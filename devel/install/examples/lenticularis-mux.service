@@ -1,0 +1,15 @@
+[Unit]
+Description = lenticularis multiplexer and controller (gunicorn app)
+After = network.target
+
+[Service]
+User = _lent8
+WorkingDirectory = /
+Environment=LENTICULARIS_MUX_CONFIG=/etc/lenticularis/mux-config.yaml
+
+ExecStart = python3 -m lenticularis.start_service mux
+
+PrivateTmp = true
+
+[Install]
+WantedBy = multi-user.target

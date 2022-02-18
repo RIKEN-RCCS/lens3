@@ -1,0 +1,19 @@
+#! /bin/sh
+
+#set -o xtrace
+set -o errexit
+set -o nounset
+#set -o pipefail
+
+sudo dnf -qq install -y \
+	git \
+	python39 \
+	net-tools
+
+cat <<EOF | sudo dd of=/etc/rsyslog.d/99-local7.conf
+local7.*				/var/log/local7
+EOF
+sudo touch /var/log/local7
+sudo systemctl restart rsyslog
+
+echo DONE $(date '+%Y-%m-%dT%H:%M:%S.%6N%:z') 1>&2

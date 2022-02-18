@@ -1,0 +1,18 @@
+#! /bin/sh
+
+. ./subr
+
+[ ! -f /usr/lib/systemd/system/firewalld.service ] ||
+	sudo systemctl stop firewalld
+[ ! -f /usr/lib/systemd/system/firewalld.service ] ||
+	sudo systemctl disable firewalld
+
+selinux_config=/etc/selinux/config
+[ ! -f $selinux_config ] ||
+	sudo -e $selinux_config
+
+[ ! -f /usr/lib/systemd/system/firewalld.service ] ||
+	sudo systemctl status firewalld
+getenforce
+
+echo DONE $(date '+%Y-%m-%dT%H:%M:%S.%6N%:z') 1>&2

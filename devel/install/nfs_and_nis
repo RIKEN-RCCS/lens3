@@ -1,0 +1,20 @@
+#! /bin/sh
+
+sudo dnf -qq install -y \
+	ypbind \
+	rpcbind \
+	nfs-utils \
+
+sudo ypdomainname lenticularis
+
+#sudo -e yll /etc/sysconfig/network /etc/yp.conf
+cat <<EOF
+NISDOMAIN=lenticularis
+domain lenticularis server dns.lent8.example.com
+EOF
+
+sudo authselect select nis --force
+
+sudo systemctl enable --now rpcbind ypbind nis-domainname
+
+echo DONE $(date '+%Y-%m-%dT%H:%M:%S.%6N%:z') 1>&2

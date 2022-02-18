@@ -1,0 +1,20 @@
+#! /bin/sh
+
+if [ $# = 1 ]; then
+	cmd=$1
+else
+	cmd=restart
+fi
+
+. ./config
+. ./subr
+
+./newsyslog
+
+for c in Se Te; do
+	ec "$c" /bin/systemctl "$cmd" lenticularis-mux </dev/null
+done
+
+for c in Au; do
+	ec "$c" /bin/systemctl "$cmd" lenticularis-api </dev/null
+done

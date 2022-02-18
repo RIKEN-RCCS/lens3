@@ -1,0 +1,44 @@
+#! /bin/sh
+
+#set -o xtrace
+set -o errexit
+set -o nounset
+#set -o pipefail
+
+. ./subr
+. ./config
+
+sudo dnf -qq install -y nginx
+sudo dnf -qq install -y httpd-tools
+
+sudo systemctl stop nginx
+
+[ -f $auth_basic_user_file ] ||
+	sudo touch $auth_basic_user_file
+
+for i in $(seq 0 $((nusers - 1))); do
+	name=$(printf u%04d $i)
+	pass=$(printf p%04d $i)
+	grep -q ^$name: $auth_basic_user_file >/dev/null ||
+		sudo htpasswd -b $auth_basic_user_file $name $pass >/dev/null 2>/dev/null
+done
+wc $auth_basic_user_file
+
+[ -d $server_certificates ] ||
+	cat examples/server_certificates.tar | (cd $(dirname $server_certificates) && sudo tar xfp -)
+
+[ -f $reverseproxy_conf ] ||
+	sudo cp $srcdir/reverseproxy/reverse-proxy-sample.in $reverseproxy_conf
+
+diff -uw examples/reverse-proxy.conf $reverseproxy_conf || true
+sudo cp examples/reverse-proxy.conf $reverseproxy_conf
+
+sudo systemctl start nginx
+sudo systemctl enable nginx
+sleep 3
+systemctl status nginx
+
+ps xa|egrep '([n]ginx)'
+netstat -an|egrep '(\<443\>|\<80\>).*LISTEN'
+
+echo DONE $(date '+%Y-%m-%dT%H:%M:%S.%6N%:z') 1>&2

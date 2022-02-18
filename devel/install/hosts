@@ -1,0 +1,14 @@
+#! /bin/sh
+
+#set -o xtrace
+set -o errexit
+set -o nounset
+#set -o pipefail
+
+. ./subr
+
+echo "Nothing to do"
+#diff -uw examples/hosts /etc/hosts || true
+#sudo sed -i -e '/localhost/s/$/ webui.lent8.example.com lent8.example.com/' /etc/hosts
+
+echo DONE $(date '+%Y-%m-%dT%H:%M:%S.%6N%:z') 1>&2

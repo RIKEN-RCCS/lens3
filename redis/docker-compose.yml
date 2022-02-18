@@ -1,0 +1,12 @@
+version: '3'
+
+services:
+  #Redis
+  redis:
+    image: "redis:latest"
+    ports:
+      - "6379:6379"
+    volumes:
+      - "./data/redis:/data"
+    command: redis-server --requirepass xyzzy
+    restart: always

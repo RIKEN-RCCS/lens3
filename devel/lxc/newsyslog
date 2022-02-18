@@ -1,0 +1,8 @@
+#! /bin/sh
+
+. ./config
+. ./subr
+
+for c in $containers; do
+	ec "$c" /usr/sbin/logrotate -f /etc/logrotate.conf </dev/null
+done

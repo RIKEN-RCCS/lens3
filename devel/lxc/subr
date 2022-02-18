@@ -1,0 +1,94 @@
+ec() {
+	container="$1"
+	shift
+	lxc -q exec "$container" -- "$@"
+### lxc exec Re -- sh -c "http_proxy=$http_proxy sh -c 'echo \$http_proxy'"
+}
+
+create_storage_host() {
+	data="$1"
+	if [ ! -e "$data" ]; then
+		sudo mkdir -p "$data"
+		sudo chown 1000000:1000000 "$data"
+	fi
+}
+
+launch() {
+	container="$1"
+	lxc -q launch $image "$container"
+}
+
+network_attach() {
+	container="$1"
+	ipv4_address="$2"
+	network="$3"
+	lxc -q stop "$container"
+	lxc -q network attach "$network" "$container" eth0 eth0
+	lxc -q config device set "$container" eth0 ipv4.address "$ipv4_address"
+	lxc -q start "$container"
+}
+
+groupadd_container() {
+	container="$1"
+	group="$2"
+	gid="$3"
+	if [ -z "${group%%_*}" ]; then gidspec="-K GID_MIN=100 -K GID_MAX=499";
+	elif [ -n "$gid" ]; then gidspec="-g $gid"; fi
+	if ! ec "$container" grep "^$group:" /etc/group >/dev/null; then
+		ec "$container" groupadd $gidspec "$group"
+	else
+		echo already exists: "$group". skip.
+	fi
+}
+
+useradd_container() {
+	container="$1"
+	usr="$2"
+	uid="$3"
+	group="$4"
+	pw="$5"
+	home="${6:-/home/$usr}"
+	if [ -z "${uid%%_*}" ]; then uidspec="-K GID_MIN=100 -K GID_MAX=499";
+	elif [ -n "$uid" ]; then uidspec="-u $uid"; fi
+	ec "$container" mkdir -p "$home"
+	if ! ec "$container" grep "^$usr:" /etc/passwd >/dev/null; then
+		ec "$container" useradd $uidspec -g "$group" -p "$pw" -d "$home" "$usr"
+		ec "$container" chown -R "$usr" "$home"
+		ec "$container" chgrp -R "$group" "$home"
+	else
+		echo already exists: "$usr". skip.
+	fi
+}
+
+usermod_container() {
+	container="$1"
+	usr="$2"
+	grp="$3"
+	ec "$container" usermod -a -G "$grp" "$usr"
+}
+
+device_add_container() {
+	container="$1"
+	source="$2"
+	path="$3"
+	name="$4"
+	lxc -q stop "$container"
+	lxc -q config device add "$container" "$name" disk source="$source" path="$path"
+	lxc -q start "$container"
+}
+
+set_wildcard_dnsmasq() {
+	hostname="$1"
+	address="$2"
+	lxc -q network list --format=csv
+	lxc -q network set "$network" raw.dnsmasq address="/$hostname/$address"
+}
+
+print_ssh_config() {
+	for container in "$@"; do
+		eval address="\$${container}_address"
+		echo Host "$container"
+		echo Hostname "$address"
+		echo User ${administrators%% *}
+	done
+}

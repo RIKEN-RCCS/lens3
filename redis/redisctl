@@ -1,0 +1,21 @@
+#! /bin/sh
+
+USAGE="usage: $0 enable|disable"
+
+if [ $# != 1 ]; then
+	echo "$USAGE"
+	exit 254
+fi
+
+case "$1" in
+	enable) docker-compose up -d --build;;
+	disable) docker-compose down;;
+	*) echo "$USAGE"; exit 254;;
+esac
+
+#docker-compose up -d --build
+#
+#docker run --name some-redis -d redis
+#docker run --name some-redis -d redis redis-server --save 60 1 --loglevel warning
+#docker run -v /myredis/conf:/usr/local/etc/redis --name myredis redis redis-server /usr/local/etc/redis/redis.conf
+ps xa|grep '[r]edis'

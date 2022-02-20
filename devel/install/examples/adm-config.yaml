@@ -23,8 +23,8 @@ lenticularis:
     system_settings:
         max_zone_per_user: 3
         max_direct_hostnames_per_user: 2
-        default_zone_lifetime: 31536000
-        allowed_maximum_zone_exp_date: 1648684800
+        default_zone_lifetime: 630720000
+        allowed_maximum_zone_exp_date: 2279404800
         endpoint_url: https://{hostname}/
         direct_hostname_validator: flat
         direct_hostname_domain: lent8.example.com

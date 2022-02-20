@@ -479,8 +479,8 @@ Install Manual of Lenticularis
               max_zone_per_user: 3
       # maximum number of direct hostname per end user
               max_direct_hostnames_per_user: 2
-              default_zone_lifetime: 31536000
-              allowed_maximum_zone_exp_date: 1648684800
+              default_zone_lifetime: 630720000
+              allowed_maximum_zone_exp_date: 2279404800
       # endpoint_url is used to display Endpoint URL to user in WebUI
               endpoint_url: https://{hostname}/
       # function name that validate direct hostname 

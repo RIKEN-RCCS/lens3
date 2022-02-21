@@ -1,11 +1,12 @@
 [Unit]
 Description = lenticularis webapi (gunicorn app)
-After = network.target
+After = syslog.target network-online.target remote-fs.target nss-lookup.target
+Wants = network-online.target
 
 [Service]
 User = @API_USER@
 WorkingDirectory = /
-Environment=LENTICULARIS_ADM_CONFIG=@ADM_CONFIG@
+Environment = LENTICULARIS_ADM_CONFIG=@ADM_CONFIG@
 
 ExecStart = python3 -m lenticularis.start_service api
 

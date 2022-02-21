@@ -551,14 +551,15 @@ Install Manual of Lenticularis
       ```
       [Unit]
       Description = lenticularis webapi (gunicorn app)
-      After = network.target
+      After = syslog.target network-online.target remote-fs.target nss-lookup.target
+      Wants = network-online.target
 
       [Service]
       # API daemon's owner
       User = _lent8
       WorkingDirectory = /
       # set absolute path to adm-config.yaml to LENTICULARIS_ADM_CONFIG
-      Environment=LENTICULARIS_ADM_CONFIG=/etc/lenticularis/adm-config.yaml
+      Environment = LENTICULARIS_ADM_CONFIG=/etc/lenticularis/adm-config.yaml
 
       ExecStart = python3 -m lenticularis.start_service api
 
@@ -731,14 +732,15 @@ Install Manual of Lenticularis
       ```
       [Unit]
       Description = lenticularis multiplexer and controller (gunicorn app)
-      After = network.target
+      After = syslog.target network-online.target remote-fs.target nss-lookup.target
+      Wants = network-online.target
 
       [Service]
       # multiplexer daemon's owner
       User = _lent8
       WorkingDirectory = /
       # set absolute path to mux-config.yaml to LENTICULARIS_MUX_CONFIG
-      Environment=LENTICULARIS_MUX_CONFIG=/etc/lenticularis/mux-config.yaml
+      Environment = LENTICULARIS_MUX_CONFIG=/etc/lenticularis/mux-config.yaml
 
       ExecStart = python3 -m lenticularis.start_service mux
 

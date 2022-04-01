@@ -1,0 +1,46 @@
+gunicorn:
+    bind: "[::]:8004"
+    workers: 2
+    threads: 40
+    timeout: 60
+    log_syslog_facility: LOCAL7
+    reload: yes
+
+redis:
+    host: localhost
+    port: 6379
+    password: ZXjmrOLwQ8Ri51pb5FI79z51gAHfIQ4oMvtWrG8q
+
+lenticularis:
+
+    multiplexer:
+        port: 8004
+        delegate_hostname: lens3.fdcs.r-ccs.riken.jp
+        trusted_hosts:
+            - localhost
+            - localhost
+        timer_interval: 30
+        request_timeout: 60
+
+    controller:
+        port_min: 9000
+        port_max: 9999
+        watch_interval: 30
+        keepalive_limit: 600
+        allowed_down_count: 3
+        max_lock_duration: 60
+        mc_info_timelimit: 20
+        mc_stop_timelimit: 20
+        kill_supervisor_wait: 60
+        minio_user_install_timelimit: 60
+        refresh_margin: 5
+        sudo: /usr/bin/sudo
+
+    minio:
+        minio: /home/lens3/bin/minio
+        minio_http_trace: /var/log/minio_http_trace
+        mc: /home/lens3/bin/mc
+
+    syslog:
+        facility: LOCAL7
+        priority: DEBUG

@@ -1,12 +1,13 @@
 # LENS3
 Lenticularis-S3, a multiplexer to MinIO to service multiple MinIO instances at a single access point.
 
-# Overview
+## Overview
 
-Lenticularis-S3 (LenS3) is a multiplexer to MinIO for S3 object
-storage service.  LenS3 launches a MinIO instance for each user on
-request, manages the lift-time of the instances, and redirects file
-access requests to each instance.
+Lenticularis-S3 (Lens3) is a multiplexer to MinIO for S3 object
+storage service.  It starts a MinIO instance as a non-root process for
+each user to avoid unintended leaking of data.  Lens3 launches a MinIO
+instance for each user on request, redirects file access requests to
+an instance, and manages the life-time of an instance.
 
 End users can launch their own object storage service (called zone)
 via Web UI.  Zone consists of Access Key set, location of buckets on
@@ -26,12 +27,12 @@ therefore access to a bucket of a zone that has direct hostname is
 appropriately relayed by the system.  Putting the bucket to be public,
 anonymous user may access to the bucket.
 
-# Installation
+## Installation
 
 * See [doc/overview.md](doc/overview.md)
 * See [doc/setting.md](doc/setting.md)
 
-# Guides
+## Guides
 
 For administrators,
 see [doc/administrator-guide.md](doc/administrator-guide.md)
@@ -39,7 +40,7 @@ see [doc/administrator-guide.md](doc/administrator-guide.md)
 For users,
 see [doc/user-guide.md](doc/user-guide.md)
 
-# Manifestation
+## Manifestation
 
 ```
 doc             documents

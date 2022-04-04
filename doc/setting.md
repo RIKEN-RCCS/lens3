@@ -1,22 +1,39 @@
-Setup of Lens3
-----
+# (Minimal) Setup of Lenticularis-S3
 
-# Assuption
+[TOC]
 
-Assume Nginx for a reverse-proxy, which ... .
+## Assuption
 
-In this setup, a pseudo user "lens3" is used for the owner of the
-daemons.
+First read [configuration.md](configuration.md) for the services
+running for Lenticularis-S3.  In this setup, we assume Nginx as a
+reverse-proxy, ....  A pseudo user "lens3" is used for the owner of
+the daemons/services.  We also assume RedHat8.5 and Python3.9 at this
+writing (in March 2022).
 
-* Lens3 related user ID
-  - `nginx`
-  - `lens3:lens3` -- a pseudo user for daemons
-  - `lens3-admin:lens3` -- a pseudo user for administraion
+* Services used
+  * Lenticularis Multiplexers
+  * Lenticularis Web-UI
+  * Redis (port=6378)
+  * Reverse-proxy
 
-We also assume RedHat8.5 and Python3.9 at this writing (in March
-2022).
+* Related user IDs
+  * `nginx`
+  * `lens3:lens3` -- a pseudo user for daemons
+  * `lens3-admin:lens3` -- a pseudo user for administraion
 
-# Setup pseudo users for daemons
+* Used files and directories
+  * /usr/lib/systemd/system/lenticularis-api.service
+  * /usr/lib/systemd/system/lenticularis-mux.service
+  * /usr/lib/systemd/system/lenticularis-redis.service
+  * /etc/lenticularis/adm-config.yaml
+  * /etc/lenticularis/mux-config.yaml
+  * /etc/lenticularis/redis.conf
+  * /etc/nginx/conf.d/lens3proxy.conf
+  * /etc/nginx/private
+  * /etc/nginx/private/htpasswd
+  * /run/lenticularis-redis (temporary)
+
+## Setup pseudo users for daemons
 
 ```
 # groupadd -K GID_MIN=100 -K GID_MAX=499 lens3
@@ -25,7 +42,7 @@ We also assume RedHat8.5 and Python3.9 at this writing (in March
 # usermod -a -G lens3 lens3-admin
 ```
 
-# Install prerequisite software
+## Install prerequisite software
 
 Install packages Development-Tools, Redis, Python, and Nginx onto the
 hosts.  httpd-tools is only required if you use basic authentication.
@@ -63,7 +80,7 @@ $ curl https://dl.min.io/client/mc/release/linux-amd64/mc -o /tmp/mc
 # install -m 755 -c /tmp/mc ~/bin/mc
 ```
 
-# Start Redis
+## Start Redis
 
 * Change the fields of redis.conf.
   * bind: Network interfaces; localhost by default
@@ -84,17 +101,18 @@ $ curl https://dl.min.io/client/mc/release/linux-amd64/mc -o /tmp/mc
 * Note: Starting Redis will file when the file owner of
   /etc/redis.conf is not "redis".
 
-# Enable local http connections
+## Enable local http connections
 
 * Let SELinux accept connections inside a local host.
 
 ```
 # semanage port -a -t http_port_t -p tcp 8003
 # semanage port -a -t http_port_t -p tcp 8004
+# semanage port --list
 # setsebool -P httpd_can_network_connect 1
 ```
 
-# Start reverse-proxy
+## Start reverse-proxy
 
 It is highly site dependent.
 See [overview.md](overview.md).
@@ -137,7 +155,7 @@ See [overview.md](overview.md).
       # firewall-cmd --reload
       ```
 
-# Setup Web-UI
+## Setup Web-UI
 
 * Copy the Web-UI configuration file
   * Configuration file: `/etc/lenticularis/adm-config.yaml`
@@ -168,7 +186,7 @@ See [overview.md](overview.md).
   * See the template `$SRC/unit-file/multiplexer/lenticularis-api.service.in`
   * Replace placeholders: @API_USER@, @ADM_CONFIG@
 
-# Setup sudoers for Multiplexer
+## Setup sudoers for Multiplexer
 
 * Copy a sudoers entry in /etc/sudoers.d
   * Modify it if necessary
@@ -179,7 +197,7 @@ See [overview.md](overview.md).
 # chmod o-rwx /etc/sudoers.d/lenticularis-sudoers
 ```
 
-# Setup Multiplexer
+## Setup Multiplexer
 
 * Copy the Multiplexer configuration file
   * Configuration file: `/etc/lenticularis/mux-config.yaml`
@@ -209,7 +227,7 @@ See [overview.md](overview.md).
   * See the template `$SRC/unit-file/multiplexer/lenticularis-mux.service.in`
   * Replace placeholders: @MUX_USER@, @MUX_CONFIG@
 
-# Start services (Web-UI and Muxiplexer)
+## Start services (Web-UI and Muxiplexer)
 
 ```
 # systemctl enable lenticularis-api
@@ -219,7 +237,7 @@ See [overview.md](overview.md).
 
 ```
 
-# Register users
+## Register users
 
 See [administrators-guide.md](administrators-guide.md#).
 
@@ -252,7 +270,7 @@ lens3-admin$ lenticularis-admin insert allow-deny-rules {csv-file}
 lens3-admin$ lenticularis-admin show allow-deny-rules --format=json
 ```
 
-# Check the status
+## Check the status
 
 *  Redis status
 
@@ -279,7 +297,7 @@ $ systemctl status lenticularis-mux.service
 lens3-admin$ lenticularis-admin show multiplexer
 ```
 
-# Access test
+## Access test
 
 * Access website by a browser, and create a zone.
   * URL: `http://webui.lent8.example.com/`

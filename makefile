@@ -1,7 +1,7 @@
-all: archive
+all:
 
 install::
-	pip3 -qq install -r requirements.txt --user
+	pip3 install --user -r requirements.txt
 
 ARCHIVE=/tmp/archive-$$(date +%Y%m%d).zip
 FORMAT=zip

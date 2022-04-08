@@ -38,6 +38,6 @@ lenticularis:
 
 
 webui:
-    trusted_hosts:
+    trusted_proxies:
         - @REVERSE_PROXY_ADDRESS@
     CSRF_secret_key: @CSRF_SECRET_KEY@

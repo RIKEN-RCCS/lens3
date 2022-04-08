@@ -18,7 +18,7 @@ lenticularis:
     multiplexer:
         port: 8000
         delegate_hostname: lent8.example.com
-        trusted_hosts:
+        trusted_proxies:
             - localhost
         timer_interval: 30
         request_timeout: 60

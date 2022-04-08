@@ -23,7 +23,8 @@ def app():
         sys.stderr.write(f"{e}\n")
         return None
 
-    openlog(**mux_conf["lenticularis"]["syslog"])
+    openlog(mux_conf["lenticularis"]["log_file"],
+            **mux_conf["lenticularis"]["log_syslog"])
     logger.info("***** START MUXMAIN *****")
 
     tables = get_tables(mux_conf)

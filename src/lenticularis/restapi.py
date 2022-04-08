@@ -1,3 +1,5 @@
+"""API server by Gunicorn + Uvicorn + FastAPI."""
+
 # Copyright (c) 2022 RIKEN R-CCS.
 # SPDX-License-Identifier: BSD-2-Clause
 
@@ -29,8 +31,9 @@ except Exception as e:
     sys.stderr.write(f"{e}\n")
     sys.exit(ERROR_READCONF)
 
-openlog(**adm_conf["lenticularis"]["syslog"])
-logger.info("***** START RESTAPI *****")
+openlog(adm_conf["lenticularis"]["log_file"],
+        **adm_conf["lenticularis"]["log_syslog"])
+logger.info("***** START API *****")
 
 pkgdir = os.path.dirname(inspect.getfile(lenticularis))
 webui_dir = os.path.join(pkgdir, "webui")
@@ -53,13 +56,13 @@ def get_csrf_config():
 
 
 @app.exception_handler(CsrfProtectError)
-def csrf_protect_exception_handler(request: Request, 
+def csrf_protect_exception_handler(request: Request,
                                    exc: CsrfProtectError):
                                    #user_id: str = Depends(get_authorized_user),
                                    #client_addr: str = Depends(get_client_addr)):
     #logger.debug(f"@@@ {exc.message}")
     logger.error(f"{exc.message}")
-    content = {"detail":  exc.message}
+    content = {"detail": exc.message}
     user_id = request.headers.get("X-REMOTE-USER")
     client_addr = request.headers.get("X-REAL-IP")
     accesslog(f"{exc.status_code}", client_addr, user_id, request.method, request.url)
@@ -68,30 +71,30 @@ def csrf_protect_exception_handler(request: Request,
 
 async def get_authorized_user(request: Request):
     remote_user = request.headers.get("X-REMOTE-USER")
-    logger.debug(f"@@@ X_REMOTE_USER = {remote_user}")
+    #logger.debug(f"@@@ X_REMOTE_USER = {remote_user}")
     return remote_user
 
 
 async def get_client_addr(request: Request):
     real_ip = request.headers.get("X-REAL-IP")
     #forwarded_for = request.headers.get("X-FORWARDED-FOR")
+    #return request.headers.get("X-FORWARDED-FOR")
     return real_ip
-    # return request.headers.get("X-FORWARDED-FOR")
 
 
 async def get_traceid(request: Request):
     traceid = request.headers.get("X-TRACEID")
-    threading.currentThread().name = traceid
-    logger.debug(f"@@@ traceid = {traceid}")
+    threading.current_thread().name = traceid
+    #logger.debug(f"@@@ traceid = {traceid}")
     return traceid
 
 
 @app.get("/")
-async def show_html_file(request: Request,
-                         user_id: str = Depends(get_authorized_user),
-                         traceid: str = Depends(get_traceid),
-                         client_addr: str = Depends(get_client_addr)):
-    logger.debug(f"@@@ GET /")
+async def app_show_ui(request: Request,
+                      user_id: str = Depends(get_authorized_user),
+                      traceid: str = Depends(get_traceid),
+                      client_addr: str = Depends(get_client_addr)):
+    logger.debug(f"APP.GET /")
     status_code = status.HTTP_200_OK
     accesslog(f"{status_code}", client_addr, user_id, request.method, request.url)
     response = HTMLResponse(status_code=status_code, content=create_html)
@@ -104,7 +107,7 @@ async def func_zone_template(request: Request,
                          traceid: str = Depends(get_traceid),
                          client_addr: str = Depends(get_client_addr),
                          csrf_protect: CsrfProtect = Depends()):
-    logger.debug(f"@@@ GET /template")
+    logger.debug(f"APP.GET /template")
     (zone_list, err) = api.api_get_template(traceid, user_id)
     return respond_zone(zone_list, err, csrf_protect, client_addr, user_id, request)
 
@@ -115,7 +118,7 @@ async def func_zone_list(request: Request,
                          traceid: str = Depends(get_traceid),
                          client_addr: str = Depends(get_client_addr),
                          csrf_protect: CsrfProtect = Depends()):
-    logger.debug(f"@@@  GET /zone")
+    logger.debug(f"APP.GET /zone")
     (zone_list, err) = api.api_zone_list(traceid, user_id, None)
     return respond_zone(zone_list, err, csrf_protect, client_addr, user_id, request)
 
@@ -127,7 +130,7 @@ async def func_zone_get(zone_id: str,
                          traceid: str = Depends(get_traceid),
                          client_addr: str = Depends(get_client_addr),
                          csrf_protect: CsrfProtect = Depends()):
-    logger.debug(f"@@@ GET /zone/{zone_id}")
+    logger.debug(f"APP.GET /zone/{zone_id}")
     (zone_list, err) = api.api_zone_list(traceid, user_id, zone_id)
     return respond_zone(zone_list, err, csrf_protect, client_addr, user_id, request)
 
@@ -138,7 +141,7 @@ async def func_create_zone(request: Request,
                            traceid: str = Depends(get_traceid),
                            client_addr: str = Depends(get_client_addr),
                            csrf_protect: CsrfProtect = Depends()):
-    logger.debug(f"@@@ POST /zone")
+    logger.debug(f"APP.POST /zone")
     body = await get_request_body(request)
     return zone_update(traceid, None, body, client_addr, user_id, request, csrf_protect, "create_zone")
 
@@ -150,7 +153,7 @@ async def func_upsert_zone(zone_id: str,
                            traceid: str = Depends(get_traceid),
                            client_addr: str = Depends(get_client_addr),
                            csrf_protect: CsrfProtect = Depends()):
-    logger.debug(f"@@@ PUT /zone/{zone_id}")
+    logger.debug(f"APP.PUT /zone/{zone_id}")
     body = await get_request_body(request)
     return zone_update(traceid, zone_id, body, client_addr, user_id, request, csrf_protect, "update_zone")
 
@@ -162,7 +165,7 @@ async def func_upsert_zone_buckets(zone_id: str,
                            traceid: str = Depends(get_traceid),
                            client_addr: str = Depends(get_client_addr),
                            csrf_protect: CsrfProtect = Depends()):
-    logger.debug(f"@@@ PUT /zone/{zone_id}/buckets")
+    logger.debug(f"APP.PUT /zone/{zone_id}/buckets")
     body = await get_request_body(request)
     return zone_update(traceid, zone_id, body, client_addr, user_id, request, csrf_protect, "update_buckets")
 
@@ -174,7 +177,7 @@ async def func_upsert_zone_secret(zone_id: str,
                            traceid: str = Depends(get_traceid),
                            client_addr: str = Depends(get_client_addr),
                            csrf_protect: CsrfProtect = Depends()):
-    logger.debug(f"@@@ PUT /zone/{zone_id}/accessKeys")
+    logger.debug(f"APP.PUT /zone/{zone_id}/accessKeys")
     body = await get_request_body(request)
     return zone_update(traceid, zone_id, body, client_addr, user_id, request, csrf_protect, "change_secret_key")
 
@@ -201,7 +204,7 @@ async def func_delete_zone(zone_id: str,
                            traceid: str = Depends(get_traceid),
                            client_addr: str = Depends(get_client_addr),
                            csrf_protect: CsrfProtect = Depends()):
-    logger.debug(f"@@@ DELETE /zone/{zone_id}")
+    logger.debug(f"APP.DELETE /zone/{zone_id}")
     body = await get_request_body(request)
     csrf_token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(csrf_token)
@@ -220,7 +223,7 @@ def respond_zone(zone_list, err, csrf_protect, client_addr, user_id, request):
     else:
         content = {"status": "success"}
         status_code = status.HTTP_200_OK
-    if zone_list is not None:  # do not miss []
+    if zone_list is not None: # do not miss []
         content["zonelist"] = zone_list
     if csrf_protect:
         content["CSRF-Token"] = csrf_protect.generate_csrf()
@@ -254,14 +257,9 @@ async def validate_session(request: Request, call_next):
     client_addr = await get_client_addr(request)
     #logger.debug(f"@@@ api_check_user: {user_id} {client_addr}")
 
-    if peer_addr not in api.trusted_hosts:
-        logger.error(f"IP {peer_addr} is not allowed to access this resource.")
-        # This error is a server configuration error. As end users cannot address this
-        # error. So that, our error message will provide information that there
-        # was an error, simply and hiding {peer_addr} from end-user.
-        #  DONT TELL END USERS THAT REAL ERROR WAS: 
-        #  "IP {peer_addr} is not allowed to access this resource."
-        content = {"status": "error", "reason": f"Internal configuration error. (forbidded)"}
+    if peer_addr not in api.trusted_proxies:
+        logger.error(f"Proxy {peer_addr} is not trusted.")
+        content = {"status": "error", "reason": f"Configuration error (trusted_proxies)."}
         status_code = status.HTTP_403_FORBIDDEN
         # Access log contains client_addr, but peer_addr.
         accesslog(f"{status_code}", client_addr, user_id, request.method, request.url)
@@ -275,6 +273,8 @@ async def validate_session(request: Request, call_next):
         accesslog(f"{status_code}", client_addr, user_id, request.method, request.url)
         return JSONResponse(status_code=status_code, content=content)
 
-    logger.info(f"allowed: user: {user_id}")
+    #logger.debug(f"request={request} method={request.method} url={request.url}")
 
-    return await call_next(request)
+    response = await call_next(request)
+
+    return response

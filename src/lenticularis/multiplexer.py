@@ -25,11 +25,11 @@ class Multiplexer():
         delegate_hostnames = multiplexer_param["delegate_hostnames"]
         self.delegate_hostnames = [e.lower() for e in delegate_hostnames]
 
-        trusted_hosts = multiplexer_param["trusted_hosts"]
-        self.trusted_hosts = set([addr for h in trusted_hosts
+        trusted_proxies = multiplexer_param["trusted_proxies"]
+        self.trusted_proxies = set([addr for h in trusted_proxies
                                        for addr in get_ip_address(h)])
         self.active_multiplexers = self.current_active_multiplexers()
-        logger.debug(f"@@@ trusted_hosts = {self.trusted_hosts}")
+        logger.debug(f"@@@ trusted_proxies = {self.trusted_proxies}")
         logger.debug(f"@@@ active_multiplexers = {self.active_multiplexers}")
 
         #XXXself.mux_reqest_timeout = 300  # XXX FIXME
@@ -85,7 +85,7 @@ class Multiplexer():
 
     def __call__(self, environ, start_response):
         traceid = environ.get("HTTP_X_TRACEID")
-        threading.currentThread().name = traceid
+        threading.current_thread().name = traceid
         logger.debug(f"@@@ MUX_MAIN: __CALL__")
         # logger.debug(f"@@@ environ = {environ}")
 
@@ -270,13 +270,13 @@ class Multiplexer():
             return False
         peer_addr = normalize_address(peer_addr)
         # logger.debug("@@@ +++")
-        # logger.debug(f"@@@ {peer_addr} {self.trusted_hosts}")
+        # logger.debug(f"@@@ {peer_addr} {self.trusted_proxies}")
         # logger.debug(f"@@@ {peer_addr} {self.active_multiplexers}")
-        if (peer_addr in self.trusted_hosts or
+        if (peer_addr in self.trusted_proxies or
             peer_addr in self.active_multiplexers):
             return True
         self.active_mutilpexers = self.current_active_multiplexers()
-        # logger.debug(f"@@@ TRUSTED_HOSTS = {self.active_mutilpexers}")
+        # logger.debug(f"@@@ TRUSTED_PROXIES = {self.active_mutilpexers}")
         # logger.debug(f"@@@ peer_addr = {peer_addr}")
         if peer_addr in self.active_mutilpexers:
             return True

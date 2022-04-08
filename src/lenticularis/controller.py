@@ -10,6 +10,7 @@ import sys
 
 
 class Controller():
+    """A manager of a MinIO instance."""
 
     manager = "lenticularis.manager"
 

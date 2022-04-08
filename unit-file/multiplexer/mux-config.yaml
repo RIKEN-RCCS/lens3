@@ -1,8 +1,10 @@
 gunicorn:
     bind: "[::]:8004"
     workers: 2
-    threads: 40
+    threads: 4
     timeout: 60
+    log_file: "/tmp/lens3-gunicorn-mux-log"
+    log_level: debug
     log_syslog_facility: LOCAL7
     reload: yes
 
@@ -15,9 +17,8 @@ lenticularis:
 
     multiplexer:
         port: 8004
-        delegate_hostname: lens3.fdcs.r-ccs.riken.jp
-        trusted_hosts:
-            - localhost
+        delegate_hostname: lens3.example.jp
+        trusted_proxies:
             - localhost
         timer_interval: 30
         request_timeout: 60
@@ -41,6 +42,7 @@ lenticularis:
         minio_http_trace: /var/log/minio_http_trace
         mc: /home/lens3/bin/mc
 
-    syslog:
+    log_file: "/tmp/lens3-mux-log"
+    log_syslog:
         facility: LOCAL7
         priority: DEBUG

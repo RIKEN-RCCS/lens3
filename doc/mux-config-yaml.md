@@ -40,7 +40,7 @@
               port: 8000
       # delegate hostname
               delegate_hostname: lent8.example.com
-              trusted_hosts:
+              trusted_proxies:
       # trust reverse-proxy
                   - localhost
       # and also trust Admin-API-Host (in this example, they are same so you can omit it)

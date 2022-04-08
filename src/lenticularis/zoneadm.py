@@ -986,8 +986,10 @@ class ZoneAdm():
     def fetch_current_mode(self, zoneID):  # private use
         return self.tables.zones.get_mode(zoneID)
 
-    def set_current_mode(self, zoneID, mode):  # private use
-        self.tables.zones.set_mode(zoneID, mode)
+    def set_current_mode(self, zoneID, state):  # private use
+        o = self.fetch_current_mode(zoneID)
+        logger.debug("change bucket-pool-status({zoneID}): {o} to {state}")
+        self.tables.zones.set_mode(zoneID, state)
 
     def zone_to_user(self, zoneID):  # ADMIN, multiplexer   CODE CLONE @ multiplexer.py
         zone = self.tables.zones.get_zone(zoneID)

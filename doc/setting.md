@@ -61,7 +61,7 @@ Install Python packages.
 
 ```
 # su - lens3
-$ cd $SRC
+$ cd $TOP
 $ pip3 install --user -r requirements.txt
 ```
 
@@ -118,12 +118,12 @@ It is highly site dependent.
 See [overview.md](overview.md).
 
 * Copy a configuration file to /etc/nginx/conf.d/
-  * A sample file is in $SRC/nginx/lens3proxy.conf
+  * A sample file is in $TOP/nginx/lens3proxy.conf
   * Copy it as /etc/nginx/conf.d/lens3proxy.conf
   * Edit it
 
 ```
-# cp $SRC/nginx/lens3proxy.conf /etc/nginx/conf.d/
+# cp $TOP/nginx/lens3proxy.conf /etc/nginx/conf.d/
 # vi /etc/nginx/conf.d/lens3proxy.conf
 ```
 
@@ -162,7 +162,7 @@ See [overview.md](overview.md).
 
 ```
 # mkdir -p /etc/lenticularis
-# cp $SRC/unit-file/webui/adm-config.yaml.in /etc/lenticularis/adm-config.yaml
+# cp $TOP/unit-file/webui/adm-config.yaml.in /etc/lenticularis/adm-config.yaml
 # vi /etc/lenticularis/adm-config.yaml
 # chown lens3:lens3 /etc/lenticularis/adm-config.yaml
 # chmod o-rwx /etc/lenticularis/adm-config.yaml
@@ -179,11 +179,11 @@ See [overview.md](overview.md).
 * Copy the systemd unit file for Web-UI
 
 ```
-# cp $SRC/unit-file/webui/lenticularis-api.service /usr/lib/systemd/system/
+# cp $TOP/unit-file/webui/lenticularis-api.service /usr/lib/systemd/system/
 ```
 
 * Modify it if necessary
-  * See the template `$SRC/unit-file/multiplexer/lenticularis-api.service.in`
+  * See the template `$TOP/unit-file/multiplexer/lenticularis-api.service.in`
   * Replace placeholders: @API_USER@, @ADM_CONFIG@
 
 ## Setup sudoers for Multiplexer
@@ -192,7 +192,7 @@ See [overview.md](overview.md).
   * Modify it if necessary
 
 ```
-# cp $SRC/unit-file/multiplexer/lenticularis-sudoers /etc/sudoers.d/
+# cp $TOP/unit-file/multiplexer/lenticularis-sudoers /etc/sudoers.d/
 # chmod -w /etc/sudoers.d/lenticularis-sudoers
 # chmod o-rwx /etc/sudoers.d/lenticularis-sudoers
 ```
@@ -204,7 +204,7 @@ See [overview.md](overview.md).
 
 ```
 # mkdir -p /etc/lenticularis/
-# cp $SRC/multiplexer/mux-config.yaml.in /etc/lenticularis/mux-config.yaml
+# cp $TOP/multiplexer/mux-config.yaml.in /etc/lenticularis/mux-config.yaml
 # vi /etc/lenticularis/mux-config.yaml
 # chown lens3:lens3 /etc/lenticularis/mux-config.yaml
 # chmod o-rwx /etc/lenticularis/mux-config.yaml
@@ -220,16 +220,17 @@ See [overview.md](overview.md).
 * Copy the systemd unit file for Multiplexer
 
 ```
-# cp $SRC/unit-file/multiplexer/lenticularis-mux.service /usr/lib/systemd/system/
+# cp $TOP/unit-file/multiplexer/lenticularis-mux.service /usr/lib/systemd/system/
 ```
 
 * Modify it if necessary
-  * See the template `$SRC/unit-file/multiplexer/lenticularis-mux.service.in`
+  * See the template `$TOP/unit-file/multiplexer/lenticularis-mux.service.in`
   * Replace placeholders: @MUX_USER@, @MUX_CONFIG@
 
 ## Start services (Web-UI and Muxiplexer)
 
 ```
+# systemctl daemon-reload
 # systemctl enable lenticularis-api
 # systemctl start lenticularis-api
 # systemctl enable lenticularis-mux

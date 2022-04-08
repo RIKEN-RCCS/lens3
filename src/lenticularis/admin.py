@@ -1,3 +1,5 @@
+"""lenticularis-admin command."""
+
 # Copyright (c) 2022 RIKEN R-CCS.
 # SPDX-License-Identifier: BSD-2-Clause
 
@@ -46,12 +48,13 @@ def main():
     try:
         (adm_conf, configfile) = read_adm_conf(args.configfile)
     except Exception as e:
-        sys.stderr.write(f"{e}\n")
+        sys.stderr.write(f"Reading conf failed: {e}\n")
         sys.exit(ERROR_READCONF)
 
     traceid = random_str(12)
-    threading.currentThread().name = traceid
-    openlog(**adm_conf["lenticularis"]["syslog"])
+    threading.current_thread().name = traceid
+    openlog(adm_conf["lenticularis"]["log_file"],
+            **adm_conf["lenticularis"]["log_syslog"])
     logger.info("***** START ADMIN *****")
     logger.debug(f"traceid = {traceid}")
 

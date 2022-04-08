@@ -1,4 +1,4 @@
-# Copyright (c) 2022 RIKEN R-CCS.
+# Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
 import collections
@@ -7,6 +7,8 @@ from lenticularis.utility import sha1, get_mux_addr
 
 
 class Scheduler():
+    """A part of a Controller."""
+
     def __init__(self, tables):
         #self.mux_conf = mux_conf
         #self.process_table = process_table

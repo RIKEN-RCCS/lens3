@@ -14,10 +14,10 @@ class Api():
     def __init__(self, adm_conf):
 
         self.zone_adm = ZoneAdm(adm_conf)
-        trusted_hosts = adm_conf["webui"]["trusted_hosts"]
-        self.trusted_hosts = set([addr for h in trusted_hosts
+        trusted_proxies = adm_conf["webui"]["trusted_proxies"]
+        self.trusted_proxies = set([addr for h in trusted_proxies
                                        for addr in get_ip_address(h)])
-        logger.debug(f"@@@ self.trusted_hosts = {self.trusted_hosts}")
+        logger.debug(f"@@@ self.trusted_proxies = {self.trusted_proxies}")
 
     def api_get_template(self, traceid, user_id):
         try:

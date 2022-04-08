@@ -82,7 +82,7 @@
 
 
       webui:
-          trusted_hosts:
+          trusted_proxies:
       # trust reverse-proxy
               - localhost
       # secret key for CSRF protector. (DO NOT USE REDIS'S PASSWORD HERE)

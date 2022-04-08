@@ -4,13 +4,16 @@ After = syslog.target network-online.target remote-fs.target nss-lookup.target
 Wants = network-online.target
 
 [Service]
+Type = simple
 User = lens3
 WorkingDirectory = /tmp
 Environment = LENTICULARIS_ADM_CONFIG=/etc/lenticularis/adm-config.yaml
+StandardOutput = journal
+StandardError = journal
 
 ExecStart = python3 -m lenticularis.start_service api
 
-PrivateTmp = true
+#PrivateTmp = true
 
 [Install]
 WantedBy = multi-user.target

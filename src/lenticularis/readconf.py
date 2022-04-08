@@ -1,15 +1,15 @@
 # Copyright (c) 2022 RIKEN R-CCS.
 # SPDX-License-Identifier: BSD-2-Clause
 
-from jsonschema import validate
+import jsonschema
 import os
 import yaml
 
-default_mux_conf = "/etc/lenticularis/mux-config.yaml"
+##default_mux_conf = "/etc/lenticularis/mux-config.yaml"
 mux_conf_envname = "LENTICULARIS_MUX_CONFIG"
 
 
-default_adm_conf = "/etc/lenticularis/adm-config.yaml"
+##default_adm_conf = "/etc/lenticularis/adm-config.yaml"
 adm_conf_envname = "LENTICULARIS_ADM_CONFIG"
 
 
@@ -18,19 +18,18 @@ node_envname = "LENTICULARIS_MUX_NODE"
 
 def read_mux_conf(configfile=None):
     return readconf(configfile, fix_mux_conf, validate_mux_conf,
-                    mux_conf_envname, default_mux_conf)
+                    mux_conf_envname)
 
 
 def read_adm_conf(configfile=None):
     return readconf(configfile, fix_adm_conf, validate_adm_conf,
-                    adm_conf_envname, default_adm_conf)
+                    adm_conf_envname)
 
 
-def readconf(configfile, fix, vali, envname, default_conf):
+def readconf(configfile, fixfn, valfn, envname):
     if configfile is None:
         configfile = os.environ.get(envname)
-    if configfile is None:
-        configfile = default_conf
+    assert configfile is not None
 
     try:
         with open(configfile, "r") as f:
@@ -40,8 +39,8 @@ def readconf(configfile, fix, vali, envname, default_conf):
     except Exception as e:
         raise Exception(f"cannot read {configfile} {e}")
 
-    conf = fix(conf)
-    vali(conf)
+    conf = fixfn(conf)
+    valfn(conf)
 
     return (conf, configfile)
 
@@ -112,14 +111,14 @@ def mux_schema(type_number):
         "properties": {
             "port": type_number,
             "delegate_hostnames": {"type": "array", "items": {"type": "string"}},
-            "trusted_hosts": {"type": "array", "items": {"type": "string"}},
+            "trusted_proxies": {"type": "array", "items": {"type": "string"}},
             "timer_interval": type_number,
             "request_timeout": type_number,
         },
         "required": [
             "port",
             "delegate_hostnames",
-            "trusted_hosts",
+            "trusted_proxies",
             "timer_interval",
             "request_timeout",
         ],
@@ -180,13 +179,14 @@ def mux_schema(type_number):
             "multiplexer": multiplexer,
             "controller": controller,
             "minio": minio,
-            "syslog": syslog_schema(),
+            "log_file": {"type": "string"},
+            "log_syslog": syslog_schema(),
         },
         "required": [
             "multiplexer",
             "controller",
             "minio",
-            "syslog",
+            "log_syslog",
         ],
         "additionalProperties": False,
     }
@@ -264,13 +264,14 @@ def adm_schema(type_number):
             "multiplexer": multiplexer,
             "controller": controller,
             "system_settings": system_settings,
-            "syslog": syslog_schema(),
+            "log_file": {"type": "string"},
+            "log_syslog": syslog_schema(),
         },
         "required": [
             "multiplexer",
             "controller",
             "system_settings",
-            "syslog",
+            "log_syslog",
         ],
         "additionalProperties": False,
     }
@@ -278,11 +279,11 @@ def adm_schema(type_number):
     webui = {
         "type": "object",
         "properties": {
-            "trusted_hosts": {"type": "array", "items": {"type": "string"}},
+            "trusted_proxies": {"type": "array", "items": {"type": "string"}},
             "CSRF_secret_key": {"type": "string"},
         },
         "required": [
-            "trusted_hosts",
+            "trusted_proxies",
             "CSRF_secret_key",
         ],
         "additionalProperties": False,
@@ -307,12 +308,12 @@ def adm_schema(type_number):
 
 
 def validate_mux_conf(conf):
-    validate(instance=conf, schema=mux_schema({"type": "string"}))
+    jsonschema.validate(instance=conf, schema=mux_schema({"type": "string"}))
     check_type_number(conf, mux_schema({"type": "number"}))
 
 
 def validate_adm_conf(conf):
-    validate(instance=conf, schema=adm_schema({"type": "string"}))
+    jsonschema.validate(instance=conf, schema=adm_schema({"type": "string"}))
     check_type_number(conf, adm_schema({"type": "number"}))
 
 

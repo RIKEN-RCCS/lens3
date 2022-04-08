@@ -1,7 +1,10 @@
 gunicorn:
     bind: "[::]:8003"
-    workers: 24
+    workers: 2
+    threads: 4
     timeout: 120
+    log_file: "/tmp/lens3-gunicorn-adm-log"
+    log_level: debug
     log_syslog_facility: LOCAL7
     reload: yes
 
@@ -13,7 +16,7 @@ redis:
 lenticularis:
 
     multiplexer:
-        delegate_hostname: lens3.fdcs.r-ccs.riken.jp
+        delegate_hostname: lens3.example.jp
 
     controller:
         max_lock_duration: 60
@@ -25,16 +28,17 @@ lenticularis:
         allowed_maximum_zone_exp_date: 2279404800
         endpoint_url: https://{hostname}/
         direct_hostname_validator: flat
-        direct_hostname_domain: s3.lens3.fdcs.r-ccs.riken.jp
+        direct_hostname_domain: s3.lens3.example.jp
         reserved_hostnames:
-            - bad.lens3.fdcs.r-ccs.riken.jp
+            - bad.lens3.example.jp
         decoy_connection_timeout: 60
 
-    syslog:
+    log_file: "/tmp/lens3-adm-log"
+    log_syslog:
         facility: LOCAL7
         priority: DEBUG
 
 webui:
-    trusted_hosts:
+    trusted_proxies:
         - localhost
     CSRF_secret_key: xyzzy

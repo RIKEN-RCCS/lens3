@@ -1,9 +1,8 @@
-Object storage service design document in HPC
-================================================= ========
+# Design of Lenticularis-S3
 
-#Introduction
+This book is a design document of Lenticularis-S3.
 
-This book is a design document of "object storage service in HPC".
+[TOC]
 
 ## Overview
 
@@ -17,37 +16,11 @@ This book is a design document of "object storage service in HPC".
 
 ## System configuration
 
-  + Name: lenticularis
+* Components
+  * Multiplexer
+  * Controller
 
-  + Components
-
-    --Multiplexer
-      --Distribution by Access Key ID
-      --Sort by host name (⇒Public access function)
-      --All multiplexers must be reachable to all MinIO nodes.
-        --The transfer destination MinIO is started on the same node as the multiplexer.
-          Not exclusively.
-
-    - controller
-      --Called by the multiplexer and starts MinIO.
-      -Scheduler
-        --Plan the node to start MinIO.
-          When starting MinIO on its own node, the manager is in charge of the actual start.
-          Scheduler is the python code in the same process as the multiplexer.
-      --Manager
-        --Responsible for starting MinIO. The manager is started by Popen from the scheduler,
-          It will be a separate process (python program). This process is MinIO
-          It starts and the process monitors MinIO's life and death.
-        --Register your own information in the manger list.
-        --Auto start: Called on demand when accessed.
-          Scheduler makes the decision to start. The Manager determines the suppression of multiple startups.
-        --Automatic stop: Stops if there is no access for a certain period of time
-           Stops when the specified deadline expires
-           Stops when "offline" is set by user or administrator operation
-           Stops when an administrator puts a user in the Deny list ("disabled")
-           Stop when your entry disappears from the Manager list
-
-    --Server (S3 compatible server function)
+   * MinIO instances (S3 compatible server function)
       --Launched from manager
       --The S3 compatible server function uses MinIO (`https://min.io/`).
       --MinIO adds and uses MinIO User.
@@ -100,6 +73,36 @@ This book is a design document of "object storage service in HPC".
         In the implementation, the same thread as the multiplexer)
       --WebUI service (gunicorn thread)
       --Administrator CLI
+
+### Multiplexer
+
+      --Distribution by Access Key ID
+      --Sort by host name (⇒Public access function)
+      --All multiplexers must be reachable to all MinIO nodes.
+        --The transfer destination MinIO is started on the same node as the multiplexer.
+          Not exclusively.
+
+### Subcomponents of a Controller
+
+A Controller starts a MinIO instance and manages its life-time.
+
+* Subcomponents of a Controller
+  * Scheduler
+        --Plan the node to start MinIO.
+          When starting MinIO on its own node, the manager is in charge of the actual start.
+          Scheduler is the python code in the same process as the multiplexer.
+  * Manager
+        --Responsible for starting MinIO. The manager is started by Popen from the scheduler,
+          It will be a separate process (python program). This process is MinIO
+          It starts and the process monitors MinIO's life and death.
+        --Register your own information in the manger list.
+        --Auto start: Called on demand when accessed.
+          Scheduler makes the decision to start. The Manager determines the suppression of multiple startups.
+        --Automatic stop: Stops if there is no access for a certain period of time
+           Stops when the specified deadline expires
+           Stops when "offline" is set by user or administrator operation
+           Stops when an administrator puts a user in the Deny list ("disabled")
+           Stop when your entry disappears from the Manager list
 
 
 ## Multiplexer

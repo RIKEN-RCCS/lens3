@@ -64,8 +64,9 @@ def main():
         sys.stderr.write(f"manager:main: {e}\n")
         sys.exit(ERROR_READCONF)
 
-    threading.currentThread().name = args.traceid
-    openlog(**mux_conf["lenticularis"]["syslog"])
+    threading.current_thread().name = args.traceid
+    openlog(mux_conf["lenticularis"]["log_file"],
+            **mux_conf["lenticularis"]["log_syslog"])
     logger.info("***** START MANAGER *****")
 
     logger.debug("main")

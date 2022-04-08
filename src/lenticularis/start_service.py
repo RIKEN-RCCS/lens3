@@ -1,4 +1,6 @@
-# Copyright (c) 2022 RIKEN R-CCS.
+"""Start routines of Gunicorn."""
+
+# Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
 import argparse
@@ -31,7 +33,8 @@ def start_mux():
         sys.stderr.write(f"{e}\n")
         return None
 
-    openlog(**mux_conf["lenticularis"]["syslog"])
+    openlog(mux_conf["lenticularis"]["log_file"],
+            **mux_conf["lenticularis"]["log_syslog"])
     logger.info("***** START GUNICORN FOR MUX *****")
 
     gunicorn_conf = mux_conf["gunicorn"]
@@ -66,7 +69,7 @@ def start_mux():
         args.append("--reload")
     args.append("lenticularis.muxmain:app()")
 
-    run(env, cmd, args)
+    run("lenticularis.mux", env, cmd, args)
 
 
 def start_api():
@@ -77,13 +80,14 @@ def start_api():
         sys.stderr.write(f"{e}\n")
         return None
 
-    openlog(**adm_conf["lenticularis"]["syslog"])
+    openlog(adm_conf["lenticularis"]["log_file"],
+            **adm_conf["lenticularis"]["log_syslog"])
     logger.info("***** START GUNICORN FOR API *****")
 
     gunicorn_conf = adm_conf["gunicorn"]
     bind = gunicorn_conf["bind"]
     workers = gunicorn_conf.get("workers")
-
+    #threads = gunicorn_conf.get("threads")
     timeout = gunicorn_conf.get("timeout")
     log_file = gunicorn_conf.get("log_file")
     log_level = gunicorn_conf.get("log_level")
@@ -96,7 +100,6 @@ def start_api():
     args = ["--worker-class", "uvicorn.workers.UvicornWorker", "--bind", bind]
     if workers:
         args += ["--workers", workers]
-
 
     if timeout:
         args += ["--timeout", timeout]
@@ -112,25 +115,32 @@ def start_api():
         args.append("--reload")
     args.append("lenticularis.restapi:app")
 
-    run(env, cmd, args)
+    run("lenticularis.api", env, cmd, args)
 
 
-def run(env, cmd, args):
+def run(servicename, env, cmd, args):
+    """Starts Gunicorn as a systemd service.  It will not return unless it
+    errs or finishes.  The messages at starting Gunicorn go to
+    stdout/stderr.
+    """
 
-    logger.debug(f"env = {env}")
+    logger.debug(f"{servicename}: starting gunicorn ...")
     logger.debug(f"cmd = {cmd}")
     logger.debug(f"args = {args}")
+    logger.debug(f"env = {env}")
 
     try:
-        with Popen(cmd + args, stdout=PIPE, stderr=PIPE, env=env) as p:
-            (out, err) = p.communicate()
+        with Popen(cmd + args, stdout=None, stderr=None, env=env) as p:
+            #(out, err) = p.communicate()
             status = p.wait()
-            logger.debug(f"@@@ WAIT: status, out, err = {status}, {out}, {err}")
     except Exception as e:
-        logger.error(f"Exception: e = {e}")
-        logger.exception(e)
+        logger.exception(f"{servicename} failed to start")
         sys.exit(1)
-    sys.exit(0)
+    logger.debug(f"{servicename} exited: status = {status}")
+    if status is None or status < 0:
+        sys.exit(1)
+    else:
+        sys.exit(status)
 
 
 if __name__ == "__main__":

@@ -18,7 +18,7 @@ lenticularis:
     multiplexer:
         port: @SERVER_PORT@
         delegate_hostname: @DELEGATE_HOSTNAME@
-        trusted_hosts:
+        trusted_proxies:
             - @REVERSE_PROXY_ADDRESS@
             - @API_ADDRESS@
         timer_interval: 30

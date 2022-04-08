@@ -1,12 +1,13 @@
-# Copyright (c) 2022 RIKEN R-CCS.
+# Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
 import codecs
 import hashlib
 import json
 import logging
-from logging import getLogger
-from logging.handlers import SysLogHandler
+import logging.handlers
+#from logging import getLogger
+#from logging.handlers import SysLogHandler
 import platform
 import random
 import string
@@ -16,7 +17,7 @@ from urllib.error import HTTPError
 import socket
 
 
-logger = getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 ERROR_EXCEPTION = 120
@@ -42,37 +43,47 @@ class MicrosecondFilter(logging.Filter):
         return True
 
 
-def openlog(facility=None, priority=None):
+def openlog(file, facility, priority):
+    assert (facility is not None) and (priority is not None)
     address = "/dev/log"
 
-    if facility in {
+    if file is not None:
+        handler = logging.FileHandler(file)
+    elif facility in {
             "KERN", "USER", "MAIL", "DAEMON", "AUTH", "LPR",
             "NEWS", "UUCP", "CRON", "SYSLOG",
             "LOCAL0", "LOCAL1", "LOCAL2", "LOCAL3", "LOCAL4",
             "LOCAL5", "LOCAL6", "LOCAL7", "AUTHPRIV"}:
-        facility = eval(f"SysLogHandler.LOG_{facility}")
+        fa = eval(f"logging.handlers.SysLogHandler.LOG_{facility}")
+        handler = logging.handlers.SysLogHandler(address=address, facility=fa)
     else:
-        facility = SysLogHandler.LOG_LOCAL7
+        fa = logging.handlers.SysLogHandler.LOG_LOCAL7
+        handler = logging.handlers.SysLogHandler(address=address, facility=fa)
 
     if priority in {
             "EMERG", "ALERT", "CRIT", "ERR", "WARNING",
             "NOTICE", "INFO", "DEBUG"}:
-        priority = eval(f"logging.{priority}")
+        pr = eval(f"logging.{priority}")
     else:
-        priority = logging.INFO
+        pr = logging.INFO
 
-    if priority == logging.DEBUG:
-        format = ("%(microsecond)s - %(levelname)s:[%(hostname)s:%(threadName)s.%(thread)d]:"
+    if file is not None:
+        format = ("%(asctime)s %(levelname)s: "
                   "%(filename)s:%(lineno)s:%(funcName)s: %(message)s")
     else:
-        format = ("%(asctime)s - %(levelname)s:"
-                  "%(filename)s:%(lineno)s:%(funcName)s: %(message)s")
-    handler = SysLogHandler(address=address, facility=facility)
+        if pr == logging.DEBUG:
+            format = ("lenticularis: %(levelname)s:[%(hostname)s:%(threadName)s.%(thread)d]:"
+                      "%(filename)s:%(lineno)s:%(funcName)s: %(message)s")
+
+        else:
+            format = ("lenticularis: %(levelname)s: "
+                      "%(filename)s:%(lineno)s:%(funcName)s: %(message)s")
+
     handler.addFilter(HostnameFilter())
     handler.addFilter(MicrosecondFilter())
     handler.setFormatter(logging.Formatter(format))
     logger.addHandler(handler)
-    logger.setLevel(priority)
+    logger.setLevel(pr)
 
     if priority == logging.DEBUG:
         logger.debug("*** openlog: priority=DEBUG ***")
@@ -85,10 +96,10 @@ class Read1Reader():
     sniff_offset = 0
     sniff_rest = 512
 
-    def __init__(self, stream, thunk=None, 
+    def __init__(self, stream, thunk=None,
                  sniff=False, sniff_marker="-", use_read=False):
         #self.response = response
-        
+
         self.stream = stream
         self.use_read = use_read
         self.thunk = thunk
@@ -435,4 +446,4 @@ def accesslog(status, client_addr, user, method, url,
     user = user if user else "-"
     content_length_upstream = content_length_upstream if content_length_upstream else "-"
     content_length_downstream = content_length_downstream if content_length_downstream else "-"
-    logger.info(f"{access_time} {status} {client_addr} {user} {method} {url} {content_length_upstream} {content_length_downstream}")
+    logger.debug(f"{access_time} {status} {client_addr} {user} {method} {url} {content_length_upstream} {content_length_downstream}")

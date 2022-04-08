@@ -506,7 +506,7 @@ Install Manual of Lenticularis
 
 
       webui:
-          trusted_hosts:
+          trusted_proxies:
       # trust reverse-proxy
               - localhost
       # secret key for CSRF protector. (DO NOT USE REDIS'S PASSWORD HERE)
@@ -652,7 +652,7 @@ Install Manual of Lenticularis
               port: 8000
       # delegate hostname
               delegate_hostname: lent8.example.com
-              trusted_hosts:
+              trusted_proxies:
       # trust reverse-proxy
                   - localhost
       # and also trust API node (in this example, they are same so you can omit it)

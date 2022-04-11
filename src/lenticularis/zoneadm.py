@@ -1,4 +1,6 @@
-# Copyright (c) 2022 RIKEN R-CCS.
+"""Pool mangement."""
+
+# Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
 from lenticularis.lockdb import LockDB
@@ -17,6 +19,117 @@ import os
 import string
 import sys
 import time
+
+
+def _check_bucket_fmt(bucket):
+                bucket_keys = set(bucket.keys())
+                return bucket_keys == {"key", "policy"}
+
+def _check_access_key_fmt(access_key):
+                access_key_keys = set(access_key.keys())
+                return ({"accessKeyID"}.issubset(access_key_keys) and
+                        access_key_keys.issubset({"accessKeyID", "secretAccessKey", "policyName"}))
+
+def _check_create_bucket_keys(zone):
+            """ zone ::= {"buckets": [{"key": bucket_name,
+                                       "policy": policy}]}
+            """
+            if zone.keys() != {"buckets"}:
+                raise Exception(f"update_buckets: invalid key set: {set(zone.keys())}")
+            if not all(_check_bucket_fmt(bucket) for bucket in zone["buckets"]):
+                raise Exception(f"update_buckets: invalid bucket: {zone}")
+
+def _check_change_secret_keys(zone):
+            """ zone ::= {"accessKeys": [accessKey]}
+                accessKey ::= {"accessKeyID": access_key_id,
+                               "secretAccessKey": secret (optional),
+                               "policyName": policy (optional) }
+            """
+            if zone.keys() != {"accessKeys"}:
+                raise Exception(f"update_secret_keys: invalid key set: {set(zone.keys())}")
+            if not all(_check_access_key_fmt(access_key) for access_key in zone["accessKeys"]):
+                raise Exception(f"change_secret_key: invalid accessKey: {zone}")
+
+def _check_zone_keys(zone):
+            given_keys = set(zone.keys())
+            mandatory_keys = {"group", "bucketsDir", "buckets", "accessKeys",
+                              "directHostnames", "expDate", "status"}
+            allowed_keys = mandatory_keys.union({"user", "rootSecret", "permission"})
+            if not mandatory_keys.issubset(given_keys):
+                raise Exception(f"upsert_zone: invalid key set: missing {mandatory_keys - given_keys}")
+            if not given_keys.issubset(allowed_keys):
+                raise Exception(f"upsert_zone: invalid key set {given_keys - allowed_keys}")
+
+def _check_zone_owner(user_id, zone_id, zone):
+            logger.debug(f"+++")
+            if zone["user"] != user_id:
+                existing_user = zone["user"]
+                logger.error(f"user_id mismatch: {user_id} != {existing_user} in {zone_id}")
+                raise Exception(f"user_id mismatch: {user_id} != {existing_user} in {zone_id}")
+
+def _gen_unique_key(key_generator, allkeys):
+            while True:
+                key = key_generator()
+                if key not in allkeys:
+                    break
+            allkeys.add(key)
+            return key
+
+def _encrypt_or_generate(dic, key):
+            val = dic.get(key)
+            dic[key] = encrypt_secret(val if val else gen_secret_access_key())
+
+def _check_bucket_names(zone):
+            for bucket in zone.get("buckets", []):
+                _check_bucket_name(zone, bucket)
+
+def _check_bucket_name(zone, bucket):
+            name = bucket["key"]
+            if len(name) < 3:
+                raise Exception(f"too short bucket name: {name}")
+            if len(name) > 63:
+                raise Exception(f"too long bucket name: {name}")
+
+            logger.debug("@@@ CHECK_BUCKET_NAME: FIXME XXX ")
+
+            #    if not name ~ "[a-z0-9][-\.a-z0-9][a-z0-9]":
+            #        raise Exception(f"")
+            #    if strstr(name, ".."):
+            #        raise Exception(f"")
+            #    # buckets: 3..63, [a-z0-9][-\.a-z0-9][a-z0-9]
+            #    #          no .. , not ip-address form
+
+            check_policy(bucket["policy"])  # {"none", "upload", "download", "public"}
+
+def _check_direct_hostname_flat(host_label):
+            logger.error(f"@@@ check_direct_hostname_flat")
+            # logger.error(f"@@@ check_direct_hostname_flat XXX FIXME")
+            if '.' in host_label:
+                raise Exception(f"invalid direct hostname: {host_label}: only one level label is allowed")
+            _check_rfc1035_label(host_label)
+            _check_rfc1122_hostname(host_label)
+
+def _check_rfc1035_label(label):
+            if len(label) > 63:
+                raise Exception(f"{label}: too long")
+            if len(label) < 1:
+                raise Exception(f"{label}: too short")
+
+def _check_rfc1122_hostname(label):
+            alnum = string.ascii_lowercase + string.digits
+            if not all(c in alnum + '-' for c in label):
+                raise Exception(f"{label}: contains invalid char(s)")
+            if not label[0] in alnum:
+                raise Exception(f"{label}: must start with a letter or a digit")
+            if not label[-1] in alnum:
+                raise Exception(f"{label}: must end with a letter or a digit")
+
+def _is_subdomain(host_fqdn, domain):
+                return host_fqdn.endswith("." + domain)
+
+def _strip_domain(host_fqdn, domain):
+                domain_len = 1 + len(domain)
+                return host_fqdn[:-domain_len]
 
 
 class ZoneAdm():
@@ -101,6 +214,7 @@ class ZoneAdm():
     def delete_unixUserInfo(self, user_id):  # ADMIN
         self.tables.zones.del_unixUserInfo(user_id)
 
+
     def upsert_zone(self, traceid, user_id, zone_id, zone, include_atime=False,
                     how=None, decrypt=False, initialize=True):  # ADMIN, API
         """
@@ -117,19 +231,21 @@ class ZoneAdm():
                             f" how: {how}"
                             f" decrypt: {decrypt}"
                             )
+        return self.__upsert_zone_main__(traceid, user_id, zone_id, zone, include_atime, how, decrypt, initialize)
 
-        def __upsert_zone_main__():
+
+    def __upsert_zone_main__(self, traceid, user_id, zone_id, zone, include_atime, how, decrypt, initialize):
 
             if not user_id:
                 logger.errror("INTERNAL ERROR: user id is None")
                 raise Exception("INTERNAL ERROR: user id is None")
 
             if how == "update_buckets":
-                check_create_bucket_keys(zone)
+                _check_create_bucket_keys(zone)
                 return self.update_zone(traceid, user_id, zone_id, zone, how, decrypt=decrypt) # let update_zone initialize (default)
 
             if how == "change_secret_key":
-                check_change_secret_keys(zone)
+                _check_change_secret_keys(zone)
                 return self.update_zone(traceid, user_id, zone_id, zone, how, decrypt=decrypt) # let update_zone initialize (default)
 
             # else: how in {"create_zone", "update_zone", None}
@@ -139,7 +255,7 @@ class ZoneAdm():
                 raise Exception("INTERNAL ERROR: zone_id should be None when creating a zone.")
 
             atime_from_arg = zone.pop("atime", None) if include_atime else None
-            check_zone_keys(zone)
+            _check_zone_keys(zone)
 
             logger.debug("@@@"
                                 f" user_id: {user_id}"
@@ -150,48 +266,10 @@ class ZoneAdm():
                                 )
 
             return self.update_zone(traceid, user_id, zone_id, zone, how,
-                                    atime_from_arg=atime_from_arg, 
+                                    atime_from_arg=atime_from_arg,
                                     initialize=initialize, # owerride behaviour
                                     decrypt=decrypt)
 
-        def check_create_bucket_keys(zone):
-            """ zone ::= {"buckets": [{"key": bucket_name,
-                                       "policy": policy}]}
-            """
-            def check_bucket_fmt(bucket):
-                bucket_keys = set(bucket.keys())
-                return bucket_keys == {"key", "policy"}
-            if zone.keys() != {"buckets"}:
-                raise Exception(f"update_buckets: invalid key set: {set(zone.keys())}")
-            if not all(check_bucket_fmt(bucket) for bucket in zone["buckets"]):
-                raise Exception(f"update_buckets: invalid bucket: {zone}")
-
-        def check_change_secret_keys(zone):
-            """ zone ::= {"accessKeys": [accessKey]}
-                accessKey ::= {"accessKeyID": access_key_id,
-                               "secretAccessKey": secret (optional),
-                               "policyName": policy (optional) }
-            """
-            def check_access_key_fmt(access_key):
-                access_key_keys = set(access_key.keys())
-                return ({"accessKeyID"}.issubset(access_key_keys) and
-                        access_key_keys.issubset({"accessKeyID", "secretAccessKey", "policyName"}))
-            if zone.keys() != {"accessKeys"}:
-                raise Exception(f"update_secret_keys: invalid key set: {set(zone.keys())}")
-            if not all(check_access_key_fmt(access_key) for access_key in zone["accessKeys"]):
-                raise Exception(f"change_secret_key: invalid accessKey: {zone}")
-
-        def check_zone_keys(zone):
-            given_keys = set(zone.keys())
-            mandatory_keys = {"group", "bucketsDir", "buckets", "accessKeys",
-                              "directHostnames", "expDate", "status"}
-            allowed_keys = mandatory_keys.union({"user", "rootSecret", "permission"})
-            if not mandatory_keys.issubset(given_keys):
-                raise Exception(f"upsert_zone: invalid key set: missing {mandatory_keys - given_keys}")
-            if not given_keys.issubset(allowed_keys):
-                raise Exception(f"upsert_zone: invalid key set {given_keys - allowed_keys}")
-
-        return __upsert_zone_main__()
 
     def delete_zone(self, traceid, user_id, zoneID):  # ADMIN, API
         logger.debug(f"+++ {user_id} {zoneID}")
@@ -285,6 +363,19 @@ class ZoneAdm():
     def flush_routing_table(self, everything=False):  # ADMIN
         self.tables.routes.flushall(everything=everything)
 
+    def update_zone_factory(self, traceid, user_id, zoneID, zone, how,
+                    permission=None,
+                    atime_from_arg=None,
+                    initialize=True,
+                    decrypt=False):
+            logger.debug(f"@@@ traceid = {traceid}")
+            logger.debug(f"@@@ user_id = {user_id}")
+            logger.debug(f"@@@ zoneID = {zoneID}")
+            #logger.debug(f"@@@ zone = {zone}")
+            return self.update_zone_with_lockdb(traceid, user_id, zoneID, zone, how,
+                                  permission, atime_from_arg, decrypt, initialize)
+
+
     def update_zone(self, traceid, user_id, zoneID, zone, how,
                     permission=None,
                     atime_from_arg=None,
@@ -292,7 +383,7 @@ class ZoneAdm():
                     decrypt=False):  # private use
 
         """
-        permission           -- independent from "how" 
+        permission           -- independent from "how"
         atime_from_arg       -- ditto.   <= include_atime
         initialize           -- ditto.
         decrypt              -- ditto.
@@ -422,16 +513,8 @@ class ZoneAdm():
 
         """
 
-        def update_zone_factory():
-            logger.debug(f"@@@ traceid = {traceid}")
-            logger.debug(f"@@@ user_id = {user_id}")
-            logger.debug(f"@@@ zoneID = {zoneID}")
-            #logger.debug(f"@@@ zone = {zone}")
-            return self.update_zone_with_lockdb(traceid, user_id, zoneID, zone, how,
-                                  permission, atime_from_arg, decrypt, initialize)
-
         if zoneID is None:  # do update without locking zone
-            return update_zone_factory()
+            return self.update_zone_factory(traceid, user_id, zoneID, zone, how, permission, atime_from_arg, initialize, decrypt)
 
         lock = LockDB(self.tables.zones)
         key = f"{self.zone_table_lock_pfx}{zoneID}"
@@ -439,12 +522,53 @@ class ZoneAdm():
         try:
             lock.lock(key, self.timeout)
             # logger.debug(f"@@@ case 2: LOCK SUCCEEDED: {zoneID}")
-            return update_zone_factory()
+            return self.update_zone_factory(traceid, user_id, zoneID, zone, how, permission, atime_from_arg, initialize, decrypt)
         finally:
             # logger.debug(f"@@@ UNLOCK {zoneID}")
             lock.unlock()
 
-        # NOTREACHED
+
+    def _delete_existing_zone(self, existing):
+            logger.debug(f"+++")
+            logger.debug(f"@@@ del_mode {zone_id}")
+            self.tables.zones.del_mode(zone_id)
+            logger.debug(f"@@@ del_atime {zone_id}")
+            self.tables.zones.del_atime(zone_id)
+            logger.debug(f"@@@ DELETE PTR {zone_id} {[e.get('accessKeyID') for e in existing.get('accessKeys')]}")
+            self.tables.zones.del_ptr(zone_id, existing)
+            logger.debug("@@@ del_zone")
+            self.tables.zones.del_zone(zone_id)
+            logger.debug("@@@ DONE")
+
+    def _check_user_group(self, user_id, zone):
+            ui = self.fetch_unixUserInfo(user_id)
+            groups = ui.get("groups") if ui else []
+            group = zone.get("group") if zone else None
+            if group not in groups:
+                raise Exception(f"invalid group: {group}")
+
+    def _check_direct_hostname(self, host_fqdn):
+            host_fqdn = host_fqdn.lower()
+            fns = {"flat": _check_direct_hostname_flat}
+
+            criteria = self.system_settings_param["direct_hostname_validator"]
+            logger.debug(f"@@@ {self.system_settings_param}")
+            logger.debug(f"@@@ criteria = {criteria}")
+
+            if any(host_fqdn == d for d in self.reserved_hostnames):
+                raise Exception(f"{host_fqdn}: the name is reserved'")
+
+            try:
+                domain = next(d for d in self.direct_hostname_domains if _is_subdomain(host_fqdn, d))
+            except StopIteration:
+                raise Exception(f"{host_fqdn}: direct hostname should "
+                                f"ends with one of '{self.direct_hostname_domains}'")
+
+            fn = fns.get(criteria)
+            if fn is None:
+                raise Exception(f"system configulation error: direct_hostname_validator '{criteria}' is not defined")
+            fn(_strip_domain(host_fqdn, domain))
+
 
     def update_zone_with_lockdb(self, traceid, user_id, zone_id, zone, how,
                          permission, atime_from_arg, decrypt, initialize):  # private use
@@ -459,10 +583,10 @@ class ZoneAdm():
                             f" atime_from_arg: {atime_from_arg}"
                             f" decrypt: {decrypt}"
                             )
+        return self.__update_zone_with_lockdb_main__(traceid, user_id, zone_id, zone, how, permission, atime_from_arg, decrypt, initialize)
 
-        def __update_zone_with_lockdb_main__():
-            nonlocal zone_id  # zone_id may be generated during zone installation.
 
+    def __update_zone_with_lockdb_main__(self, traceid, user_id, zone_id, zone, how, permission, atime_from_arg, decrypt, initialize):
             logger.debug(f"@@@ user_id = {user_id}")
             logger.debug(f"@@@ zone_id = {zone_id}")
 
@@ -474,14 +598,14 @@ class ZoneAdm():
                 raise Exception(f"no such zone: {zone_id}")
 
             if existing:
-                check_zone_owner(user_id, zone_id, existing)
+                _check_zone_owner(user_id, zone_id, existing)
 
             delete_zone = how == "delete_zone"
 
             if delete_zone:
                 (need_initialize, need_uniquify) = (False, False)
             else:
-                (need_initialize, need_uniquify) = prepare_zone(
+                (need_initialize, need_uniquify) = self._prepare_zone(
                  user_id, zone_id, existing, zone, permission, how)
 
             # if explicitly ordered not to initialize,
@@ -503,7 +627,7 @@ class ZoneAdm():
                 # If explicitly ordered not to initialize, do not try
                 # to stop minio (regardless it is running or not).
                 if existing and initialize:
-                    clear_route(zone_id, existing)
+                    self._clear_route(zone_id, existing)
                     logger.debug(f"@@@ SEND DECOY zone_id = {zone_id}")
                     status = self.throw_decoy(traceid, zone_id, force=False)  # force stop minio
                     logger.debug(f"@@@ SEND DECOY STATUS {status}")
@@ -519,7 +643,7 @@ class ZoneAdm():
                 pass
             else:
                 need_conflict_check = existing is not None
-                zone_id = lockdb_and_store_zone(user_id, zone_id, zone, need_conflict_check, need_uniquify)
+                zone_id = self._lockdb_and_store_zone(user_id, zone_id, zone, need_conflict_check, need_uniquify)
                 # NOTE: delete ptr here, if user allowed to modify access keys
                 #    in the future lenticularis specification.
 
@@ -528,7 +652,7 @@ class ZoneAdm():
                     self.set_current_mode(zone_id, "deprecated")
                 elif need_initialize:
                     self.set_current_mode(zone_id, "initial")
-                    send_decoy_with_zoneid_ptr(traceid, zone_id)  # trigger initialize minio
+                    self._send_decoy_with_zoneid_ptr(traceid, zone_id)  # trigger initialize minio
                 else:
                     pass
             except Exception as e:
@@ -536,7 +660,7 @@ class ZoneAdm():
                 pass
 
             if delete_zone:
-                delete_existing_zone(existing)
+                self._delete_existing_zone(existing)
             else:
                 logger.debug(f"@@@ INSERT PTR {zone_id} {[e.get('accessKeyID') for e in zone.get('accessKeys')]}")
                 if atime_from_arg:
@@ -572,16 +696,9 @@ class ZoneAdm():
             #logger.debug(f"@@@ zone = {zone}")
             return zone
 
-        ### END __update_zone_with_lockdb_main__
+    ### END __update_zone_with_lockdb_main__
 
-        def check_zone_owner(user_id, zone_id, zone):
-            logger.debug(f"+++")
-            if zone["user"] != user_id:
-                existing_user = zone["user"]
-                logger.error(f"user_id mismatch: {user_id} != {existing_user} in {zone_id}")
-                raise Exception(f"user_id mismatch: {user_id} != {existing_user} in {zone_id}")
-
-        def prepare_zone(user_id, zone_id, existing, zone, permission, how):
+    def _prepare_zone(self, user_id, zone_id, existing, zone, permission, how):
             logger.debug(f"+++")
 
             #logger.debug(f"@@@ zone = {zone}")
@@ -611,7 +728,7 @@ class ZoneAdm():
                 else:
                     zone["buckets"] = [new_bucket]
                 bucket_settings_modified = True
-                need_uniquify = regulate_zone(user_id, existing, zone, permission)  # assert(permission is None)
+                need_uniquify = self._regulate_zone(user_id, existing, zone, permission)  # assert(permission is None)
 
             elif change_secret:
                 logger.debug(f"change secret")
@@ -646,7 +763,7 @@ class ZoneAdm():
                 logger.debug(f"upsert zone")
                 merge_zone(user_id, existing, zone)
 
-                need_uniquify = regulate_zone(user_id, existing, zone, permission)
+                need_uniquify = self._regulate_zone(user_id, existing, zone, permission)
 
                 r = compare_access_keys(existing, zone)
                 if r != []:
@@ -674,10 +791,10 @@ class ZoneAdm():
 
             return (need_initialize, need_uniquify)
 
-        def regulate_zone(user_id, existing, zone, permission):
+    def _regulate_zone(self, user_id, existing, zone, permission):
             logger.debug(f"+++")
 
-            encrypt_or_generate(zone, "rootSecret")
+            _encrypt_or_generate(zone, "rootSecret")
 
             if permission is None:  # how not in {"enable_zone", "disable_zone"}
                 allow_deny_rules = self.tables.zones.get_allow_deny_rules()
@@ -706,7 +823,7 @@ class ZoneAdm():
                     accessKey["accessKeyID"] = ""   # temporary value
                     need_uniquify = True   # accessKeyID is updated in uniquify_zone
 
-                encrypt_or_generate(accessKey, "secretAccessKey")
+                _encrypt_or_generate(accessKey, "secretAccessKey")
 
                 if not accessKey.get("policyName"):  # (unset) or ""
                     accessKey["policyName"] = "readwrite"
@@ -716,7 +833,7 @@ class ZoneAdm():
             check_zone_schema(zone, user_id)
             logger.debug(f"@@@ CHECK_SCHEMA END")
             semantic_check_zone_dict(zone, user_id, self.adm_conf)
-            check_zone_values(user_id, zone)
+            self._check_zone_values(user_id, zone)
 
             directHostnames = zone["directHostnames"]
             logger.debug(f"@@@ directHostnames = {directHostnames}")
@@ -724,11 +841,7 @@ class ZoneAdm():
 
             return need_uniquify
 
-        def encrypt_or_generate(dic, key):
-            val = dic.get(key)
-            dic[key] = encrypt_secret(val if val else gen_secret_access_key())
-
-        def check_zone_values(user_id, zone):
+    def _check_zone_values(self, user_id, zone):
             logger.debug(f"+++")
             num_hostnames_of_zone = len(zone.get("directHostnames"))
 
@@ -742,94 +855,14 @@ class ZoneAdm():
                 raise Exception(f"update_zone: expiration date is beyond the system limit")
 
             for h in zone.get("directHostnames", []):
-                check_direct_hostname(h)
+                self._check_direct_hostname(h)
 
-            check_user_group(user_id, zone)
+            self._check_user_group(user_id, zone)
 
-            check_bucket_names(zone)
+            _check_bucket_names(zone)
 
-        def check_user_group(user_id, zone):
-            ui = self.fetch_unixUserInfo(user_id)
-            groups = ui.get("groups") if ui else []
-            group = zone.get("group") if zone else None
-            if group not in groups:
-                raise Exception(f"invalid group: {group}")
 
-        def check_bucket_names(zone):
-            for bucket in zone.get("buckets", []):
-                check_bucket_name(zone, bucket)
-
-        def check_bucket_name(zone, bucket):
-            name = bucket["key"]
-            if len(name) < 3:
-                raise Exception(f"too short bucket name: {name}")
-            if len(name) > 63:
-                raise Exception(f"too long bucket name: {name}")
-
-            logger.debug("@@@ CHECK_BUCKET_NAME: FIXME XXX ")
-
-#    if not name ~ "[a-z0-9][-\.a-z0-9][a-z0-9]":
-#        raise Exception(f"")
-#    if strstr(name, ".."):
-#        raise Exception(f"")
-#    # buckets: 3..63, [a-z0-9][-\.a-z0-9][a-z0-9]
-#    #          no .. , not ip-address form
-
-            check_policy(bucket["policy"])  # {"none", "upload", "download", "public"}
-
-        def check_direct_hostname_flat(host_label):
-            logger.error(f"@@@ check_direct_hostname_flat")
-            # logger.error(f"@@@ check_direct_hostname_flat XXX FIXME")
-            if '.' in host_label:
-                raise Exception(f"invalid direct hostname: {host_label}: only one level label is allowed")
-            check_rfc1035_label(host_label)
-            check_rfc1122_hostname(host_label)
-
-        def check_rfc1035_label(label):
-            if len(label) > 63:
-                raise Exception(f"{label}: too long")
-            if len(label) < 1:
-                raise Exception(f"{label}: too short")
-
-        def check_rfc1122_hostname(label):
-            alnum = string.ascii_lowercase + string.digits
-            if not all(c in alnum + '-' for c in label):
-                raise Exception(f"{label}: contains invalid char(s)")
-            if not label[0] in alnum:
-                raise Exception(f"{label}: must start with a letter or a digit")
-            if not label[-1] in alnum:
-                raise Exception(f"{label}: must end with a letter or a digit")
-
-        def check_direct_hostname(host_fqdn):
-            host_fqdn = host_fqdn.lower()
-            fns = {"flat": check_direct_hostname_flat}
-
-            criteria = self.system_settings_param["direct_hostname_validator"]
-            logger.debug(f"@@@ {self.system_settings_param}")
-            logger.debug(f"@@@ criteria = {criteria}")
-
-            if any(host_fqdn == d for d in self.reserved_hostnames):
-                raise Exception(f"{host_fqdn}: the name is reserved'")
-
-            def is_subdomain(host_fqdn, domain):
-                return host_fqdn.endswith("." + domain)
-
-            try:
-                domain = next(d for d in self.direct_hostname_domains if is_subdomain(host_fqdn, d))
-            except StopIteration:
-                raise Exception(f"{host_fqdn}: direct hostname should "
-                                f"ends with one of '{self.direct_hostname_domains}'")
-
-            def strip_domain(host_fqdn, domain):
-                domain_len = 1 + len(domain)
-                return host_fqdn[:-domain_len]
-
-            fn = fns.get(criteria)
-            if fn is None:
-                raise Exception(f"system configulation error: direct_hostname_validator '{criteria}' is not defined")
-            fn(strip_domain(host_fqdn, domain))
-
-        def clear_route(zone_id, zone):
+    def _clear_route(self, zone_id, zone):
             logger.debug(f"+++")
             # we need to flush the routing table entry of zone_id before,
             # to make the controller checks minio_address_table and zone.
@@ -839,7 +872,7 @@ class ZoneAdm():
 
             self.tables.routes.del_route(route)
 
-        def lockdb_and_store_zone(user_id, zone_id, zone, need_conflict_check, need_uniquify):
+    def _lockdb_and_store_zone(self, user_id, zone_id, zone, need_conflict_check, need_uniquify):
             logger.debug(f"+++ {zone_id}")
 
             lock = LockDB(self.tables.zones)
@@ -849,7 +882,7 @@ class ZoneAdm():
                 logger.debug(f"lock")
                 lock_status = lock.lock(key, self.timeout)
                 if need_conflict_check or need_uniquify:
-                    zone_id = uniquify_zone(user_id, zone_id, zone)
+                    zone_id = self._uniquify_zone(user_id, zone_id, zone)
                 #logger.debug(f"@@@ zone = {zone}")
                 logger.debug(f"@@@ call ins_zone")
                 self.tables.zones.ins_zone(zone_id, zone)  # encrypted!
@@ -862,7 +895,7 @@ class ZoneAdm():
             logger.debug(f"--- {zone_id}")
             return zone_id
 
-        def get_all_keys(zone_id):
+    def _get_all_keys(self, zone_id):
             allkeys = set()
             for z_id in self.tables.zones.get_zoneID_list(None):
                 #logger.debug(f"@@@ z_id = {z_id}")
@@ -889,33 +922,25 @@ class ZoneAdm():
             #logger.debug(f"@@@ allkeys = {allkeys}")
             return allkeys
 
-        def gen_unique_key(key_generator, allkeys):
-            while True:
-                key = key_generator()
-                if key not in allkeys:
-                    break
-            allkeys.add(key)
-            return key
-
-        def uniquify_zone(user_id, zone_id, zone):
+    def _uniquify_zone(self, user_id, zone_id, zone):
             logger.debug(f"+++")
             logger.debug(f"@@@ UNIQUIFY")
             reasons = []
             num_zones_of_user = 0
 
             logger.debug(f"@@@ get_allkeys")
-            allkeys = get_all_keys(zone_id)
+            allkeys = self._get_all_keys(zone_id)
             allkeys_orig = allkeys.copy()
             #logger.debug(f"@@@ allkeys = {allkeys}")
 
             if not zone_id:
-                zone_id = gen_unique_key(gen_access_key_id, allkeys)
+                zone_id = _gen_unique_key(gen_access_key_id, allkeys)
                 logger.debug(f"@@@ zone_id = {zone_id}")
 
             access_keys = zone.get("accessKeys", [])
             for access_key in access_keys:
                 if not access_key.get("accessKeyID"):
-                    access_key["accessKeyID"] = gen_unique_key(gen_access_key_id, allkeys)
+                    access_key["accessKeyID"] = _gen_unique_key(gen_access_key_id, allkeys)
 
             #logger.debug(f"@@@ allkeys = {allkeys}")
             logger.debug(f"@@@ newkeys = {allkeys - allkeys_orig}")
@@ -944,7 +969,7 @@ class ZoneAdm():
 
             return zone_id
 
-        def send_decoy_with_zoneid_ptr(traceid, zone_id):
+    def _send_decoy_with_zoneid_ptr(self, traceid, zone_id):
             logger.debug(f"+++")
 
             temp_access_keys = [{"accessKeyID": zone_id}]
@@ -966,20 +991,6 @@ class ZoneAdm():
                 logger.debug(f"@@@ DELETE PTR {zone_id} {[e.get('accessKeyID') for e in temp_access_keys]}")
                 self.tables.zones.del_ptr(zone_id, zoneID_accessible_zone)
             logger.debug("@@@ SEND DECOY END")
-
-        def delete_existing_zone(existing):
-            logger.debug(f"+++")
-            logger.debug(f"@@@ del_mode {zone_id}")
-            self.tables.zones.del_mode(zone_id)
-            logger.debug(f"@@@ del_atime {zone_id}")
-            self.tables.zones.del_atime(zone_id)
-            logger.debug(f"@@@ DELETE PTR {zone_id} {[e.get('accessKeyID') for e in existing.get('accessKeys')]}")
-            self.tables.zones.del_ptr(zone_id, existing)
-            logger.debug("@@@ del_zone")
-            self.tables.zones.del_zone(zone_id)
-            logger.debug("@@@ DONE")
-
-        return __update_zone_with_lockdb_main__()
 
     ### END update_zone_with_lockdb
 
@@ -1035,13 +1046,10 @@ class ZoneAdm():
         for accessKey in access_keys:
             accessKey["secretAccessKey"] = decrypt_secret(accessKey["secretAccessKey"])
 
-    def fetch_zone_list(self, user_id, extra_info=False, include_atime=False,
-            decrypt=False, include_userinfo=False, zone_id=None):  # ADMIN, API
-
-        def pullup_mode(zoneID, zone):
+    def _pullup_mode(self, zoneID, zone):
             zone["mode"] = self.fetch_current_mode(zoneID)
 
-        def pullup_atime(zoneID, zone):
+    def _pullup_atime(self, zoneID, zone):
             # we do not copy atime form routing table here.
             #  (1) manager periodically copy atime from routing table to zone table.
             #  (2) it's nouissance to access atime on routing table, because we must
@@ -1049,15 +1057,19 @@ class ZoneAdm():
             atime = self.tables.zones.get_atime(zoneID)
             zone["atime"] = atime
 
-        def pullup_ptr(zoneID, zone, access_key_ptr, direct_host_ptr):
+    def _pullup_ptr(self, zoneID, zone, access_key_ptr, direct_host_ptr):
             zone["accessKeysPtr"] = [{"key": e, "ptr": v} for (e, v) in access_key_ptr if v == zoneID]
             zone["directHostnamePtr"] = [{"key": e, "ptr": v} for (e, v) in direct_host_ptr if v == zoneID]
 
-        def add_info_for_webui(zoneID, zone, groups):
+    def _add_info_for_webui(self, zoneID, zone, groups):
             zone["groups"] = groups
             zone["directHostnameDomains"] = self.direct_hostname_domains
             zone["delegateHostnames"] = self.delegate_hostnames
             zone["endpoint_url"] = self.endpoint_urls(zone)
+
+    def fetch_zone_list(self, user_id, extra_info=False, include_atime=False,
+            decrypt=False, include_userinfo=False, zone_id=None):  # ADMIN, API
+
 
         # logger.debug(f"@@@ zone_id = {zone_id}")
         groups = None
@@ -1085,16 +1097,16 @@ class ZoneAdm():
             if decrypt:
                 self.decrypt_access_keys(zone)
 
-            pullup_mode(zoneID, zone)
+            self._pullup_mode(zoneID, zone)
 
             if include_atime:
-                pullup_atime(zoneID, zone)
+                self._pullup_atime(zoneID, zone)
 
             if extra_info:
-                pullup_ptr(zoneID, zone, access_key_ptr, direct_host_ptr)
+                self._pullup_ptr(zoneID, zone, access_key_ptr, direct_host_ptr)
 
             if include_userinfo:
-                add_info_for_webui(zoneID, zone, groups)
+                self._add_info_for_webui(zoneID, zone, groups)
 
             zone_list.append(zone)
         # logger.debug(f"@@@ {zone_list} {broken_zones}")

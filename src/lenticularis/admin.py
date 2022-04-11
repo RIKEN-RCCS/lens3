@@ -26,22 +26,22 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("operation",
                         choices=["delete",
-                                "disable",
-                                "drop",
-                                "resetall",
-                                "printall",
-                                "dump",
-                                "flush",
-                                "enable",
-                                "insert",
-                                "restore",
-                                "show",
-                                "throw"])
+                                 "disable",
+                                 "drop",
+                                 "resetall",
+                                 "printall",
+                                 "dump",
+                                 "flush",
+                                 "enable",
+                                 "insert",
+                                 "restore",
+                                 "show",
+                                 "throw"])
 
-    parser.add_argument("--format", choices=["text", "json"])
-    parser.add_argument("--configfile")
+    parser.add_argument("--configfile", "-c")
+    parser.add_argument("--format", "-f", choices=["text", "json"])
     parser.add_argument("--everything", type=bool, default=False)
-                        #action=argparse.BooleanOptionalAction  -- was introduced in Python3.9
+    #action=argparse.BooleanOptionalAction was introduced in Python3.9
 
     args, rest = parser.parse_known_args()
 

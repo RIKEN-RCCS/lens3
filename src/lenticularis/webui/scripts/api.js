@@ -62,7 +62,7 @@ var show_app = new Vue({
 	el: "#show_button",
 	data: show_data,
 	methods: {
-		show: get_zone_list,
+		show_pool_list: get_zone_list,
 		debug: debug,
 	},
 });
@@ -445,7 +445,7 @@ function get_zone_list_body(zone_list) {
 	for (var k = 0; k < zone_list.length; k++) {
 		var zone = zone_list[k];
 		var i = "<input v-on:click='editZone(" + k + ")' type='button' class='button' value='Edit' />" +
-			"<input v-on:click='deleteZone(" + k + ")' type='button' class='button' value='Delete' :disabled='WRONG_deleteButtonDisabled' />" +
+			"<input v-on:click='deleteZone(" + k + ")' type='button' class='button' value='Delete' :disabled='editor_data.deleteButtonDisabled' />" +
 			"<ul style='list-style: none;'>" +
 			"<li v-for='item in items_list[" + k + "]'>" +
 			"<span class='label'> {{ item.text.label }}: </span>" +

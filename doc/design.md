@@ -1542,3 +1542,19 @@ Figure 3 Credential
 
   --config (`--config-dir`)
     --Place in the following directory: `$ PrivateTmp / .mc / {zoneID}`
+
+## Design notes
+
+### Bucket-pool
+
+A bucket-pool has a state reflecting the state of a MinIO instance.
+
+* Bucket-pool states
+  * None
+  * "initial"
+  * "ready"
+  * "suspended"
+  * "deprecated"
+  * "error: " + error-description-string
+* Bucket-pool state changes
+  * `None -> "initial" -> "ready"`

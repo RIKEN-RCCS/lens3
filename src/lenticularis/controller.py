@@ -1,9 +1,9 @@
-# Copyright (c) 2022 RIKEN R-CCS.
+# Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
 from lenticularis.scheduler import Scheduler
 from lenticularis.utility import logger
-from lenticularis.utility import make_clean_env, hostport
+from lenticularis.utility import make_clean_env, host_port
 import os
 from subprocess import Popen, PIPE
 import sys
@@ -97,12 +97,12 @@ class Controller():
             logger.debug(f"@@@ localhost -- return None")
             return None  # localhost
         logger.debug(f"@@@ other -- return ({host}, {port})")
-        return hostport(host, port)
+        return host_port(host, port)
 
         #scheduled_host = self.scheduler.schedule(zone_id)
         #if scheduled_host[0] == self.mux_addr:
         #    return None  # localhost
-        #return hostport(scheduled_host[0], scheduled_host[1])
+        #return host_port(scheduled_host[0], scheduled_host[1])
 
     def start_minio(self, traceid, zone_id, access_key_id):
         """

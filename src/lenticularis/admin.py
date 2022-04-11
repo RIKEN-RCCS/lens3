@@ -1,6 +1,6 @@
 """lenticularis-admin command."""
 
-# Copyright (c) 2022 RIKEN R-CCS.
+# Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
 import argparse
@@ -325,7 +325,7 @@ def admin_main(traceid, adm_conf, args, rest):
 
     def fn_throw_decoy(zone_id):
         logger.debug(f"@@@ THROW DECOY zone_id = {zone_id}")
-        zone_adm.throw_decoy(traceid, zone_id, force=True)
+        zone_adm.check_mux_access_for_zone(traceid, zone_id, force=True)
 
     def fn_show_routing_table():
         (akey_list, host_list, atime_list) = zone_adm.fetch_route_list()

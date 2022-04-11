@@ -211,7 +211,7 @@ def check_number(number):
         raise Exception(f"number expected: {number}")
 
 
-def semantic_check_zone_dict(dict, user, adm_conf):
+def check_pool_dict_is_sound(dict, user, adm_conf):
     """
     in situ checks are defined in `check_zone_values'
     """

@@ -1,10 +1,19 @@
-# Copyright (c) 2022 RIKEN R-CCS.
+"""A set of three Redis DBs."""
+
+# Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
 import json
 from lenticularis.utility import logger
 from lenticularis.utility import safe_json_loads
 from lenticularis.dbase import DBase
+
+
+# Redis DB number.
+
+STORAGE_TABLE_ID = 0
+PROCESS_TABLE_ID = 2
+ROUTING_TABLE_ID = 4
 
 
 class TableCommon():
@@ -31,12 +40,14 @@ class StorageZoneTable(TableCommon):
 
     def ins_ptr(self, zoneID, dict):
         # logger.debug(f"+++ {zoneID} {dict}")
-        for a in dict.get("accessKeys"):   # accessKeys must exist
+        ## accessKeys must exist.
+        for a in dict.get("accessKeys"):
             access_key_id = a.get("accessKeyID")
             if access_key_id:
                 key = f"{self.access_key_id_prefix}{access_key_id}"
                 self.dbase.set(key, zoneID)
-        for directHostname in dict.get("directHostnames"):   # directHostnames must exist
+        ## directHostnames must exist.
+        for directHostname in dict.get("directHostnames"):
             key = f"{self.directHostnamePrefix}{directHostname}"
             self.dbase.set(key, zoneID)
         return None
@@ -153,17 +164,17 @@ class StorageZoneTable(TableCommon):
         # logger.debug(f"+++ {zoneID}")
         return scan_strip(self.dbase.r, self.zoneIDPrefix, zoneID)
 
-    def flushall(self, everything=False):
-        deleteall(self.dbase.r, self.access_key_id_prefix)
-        deleteall(self.dbase.r, self.directHostnamePrefix)
-        deleteall(self.dbase.r, self.zoneIDPrefix)
-        deleteall(self.dbase.r, self.atimePrefix)
-        deleteall(self.dbase.r, self.modePrefix)
+    def clear_all(self, everything):
+        delete_all(self.dbase.r, self.access_key_id_prefix)
+        delete_all(self.dbase.r, self.directHostnamePrefix)
+        delete_all(self.dbase.r, self.zoneIDPrefix)
+        delete_all(self.dbase.r, self.atimePrefix)
+        delete_all(self.dbase.r, self.modePrefix)
         zone_table_lock_pfx = "zk:"
-        deleteall(self.dbase.r, zone_table_lock_pfx)
+        delete_all(self.dbase.r, zone_table_lock_pfx)
         if everything:
-            deleteall(self.dbase.r, self.allowDenyRuleKey)
-            deleteall(self.dbase.r, self.unixUserPrefix)
+            delete_all(self.dbase.r, self.allowDenyRuleKey)
+            delete_all(self.dbase.r, self.unixUserPrefix)
 
     def printall(self):
         prntall(self.dbase.r, "zone")
@@ -172,6 +183,7 @@ class StorageZoneTable(TableCommon):
 class ProcessTable(TableCommon):
     minioAddrPrefix = "ma:"
     muxPrefix = "mx:"
+    lock_key = "lk:"
     hashes = {minioAddrPrefix, muxPrefix}
     structured = {"mux_conf"}
 
@@ -238,12 +250,15 @@ class ProcessTable(TableCommon):
         # logger.debug(f"+++ {muxID}")
         return scan_strip(self.dbase.r, self.muxPrefix, muxID, include_value=self.get_mux)
 
-    def flushall(self, everything=False):
+    def clear_all(self, everything):
+        """Clears Redis DB.  It leaves entires for multiplexers unless
+        everything.
+        """
         # logger.debug(f"@@@ FLUSHALL: EVERYTHING = {everything}")
-        deleteall(self.dbase.r, self.minioAddrPrefix)
+        delete_all(self.dbase.r, self.lock_key)
+        delete_all(self.dbase.r, self.minioAddrPrefix)
         if everything:
-            deleteall(self.dbase.r, self.muxPrefix)
-        deleteall(self.dbase.r, "lk:")
+            delete_all(self.dbase.r, self.muxPrefix)
 
     def printall(self):
         prntall(self.dbase.r, "process")
@@ -341,18 +356,13 @@ class RoutingTable(TableCommon):
         atime = scan_strip(self.dbase.r, self.atimePrefix, None, include_value="get")
         return (access_key_route, direct_host_route, atime)
 
-    def flushall(self, everything=False):
-        deleteall(self.dbase.r, self.access_key_id_prefix)
-        deleteall(self.dbase.r, self.directHostnamePrefix)
-        deleteall(self.dbase.r, self.atimePrefix)
+    def clear_all(self, everything):
+        delete_all(self.dbase.r, self.access_key_id_prefix)
+        delete_all(self.dbase.r, self.directHostnamePrefix)
+        delete_all(self.dbase.r, self.atimePrefix)
 
     def printall(self):
         prntall(self.dbase.r, "route")
-
-
-STORAGE_ZONE_TABLE_ID = 0
-PROCESS_TABLE_ID = 2
-ROUTING_TABLE_ID = 4
 
 
 class Tables():
@@ -370,7 +380,7 @@ def get_tables(mux_conf):
     redis_port = redis_conf["port"]
     redis_password = redis_conf["password"]
 
-    zone_table = StorageZoneTable(redis_host, redis_port, STORAGE_ZONE_TABLE_ID,
+    zone_table = StorageZoneTable(redis_host, redis_port, STORAGE_TABLE_ID,
                                   redis_password)
     process_table = ProcessTable(redis_host, redis_port, PROCESS_TABLE_ID,
                                  redis_password)
@@ -386,7 +396,7 @@ def prntall(r, name):
         print(f"{key}")
 
 
-def deleteall(r, match):
+def delete_all(r, match):
     for key in r.scan_iter(f"{match}*"):
         r.delete(key)
 

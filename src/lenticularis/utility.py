@@ -1,3 +1,5 @@
+"""Small functions."""
+
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
@@ -18,7 +20,6 @@ import socket
 
 
 logger = logging.getLogger(__name__)
-
 
 ERROR_EXCEPTION = 120
 ERROR_START_MINIO = 123
@@ -201,7 +202,7 @@ def parse_s3_auth(authorization):
     return None
 
 
-def send_decoy_packet(traceid, host, access_key_id, delegate_hostname, timeout):
+def check_mux_access(traceid, host, access_key_id, delegate_hostname, timeout):
     logger.debug(f"@@@ SEND DECOY PACKET")
     proto = "http"
     url = f"{proto}://{host}/"
@@ -210,25 +211,22 @@ def send_decoy_packet(traceid, host, access_key_id, delegate_hostname, timeout):
     authorization = forge_s3_auth(access_key_id)
     headers["AUTHORIZATION"] = authorization
     headers["X-TRACEID"] = traceid
-    # headers["X-REAL-IP"] = (unset)   # if X-REAL-IP is missing, multiplexer will use peer_addr instead.
+    # headers["X-REAL-IP"] = (unset)
     headers["X-FORWARDED-PROTO"] = proto
-    logger.debug(f"@@@ traceid = {traceid}")
-    logger.debug(f"@@@ host = {host}")
-    logger.debug(f"@@@ url = {url}")
-    logger.debug(f"@@@ headers = {headers}")
+    ## A multiplexer uses a peer-address if X-REAL-IP is missing.
     req = Request(url, headers=headers)
-    logger.debug(f"@@@ request = {req}")
+    logger.debug(f"urlopen with url={url}, timeout={timeout},"
+                 f" headers={headers}")
     try:
-        logger.debug("@@@ (try)")
-        res = urlopen(req, timeout=timeout)
+        response = urlopen(req, timeout=timeout)
     except HTTPError as e:
         logger.debug(f"@@@ EXCEPTTION: {e}")
         b = e.read()
         logger.debug(f"@@@ ERROR BODY: {b}")
         # logger.exception(e)  # do not record exception detail
         # OK. expected behaviour
-        res = e
-    status = f"{res.status}"
+        response = e
+    status = f"{response.status}"
     logger.debug(f"@@@ status {status}")
     return status
 
@@ -411,10 +409,12 @@ def dump_object(obj, lv="", array_element=False, order=None):
     return r
 
 
-def hostport(host, port):
+def host_port(host, port):
+    """Quotes an ipv6 address."""
     if ':' in host:
-        host = f"[{host}]"
-    return f"{host}:{port}"
+        return f"[{host}]:{port}"
+    else:
+        return f"{host}:{port}"
 
 
 def safe_json_loads(s, parse_int=None, default=None):

@@ -10,7 +10,7 @@ from lenticularis.utility import ERROR_READCONF, ERROR_FORK, ERROR_START_MINIO
 from lenticularis.utility import decrypt_secret, outer_join
 from lenticularis.utility import gen_access_key_id, gen_secret_access_key
 from lenticularis.utility import logger, openlog
-from lenticularis.utility import make_clean_env, hostport
+from lenticularis.utility import make_clean_env, host_port
 from lenticularis.utility import remove_trailing_shash, uniform_distribution_jitter
 import math
 import os
@@ -286,7 +286,7 @@ class MinioManager():
                 raise
 
             host = self.host
-            self.minioAddr = hostport(host, port)
+            self.minioAddr = host_port(host, port)
 
             self.mc = Mc(self.mc_bin, self.mcenv)
             with tempfile.TemporaryDirectory() as confdir:

@@ -1,10 +1,12 @@
-# Copyright (c) 2022 RIKEN R-CCS.
+"""Redis DB wrapper."""
+
+# Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
 import json
 from lenticularis.utility import logger
 from lenticularis.utility import safe_json_loads
-from redis import ConnectionError 
+from redis import ConnectionError
 from redis import Redis
 import time
 
@@ -14,7 +16,7 @@ class DBase():
         def wait_for_redis():
             while True:
                 try:
-                    self.r.ping() 
+                    self.r.ping()
                     logger.debug("@@@ Redis is Ready")
                     return
                 except ConnectionError as e:

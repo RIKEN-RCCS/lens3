@@ -8,7 +8,7 @@ from lenticularis.utility import rot13
 from lenticularis.utility import random_str
 from lenticularis.utility import forge_s3_auth
 from lenticularis.utility import parse_s3_auth
-from lenticularis.utility import send_decoy_packet
+from lenticularis.utility import check_mux_access
 from lenticularis.utility import check_permission
 from lenticularis.utility import make_clean_env
 #from lenticularis.utility import validate_zone_dict

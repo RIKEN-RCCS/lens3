@@ -9,9 +9,9 @@ from lenticularis.utility import decrypt_secret, encrypt_secret
 from lenticularis.utility import gen_access_key_id, gen_secret_access_key
 from lenticularis.utility import logger
 from lenticularis.utility import pick_one, check_permission, get_mux_addr
-from lenticularis.utility import send_decoy_packet, hostport
+from lenticularis.utility import check_mux_access, host_port
 from lenticularis.utility import uniq_d
-from lenticularis.zoneutil import check_zone_schema, semantic_check_zone_dict
+from lenticularis.zoneutil import check_zone_schema, check_pool_dict_is_sound
 from lenticularis.zoneutil import merge_zone, check_conflict
 from lenticularis.zoneutil import compare_access_keys, compare_buckets_directory
 from lenticularis.zoneutil import compare_buckets, check_policy
@@ -231,10 +231,10 @@ class ZoneAdm():
                             f" how: {how}"
                             f" decrypt: {decrypt}"
                             )
-        return self.__upsert_zone_main__(traceid, user_id, zone_id, zone, include_atime, how, decrypt, initialize)
+        return self._upsert_zone_main_(traceid, user_id, zone_id, zone, include_atime, how, decrypt, initialize)
 
 
-    def __upsert_zone_main__(self, traceid, user_id, zone_id, zone, include_atime, how, decrypt, initialize):
+    def _upsert_zone_main_(self, traceid, user_id, zone_id, zone, include_atime, how, decrypt, initialize):
 
             if not user_id:
                 logger.errror("INTERNAL ERROR: user id is None")
@@ -290,12 +290,12 @@ class ZoneAdm():
         return self.update_zone(traceid, user_id, zoneID, zone, how, permission="allowed")
 
     def flush_zone_table(self, everything=False):  # ADMIN
-        self.tables.zones.flushall(everything=everything)
+        self.tables.zones.clear_all(everything=everything)
 
     def reset_database(self, everything=False):  # ADMIN
-        self.tables.zones.flushall(everything=everything)
-        self.tables.processes.flushall(everything=everything)
-        self.tables.routes.flushall(everything=everything)
+        self.tables.zones.clear_all(everything=everything)
+        self.tables.processes.clear_all(everything=everything)
+        self.tables.routes.clear_all(everything=everything)
 
     def print_database(self):  # ADMIN
         self.tables.zones.printall()
@@ -312,14 +312,15 @@ class ZoneAdm():
         return self.tables.processes.del_minio_address(processID)
 
     def flush_process_table(self, everything=False):  # ADMIN
-        self.tables.processes.flushall(everything=everything)
+        self.tables.processes.clear_all(everything=everything)
 
-    def throw_decoy(self, traceid, zoneID, force=False, access_key_id=None):  # ADMIN
-        """ send a decoy to the multiplexer of the zone, if minio of the zone is running.
-            force=True to send a decoy regardless minio is running or not.
-            if there are no zone, do nothing.
+    def check_mux_access_for_zone(self, traceid, zoneID, force, access_key_id=None):  # ADMIN
+        """Tries to access a multiplexer of the zone, if minio of the zone is
+        running. force=True to send a decoy regardless minio is
+        running or not. if there are no zone, do nothing.
         """
-        logger.debug(f"+++ {zoneID} {force} {access_key_id}")
+
+        logger.debug(f"zone={zoneID}, access_key={access_key_id}, force={force}")
 
         minioAddr = self.tables.processes.get_minio_address(zoneID)
         multiplexers = self.refresh_multiplexer_list()
@@ -337,20 +338,22 @@ class ZoneAdm():
             multiplexer = pick_one(multiplexers)
             logger.debug(f"@@@ PICK ONE = {multiplexer}")
         else:
-            # MinIO is not running. Do nohing.
+            ## Done if MinIO is not running.
+            logger.debug(f"No check, as no MinIO instance is running.")
             return ""
         logger.debug(f"@@@ MULTIPLEXER = {multiplexer}")
-        if multiplexer is None:
-            raise Exception("throw_decoy: cannot find multiplexer")
-        host = hostport(multiplexer[0], multiplexer[1])  # multiplexer == (host, port)
+        assert multiplexer is not None
+        ## multiplexer is a pair of (host, port).
+        host = host_port(multiplexer[0], multiplexer[1])
         if access_key_id is None:
             zone = self.tables.zones.get_zone(zoneID)
             if zone is None:
-                return ""  # zone not found. do nothing.
+                ## Done if neither access-key nor zone.
+                logger.debug(f"No check, as neither access-key nor zone.")
+                return ""
             access_key_id = zone["accessKeys"][0]["accessKeyID"]  # any key is suffice.
         delegate_hostname = self.delegate_hostnames[0]
-        logger.debug(f"@@@ HOST = {host}")
-        status = send_decoy_packet(traceid,
+        status = check_mux_access(traceid,
                                    host,
                                    access_key_id,
                                    delegate_hostname, self.decoy_connection_timeout)
@@ -361,7 +364,7 @@ class ZoneAdm():
         return self.tables.routes.get_route_list()
 
     def flush_routing_table(self, everything=False):  # ADMIN
-        self.tables.routes.flushall(everything=everything)
+        self.tables.routes.clear_all(everything=everything)
 
     def update_zone_factory(self, traceid, user_id, zoneID, zone, how,
                     permission=None,
@@ -583,10 +586,10 @@ class ZoneAdm():
                             f" atime_from_arg: {atime_from_arg}"
                             f" decrypt: {decrypt}"
                             )
-        return self.__update_zone_with_lockdb_main__(traceid, user_id, zone_id, zone, how, permission, atime_from_arg, decrypt, initialize)
+        return self._update_zone_with_lockdb_main_(traceid, user_id, zone_id, zone, how, permission, atime_from_arg, decrypt, initialize)
 
 
-    def __update_zone_with_lockdb_main__(self, traceid, user_id, zone_id, zone, how, permission, atime_from_arg, decrypt, initialize):
+    def _update_zone_with_lockdb_main_(self, traceid, user_id, zone_id, zone, how, permission, atime_from_arg, decrypt, initialize):
             logger.debug(f"@@@ user_id = {user_id}")
             logger.debug(f"@@@ zone_id = {zone_id}")
 
@@ -629,7 +632,8 @@ class ZoneAdm():
                 if existing and initialize:
                     self._clear_route(zone_id, existing)
                     logger.debug(f"@@@ SEND DECOY zone_id = {zone_id}")
-                    status = self.throw_decoy(traceid, zone_id, force=False)  # force stop minio
+                    ## Stop MinIO.
+                    status = self.check_mux_access_for_zone(traceid, zone_id, force=False)
                     logger.debug(f"@@@ SEND DECOY STATUS {status}")
                     minioAddr = self.tables.processes.get_minio_address(zone_id)
                     if minioAddr is not None:
@@ -696,7 +700,7 @@ class ZoneAdm():
             #logger.debug(f"@@@ zone = {zone}")
             return zone
 
-    ### END __update_zone_with_lockdb_main__
+    ### END _update_zone_with_lockdb_main_
 
     def _prepare_zone(self, user_id, zone_id, existing, zone, permission, how):
             logger.debug(f"+++")
@@ -728,7 +732,7 @@ class ZoneAdm():
                 else:
                     zone["buckets"] = [new_bucket]
                 bucket_settings_modified = True
-                need_uniquify = self._regulate_zone(user_id, existing, zone, permission)  # assert(permission is None)
+                need_uniquify = self._regularize_pool_dict(user_id, existing, zone, permission)  # assert(permission is None)
 
             elif change_secret:
                 logger.debug(f"change secret")
@@ -763,7 +767,7 @@ class ZoneAdm():
                 logger.debug(f"upsert zone")
                 merge_zone(user_id, existing, zone)
 
-                need_uniquify = self._regulate_zone(user_id, existing, zone, permission)
+                need_uniquify = self._regularize_pool_dict(user_id, existing, zone, permission)
 
                 r = compare_access_keys(existing, zone)
                 if r != []:
@@ -791,7 +795,7 @@ class ZoneAdm():
 
             return (need_initialize, need_uniquify)
 
-    def _regulate_zone(self, user_id, existing, zone, permission):
+    def _regularize_pool_dict(self, user_id, existing, zone, permission):
             logger.debug(f"+++")
 
             _encrypt_or_generate(zone, "rootSecret")
@@ -827,12 +831,12 @@ class ZoneAdm():
 
                 if not accessKey.get("policyName"):  # (unset) or ""
                     accessKey["policyName"] = "readwrite"
-                # policyName will be checked in `semantic_check_zone_dict`
+                # policyName will be checked in `check_pool_dict_is_sound`
 
             logger.debug(f"@@@ CHECK_SCHEMA")
             check_zone_schema(zone, user_id)
             logger.debug(f"@@@ CHECK_SCHEMA END")
-            semantic_check_zone_dict(zone, user_id, self.adm_conf)
+            check_pool_dict_is_sound(zone, user_id, self.adm_conf)
             self._check_zone_values(user_id, zone)
 
             directHostnames = zone["directHostnames"]
@@ -980,7 +984,8 @@ class ZoneAdm():
                 self.tables.zones.ins_ptr(zone_id, zoneID_accessible_zone)
                 logger.debug("@@@ SEND DECOY START (try)")
                 logger.debug(f"@@@ SEND DECOY zone_id = {zone_id}")
-                status = self.throw_decoy(traceid, zone_id, force=True, access_key_id=zone_id)  # trigger initialize
+                ## Trigger initialize.
+                status = self.check_mux_access_for_zone(traceid, zone_id, force=True, access_key_id=zone_id)
                 logger.debug(f"@@@ SEND DECOY STATUS {status}")
             except Exception as e:
                 logger.debug(f"@@@ SEND DECOY EXCEPTION {e}")
@@ -999,7 +1004,7 @@ class ZoneAdm():
 
     def set_current_mode(self, zoneID, state):  # private use
         o = self.fetch_current_mode(zoneID)
-        logger.debug("change bucket-pool-status({zoneID}): {o} to {state}")
+        logger.debug(f"Change bucket-pool-state ({zoneID}): {o} to {state}")
         self.tables.zones.set_mode(zoneID, state)
 
     def zone_to_user(self, zoneID):  # ADMIN, multiplexer   CODE CLONE @ multiplexer.py

@@ -90,7 +90,7 @@ async def get_traceid(request: Request):
 
 
 @app.get("/")
-async def app_show_ui(request: Request,
+async def app_get_show_ui(request: Request,
                       user_id: str = Depends(get_authorized_user),
                       traceid: str = Depends(get_traceid),
                       client_addr: str = Depends(get_client_addr)):
@@ -102,7 +102,7 @@ async def app_show_ui(request: Request,
 
 
 @app.get("/template")
-async def func_zone_template(request: Request,
+async def app_get_zone_template(request: Request,
                          user_id: str = Depends(get_authorized_user),
                          traceid: str = Depends(get_traceid),
                          client_addr: str = Depends(get_client_addr),
@@ -113,7 +113,7 @@ async def func_zone_template(request: Request,
 
 
 @app.get("/zone")
-async def func_zone_list(request: Request,
+async def app_get_zone_list(request: Request,
                          user_id: str = Depends(get_authorized_user),
                          traceid: str = Depends(get_traceid),
                          client_addr: str = Depends(get_client_addr),
@@ -124,7 +124,7 @@ async def func_zone_list(request: Request,
 
 
 @app.get("/zone/{zone_id}")
-async def func_zone_get(zone_id: str,
+async def app_get_zone_get(zone_id: str,
                          request: Request,
                          user_id: str = Depends(get_authorized_user),
                          traceid: str = Depends(get_traceid),
@@ -136,7 +136,7 @@ async def func_zone_get(zone_id: str,
 
 
 @app.post("/zone")
-async def func_create_zone(request: Request,
+async def app_post_create_zone(request: Request,
                            user_id: str = Depends(get_authorized_user),
                            traceid: str = Depends(get_traceid),
                            client_addr: str = Depends(get_client_addr),
@@ -147,7 +147,7 @@ async def func_create_zone(request: Request,
 
 
 @app.put("/zone/{zone_id}")
-async def func_upsert_zone(zone_id: str,
+async def app_put_upsert_zone(zone_id: str,
                            request: Request,
                            user_id: str = Depends(get_authorized_user),
                            traceid: str = Depends(get_traceid),
@@ -159,7 +159,7 @@ async def func_upsert_zone(zone_id: str,
 
 
 @app.put("/zone/{zone_id}/buckets")
-async def func_upsert_zone_buckets(zone_id: str,
+async def app_put_upsert_zone_buckets(zone_id: str,
                            request: Request,
                            user_id: str = Depends(get_authorized_user),
                            traceid: str = Depends(get_traceid),
@@ -171,7 +171,7 @@ async def func_upsert_zone_buckets(zone_id: str,
 
 
 @app.put("/zone/{zone_id}/accessKeys")
-async def func_upsert_zone_secret(zone_id: str,
+async def app_put_upsert_zone_secret(zone_id: str,
                            request: Request,
                            user_id: str = Depends(get_authorized_user),
                            traceid: str = Depends(get_traceid),
@@ -198,7 +198,7 @@ def zone_update(traceid, zone_id, body, client_addr, user_id, request, csrf_prot
 
 
 @app.delete("/zone/{zone_id}")
-async def func_delete_zone(zone_id: str,
+async def app_delete_zone(zone_id: str,
                            request: Request,
                            user_id: str = Depends(get_authorized_user),
                            traceid: str = Depends(get_traceid),

@@ -15,11 +15,15 @@ import random
 import string
 import time
 from urllib.request import Request, urlopen
-from urllib.error import HTTPError
+#from urllib.error
+import urllib.error
 import socket
+import traceback
+import contextvars
 
 
 logger = logging.getLogger(__name__)
+tracing = contextvars.ContextVar('tracing')
 
 ERROR_EXCEPTION = 120
 ERROR_START_MINIO = 123
@@ -202,15 +206,15 @@ def parse_s3_auth(authorization):
     return None
 
 
-def check_mux_access(traceid, host, access_key_id, delegate_hostname, timeout):
-    logger.debug(f"@@@ SEND DECOY PACKET")
+def check_mux_access(traceid, host, access_key_id, facade_hostname, timeout):
     proto = "http"
     url = f"{proto}://{host}/"
     headers = {}
-    headers["HOST"] = delegate_hostname
+    headers["HOST"] = facade_hostname
     authorization = forge_s3_auth(access_key_id)
     headers["AUTHORIZATION"] = authorization
-    headers["X-TRACEID"] = traceid
+    if traceid is not None:
+        headers["X-TRACEID"] = traceid
     # headers["X-REAL-IP"] = (unset)
     headers["X-FORWARDED-PROTO"] = proto
     ## A multiplexer uses a peer-address if X-REAL-IP is missing.
@@ -218,16 +222,26 @@ def check_mux_access(traceid, host, access_key_id, delegate_hostname, timeout):
     logger.debug(f"urlopen with url={url}, timeout={timeout},"
                  f" headers={headers}")
     try:
-        response = urlopen(req, timeout=timeout)
-    except HTTPError as e:
-        logger.debug(f"@@@ EXCEPTTION: {e}")
+        with urlopen(req, timeout=timeout) as response:
+            pass
+        #response = urlopen(req, timeout=timeout)
+        status = f"{response.status}"
+        logger.debug(f"urlopen status={status}")
+    except urllib.error.HTTPError as e:
         b = e.read()
-        logger.debug(f"@@@ ERROR BODY: {b}")
-        # logger.exception(e)  # do not record exception detail
-        # OK. expected behaviour
-        response = e
-    status = f"{response.status}"
-    logger.debug(f"@@@ status {status}")
+        logger.debug(f"Exception from urlopen to mux url=({url}):"
+                     f" exception=({e}) body=({b})")
+        status = f"{e.code}"
+    except urllib.error.URLError as e:
+        logger.debug(f"Exception from urlopen to mux url=({url}):"
+                     f" exception=({e})")
+        status = "400"
+    except Exception as e:
+        logger.debug(f"Exception from urlopen to mux url=({url}):"
+                     f" exception=({e})")
+        logger.debug(traceback.format_exc())
+        status = "400"
+    logger.debug(f"status={status}")
     return status
 
 

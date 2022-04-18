@@ -17,7 +17,7 @@ lenticularis:
 
     multiplexer:
         port: @SERVER_PORT@
-        delegate_hostname: @DELEGATE_HOSTNAME@
+        facade_hostname: @FACADE_HOSTNAME@
         trusted_proxies:
             - @REVERSE_PROXY_ADDRESS@
             - @API_ADDRESS@

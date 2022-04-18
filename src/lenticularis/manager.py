@@ -1,7 +1,20 @@
-# Copyright (c) 2022 RIKEN R-CCS.
+"""A sentinel of a MinIO instance."""
+
+# Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
 import argparse
+import math
+import os
+import platform
+from signal import signal, alarm, SIGTERM, SIGCHLD, SIGALRM, SIG_IGN
+from subprocess import Popen, PIPE
+import random
+import select
+import sys
+import tempfile
+#import threading
+import time
 from lenticularis.mc import Mc
 from lenticularis.readconf import read_mux_conf
 from lenticularis.lockdb import LockDB
@@ -12,18 +25,7 @@ from lenticularis.utility import gen_access_key_id, gen_secret_access_key
 from lenticularis.utility import logger, openlog
 from lenticularis.utility import make_clean_env, host_port
 from lenticularis.utility import remove_trailing_shash, uniform_distribution_jitter
-import math
-import os
-import platform
-from signal import signal, alarm, SIGTERM, SIGCHLD, SIGALRM, SIG_IGN
-from subprocess import Popen, PIPE
-import random
-import select
-import sys
-import tempfile
-import threading
-import time
-
+from lenticularis.utility import tracing
 
 class TerminateException(Exception):
     pass
@@ -64,7 +66,8 @@ def main():
         sys.stderr.write(f"manager:main: {e}\n")
         sys.exit(ERROR_READCONF)
 
-    threading.current_thread().name = args.traceid
+    #threading.current_thread().name = args.traceid
+    tracing.set(args.traceid)
     openlog(mux_conf["lenticularis"]["log_file"],
             **mux_conf["lenticularis"]["log_syslog"])
     logger.info("***** START MANAGER *****")

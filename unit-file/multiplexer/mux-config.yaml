@@ -17,7 +17,7 @@ lenticularis:
 
     multiplexer:
         port: 8004
-        delegate_hostname: lens3.example.jp
+        facade_hostname: lens3.example.jp
         trusted_proxies:
             - localhost
         timer_interval: 30

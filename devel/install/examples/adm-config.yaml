@@ -15,7 +15,7 @@ redis:
 lenticularis:
 
     multiplexer:
-        delegate_hostname: lent8.example.com
+        facade_hostname: lens3.example.com
 
     controller:
         max_lock_duration: 60

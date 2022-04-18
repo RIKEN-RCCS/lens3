@@ -3,6 +3,10 @@
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
+import os
+import string
+import sys
+import time
 from lenticularis.lockdb import LockDB
 from lenticularis.table import get_tables, zone_to_route
 from lenticularis.utility import decrypt_secret, encrypt_secret
@@ -15,10 +19,7 @@ from lenticularis.zoneutil import check_zone_schema, check_pool_dict_is_sound
 from lenticularis.zoneutil import merge_zone, check_conflict
 from lenticularis.zoneutil import compare_access_keys, compare_buckets_directory
 from lenticularis.zoneutil import compare_buckets, check_policy
-import os
-import string
-import sys
-import time
+from lenticularis.utility import tracing
 
 
 def _check_bucket_fmt(bucket):
@@ -143,7 +144,7 @@ class ZoneAdm():
         self.timeout = int(controller_param["max_lock_duration"])
 
         multiplexer_param = adm_conf["lenticularis"]["multiplexer"]
-        self.delegate_hostnames = multiplexer_param["delegate_hostnames"]
+        self.facade_hostname = multiplexer_param["facade_hostname"]
 
         system_settings_param = adm_conf["lenticularis"]["system_settings"]
         self.system_settings_param = system_settings_param
@@ -352,11 +353,11 @@ class ZoneAdm():
                 logger.debug(f"No check, as neither access-key nor zone.")
                 return ""
             access_key_id = zone["accessKeys"][0]["accessKeyID"]  # any key is suffice.
-        delegate_hostname = self.delegate_hostnames[0]
+        facade_hostname = self.facade_hostname
         status = check_mux_access(traceid,
                                    host,
                                    access_key_id,
-                                   delegate_hostname, self.decoy_connection_timeout)
+                                   facade_hostname, self.decoy_connection_timeout)
         logger.debug(f"@@@ SEND DECOY STATUS {status}")
         return status
 
@@ -384,7 +385,6 @@ class ZoneAdm():
                     atime_from_arg=None,
                     initialize=True,
                     decrypt=False):  # private use
-
         """
         permission           -- independent from "how"
         atime_from_arg       -- ditto.   <= include_atime
@@ -974,8 +974,6 @@ class ZoneAdm():
             return zone_id
 
     def _send_decoy_with_zoneid_ptr(self, traceid, zone_id):
-            logger.debug(f"+++")
-
             temp_access_keys = [{"accessKeyID": zone_id}]
             zoneID_accessible_zone = {"accessKeys": temp_access_keys,
                              "directHostnames": []}
@@ -988,23 +986,20 @@ class ZoneAdm():
                 status = self.check_mux_access_for_zone(traceid, zone_id, force=True, access_key_id=zone_id)
                 logger.debug(f"@@@ SEND DECOY STATUS {status}")
             except Exception as e:
-                logger.debug(f"@@@ SEND DECOY EXCEPTION {e}")
-                # logger.exception(e)   # do not record exception detail
-                # logger.warning(f"initialization failed: {e}")  # do not record
+                ## (IGNORE-FATAL-ERROR)
+                logger.exception(e)
                 pass
             finally:
                 logger.debug(f"@@@ DELETE PTR {zone_id} {[e.get('accessKeyID') for e in temp_access_keys]}")
                 self.tables.zones.del_ptr(zone_id, zoneID_accessible_zone)
             logger.debug("@@@ SEND DECOY END")
 
-    ### END update_zone_with_lockdb
-
     def fetch_current_mode(self, zoneID):  # private use
         return self.tables.zones.get_mode(zoneID)
 
     def set_current_mode(self, zoneID, state):  # private use
         o = self.fetch_current_mode(zoneID)
-        logger.debug(f"Change bucket-pool-state ({zoneID}): {o} to {state}")
+        logger.debug(f"pool-state change pool=({zoneID}): {o} to {state}")
         self.tables.zones.set_mode(zoneID, state)
 
     def zone_to_user(self, zoneID):  # ADMIN, multiplexer   CODE CLONE @ multiplexer.py
@@ -1042,7 +1037,7 @@ class ZoneAdm():
             "groups": groups,
             "atime": "0",
             "directHostnameDomains": self.direct_hostname_domains,
-            "delegateHostnames": self.delegate_hostnames,
+            "facadeHostname": self.facade_hostname,
             "endpoint_url": self.endpoint_urls({"directHostnames": []})
         }
 
@@ -1069,7 +1064,7 @@ class ZoneAdm():
     def _add_info_for_webui(self, zoneID, zone, groups):
             zone["groups"] = groups
             zone["directHostnameDomains"] = self.direct_hostname_domains
-            zone["delegateHostnames"] = self.delegate_hostnames
+            zone["facadeHostname"] = self.facade_hostname
             zone["endpoint_url"] = self.endpoint_urls(zone)
 
     def fetch_zone_list(self, user_id, extra_info=False, include_atime=False,
@@ -1120,6 +1115,6 @@ class ZoneAdm():
     def endpoint_urls(self, zone):  # private use
         template = self.system_settings_param["endpoint_url"]
         return ([template.format(hostname=h)
-                 for h in self.delegate_hostnames] +
+                 for h in [self.facade_hostname]] +
                 [template.format(hostname=h)
                  for h in zone.get("directHostnames", [])])

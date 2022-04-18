@@ -1,16 +1,18 @@
-# Copyright (c) 2022 RIKEN R-CCS.
+"""Multiplexer."""
+
+# Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
+import os
+import time
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 from lenticularis.utility import Read1Reader, parse_s3_auth
 from lenticularis.utility import accesslog
 from lenticularis.utility import get_ip_address
 from lenticularis.utility import logger
 from lenticularis.utility import normalize_address
-import os
-import threading
-import time
-from urllib.request import Request, urlopen
-from urllib.error import HTTPError, URLError
+from lenticularis.utility import tracing
 
 
 class Multiplexer():
@@ -22,8 +24,8 @@ class Multiplexer():
         self.start = time.time()
         lenticularis_conf = mux_conf["lenticularis"]
         multiplexer_param = lenticularis_conf["multiplexer"]
-        delegate_hostnames = multiplexer_param["delegate_hostnames"]
-        self.delegate_hostnames = [e.lower() for e in delegate_hostnames]
+        self.facade_hostname = multiplexer_param["facade_hostname"].lower
+        #self.facade_hostnames = [e.lower() for e in facade_hostnames]
 
         trusted_proxies = multiplexer_param["trusted_proxies"]
         self.trusted_proxies = set([addr for h in trusted_proxies
@@ -85,7 +87,8 @@ class Multiplexer():
 
     def __call__(self, environ, start_response):
         traceid = environ.get("HTTP_X_TRACEID")
-        threading.current_thread().name = traceid
+        #threading.current_thread().name = traceid
+        tracing.set(traceid)
         logger.debug(f"@@@ MUX_MAIN: __CALL__")
         # logger.debug(f"@@@ environ = {environ}")
 
@@ -157,12 +160,6 @@ class Multiplexer():
         if content_length:
             headers["CONTENT-LENGTH"] = content_length
 
-        def zone_to_user(zoneID):  # CODE CLONE @ zoneadm.py
-            zone = self.tables.zones.get_zone(zoneID)
-            if zone is None:
-                return None
-            return zone["user"]
-
         # now, lookup the routing table
         (dest_addr, zone_id) = self.get_dest_addr(traceid, headers)  # minioAddr or muxAddr
         # (int, None)      => could not resolve zone
@@ -175,7 +172,7 @@ class Multiplexer():
             # 2. succeeded to resolve zone_id, but failed to start minio.
             status = f"{dest_addr}"
             logger.debug(f"@@@ FAIL: status(dest_addr) = {status}")
-            user_id = zone_to_user(zone_id) if zone_id else None
+            user_id = self._zone_to_user(zone_id) if zone_id else None
             user_id = user_id if user_id else f"Access_Key_ID:{access_key_id}"
             accesslog(status, client_addr, user_id, request_method, request_url)
             start_response(status, [])
@@ -187,14 +184,6 @@ class Multiplexer():
 
         input = environ.get("wsgi.input")
         file_wrapper = environ["wsgi.file_wrapper"]
-
-        def wrap_res(res, headers, sniff=False, sniff_marker=""):
-            if self.unbufferp(headers) or sniff:
-                logger.debug("@@@ READ1READER")
-                return Read1Reader(res, sniff=sniff, sniff_marker=sniff_marker, thunk=res)
-            else:
-                logger.debug("@@@ FILE_WRAPPER")
-                return file_wrapper(res)
 
         #sniff = True  # DEBUG FLAG FOR DEVELOPER
         #              # WARNING: turning on `sniff` makes logger to emit sensitive information. use with grate care.
@@ -213,14 +202,14 @@ class Multiplexer():
             headers = res.getheaders()
             logger.debug(f"@@@ < HEADERS {headers}")
             logger.debug(f"@@@ res = {res}")
-            respiter = wrap_res(res, headers, sniff=sniff, sniff_marker="<")
+            respiter = self._wrap_res(res, headers, sniff=sniff, sniff_marker="<")
 
         except HTTPError as e:
             logger.error(f"HTTP ERROR: {request_method} {request_url} => {url} {e}")
             # logger.exception(e)  # do not record exception detail
             status = f"{e.status}"
             headers = [(k, e.headers[k]) for k in e.headers]
-            respiter = wrap_res(e, headers, sniff=sniff, sniff_marker="<E")
+            respiter = self._wrap_res(e, headers, sniff=sniff, sniff_marker="<E")
             #respiter = file_wrapper(e, sniff=sniff)
 
         except URLError as e:
@@ -249,7 +238,7 @@ class Multiplexer():
             self.tables.routes.set_atime_by_addr(dest_addr, atime, atime_timeout)
 
         logger.debug(f"@@@ ZONE_ID {zone_id}")
-        user_id = zone_to_user(zone_id)
+        user_id = self._zone_to_user(zone_id)
         logger.debug(f"@@@ ZONE_OWNER {user_id}")
 
         content_length_downstream = next((v for (k, v) in headers if k.lower() == "content-length"), None)
@@ -263,6 +252,21 @@ class Multiplexer():
         # logger.debug(f"@@@ < RESPITER {respiter}")
         start_response(status, headers)
         return respiter
+
+
+    def _zone_to_user(self, zoneID):  # CODE CLONE @ zoneadm.py
+            zone = self.tables.zones.get_zone(zoneID)
+            if zone is None:
+                return None
+            return zone["user"]
+
+    def _wrap_res(self, res, headers, sniff=False, sniff_marker=""):
+            if self.unbufferp(headers) or sniff:
+                logger.debug("@@@ READ1READER")
+                return Read1Reader(res, sniff=sniff, sniff_marker=sniff_marker, thunk=res)
+            else:
+                logger.debug("@@@ FILE_WRAPPER")
+                return file_wrapper(res)
 
     def check_access(self, peer_addr):
         if peer_addr is None:
@@ -297,7 +301,7 @@ class Multiplexer():
         host = headers.get("HOST")
         if host:  # do not pick up host here, if it's a empty string. "" => false
             host = host.lower()
-            if host in self.delegate_hostnames:
+            if host == self.facade_hostname:
                 host = None
         # logger.debug(f"@@@ HOST: {headers.get('HOST')}")
         # logger.debug(f"@@@ host: {host}")

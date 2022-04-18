@@ -6,8 +6,8 @@
     - `reserved_hostnames`:
       list reserved hostnames.
       - In this example, we show 2. below.
-        1. In case delegateHostname is a subdomain of`direct_hostname_domain`,
-            delegateHostname(FQDN)
+        1. In case facade-hostname is a subdomain of`direct_hostname_domain`,
+            facade-hostname(FQDN)
         2. In case WebUI hostname is a subdomain of `direct_hostname_domain`
             WebUI hostname(FQDN)
         3. Other hostnames that administrator disallows end users to use.(FQDN)
@@ -43,8 +43,8 @@
       lenticularis:
 
           multiplexer:
-      # set delegate hostname
-              delegate_hostname: lent8.example.com
+      # set facade hostname
+              facade_hostname: lent8.example.com
 
           controller:
       # maximum allowed time during initializing a zone

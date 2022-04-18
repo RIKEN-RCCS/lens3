@@ -38,8 +38,8 @@
           multiplexer:
       # multiplexer's port
               port: 8000
-      # delegate hostname
-              delegate_hostname: lent8.example.com
+      # facade hostname
+              facade_hostname: lens3.example.com
               trusted_proxies:
       # trust reverse-proxy
                   - localhost

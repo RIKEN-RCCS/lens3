@@ -17,7 +17,7 @@ lenticularis:
 
     multiplexer:
         port: 8000
-        delegate_hostname: lent8.example.com
+        facade_hostname: lens3.example.com
         trusted_proxies:
             - localhost
         timer_interval: 30

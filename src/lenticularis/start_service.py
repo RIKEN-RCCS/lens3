@@ -4,13 +4,13 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 import argparse
+import os
+from subprocess import Popen, PIPE
+import sys
 from lenticularis.readconf import read_mux_conf
 from lenticularis.readconf import read_adm_conf
 from lenticularis.utility import logger, openlog
 from lenticularis.utility import make_clean_env
-import os
-from subprocess import Popen, PIPE
-import sys
 
 
 def main():
@@ -35,7 +35,7 @@ def start_mux():
 
     openlog(mux_conf["lenticularis"]["log_file"],
             **mux_conf["lenticularis"]["log_syslog"])
-    logger.info("***** START GUNICORN FOR MUX *****")
+    logger.info("Start Lenticularis-S3 MUX service")
 
     gunicorn_conf = mux_conf["gunicorn"]
     bind = gunicorn_conf["bind"]
@@ -82,7 +82,7 @@ def start_api():
 
     openlog(adm_conf["lenticularis"]["log_file"],
             **adm_conf["lenticularis"]["log_syslog"])
-    logger.info("***** START GUNICORN FOR API *****")
+    logger.info("Start Lenticularis-S3 API service")
 
     gunicorn_conf = adm_conf["gunicorn"]
     bind = gunicorn_conf["bind"]

@@ -10,6 +10,11 @@ from fastapi.responses import JSONResponse
 from fastapi_csrf_protect import CsrfProtect
 from fastapi_csrf_protect.exceptions import CsrfProtectError
 import inspect
+import os
+import sys
+#import threading
+import time
+from pydantic import BaseModel
 import lenticularis
 from lenticularis.api import Api
 from lenticularis.readconf import read_adm_conf
@@ -18,11 +23,7 @@ from lenticularis.utility import accesslog
 from lenticularis.utility import logger, openlog
 from lenticularis.utility import normalize_address
 from lenticularis.utility import safe_json_loads
-import os
-import sys
-import threading
-import time
-from pydantic import BaseModel
+from lenticularis.utility import tracing
 
 
 try:
@@ -84,8 +85,8 @@ async def get_client_addr(request: Request):
 
 async def get_traceid(request: Request):
     traceid = request.headers.get("X-TRACEID")
-    threading.current_thread().name = traceid
-    #logger.debug(f"@@@ traceid = {traceid}")
+    #threading.current_thread().name = traceid
+    tracing.set(traceid)
     return traceid
 
 
@@ -95,9 +96,13 @@ async def app_get_show_ui(request: Request,
                       traceid: str = Depends(get_traceid),
                       client_addr: str = Depends(get_client_addr)):
     logger.debug(f"APP.GET /")
-    status_code = status.HTTP_200_OK
-    accesslog(f"{status_code}", client_addr, user_id, request.method, request.url)
-    response = HTMLResponse(status_code=status_code, content=create_html)
+    logger.debug(f"traceid={traceid}")
+    code = status.HTTP_200_OK
+    accesslog(f"{code}", client_addr, user_id, request.method, request.url)
+    ##traceid = traceid if traceid is not None else "12345"
+    ##headers = {"X-TRACEID": traceid}
+    ##(headers=headers,)
+    response = HTMLResponse(status_code=code, content=create_html)
     return response
 
 

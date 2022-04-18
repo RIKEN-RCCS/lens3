@@ -28,7 +28,7 @@ policy: "",
 	atime: "",
 	groups: "",
 	directHostnameDomains: "",
-	delegateHostnames: "",
+	facadeHostname: "",
 	endpointURLs: "",
 	createButtonName: "",
 	createButtonDisabled: false,
@@ -561,7 +561,7 @@ function set_zone_to_editor_body(zone) {
 	editor_data.atime = format_rfc3339_if_not_zero(zone["atime"]);
 	editor_data.groups = zone["groups"];
 	editor_data.directHostnameDomains = zone["directHostnameDomains"];
-	editor_data.delegateHostnames = zone["delegateHostnames"];
+	editor_data.facadeHostname = zone["facadeHostname"];
 	editor_data.endpointURLs = zone["endpoint_url"];
 	show_message("editing");
 }

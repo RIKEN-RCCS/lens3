@@ -33,7 +33,7 @@ def app():
     if not node:
         node = platform.node()
 
-    logger.info(f"NODE: {node}")
+    logger.info(f"mux is running on a host=({node})")
 
     controller = Controller(mux_conf, tables, configfile, node)
 

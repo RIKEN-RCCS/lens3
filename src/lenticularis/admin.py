@@ -8,6 +8,9 @@ import csv
 from inspect import signature
 import io
 import json
+import os
+#import threading
+import sys
 from lenticularis.zoneadm import ZoneAdm
 from lenticularis.readconf import read_adm_conf
 from lenticularis.utility import ERROR_READCONF, ERROR_EXCEPTION, ERROR_ARGUMENT
@@ -17,9 +20,7 @@ from lenticularis.utility import objdump
 from lenticularis.utility import outer_join
 from lenticularis.utility import random_str
 from lenticularis.utility import safe_json_loads
-import os
-import threading
-import sys
+from lenticularis.utility import tracing
 
 
 def main():
@@ -52,7 +53,8 @@ def main():
         sys.exit(ERROR_READCONF)
 
     traceid = random_str(12)
-    threading.current_thread().name = traceid
+    #threading.current_thread().name = traceid
+    tracing.set(traceid)
     openlog(adm_conf["lenticularis"]["log_file"],
             **adm_conf["lenticularis"]["log_syslog"])
     logger.info("***** START ADMIN *****")

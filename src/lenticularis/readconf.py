@@ -110,14 +110,15 @@ def mux_schema(type_number):
         "type": "object",
         "properties": {
             "port": type_number,
-            "delegate_hostnames": {"type": "array", "items": {"type": "string"}},
+            #"facade_hostnames": {"type": "array", "items": {"type": "string"}},
+            "facade_hostname": {"type": "string"},
             "trusted_proxies": {"type": "array", "items": {"type": "string"}},
             "timer_interval": type_number,
             "request_timeout": type_number,
         },
         "required": [
             "port",
-            "delegate_hostnames",
+            "facade_hostname",
             "trusted_proxies",
             "timer_interval",
             "request_timeout",
@@ -212,10 +213,11 @@ def adm_schema(type_number):
     multiplexer = {
         "type": "object",
         "properties": {
-            "delegate_hostnames": {"type": "array", "items": {"type": "string"}},
+            #"facade_hostnames": {"type": "array", "items": {"type": "string"}},
+            "facade_hostname": {"type": "string"},
         },
         "required": [
-            "delegate_hostnames",
+            "facade_hostname",
         ],
         "additionalProperties": False,
     }
@@ -343,8 +345,8 @@ def check_type_number(conf, schema):
 
 def fix_adm_conf(conf):
     multiplexer_param = conf["lenticularis"]["multiplexer"]
-    merge_single_key_into_list_key(multiplexer_param, "delegate_hostname",
-                                 "delegate_hostnames")
+    #merge_single_key_into_list_key(multiplexer_param, "facade_hostname",
+    #                               "facade_hostnames")
     system_settings_param = conf["lenticularis"]["system_settings"]
     merge_single_key_into_list_key(system_settings_param, "direct_hostname_domain",
                                  "direct_hostname_domains")
@@ -353,8 +355,8 @@ def fix_adm_conf(conf):
 
 def fix_mux_conf(conf):
     multiplexer_param = conf["lenticularis"]["multiplexer"]
-    merge_single_key_into_list_key(multiplexer_param, "delegate_hostname",
-                                 "delegate_hostnames")
+    #merge_single_key_into_list_key(multiplexer_param, "facade_hostname",
+    #                               "facade_hostnames")
     return conf
 
 

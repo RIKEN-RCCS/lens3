@@ -119,7 +119,7 @@ class Controller():
         env["LENTICULARIS_ZONE_ID"] = zone_id
         if access_key_id == zone_id:
             args.append("--accessByZoneID=True")
-        if traceid:
+        if traceid is not None:
             args.append(f"--traceid={traceid}")
         logger.debug(f"@@@ cmd = {cmd}")
         logger.debug(f"@@@ args = {args}")

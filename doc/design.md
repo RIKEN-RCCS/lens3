@@ -10,7 +10,7 @@ This book is a design document of Lenticularis-S3.
     --Storage Zone:
       UNIX userid, bucket storage, access key, expiration date, etc.
       A concept that summarizes a set of information. A concept similar to Endpoint, but
-      Because the delegate hostname function makes the endpoint-url common,
+      Because the facade hostname function makes the endpoint-url common,
       To avoid confusion, this system calls it the Storage Zone.
       (Abbreviated as zone if it is not ambiguous in context)
 
@@ -130,13 +130,13 @@ A Controller starts a MinIO instance and manages its life-time.
       --No negative cache.
         --The possibility of over-rejection cannot be ruled out: Causes a Type II error.
 
-    2. Get the HTTP Host header. Compare with delegate hostname. (case insensitive)
+    2. Get the HTTP Host header. Compare with facade hostname. (case insensitive)
       --Goto 4; if there is no Host header (not direct hostname)
       --goto 3; if not direct hostname (if direct hostname)
       --goto 4; for direct hostname (not direct hostname)
 
     3. Access with direct hostname
-      --If Host is not delegate hostname, Host is the key and Routing Table
+      --If Host is not facade hostname, Host is the key and Routing Table
         Look up (directHostname) and extract MinIO Address. Get MinIO Address
         If you go to 6;
       --otherly goto 5;
@@ -153,7 +153,7 @@ A Controller starts a MinIO instance and manages its life-time.
       --Intended to be able to handle multiple direct_hostname_domains in the future.
 
     4. Access by Access Key ID
-      --If there is no Host or if it is a delegate hostname:
+      --If there is no Host or if it is a facade hostname:
       --From the HTTP header `Authorization:`, `AWS4-HMAC-SHA256 Credential =`
         (Hereafter, S3 Authorization) followed by Access Key ID (until immediately before "` / `"
         Part) is extracted and used as the Access Key ID.
@@ -795,7 +795,7 @@ A Controller starts a MinIO instance and manages its life-time.
 
 ## decoy packet
   + decoy packet
-    --Host: (direct hostname / delegate hostname) and Authorization:
+    --Host: (direct hostname / facade hostname) and Authorization:
       Throws the correct (*) packet, the multiplexer, scheduler,
       The manager does exactly the same as for legitimate access,
       MinIO starts. Using this form of packet, the admin command
@@ -1018,7 +1018,7 @@ Figure 3 Credential
 
   + Forced start of MinIO
     --Throw a decoy packet to a suitable multiplexer.
-      --In case of operation without delegate hostname, you can go to direct hostname.
+      --In case of operation without facade hostname, you can go to direct hostname.
 
   + Forced stop of MinIO (time consuming op.)
     1. try: lock the Storage Zone Table ("zk:")

@@ -27,6 +27,7 @@ from lenticularis.utility import make_clean_env, host_port
 from lenticularis.utility import remove_trailing_shash, uniform_distribution_jitter
 from lenticularis.utility import tracing
 
+
 class TerminateException(Exception):
     pass
 
@@ -126,14 +127,14 @@ class MinioManager():
     process_table_lock_pfx = "lk:"
     alarm_cause = None
 
-    def manager_main(self, zoneID, access_by_zoneID, args, mux_conf):
-
-        logger.debug("@@@ +++")
-        def sigalrm(n, stackframe):
+    def _sigalrm(n, stackframe):
             logger.debug(f"@@@ raise AlarmException [{self.alarm_cause}]")
             raise AlarmException(self.alarm_cause)
 
-        signal(SIGALRM, sigalrm)
+    def manager_main(self, zoneID, access_by_zoneID, args, mux_conf):
+        logger.debug("@@@ +++")
+
+        signal(SIGALRM, self._sigalrm)
 
         self.zoneID = zoneID
         use_zone_id_as_minio_root_user = args.useTrueAccount
@@ -265,21 +266,20 @@ class MinioManager():
                 break
         # VIRTUALLY NOT REACHED
 
-    def try_manage_minio(self, port, mode, user, group,
-                        bucketsDir, zone, up_minio, need_initialize):
-
-        def check_elapsed_time():
+    def _check_elapsed_time(self):
             now = int(time.time())
             elapsed_time = now - self.locked_time
             if elapsed_time + self.timeout_margin > self.timeout:
                 logger.warning("lock time exceeded")
 
-        address = f":{port}"  # bind INADDR_ANY
-        cmd = [self.sudo, "-u", user, "-g", group, self.minio_bin]
-        args = ["--anonymous", "server", "--address", address, bucketsDir]
-        logger.debug(f"@@@ CMD: {cmd + args}")
 
-        with Popen(cmd + args, stdin=PIPE, stdout=PIPE, stderr=PIPE,
+    def try_manage_minio(self, port, mode, user, group,
+                        bucketsDir, zone, up_minio, need_initialize):
+        address = f":{port}"
+        cmd = [self.sudo, "-u", user, "-g", group, self.minio_bin,
+               "server", "--anonymous", "--address", address, bucketsDir]
+        logger.debug(f"starting minio with: {cmd}")
+        with Popen(cmd, stdin=PIPE, stdout=PIPE, stderr=PIPE,
                    env=self.minioenv) as p:
             try:
                 if not self.wait_for_minio_to_come_up(p):
@@ -308,7 +308,7 @@ class MinioManager():
 
                     if not up_minio:
                         self.stop_minio(p)
-                        check_elapsed_time()
+                        self._check_elapsed_time()
                         raise NoStartRequiredException(
                                              "Starting MinIO is not required (N)")
                     jitter = 0
@@ -321,7 +321,7 @@ class MinioManager():
                     sys.stdout.flush()
                     sys.stdout.close()
 
-                    check_elapsed_time()
+                    self._check_elapsed_time()
                     logger.debug(f"@@@ UNLOCK {self.zoneID}")
                     self.lock.unlock()  # unlock here. don't mind that unlock will called twice.
                     self.watch_minio(p)
@@ -367,9 +367,7 @@ class MinioManager():
                 logger.debug("@ SUCCESS")
                 return True
 
-    def watch_minio(self, p):
-
-        def check_status():
+    def _check_status(self):
             zone = self.tables.zones.get_zone(self.zoneID)
             if zone is None:
                 raise LoopBreakException("Access key table erased")
@@ -378,7 +376,7 @@ class MinioManager():
             if zone["status"] != "online":
                 raise LoopBreakException("Credential disabled (status offline)")
 
-        def check_authoritativeness():
+    def _check_authoritativeness(self):
             minioAddress = self.tables.processes.get_minio_address(self.zoneID)
             if minioAddress is None:
                 # apotosis caused by self entry disappearance
@@ -388,7 +386,7 @@ class MinioManager():
                 # apotosis caused by self entry disappearance
                 raise LoopBreakException("Another controller owns address table")
 
-        def check_stdout(stdout_d):
+    def _check_stdout(self, stdout_d):
             # do not gurad with try. let read raise exception.
             r = os.read(stdout_d, 512)
             if r == b"":                              # stdout closed.
@@ -396,12 +394,12 @@ class MinioManager():
                 raise LoopBreakException("MinIO closed it's stdout")
             logger.debug(f"@@@ {r}")
 
-        def check_stderr(stderr_d):
+    def _check_stderr(self, stderr_d):
             # do not guard with try. let read raise exception.
             r = os.read(stderr_d, 512)
             logger.debug(f"@@@ {r}")
 
-        def check_minio_info():
+    def _check_minio_info(self):
             # FIXME: XXX USE FOLLOWING METHOD IS RECOMMENDED:
             # curl -I https://minio.example.net:9000/minio/health/live
             logger.debug("@@@ CHECK IF MINIO IS ALIVE")
@@ -424,7 +422,7 @@ class MinioManager():
                 raise
             return r
 
-        def check_activity(now):
+    def _check_activity(self, now):
             # check inactive time
             atime = self.tables.routes.get_atime_by_addr(self.minioAddr)
 
@@ -437,19 +435,20 @@ class MinioManager():
             if elapsed_time > self.keepalive_limit:
                 raise LoopBreakException("Keepalive_limit exceeded")
 
-        def check_key_validity(now):
+    def _check_key_validity(self, now):
             if now >= self.expDate:
                 logger.info(f"CHECK KEY VALIDITY: Access Key Expired: {self.zoneID}")
                 raise LoopBreakException("Credential expired")
 
-        def sigterm(n, stackframe):
+    def _sigterm(n, stackframe):
             logger.debug("@@@ raiseException TerminateException")
             signal(SIGTERM, SIG_IGN)
-            raise TerminateException
+            raise TerminateException()
 
+    def watch_minio(self, p):
         # watch_minio body
 
-        signal(SIGTERM, sigterm)
+        signal(SIGTERM, self._sigterm)
         signal(SIGCHLD, SIG_IGN)
 
         stdout_d = p.stdout.fileno()
@@ -472,19 +471,19 @@ class MinioManager():
 
                 now = int(time.time())
 
-                check_status()
-                check_authoritativeness()
+                self._check_status()
+                self._check_authoritativeness()
 
                 if stdout_d in readable:
-                    check_stdout(stdout_d)
+                    self._check_stdout(stdout_d)
 
                 if stderr_d in readable:
-                    check_stderr(stderr_d)
+                    self._check_stderr(stderr_d)
 
                 if readable == []:
                     # following funcall will take upto self.mc_info_timelimit
                     try:
-                        check_minio_info()
+                        self._check_minio_info()
                         logger.info(f"set down_count to 0")
                         down_count = 0
                     except Exception as e:
@@ -494,9 +493,9 @@ class MinioManager():
                             raise
                         logger.info(f"down_count is {down_count}")
 
-                check_activity(now)
+                self._check_activity(now)
 
-                check_key_validity(now)
+                self._check_key_validity(now)
 
                 jitter = uniform_distribution_jitter()
                 next_idle_duration = self.watch_interval + jitter + self.mc_info_timelimit
@@ -626,12 +625,8 @@ class MinioManager():
             self.set_current_mode(self.zoneID, f"error: {e}")
             raise
 
-    def install_minio_access_keys(self, zone):
-        logger.debug("@@@ +++")
-        logger.debug("@@@ install_minio_access_keys")
-        children = []
 
-        def install_minio_access_keys_body(b, e):
+    def _install_minio_access_keys_body(self, b, e):
             logger.debug("@@@ install_minio_access_keys_body")
             if e is None:  # New Entry
                 access_key_id = b["accessKeyID"]
@@ -677,6 +672,11 @@ class MinioManager():
                 r = self.mc.admin_user_enable(access_key_id)
                 check_mc_status(r, "mc.admin_user_enable")
 
+    def install_minio_access_keys(self, zone):
+        logger.debug("@@@ +++")
+        logger.debug("@@@ install_minio_access_keys")
+        children = []
+
         access_keys = zone["accessKeys"]
         existing = self.mc.admin_user_list()
         check_mc_status(existing, "mc.admin_user_list")
@@ -685,16 +685,11 @@ class MinioManager():
         logger.debug(f"@@@ existing = {existing}")
         outer_join(access_keys, lambda b: b.get("accessKeyID"),
                    existing, lambda e: e.get("accessKey"),
-                   install_minio_access_keys_body)
+                   self._install_minio_access_keys_body)
 
         return children
 
-    def set_bucket_policy(self, zone):
-        logger.debug("@@@ +++")
-        logger.debug("@@@ set_bucket_policy")
-        children = []
-
-        def set_bucket_policy_body(b, e):
+    def _set_bucket_policy_body(self, b, e):
             logger.debug(f"@@@ set_bucket_policy_body: {b} {e}")
             if e is None:  # New Entry
                 name = b["key"]
@@ -720,6 +715,11 @@ class MinioManager():
                 r = self.mc.policy_set(name, policy)
                 check_mc_status(r, "mc.policy_set")
 
+    def set_bucket_policy(self, zone):
+        logger.debug("@@@ +++")
+        logger.debug("@@@ set_bucket_policy")
+        children = []
+
         buckets = zone["buckets"]
         existing = self.mc.list_buckets()
         check_mc_status(existing, "mc.list_buckets")
@@ -728,7 +728,7 @@ class MinioManager():
         logger.debug(f"@@@ existing = {existing}")
         outer_join(buckets, lambda b: b.get("key"),
                    existing, lambda e: remove_trailing_shash(e.get("key")),
-                   set_bucket_policy_body)
+                   self._set_bucket_policy_body)
         return children
 
     def stop_minio(self, p):

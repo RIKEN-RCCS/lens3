@@ -1,4 +1,6 @@
-"""A sentinel of a MinIO instance."""
+"""A sentinel process for a MinIO instance.  It is started by a
+controller and returns immediately after forking as a daemon.
+"""
 
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
@@ -521,7 +523,6 @@ class MinioManager():
         logger.debug("@@@ exit")
         sys.exit(0)
 
-        # NOT REACHED
 
     def update_tables(self, pid, zone, timeout):
         timeout = math.ceil(timeout)
@@ -626,7 +627,13 @@ class MinioManager():
             raise
 
 
-    def _install_minio_access_keys_body(self, b, e):
+    def install_minio_access_keys(self, zone):
+        logger.debug("@@@ +++")
+        logger.debug("@@@ install_minio_access_keys")
+        children = []
+
+        def _install_minio_access_keys_body(b, e):
+            """CLOSURE WITH children."""
             logger.debug("@@@ install_minio_access_keys_body")
             if e is None:  # New Entry
                 access_key_id = b["accessKeyID"]
@@ -672,11 +679,6 @@ class MinioManager():
                 r = self.mc.admin_user_enable(access_key_id)
                 check_mc_status(r, "mc.admin_user_enable")
 
-    def install_minio_access_keys(self, zone):
-        logger.debug("@@@ +++")
-        logger.debug("@@@ install_minio_access_keys")
-        children = []
-
         access_keys = zone["accessKeys"]
         existing = self.mc.admin_user_list()
         check_mc_status(existing, "mc.admin_user_list")
@@ -685,11 +687,17 @@ class MinioManager():
         logger.debug(f"@@@ existing = {existing}")
         outer_join(access_keys, lambda b: b.get("accessKeyID"),
                    existing, lambda e: e.get("accessKey"),
-                   self._install_minio_access_keys_body)
+                   _install_minio_access_keys_body)
 
         return children
 
-    def _set_bucket_policy_body(self, b, e):
+    def set_bucket_policy(self, zone):
+        logger.debug("@@@ +++")
+        logger.debug("@@@ set_bucket_policy")
+        children = []
+
+        def _set_bucket_policy_body(b, e):
+            """CLOSURE WITH children."""
             logger.debug(f"@@@ set_bucket_policy_body: {b} {e}")
             if e is None:  # New Entry
                 name = b["key"]
@@ -715,11 +723,6 @@ class MinioManager():
                 r = self.mc.policy_set(name, policy)
                 check_mc_status(r, "mc.policy_set")
 
-    def set_bucket_policy(self, zone):
-        logger.debug("@@@ +++")
-        logger.debug("@@@ set_bucket_policy")
-        children = []
-
         buckets = zone["buckets"]
         existing = self.mc.list_buckets()
         check_mc_status(existing, "mc.list_buckets")
@@ -728,7 +731,7 @@ class MinioManager():
         logger.debug(f"@@@ existing = {existing}")
         outer_join(buckets, lambda b: b.get("key"),
                    existing, lambda e: remove_trailing_shash(e.get("key")),
-                   self._set_bucket_policy_body)
+                   _set_bucket_policy_body)
         return children
 
     def stop_minio(self, p):

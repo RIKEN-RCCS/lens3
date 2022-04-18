@@ -1,19 +1,21 @@
-# Copyright (c) 2022 RIKEN R-CCS.
+"""A gunicorn main started as a service."""
+
+# Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
 import atexit
-from lenticularis.controller import Controller
-from lenticularis.multiplexer import Multiplexer
-from lenticularis.readconf import read_mux_conf, node_envname
-from lenticularis.table import get_tables
-from lenticularis.utility import logger, openlog
-from lenticularis.utility import uniform_distribution_jitter
 import os
 import platform
 import random
 import threading
 import time
 import sys
+from lenticularis.controller import Controller
+from lenticularis.multiplexer import Multiplexer
+from lenticularis.readconf import read_mux_conf, node_envname
+from lenticularis.table import get_tables
+from lenticularis.utility import logger, openlog
+from lenticularis.utility import uniform_distribution_jitter
 
 
 def app():

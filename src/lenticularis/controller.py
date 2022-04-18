@@ -1,3 +1,5 @@
+"""A manager of a MinIO instance."""
+
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
@@ -31,9 +33,7 @@ class Controller():
         host is not None  => design.md:2.1
         host is None      => design.md:2.2
         """
-        logger.debug("@@@ +++")
-
-        logger.debug(f"@@@ access_key_id: {access_key_id}  host: {host}")
+        logger.debug(f"access_key_id={access_key_id} host={host}")
         if host:
             # Use Direct Hostname to resolve routing
             zone_id = self.tables.zones.get_zoneID_by_directHostname(host)

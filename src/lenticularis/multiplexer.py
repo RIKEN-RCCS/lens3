@@ -24,7 +24,7 @@ class Multiplexer():
         self.start = time.time()
         lenticularis_conf = mux_conf["lenticularis"]
         multiplexer_param = lenticularis_conf["multiplexer"]
-        self.facade_hostname = multiplexer_param["facade_hostname"].lower
+        self.facade_hostname = multiplexer_param["facade_hostname"].lower()
         #self.facade_hostnames = [e.lower() for e in facade_hostnames]
 
         trusted_proxies = multiplexer_param["trusted_proxies"]
@@ -60,6 +60,7 @@ class Multiplexer():
         # as muxmain is going to call timer_interrupt at once.
         # self.register_mux_info()
 
+
     def current_active_multiplexers(self):
         # logger.debug("@@@ +++")
         # logger.debug(f"@@@ RDS = {list(self.tables.processes.get_mux_list(None))}")
@@ -67,6 +68,7 @@ class Multiplexer():
         muxs = [v["mux_conf"]["lenticularis"]["multiplexer"]["host"] for (e, v) in mux_list]
         # logger.debug(f"@@@ muxs = {muxs}")
         return set([addr for h in muxs for addr in get_ip_address(h)])
+
 
     def register_mux_info(self, next_sleep_time):
         # logger.debug("@@@ +++")
@@ -81,11 +83,18 @@ class Multiplexer():
         # logger.debug("@@@ +++")
         self.register_mux_info(next_sleep_time)
 
+
     def __del__(self):
         logger.debug("@@@ MUX_MAIN: __DEL__")
         self.tables.processes.del_mux(self.mux_key)
 
+
     def __call__(self, environ, start_response):
+        return self.process_request(environ, start_response)
+
+
+    def process_request(self, environ, start_response):
+        """Starts request processing from gunicorn."""
         traceid = environ.get("HTTP_X_TRACEID")
         #threading.current_thread().name = traceid
         tracing.set(traceid)
@@ -114,10 +123,9 @@ class Multiplexer():
             logger.warning(f"HTTP_X_FORWARDED_PROTO is not set")
         # NOTUSED forwarded_host = environ.get("HTTP_X_FORWARDED_HOST")
 
+        ### X-Remote-User is not set!
+        ### AuthKey? << mandatory!!!
 
-### X-Remote-User is not set!
-### AuthKey? << mandatory!!!
-### 
         #logger.debug(f"@@@ environ {type(environ)}")
         #logger.debug(f"@@@ environ {environ}")
         #user_id = zone_adm.zone_to_user(zone_id)
@@ -167,7 +175,7 @@ class Multiplexer():
         # (string, string) => success
         # (string, None)   => should not happen
         if isinstance(dest_addr, int):
-            ## we are here becasuse 
+            ## we are here becasuse
             # 1. cannot resolve access key id nor direct name, so that could not get zone_id.
             # 2. succeeded to resolve zone_id, but failed to start minio.
             status = f"{dest_addr}"
@@ -243,7 +251,7 @@ class Multiplexer():
 
         content_length_downstream = next((v for (k, v) in headers if k.lower() == "content-length"), None)
 
-        accesslog(status, client_addr, user_id, request_method, request_url, 
+        accesslog(status, client_addr, user_id, request_method, request_url,
             content_length_upstream=content_length,
             content_length_downstream=content_length_downstream)
 
@@ -260,6 +268,7 @@ class Multiplexer():
                 return None
             return zone["user"]
 
+
     def _wrap_res(self, res, headers, sniff=False, sniff_marker=""):
             if self.unbufferp(headers) or sniff:
                 logger.debug("@@@ READ1READER")
@@ -267,6 +276,7 @@ class Multiplexer():
             else:
                 logger.debug("@@@ FILE_WRAPPER")
                 return file_wrapper(res)
+
 
     def check_access(self, peer_addr):
         if peer_addr is None:
@@ -294,15 +304,15 @@ class Multiplexer():
             return False
         return True
 
+
     def get_dest_addr(self, traceid, headers):
-        # logger.debug("@@@ +++")
-        # logger.debug(f"@@@ get_dest_addr")
+        ## (It drops a host if it is attached by the facade).
 
         host = headers.get("HOST")
-        if host:  # do not pick up host here, if it's a empty string. "" => false
+        if host:
             host = host.lower()
-            if host == self.facade_hostname:
-                host = None
+        if host == self.facade_hostname:
+            host = None
         # logger.debug(f"@@@ HOST: {headers.get('HOST')}")
         # logger.debug(f"@@@ host: {host}")
         # logger.debug(f"@@@ AUTHORIZATION: {headers.get('AUTHORIZATION')}")
@@ -327,6 +337,7 @@ class Multiplexer():
             return (r, zone_id)
 
         return self.controller.route_request(traceid, host, access_key_id)
+
 
     def get_access_key_id(self, authorization):
         if authorization is None:

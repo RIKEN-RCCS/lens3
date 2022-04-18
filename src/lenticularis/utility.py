@@ -213,10 +213,10 @@ def check_mux_access(traceid, host, access_key_id, facade_hostname, timeout):
     headers["HOST"] = facade_hostname
     authorization = forge_s3_auth(access_key_id)
     headers["AUTHORIZATION"] = authorization
-    if traceid is not None:
-        headers["X-TRACEID"] = traceid
     # headers["X-REAL-IP"] = (unset)
     headers["X-FORWARDED-PROTO"] = proto
+    if traceid is not None:
+        headers["X-TRACEID"] = traceid
     ## A multiplexer uses a peer-address if X-REAL-IP is missing.
     req = Request(url, headers=headers)
     logger.debug(f"urlopen with url={url}, timeout={timeout},"

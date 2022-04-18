@@ -120,14 +120,15 @@ def start_api():
 
 def run(servicename, env, cmd, args):
     """Starts Gunicorn as a systemd service.  It will not return unless it
-    errs or finishes.  The messages at starting Gunicorn go to
-    stdout/stderr.
+    errs or finishes.  The messages at starting Gunicorn (until a
+    logger is set) go to stdout/stderr.
+
     """
 
-    logger.debug(f"{servicename}: starting gunicorn ...")
-    logger.debug(f"cmd = {cmd}")
-    logger.debug(f"args = {args}")
-    logger.debug(f"env = {env}")
+    logger.debug(f"{servicename}: starting gunicorn ..."
+                 f" cmd=({cmd})"
+                 f" args=({args})"
+                 f" env=({env})")
 
     try:
         with Popen(cmd + args, stdout=None, stderr=None, env=env) as p:
@@ -136,7 +137,7 @@ def run(servicename, env, cmd, args):
     except Exception as e:
         logger.exception(f"{servicename} failed to start")
         sys.exit(1)
-    logger.debug(f"{servicename} exited: status = {status}")
+    logger.debug(f"{servicename} exited: status={status}")
     if status is None or status < 0:
         sys.exit(1)
     else:

@@ -264,6 +264,7 @@ def adm_schema(type_number):
     lenticularis = {
         "type": "object",
         "properties": {
+            "aws_signature": {"type": "string"},
             "multiplexer": multiplexer,
             "controller": controller,
             "system_settings": system_settings,

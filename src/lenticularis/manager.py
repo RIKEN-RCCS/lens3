@@ -333,25 +333,26 @@ class MinioManager():
                     return True
 
     def wait_for_minio_to_come_up(self, p):
+        ## minio outputs at a start like following lines (to stdout):
+        ## "API: http://10.128.8.26:9000  http://127.0.0.1:9000"
+        ## "RootUser: minioadmin"
+        ## "RootPass: minioadmin"
+        expected_response = b"API: "
         errs_port = b"Specified port is already in use"
         errs_perm = b"Insufficient permissions to use specified port"
         errs_priv = b"Unable to write to the backend"
-        expected_response = b"API: "
         outs = b""
         while True:
             try:
                 r = p.stdout.readline()
-                logger.debug(f"@ r = {r}")
                 outs += r
             except Exception:
-                pass  # ignore any exceptions
+                pass
             if r == b"":
-                logger.debug("@ FAIL")
+                ## Got eof in the end.
                 p_status = p.wait()
-                logger.debug(f"@ p_status = {p_status}")
-                logger.debug(f"@ outs = {outs}")
-
-                logger.debug(f"@ error_end = {outs.find(b'ERROR')}")
+                logger.error(f"starting minio failed with"
+                             f" wait-status={p_status} outputs={outs}")
                 if outs.find(b"ERROR") != -1:
                     if outs.find(errs_port) != -1:
                         logger.debug(f"@ {errs_port}")
@@ -362,7 +363,6 @@ class MinioManager():
                     elif outs.find(errs_priv) != -1:
                         logger.debug("@ raise Exception")
                         raise Exception(f"ERROR: {errs_priv}")
-
                 return False
             if r.startswith(expected_response):
                 urls = r.decode().split()[1:]

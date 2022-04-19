@@ -191,7 +191,7 @@ class Multiplexer():
         url = f"{proto}://{dest_addr}{path}"
 
         input = environ.get("wsgi.input")
-        file_wrapper = environ["wsgi.file_wrapper"]
+        #file_wrapper = environ["wsgi.file_wrapper"]
 
         #sniff = True  # DEBUG FLAG FOR DEVELOPER
         #              # WARNING: turning on `sniff` makes logger to emit sensitive information. use with grate care.
@@ -210,14 +210,14 @@ class Multiplexer():
             headers = res.getheaders()
             logger.debug(f"@@@ < HEADERS {headers}")
             logger.debug(f"@@@ res = {res}")
-            respiter = self._wrap_res(res, headers, sniff=sniff, sniff_marker="<")
+            respiter = self._wrap_res(res, headers, environ, sniff=sniff, sniff_marker="<")
 
         except HTTPError as e:
             logger.error(f"HTTP ERROR: {request_method} {request_url} => {url} {e}")
             # logger.exception(e)  # do not record exception detail
             status = f"{e.status}"
             headers = [(k, e.headers[k]) for k in e.headers]
-            respiter = self._wrap_res(e, headers, sniff=sniff, sniff_marker="<E")
+            respiter = self._wrap_res(e, headers, environ, sniff=sniff, sniff_marker="<E")
             #respiter = file_wrapper(e, sniff=sniff)
 
         except URLError as e:
@@ -269,12 +269,13 @@ class Multiplexer():
             return zone["user"]
 
 
-    def _wrap_res(self, res, headers, sniff=False, sniff_marker=""):
+    def _wrap_res(self, res, headers, environ, sniff=False, sniff_marker=""):
             if self.unbufferp(headers) or sniff:
                 logger.debug("@@@ READ1READER")
                 return Read1Reader(res, sniff=sniff, sniff_marker=sniff_marker, thunk=res)
             else:
                 logger.debug("@@@ FILE_WRAPPER")
+                file_wrapper = environ["wsgi.file_wrapper"]
                 return file_wrapper(res)
 
 
@@ -307,16 +308,20 @@ class Multiplexer():
 
     def get_dest_addr(self, traceid, headers):
         ## (It drops a host if it is attached by the facade).
+        ## (A host may include a port, a facade may not).
 
         host = headers.get("HOST")
         if host:
             host = host.lower()
         if host == self.facade_hostname:
             host = None
-        # logger.debug(f"@@@ HOST: {headers.get('HOST')}")
-        # logger.debug(f"@@@ host: {host}")
-        # logger.debug(f"@@@ AUTHORIZATION: {headers.get('AUTHORIZATION')}")
 
+        #logger.debug(f"@@@ HOST: {headers.get('HOST')}")
+        #logger.debug(f"@@@ host: {host}")
+        logger.debug(f"authorization-header={headers.get('AUTHORIZATION')}")
+
+        ## TEMPORARILY BAN HOST ACCESSES.
+        host = None
         if host:
             access_key_id = None
             r = self.tables.routes.get_route_by_direct_hostname(host)

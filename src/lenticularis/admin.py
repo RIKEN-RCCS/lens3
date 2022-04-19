@@ -23,25 +23,39 @@ from lenticularis.utility import safe_json_loads
 from lenticularis.utility import tracing
 
 
+_commands = [
+    "help",
+    "insert-allow-deny-rules",
+    "show-allow-deny-rules",
+    "insert-user-info",
+    "show-user-info",
+    "insert-zone",
+    "delete-zone",
+    "disable-zone",
+    "enable-zone",
+    "show-zone",
+    "dump-zone",
+    "restore-zone",
+    "drop-zone",
+    "reset-all",
+    "print-all",
+    "show-multiplexer",
+    "show-server-processes",
+    "flush-server-processes",
+    "delete-server-processes",
+    "throw-decoy",
+    "show-routing-table",
+    "flush-routing-table"
+]
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("operation",
-                        choices=["delete",
-                                 "disable",
-                                 "drop",
-                                 "resetall",
-                                 "printall",
-                                 "dump",
-                                 "flush",
-                                 "enable",
-                                 "insert",
-                                 "restore",
-                                 "show",
-                                 "throw"])
-
+                        choices=_commands)
     parser.add_argument("--configfile", "-c")
     parser.add_argument("--format", "-f", choices=["text", "json"])
     parser.add_argument("--everything", type=bool, default=False)
+    parser.add_argument("--yes", "-y", type=bool, default=False)
     #action=argparse.BooleanOptionalAction was introduced in Python3.9
 
     args, rest = parser.parse_known_args()
@@ -366,44 +380,45 @@ def admin_main(traceid, adm_conf, args, rest):
     logger.debug(f"@@@ BODY")
 
     optbl = {
-        "insert.allow-deny-rules": fn_insert_allow_deny_rules,
-        "show.allow-deny-rules": fn_show_allow_deny_rules,
+        "help": usage,
+        "insert-allow-deny-rules": fn_insert_allow_deny_rules,
+        "show-allow-deny-rules": fn_show_allow_deny_rules,
 
-        "insert.user-info": fn_insert_user_info,
-        "show.user-info": fn_show_user_info,
+        "insert-user-info": fn_insert_user_info,
+        "show-user-info": fn_show_user_info,
 
-        "insert.zone": fn_insert_zone,
-        "delete.zone": fn_delete_zone,
-        "disable.zone": fn_disable_zone,
-        "enable.zone": fn_enable_zone,
-        "show.zone": fn_show_zone,
+        "insert-zone": fn_insert_zone,
+        "delete-zone": fn_delete_zone,
+        "disable-zone": fn_disable_zone,
+        "enable-zone": fn_enable_zone,
+        "show-zone": fn_show_zone,
 
-        "dump.": fn_dump_zone,
-        "restore.": fn_restore_zone,
-        "drop.": fn_drop_zone,
-        "resetall.": fn_reset_database,
-        "printall.": fn_print_database,
+        "dump-zone": fn_dump_zone,
+        "restore-zone": fn_restore_zone,
+        "drop-zone": fn_drop_zone,
+        "reset-all": fn_reset_database,
+        "print-all": fn_print_database,
 
-        "show.multiplexer": fn_show_multiplexer,
+        "show-multiplexer": fn_show_multiplexer,
 
-        "show.server-processes": fn_show_server_processes,
-        "flush.server-processes": fn_flush_server_processes,
-        "delete.server-processes": fn_delete_server_processes,
+        "show-server-processes": fn_show_server_processes,
+        "flush-server-processes": fn_flush_server_processes,
+        "delete-server-processes": fn_delete_server_processes,
 
-        "throw.decoy": fn_throw_decoy,
+        "throw-decoy": fn_throw_decoy,
 
-        "show.routing-table": fn_show_routing_table,
-        "flush.routing-table": fn_flush_routing_table,
+        "show-routing-table": fn_show_routing_table,
+        "flush-routing-table": fn_flush_routing_table,
     }
 
-    no_table_ops = {"dump", "restore", "drop", "resetall", "printall"}
-
-    table = rest.pop(0) if args.operation not in no_table_ops else ""
-    key = f"{args.operation}.{table}"
-    fn = optbl.get(key)
+    #no_table_ops = {"dump", "restore", "drop", "resetall", "printall"}
+    #table = rest.pop(0) if args.operation not in no_table_ops else ""
+    #key = f"{args.operation}.{table}"
+    #fn = optbl.get(key)
+    fn = optbl.get(args.operation)
 
     if fn is None:
-        raise Exception(f"undefined operation: {args.operation} {table}")
+        raise Exception(f"undefined operation: {args.operation}")
 
     (nparams, varargsp) = get_nparams_of_fn(fn)
     logger.debug(f"@@@ NPARAMS = {nparams}  VARARGSP = {varargsp}")
@@ -459,35 +474,36 @@ def print_json_plain(table_name, outs, format, order=None):
 def usage():
     progname = os.path.basename(sys.argv[0])
     sys.stderr.write(
-        "usage:\n"
-        f"     {progname} insert allow-deny-rules file\n"        # fn_insert_allow_deny_rules
-        f"     {progname} show allow-deny-rules\n"               # fn_show_allow_deny_rules
+        f"usage:\n"
+        f"{progname} help\n"
+        f"{progname} insert-allow-deny-rules file\n"        # fn_insert_allow_deny_rules
+        f"{progname} show-allow-deny-rules\n"               # fn_show_allow_deny_rules
 
-        f"     {progname} insert user-info file\n"               # fn_insert_user_info
-        f"     {progname} show user-info\n"                      # fn_show_user_info
+        f"{progname} insert-user-info file\n"               # fn_insert_user_info
+        f"{progname} show-user-info\n"                      # fn_show_user_info
 
-        f"     {progname} insert zone Zone-ID jsonfile\n"        # fn_insert_zone
-        f"     {progname} delete zone Zone-ID...\n"              # fn_delete_zone ...
-        f"     {progname} disable zone Zone-ID...\n"             # fn_disable_zone ...
-        f"     {progname} enable zone Zone-ID...\n"              # fn_enable_zone ...
-        f"     {progname} show zone [--decrypt] [Zone-ID...]\n"  # fn_show_zone ...
-        f"     {progname} dump\n"                                # fn_dump_zone
-        f"     {progname} restore dump-file\n"                   # fn_restore_zone
-        f"     {progname} drop\n"                                # fn_drop_zone
-        f"     {progname} resetall\n"                            # fn_reset_database
-        f"     {progname} printall\n"                            # fn_print_database
+        f"{progname} insert-zone Zone-ID jsonfile\n"        # fn_insert_zone
+        f"{progname} delete-zone Zone-ID...\n"              # fn_delete_zone ...
+        f"{progname} disable-zone Zone-ID...\n"             # fn_disable_zone ...
+        f"{progname} enable-zone Zone-ID...\n"              # fn_enable_zone ...
+        f"{progname} show-zone [--decrypt] [Zone-ID...]\n"  # fn_show_zone ...
+        f"{progname} dump-zone\n"                                # fn_dump_zone
+        f"{progname} restore-zone dump-file\n"                   # fn_restore_zone
+        f"{progname} drop-zone\n"                                # fn_drop_zone
+        f"{progname} reset-all\n"                            # fn_reset_database
+        f"{progname} print-all\n"                            # fn_print_database
 
-        f"     {progname} show multiplexer\n"                    # fn_show_multiplexer
-        # f"     {progname} flush multiplexer\n" NOT IMPLEMENTED
+        f"{progname} show-multiplexer\n"                    # fn_show_multiplexer
+        # f"{progname} flush-multiplexer\n" NOT IMPLEMENTED
 
-        f"     {progname} show server-processes\n"               # fn_show_server_processes
-        f"     {progname} flush server-processes\n"              # fn_flush_server_processes
-        f"     {progname} delete server-processes [Server-ID...]\n"  # fn_delete_server_processes ...
+        f"{progname} show-server-processes\n"               # fn_show_server_processes
+        f"{progname} flush-server-processes\n"              # fn_flush_server_processes
+        f"{progname} delete-server-processes [Server-ID...]\n"  # fn_delete_server_processes ...
 
-        f"     {progname} throw decoy Zone-ID\n"                 # fn_throw_decoy
+        f"{progname} throw-decoy Zone-ID\n"                 # fn_throw_decoy
 
-        f"     {progname} show routing-table\n"                  # fn_show_routing_table
-        f"     {progname} flush routing-table\n"                 # fn_flush_routing_table
+        f"{progname} show-routing-table\n"                  # fn_show_routing_table
+        f"{progname} flush-routing-table\n"                 # fn_flush_routing_table
     )
     sys.exit(ERROR_ARGUMENT)
 

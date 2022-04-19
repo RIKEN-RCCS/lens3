@@ -38,8 +38,8 @@ def app():
     logger.info(f"mux is running on a host=({node})")
 
     controller = Controller(mux_conf, tables, configfile, node)
-
     multiplexer = Multiplexer(mux_conf, tables, controller, node)
+
     atexit.register((lambda: multiplexer.__del__()))
 
     timer_interval = int(mux_conf["lenticularis"]["multiplexer"]["timer_interval"])
@@ -52,4 +52,5 @@ def app():
             time.sleep(sleep_time)
 
     threading.Thread(target=interval_timer, daemon=True).start()
+
     return multiplexer

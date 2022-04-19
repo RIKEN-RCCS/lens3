@@ -1,4 +1,4 @@
-"""Multiplexer."""
+"""Multiplexer.  It is a gunicorn app."""
 
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
@@ -94,12 +94,15 @@ class Multiplexer():
 
 
     def process_request(self, environ, start_response):
-        """Starts request processing from gunicorn."""
+        """Processes a request from gunicorn."""
         traceid = environ.get("HTTP_X_TRACEID")
         #threading.current_thread().name = traceid
         tracing.set(traceid)
-        logger.debug(f"@@@ MUX_MAIN: __CALL__")
-        # logger.debug(f"@@@ environ = {environ}")
+        #logger.debug(f"@@@ MUX_MAIN: __CALL__")
+        #logger.debug(f"@@@ environ = {environ}")
+
+        ##server_name = environ.get("SERVER_NAME")
+        server_port = environ.get("SERVER_PORT")
 
         peer_addr = environ.get("REMOTE_ADDR")
 
@@ -108,7 +111,7 @@ class Multiplexer():
         #    logger.error("missing 'REMOTE_ADDR'")
         #    return None
 
-        logger.debug(f"@@@ PEER ADDR {peer_addr}")
+        #logger.debug(f"@@@ PEER ADDR {peer_addr}")
 
         # x_forwarded_for = environ.get("HTTP_X_FORWARDED_FOR")
         x_real_ip = environ.get("HTTP_X_REAL_IP")
@@ -119,8 +122,7 @@ class Multiplexer():
         path = environ.get("RAW_URI")
         request_method = environ.get("REQUEST_METHOD")
         request_proto = environ.get("HTTP_X_FORWARDED_PROTO")
-        if not request_proto:
-            logger.warning(f"HTTP_X_FORWARDED_PROTO is not set")
+
         # NOTUSED forwarded_host = environ.get("HTTP_X_FORWARDED_HOST")
 
         ### X-Remote-User is not set!
@@ -131,34 +133,42 @@ class Multiplexer():
         #user_id = zone_adm.zone_to_user(zone_id)
         host = environ.get("HTTP_HOST")
         host = host if host else "-"
-        access_key_id = self.get_access_key_id(environ.get("HTTP_AUTHORIZATION"))
+
+        auth = environ.get("HTTP_AUTHORIZATION")
+
+        logger.debug(f"mux on port={server_port} handles a request:"
+                     f" {request_method} {path};"
+                     f" host=({host}),"
+                     f" peer=({peer_addr}),"
+                     f" proto=({request_proto}),"
+                     f" auth=({auth})")
+
+        if not request_proto:
+            logger.warning(f"HTTP_X_FORWARDED_PROTO is not set")
+
+        access_key_id = self.get_access_key_id(auth)
+        logger.debug(f"access_key_id=({access_key_id})")
 
         request_url = f"{request_proto}://{host}{path}"
 
-        # assert('client_addr' in vars())
-        # assert(client_addr != None)
-        # assert('access_key_id' in vars())
-        # assert('request_method' in vars())
-        # assert('host' in vars())
-        # assert('path' in vars())
-
         if not self.check_access(peer_addr):
+            logger.debug(f"Deny access from peer={peer_addr}")
             status = "400"  # 400 Bad Request
-            logger.info(f"DENY: {peer_addr}")
             user_id = f"Access_Key_ID:{access_key_id}"
             accesslog(status, client_addr, user_id, request_method, request_url)
             start_response(status, [])
             return []
 
-        logger.info(f"ALLOW: {peer_addr}")
+        logger.debug(f"Allow access from peer={peer_addr}")
 
         #logger.debug(f"@@@ MATCH    {peer_addr}")
 
-        headers = [(h[5:].replace('_', '-'), environ.get(h))
-                   for h in environ if h.startswith("HTTP_")]
-
-        # logger.debug(f"@@@ > HEADERS FROM ENVIRON {headers}")
-        headers = dict(headers)
+        #headers = [(h[5:].replace('_', '-'), environ.get(h))
+        #           for h in environ if h.startswith("HTTP_")]
+        #headers = dict(headers)
+        headers = {h[5:].replace('_', '-'): environ.get(h)
+                   for h in environ if h.startswith("HTTP_")}
+        #logger.debug(f"headers in environ: {headers}")
 
         content_type = environ.get("CONTENT_TYPE")
         if content_type:
@@ -210,14 +220,14 @@ class Multiplexer():
             headers = res.getheaders()
             logger.debug(f"@@@ < HEADERS {headers}")
             logger.debug(f"@@@ res = {res}")
-            respiter = self._wrap_res(res, headers, environ, sniff=sniff, sniff_marker="<")
+            respiter = self._wrap_res(environ, res, headers, sniff=sniff, sniff_marker="<")
 
         except HTTPError as e:
             logger.error(f"HTTP ERROR: {request_method} {request_url} => {url} {e}")
             # logger.exception(e)  # do not record exception detail
             status = f"{e.status}"
             headers = [(k, e.headers[k]) for k in e.headers]
-            respiter = self._wrap_res(e, headers, environ, sniff=sniff, sniff_marker="<E")
+            respiter = self._wrap_res(environ, e, headers, sniff=sniff, sniff_marker="<E")
             #respiter = file_wrapper(e, sniff=sniff)
 
         except URLError as e:
@@ -269,7 +279,7 @@ class Multiplexer():
             return zone["user"]
 
 
-    def _wrap_res(self, res, headers, environ, sniff=False, sniff_marker=""):
+    def _wrap_res(self, environ, res, headers, sniff=False, sniff_marker=""):
             if self.unbufferp(headers) or sniff:
                 logger.debug("@@@ READ1READER")
                 return Read1Reader(res, sniff=sniff, sniff_marker=sniff_marker, thunk=res)
@@ -318,7 +328,7 @@ class Multiplexer():
 
         #logger.debug(f"@@@ HOST: {headers.get('HOST')}")
         #logger.debug(f"@@@ host: {host}")
-        logger.debug(f"authorization-header={headers.get('AUTHORIZATION')}")
+        #logger.debug(f"authorization-header={headers.get('AUTHORIZATION')}")
 
         ## TEMPORARILY BAN HOST ACCESSES.
         host = None

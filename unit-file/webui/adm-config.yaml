@@ -1,22 +1,22 @@
-gunicorn:
-    bind: "[::]:8003"
-    workers: 2
-    threads: 4
-    timeout: 120
-    log_file: "/tmp/lens3-gunicorn-adm-log"
-    log_level: debug
-    log_syslog_facility: LOCAL7
-    reload: yes
-
 redis:
     host: localhost
     port: 6379
     password: ZXjmrOLwQ8Ri51pb5FI79z51gAHfIQ4oMvtWrG8q
 
+gunicorn:
+    port: 8003
+    workers: 2
+    timeout: 120
+    log_file: "/tmp/lens3-gunicorn-adm-log"
+    log_level: debug
+    #log_syslog_facility: LOCAL8
+    reload: yes
+
 lenticularis:
+    aws_signature: "AWS4-HMAC-SHA256"
 
     multiplexer:
-        delegate_hostname: lens3.example.jp
+        facade_hostname: fgkvm-010-128-008-026.fdcs.r-ccs.riken.jp
 
     controller:
         max_lock_duration: 60
@@ -28,9 +28,9 @@ lenticularis:
         allowed_maximum_zone_exp_date: 2279404800
         endpoint_url: https://{hostname}/
         direct_hostname_validator: flat
-        direct_hostname_domain: s3.lens3.example.jp
+        direct_hostname_domain: fgkvm-010-128-008-026.fdcs.r-ccs.riken.jp
         reserved_hostnames:
-            - bad.lens3.example.jp
+            - bad.lens3.fdcs.r-ccs.riken.jp
         decoy_connection_timeout: 60
 
     log_file: "/tmp/lens3-adm-log"

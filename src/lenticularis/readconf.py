@@ -1,4 +1,6 @@
-# Copyright (c) 2022 RIKEN R-CCS.
+"""A config file reader."""
+
+# Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
 import jsonschema
@@ -8,10 +10,8 @@ import yaml
 ##default_mux_conf = "/etc/lenticularis/mux-config.yaml"
 mux_conf_envname = "LENTICULARIS_MUX_CONFIG"
 
-
 ##default_adm_conf = "/etc/lenticularis/adm-config.yaml"
 adm_conf_envname = "LENTICULARIS_ADM_CONFIG"
-
 
 node_envname = "LENTICULARIS_MUX_NODE"
 
@@ -49,7 +49,7 @@ def gunicorn_schema(type_number):
     return {
         "type": "object",
         "properties": {
-            "bind": {"type": "string"},
+            "port": {"type": "string"},
             "workers": type_number,
             "threads": type_number,
             "timeout": type_number,
@@ -59,7 +59,7 @@ def gunicorn_schema(type_number):
             "reload": {"type": "string"},
         },
         "required": [
-            "bind",
+            "port",
             # OPTIONAL "workers",
             # OPTIONAL "threads",
             # OPTIONAL "timeout",
@@ -177,6 +177,7 @@ def mux_schema(type_number):
     lenticularis = {
         "type": "object",
         "properties": {
+            "aws_signature": {"type": "string"},
             "multiplexer": multiplexer,
             "controller": controller,
             "minio": minio,
@@ -195,13 +196,13 @@ def mux_schema(type_number):
     return {
         "type": "object",
         "properties": {
-            "gunicorn": gunicorn_schema(type_number),
             "redis": redis_schema(type_number),
+            "gunicorn": gunicorn_schema(type_number),
             "lenticularis": lenticularis,
         },
         "required": [
-            "gunicorn",
             "redis",
+            "gunicorn",
             "lenticularis",
         ],
         "additionalProperties": False,

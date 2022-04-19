@@ -1,23 +1,24 @@
-gunicorn:
-    bind: "[::]:8004"
-    workers: 2
-    threads: 4
-    timeout: 60
-    log_file: "/tmp/lens3-gunicorn-mux-log"
-    log_level: debug
-    log_syslog_facility: LOCAL7
-    reload: yes
-
 redis:
     host: localhost
     port: 6379
     password: ZXjmrOLwQ8Ri51pb5FI79z51gAHfIQ4oMvtWrG8q
 
+gunicorn:
+    port: 8004
+    workers: 4
+    threads: 4
+    timeout: 60
+    log_file: "/tmp/lens3-gunicorn-mux-log"
+    log_level: debug
+    #log_syslog_facility: LOCAL7
+    reload: yes
+
 lenticularis:
+    aws_signature: "AWS4-HMAC-SHA256"
 
     multiplexer:
         port: 8004
-        facade_hostname: lens3.example.jp
+        facade_hostname: fgkvm-010-128-008-026.fdcs.r-ccs.riken.jp
         trusted_proxies:
             - localhost
         timer_interval: 30

@@ -1,4 +1,4 @@
-"""Start routines of Gunicorn."""
+"""Start routines of gunicorn."""
 
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
@@ -26,7 +26,6 @@ def main():
 
 
 def start_mux():
-
     try:
         (mux_conf, configfile) = read_mux_conf()
     except Exception as e:
@@ -38,7 +37,9 @@ def start_mux():
     logger.info("Start Lenticularis-S3 MUX service")
 
     gunicorn_conf = mux_conf["gunicorn"]
-    bind = gunicorn_conf["bind"]
+    #bind = gunicorn_conf["bind"]
+    _port = gunicorn_conf["port"]
+    bind = f"[::]:{_port}"
     workers = gunicorn_conf.get("workers")
     threads = gunicorn_conf.get("threads")
     timeout = gunicorn_conf.get("timeout")
@@ -85,7 +86,9 @@ def start_api():
     logger.info("Start Lenticularis-S3 API service")
 
     gunicorn_conf = adm_conf["gunicorn"]
-    bind = gunicorn_conf["bind"]
+    #bind = gunicorn_conf["bind"]
+    _port = gunicorn_conf["port"]
+    bind = f"[::]:{_port}"
     workers = gunicorn_conf.get("workers")
     #threads = gunicorn_conf.get("threads")
     timeout = gunicorn_conf.get("timeout")

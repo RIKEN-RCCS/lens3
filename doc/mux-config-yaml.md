@@ -1,55 +1,38 @@
+# mux-config.yaml
 
-    - NOTE: Multiplexer's own hostname is not stored in configuration
-      file and, it is obtained by platform.node().
-      This value is used by other multiplexers to access this multiplexer.
-      In case the value returned by platform.node() is inappropriate for
-      this purpose, administrator should explicitly set hostname.
-      To set hostname, set environment viable `LENTICULARIS_MUX_NODE`
-      in the unit file (1.) or environment file (2.).
-      1. /usr/lib/systemd/system/lenticularis-mux.service
-      2. /etc/systemd/lenticularis-mux.service
+## Entries
 
-      ```
-      gunicorn:
-      # designate awaiting port.  we use [::]:8000 to listen both IPv4 and IPv6.
-          bind: "[::]:8000"
-      # numbers of gunicorn workers
-          workers: 2
-      # numbers of gunicorn threads per worker
-          threads: 40
-      # gunicorn timeout
-          timeout: 60
-      # syslog facility (default: user) of gunicorn
-          log_syslog_facility: LOCAL7
-          reload: yes
+* redis:
+  * host: localhost
+  * port: 6379
+  * password: deadbeef
 
+* gunicorn:
+  * port: _8000_
+    is a port.  The bind argument is "[::]:8000" to listen both IP v4/v6.
+  * workers: _
+    is passed to gunicorn.
+  * threads: _
+    is passed to gunicorn.
+  * timeout: _
+    is passed to gunicorn.
+  * log_syslog, log_syslog_facility
+    are passed to gunicorn.
+  * reload: _
+    is passed to gunicorn.
 
-      redis:
-      # hostname of Redis-Host
-          host: localhost
-      # port of Redis (see redis.conf's port above)
-          port: 6379
-      # password of Redis (see redis.conf's requirepass above)
-          password: deadbeef
+* lenticularis:
+  * aws_signature: "AWS4-HMAC-SHA256"
+  * multiplexer:
+    * port: 8000
+    * facade_hostname: lens3.example.com
+    * trusted_proxies:
+      are proxies and hosts running adminitorator commands.
+    * timer_interval: 30
+      is a time limit of connecting to minio
+    * request_timeout: 60
 
-
-      lenticularis:
-
-          multiplexer:
-      # multiplexer's port
-              port: 8000
-      # facade hostname
-              facade_hostname: lens3.example.com
-              trusted_proxies:
-      # trust reverse-proxy
-                  - localhost
-      # and also trust Admin-API-Host (in this example, they are same so you can omit it)
-                  - localhost
-              timer_interval: 30
-      # time limit of connecting to minio
-              request_timeout: 60
-
-          controller:
+  * controller:
       # port for MinIO (lower)
               port_min: 9000
       # port for MinIO (upper, inclusive)
@@ -95,4 +78,16 @@
       # WARNING: setting priority to DEBUG, sensitive information may be
       #          recorded in syslog.
               priority: INFO
-      ```
+
+## NOTE
+
+Multiplexer's own hostname is not stored in configuration file and, it
+is obtained by platform.node().  This value is used by other
+multiplexers to access this multiplexer.  In case the value returned
+by platform.node() is inappropriate for this purpose, administrator
+should explicitly set hostname.  To set hostname, set environment
+viable `LENTICULARIS_MUX_NODE` in the unit file (1.) or environment
+file (2.).
+
+1. /usr/lib/systemd/system/lenticularis-mux.service
+1. /etc/systemd/lenticularis-mux.service

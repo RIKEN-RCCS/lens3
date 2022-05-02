@@ -22,7 +22,7 @@ def app():
     try:
         (mux_conf, configfile) = read_mux_conf()
     except Exception as e:
-        sys.stderr.write(f"{e}\n")
+        sys.stderr.write(f"Lens3 reading conf failed: {e}\n")
         return None
 
     openlog(mux_conf["lenticularis"]["log_file"],

@@ -1,5 +1,5 @@
 [Unit]
-Description = lenticularis multiplexer and controller (gunicorn app)
+Description = Lenticularis-mux service (gunicorn app)
 After = syslog.target network-online.target remote-fs.target nss-lookup.target
 Wants = network-online.target
 

@@ -29,7 +29,7 @@ from lenticularis.utility import tracing
 try:
     (adm_conf, configfile) = read_adm_conf()
 except Exception as e:
-    sys.stderr.write(f"{e}\n")
+    sys.stderr.write(f"Lens3 reading conf failed: {e}\n")
     sys.exit(ERROR_READCONF)
 
 openlog(adm_conf["lenticularis"]["log_file"],
@@ -102,7 +102,9 @@ async def app_get_show_ui(request: Request,
     ##traceid = traceid if traceid is not None else "12345"
     ##headers = {"X-TRACEID": traceid}
     ##(headers=headers,)
-    response = HTMLResponse(status_code=code, content=create_html)
+    with open(os.path.join(webui_dir, "create.html")) as f:
+        create_html_nocache = f.read()
+    response = HTMLResponse(status_code=code, content=create_html_nocache)
     return response
 
 

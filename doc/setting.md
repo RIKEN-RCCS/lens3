@@ -1,11 +1,20 @@
 # (Minimal) Setup of Lenticularis-S3
 
-[TOC]
+## Configuration
+
+```
+reverse-proxy <-->︎ multiplexer <--> MinIO
+                               <--> MinIO
+                               <--> MinIO
+              <--> pool-manager (web-ui)
+                   redis
+```
+
 
 ## Assuption
 
-First read [configuration.md](configuration.md) for the services
-running for Lenticularis-S3.  In this setup, we assume Nginx as a
+Some number of services running for Lenticularis-S3 as shown in the
+configuration section.  In this setup, we assume Nginx as a
 reverse-proxy, ....  A pseudo user "lens3" is used for the owner of
 the daemons/services.  We also assume RedHat8.5 and Python3.9 at this
 writing (in March 2022).

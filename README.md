@@ -5,31 +5,15 @@ Lenticularis-S3, a multiplexer to MinIO to service multiple MinIO instances at a
 
 Lenticularis-S3 (Lens3) is a multiplexer to MinIO for S3 object
 storage service.  It starts a MinIO instance as a non-root process for
-each user to avoid unintended leaking of data.  Lens3 launches a MinIO
-instance for each user on request, redirects file access requests to
-an instance, and manages the life-time of an instance.
-
-End users can launch their own object storage service (called zone)
-via Web UI.  Zone consists of Access Key set, location of buckets on
-file system, and meta information such as expiration date or
-user/group-id for the S3 server.
-
-Once a zone is launched, on an S3 access to the zone, the system automatically
-initiates S3 server (minio) for the targeted zone and start relaying the
-session.  Zones are identified by Access Key and multiplexer distributes
-S3 session to appropriate S3 server.  Inactive S3 server is automatically
-purged to save system resources.
-
-End users can give individual domain name to their zone, which can
-be used as an dedicated endpoint (direct hostname) for the zone.
-Access to direct hostname requires no S3 Access Key,
-therefore access to a bucket of a zone that has direct hostname is
-appropriately relayed by the system.  Putting the bucket to be public,
-anonymous user may access to the bucket.
+each user to confine unintended operations.  Lens3 launches a MinIO
+instance on a request, redirects file access requests to an instance,
+and manages the life-time of an instance.  Lens3 also provides simple
+Web UI to service a pool manager.  A pool manager associates a bucket
+pool to a directory, and the bucket names in the pool to the entries
+in the directory.
 
 ## Installation
 
-* See [doc/overview.md](doc/overview.md)
 * See [doc/setting.md](doc/setting.md)
 
 ## Guides

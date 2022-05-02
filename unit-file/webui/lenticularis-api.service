@@ -1,5 +1,5 @@
 [Unit]
-Description = lenticularis webui (gunicorn app)
+Description = Lenticularis-api service (gunicorn app)
 After = syslog.target network-online.target remote-fs.target nss-lookup.target
 Wants = network-online.target
 

@@ -109,7 +109,7 @@ def mux_schema(type_number):
     multiplexer = {
         "type": "object",
         "properties": {
-            "port": type_number,
+            #"port": type_number,
             #"facade_hostnames": {"type": "array", "items": {"type": "string"}},
             "facade_hostname": {"type": "string"},
             "trusted_proxies": {"type": "array", "items": {"type": "string"}},
@@ -117,7 +117,7 @@ def mux_schema(type_number):
             "request_timeout": type_number,
         },
         "required": [
-            "port",
+            #"port",
             "facade_hostname",
             "trusted_proxies",
             "timer_interval",

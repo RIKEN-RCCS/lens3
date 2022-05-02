@@ -17,7 +17,6 @@ lenticularis:
     aws_signature: "AWS4-HMAC-SHA256"
 
     multiplexer:
-        port: 8004
         facade_hostname: fgkvm-010-128-008-026.fdcs.r-ccs.riken.jp
         trusted_proxies:
             - localhost

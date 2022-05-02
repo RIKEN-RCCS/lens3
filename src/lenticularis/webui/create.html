@@ -11,7 +11,14 @@
     <title>manage zone</title>
   </head>
   <body>
-    <div id="editor" v-if="seen">
+    <div id="add_new_pool_button">
+      <button v-on:click="add_zone">New bucket pool</button>
+    </div>
+    <div id="show_pool_list_button">
+      <button v-on:click="show_pool_list">Show bucket pools</button>
+    </div>
+    <div id="new_pool" v-if="pool_name_visible">
+      <hr />
       <div>
         <span class="label">User:</span>
         <input v-model="user" size="64" disabled /></div>
@@ -19,9 +26,14 @@
         <span class="label">Group:</span>
         <input v-model="group" size="64" /></div>
       <div>
-        <span class="label">Buckets Directory:</span>
-        <input v-model="bucketsDir" size="64" :disabled="bucketsDirectoryDisabled" /></div>
+        <span class="label">Buckets directory:</span>
+        <input v-model="bucketsDir" size="64" :disabled="buckets_directory_disabled" /></div>
+      <div v-if="submit_button_visible">
+        <button v-on:click="submitZoneToCreate" :disabled="submit_button_disabled">{{submit_button_name}}</button>
+      </div>
+    </div>
       <hr />
+    <div id="edit_pool" v-if="edit_pool_visible">
       <div>
         <span class="label">BUCKETS</span>
       </div>
@@ -64,6 +76,7 @@
         <button v-on:click="submitChangeAccessKeyWO">Change</button>
       </div>
       <hr />
+<!--
       <div>
         <span class="label">Direct Hostname (label or FQDN):</span>
         <input v-model="directHostnames" size="64" /></div>
@@ -80,6 +93,7 @@
         <span class="label">Mode:</span>
         <input v-model="mode" size="64" disabled /></div>
       <hr />
+-->
       <div>
         <span class="label">atime:</span>
         <input v-model="atime" size="64" disabled /></div>
@@ -93,25 +107,21 @@
         <span class="label">Endpoint-URLs:</span>
         <input v-model="endpointURLs" size="64" disabled /></div>
       <hr />
-      <div v-if="createButtonVisible">
-        <button v-on:click="submitZoneToCreate" :disabled="createButtonDisabled">{{ createButtonName }}</button>
+      <div v-if="submit_button_visible">
+        <button v-on:click="submitZoneToCreate" :disabled="submit_button_disabled">{{submit_button_name}}</button>
       </div>
       <hr /></div>
-    <div id="add_button">
-      <button v-on:click="add_zone">Add Storage Zone</button>
-    </div>
-    <div id="show_button">
-      <button v-on:click="show_pool_list">Show Storage Zone</button>
-      <div>
-        <p>{{ message }}</p>
-        <p>{{ status }}</p>
-        <p>{{ reason }}</p>
-        <p>{{ time }}</p>
-      </div>
+    <div>
       <button v-on:click="debug">Debug</button>
     </div>
+    <div id="show_status">
+      <p>{{message}}</p>
+      <p>{{status}}</p>
+      <p>{{reason}}</p>
+      <p>{{time}}</p>
+    </div>
     <hr />
-    <div id="zone_list"></div>
+    <div id="pool_list"></div>
     <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
     <script src="scripts/api.js"></script>
   </body>

@@ -1,4 +1,4 @@
-"""Start routines of gunicorn."""
+"""Start routines of gunicorn.  It starts a Gunicorn as a process."""
 
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
@@ -22,6 +22,8 @@ def main():
         start_mux()
     elif args.target == "api":
         start_api()
+    else:
+        assert false
     sys.exit(1)
 
 
@@ -29,7 +31,7 @@ def start_mux():
     try:
         (mux_conf, configfile) = read_mux_conf()
     except Exception as e:
-        sys.stderr.write(f"{e}\n")
+        sys.stderr.write(f"Lens3 reading conf failed: {e}\n")
         return None
 
     openlog(mux_conf["lenticularis"]["log_file"],
@@ -70,7 +72,7 @@ def start_mux():
         args.append("--reload")
     args.append("lenticularis.muxmain:app()")
 
-    run("lenticularis.mux", env, cmd, args)
+    run("lenticularis-mux", env, cmd, args)
 
 
 def start_api():
@@ -78,7 +80,7 @@ def start_api():
     try:
         (adm_conf, configfile) = read_adm_conf()
     except Exception as e:
-        sys.stderr.write(f"{e}\n")
+        sys.stderr.write(f"Lens3 reading conf failed: {e}\n")
         return None
 
     openlog(adm_conf["lenticularis"]["log_file"],
@@ -118,14 +120,13 @@ def start_api():
         args.append("--reload")
     args.append("lenticularis.restapi:app")
 
-    run("lenticularis.api", env, cmd, args)
+    run("lenticularis-api", env, cmd, args)
 
 
 def run(servicename, env, cmd, args):
     """Starts Gunicorn as a systemd service.  It will not return unless it
-    errs or finishes.  The messages at starting Gunicorn (until a
-    logger is set) go to stdout/stderr.
-
+    errs or finishes.  Note the messages from a Gunicorn process will
+    go to stdout/stderr (until a logger is set).
     """
 
     logger.debug(f"{servicename}: starting gunicorn ..."

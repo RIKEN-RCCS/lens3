@@ -22,6 +22,7 @@ class Multiplexer():
         self.tables = tables
         self.controller = controller
         self.start = time.time()
+        gunicorn_conf = mux_conf["gunicorn"]
         lenticularis_conf = mux_conf["lenticularis"]
         multiplexer_param = lenticularis_conf["multiplexer"]
         self.facade_hostname = multiplexer_param["facade_hostname"].lower()
@@ -44,7 +45,7 @@ class Multiplexer():
         self.refresh_margin = int(controller_param["refresh_margin"])
 
         mux_host = node
-        mux_port = multiplexer_param["port"]
+        mux_port = gunicorn_conf["port"]
         self.mux_key = mux_host
 
         self.mux_conf_subset = {

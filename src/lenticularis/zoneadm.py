@@ -367,18 +367,6 @@ class ZoneAdm():
     def flush_routing_table(self, everything=False):  # ADMIN
         self.tables.routes.clear_all(everything=everything)
 
-    def update_zone_factory(self, traceid, user_id, zoneID, zone, how,
-                    permission=None,
-                    atime_from_arg=None,
-                    initialize=True,
-                    decrypt=False):
-            logger.debug(f"@@@ traceid = {traceid}")
-            logger.debug(f"@@@ user_id = {user_id}")
-            logger.debug(f"@@@ zoneID = {zoneID}")
-            #logger.debug(f"@@@ zone = {zone}")
-            return self.update_zone_with_lockdb(traceid, user_id, zoneID, zone, how,
-                                  permission, atime_from_arg, decrypt, initialize)
-
 
     def _do_update_zone(self, traceid, user_id, zoneID, zone, how,
                     permission=None,
@@ -517,7 +505,7 @@ class ZoneAdm():
         """
 
         if zoneID is None:  # do update without locking zone
-            return self.update_zone_factory(traceid, user_id, zoneID, zone, how, permission, atime_from_arg, initialize, decrypt)
+            return self.update_zone_with_lockdb(traceid, user_id, zoneID, zone, how, permission, atime_from_arg, initialize, decrypt)
 
         lock = LockDB(self.tables.zones)
         key = f"{self.zone_table_lock_pfx}{zoneID}"
@@ -525,7 +513,7 @@ class ZoneAdm():
         try:
             lock.lock(key, self.timeout)
             # logger.debug(f"@@@ case 2: LOCK SUCCEEDED: {zoneID}")
-            return self.update_zone_factory(traceid, user_id, zoneID, zone, how, permission, atime_from_arg, initialize, decrypt)
+            return self.update_zone_with_lockdb(traceid, user_id, zoneID, zone, how, permission, atime_from_arg, initialize, decrypt)
         finally:
             # logger.debug(f"@@@ UNLOCK {zoneID}")
             lock.unlock()
@@ -574,22 +562,10 @@ class ZoneAdm():
 
 
     def update_zone_with_lockdb(self, traceid, user_id, zone_id, zone, how,
-                         permission, atime_from_arg, decrypt, initialize):  # private use
-
-        logger.debug("+++"
-                            f" traceid: {traceid}"
-                            f" user_id: {user_id}"
-                            f" zone_id: {zone_id}"
-                            f" zone: <omitted>"
-                            f" HOW: {how}"
-                            f" permission: {permission}"
-                            f" atime_from_arg: {atime_from_arg}"
-                            f" decrypt: {decrypt}"
-                            )
-        return self._update_zone_with_lockdb_main_(traceid, user_id, zone_id, zone, how, permission, atime_from_arg, decrypt, initialize)
-
-
-    def _update_zone_with_lockdb_main_(self, traceid, user_id, zone_id, zone, how, permission, atime_from_arg, decrypt, initialize):
+                                permission=None,
+                                atime_from_arg=None,
+                                initialize=True,
+                                decrypt=False):
             logger.debug(f"@@@ user_id = {user_id}")
             logger.debug(f"@@@ zone_id = {zone_id}")
 
@@ -700,7 +676,7 @@ class ZoneAdm():
             #logger.debug(f"@@@ zone = {zone}")
             return zone
 
-    ### END _update_zone_with_lockdb_main_
+    ### END update_zone_with_lockdb
 
     def _prepare_zone(self, user_id, zone_id, existing, zone, permission, how):
             logger.debug(f"+++")

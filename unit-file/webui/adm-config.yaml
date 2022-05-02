@@ -7,7 +7,7 @@ gunicorn:
     port: 8003
     workers: 2
     timeout: 120
-    log_file: "/tmp/lens3-gunicorn-adm-log"
+    log_file: "/var/tmp/lenticularis/lens3-gunicorn-adm-log"
     log_level: debug
     #log_syslog_facility: LOCAL8
     reload: yes
@@ -33,7 +33,7 @@ lenticularis:
             - bad.lens3.fdcs.r-ccs.riken.jp
         decoy_connection_timeout: 60
 
-    log_file: "/tmp/lens3-adm-log"
+    log_file: "/var/tmp/lenticularis/lens3-adm-log"
     log_syslog:
         facility: LOCAL7
         priority: DEBUG

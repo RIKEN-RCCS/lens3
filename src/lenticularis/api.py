@@ -38,7 +38,7 @@ class Api():
             logger.exception(e)
             return ([], f"{e}")
 
-    def api_upsert(self, traceid, user_id, zoneID, zone, how):
+    def api_upsert(self, how, traceid, user_id, zoneID, zone):
         logger.debug(f"@@@ user_id = {user_id}")
         logger.debug(f"@@@ zoneID = {zoneID}")
         logger.debug(f"@@@ zone = {zone}")
@@ -51,7 +51,7 @@ class Api():
             raise Exception(f"user mismatch")
         logger.debug(f"@@@ user = {user_id}")
         try:
-            zone = self.zone_adm.upsert_zone(traceid, user_id, zoneID, zone, how=how, decrypt=True)
+            zone = self.zone_adm.upsert_zone(how, traceid, user_id, zoneID, zone, decrypt=True)
         except Exception as e:
             logger.debug(f"@@@ FAILED: {e}")
             logger.exception(e)

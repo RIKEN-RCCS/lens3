@@ -8,7 +8,7 @@ gunicorn:
     workers: 4
     threads: 4
     timeout: 60
-    log_file: "/tmp/lens3-gunicorn-mux-log"
+    log_file: "/var/tmp/lenticularis/gunicorn-mux-log"
     log_level: debug
     #log_syslog_facility: LOCAL7
     reload: yes
@@ -39,10 +39,9 @@ lenticularis:
 
     minio:
         minio: /home/lens3/bin/minio
-        minio_http_trace: /var/log/minio_http_trace
         mc: /home/lens3/bin/mc
 
-    log_file: "/tmp/lens3-mux-log"
+    log_file: "/var/tmp/lenticularis/lens3-mux-log"
     log_syslog:
         facility: LOCAL7
         priority: DEBUG

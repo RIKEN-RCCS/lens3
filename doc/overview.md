@@ -1,7 +1,6 @@
-Configuration of services in LenS3
+# Configuration of services in Lenticluaris-S3
 ----
 
-# Configuration
 
 ```
 reverse-proxy <-->︎ multiplexer <--> MinIO
@@ -9,3 +8,10 @@ reverse-proxy <-->︎ multiplexer <--> MinIO
                                <--> MinIO
               <--> web-ui
 ```
+
+## Notes
+
+It does not support:
+
+* notifications
+* STS

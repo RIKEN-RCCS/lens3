@@ -163,12 +163,11 @@ def mux_schema(type_number):
         "type": "object",
         "properties": {
             "minio": {"type": "string"},
-            "minio_http_trace": {"type": "string"},
             "mc": {"type": "string"},
+            ##"minio_http_trace": {"type": "string"},
         },
         "required": [
             "minio",
-            # OPTIONAL "minio_http_trace",
             "mc",
         ],
         "additionalProperties": False,

@@ -167,7 +167,7 @@ def admin_main(traceid, adm_conf, args, rest):
             return
         zone = safe_json_loads(r, parse_int=str)
         user_id = zone["user"]
-        zone_adm.upsert_zone(traceid, user_id, zone_id, zone)
+        zone_adm.upsert_zone(None, traceid, user_id, zone_id, zone)
 
     def fn_delete_zone(*zoneIDs):
         logger.debug(f"@@@ DISABLE ZONE")
@@ -268,7 +268,7 @@ def admin_main(traceid, adm_conf, args, rest):
                 logger.debug(f"@@@ >> Insert / Update {user_id} {zone_id}")
                 b.pop("zoneID")
                 b.pop("mode")
-                zone_adm.upsert_zone(traceid, user_id, zone_id, b, include_atime=True,
+                zone_adm.upsert_zone(None, traceid, user_id, zone_id, b, include_atime=True,
                                      initialize=False)
 
         outer_join(zone_list, lambda b: b.get("zoneID"),

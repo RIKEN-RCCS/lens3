@@ -216,8 +216,8 @@ class ZoneAdm():
         self.tables.zones.del_unixUserInfo(user_id)
 
 
-    def upsert_zone(self, traceid, user_id, zone_id, zone, include_atime=False,
-                    how=None, decrypt=False, initialize=True):  # ADMIN, API
+    def upsert_zone(self, how, traceid, user_id, zone_id, zone, include_atime=False,
+                    decrypt=False, initialize=True):  # ADMIN, API
         """
          how ::= create_zone | update_zone | update_buckets | change_secret_key  -- (api.py)
                  | None  -- (admin.py)
@@ -232,10 +232,10 @@ class ZoneAdm():
                             f" how: {how}"
                             f" decrypt: {decrypt}"
                             )
-        return self._upsert_zone_main_(traceid, user_id, zone_id, zone, include_atime, how, decrypt, initialize)
+        return self._upsert_zone_main_(how, traceid, user_id, zone_id, zone, include_atime, decrypt, initialize)
 
 
-    def _upsert_zone_main_(self, traceid, user_id, zone_id, zone, include_atime, how, decrypt, initialize):
+    def _upsert_zone_main_(self, how, traceid, user_id, zone_id, zone, include_atime, decrypt, initialize):
 
             if not user_id:
                 logger.errror("INTERNAL ERROR: user id is None")
@@ -243,11 +243,11 @@ class ZoneAdm():
 
             if how == "update_buckets":
                 _check_create_bucket_keys(zone)
-                return self.update_zone(traceid, user_id, zone_id, zone, how, decrypt=decrypt) # let update_zone initialize (default)
+                return self._do_update_zone(traceid, user_id, zone_id, zone, how, decrypt=decrypt) # let update_zone initialize (default)
 
             if how == "change_secret_key":
                 _check_change_secret_keys(zone)
-                return self.update_zone(traceid, user_id, zone_id, zone, how, decrypt=decrypt) # let update_zone initialize (default)
+                return self._do_update_zone(traceid, user_id, zone_id, zone, how, decrypt=decrypt) # let update_zone initialize (default)
 
             # else: how in {"create_zone", "update_zone", None}
 
@@ -266,7 +266,7 @@ class ZoneAdm():
                                 f" decrypt: {decrypt}"
                                 )
 
-            return self.update_zone(traceid, user_id, zone_id, zone, how,
+            return self._do_update_zone(traceid, user_id, zone_id, zone, how,
                                     atime_from_arg=atime_from_arg,
                                     initialize=initialize, # owerride behaviour
                                     decrypt=decrypt)
@@ -276,19 +276,19 @@ class ZoneAdm():
         logger.debug(f"+++ {user_id} {zoneID}")
         zone = {"permission": "denied"}
         how = "delete_zone"
-        return self.update_zone(traceid, user_id, zoneID, zone, how)
+        return self._do_update_zone(traceid, user_id, zoneID, zone, how)
 
     def disable_zone(self, traceid, user_id, zoneID):  # ADMIN, private
         logger.debug(f"+++ {user_id} {zoneID}")
         zone = {}
         how = "disable_zone"
-        return self.update_zone(traceid, user_id, zoneID, zone, how, permission="denied")
+        return self._do_update_zone(traceid, user_id, zoneID, zone, how, permission="denied")
 
     def enable_zone(self, traceid, user_id, zoneID):  # ADMIN
         logger.debug(f"+++ {user_id} {zoneID}")
         zone = {}
         how = "enable_zone"
-        return self.update_zone(traceid, user_id, zoneID, zone, how, permission="allowed")
+        return self._do_update_zone(traceid, user_id, zoneID, zone, how, permission="allowed")
 
     def flush_zone_table(self, everything=False):  # ADMIN
         self.tables.zones.clear_all(everything=everything)
@@ -380,7 +380,7 @@ class ZoneAdm():
                                   permission, atime_from_arg, decrypt, initialize)
 
 
-    def update_zone(self, traceid, user_id, zoneID, zone, how,
+    def _do_update_zone(self, traceid, user_id, zoneID, zone, how,
                     permission=None,
                     atime_from_arg=None,
                     initialize=True,

@@ -1,20 +1,20 @@
-"""API server by Gunicorn + Uvicorn + FastAPI."""
+"""API service by Gunicorn + Uvicorn + FastAPI."""
 
 # Copyright (c) 2022 RIKEN R-CCS.
 # SPDX-License-Identifier: BSD-2-Clause
 
-from fastapi.staticfiles import StaticFiles
-from fastapi import Body, Depends, FastAPI, Request, status
-from fastapi.responses import HTMLResponse
-from fastapi.responses import JSONResponse
-from fastapi_csrf_protect import CsrfProtect
-from fastapi_csrf_protect.exceptions import CsrfProtectError
 import inspect
 import os
 import sys
 #import threading
 import time
 from pydantic import BaseModel
+from fastapi.staticfiles import StaticFiles
+from fastapi import Body, Depends, FastAPI, Request, status
+from fastapi.responses import HTMLResponse
+from fastapi.responses import JSONResponse
+from fastapi_csrf_protect import CsrfProtect
+from fastapi_csrf_protect.exceptions import CsrfProtectError
 import lenticularis
 from lenticularis.api import Api
 from lenticularis.readconf import read_adm_conf
@@ -189,6 +189,9 @@ async def app_put_upsert_zone_secret(zone_id: str,
     return zone_update(traceid, zone_id, body, client_addr, user_id, request, csrf_protect, "change_secret_key")
 
 
+## 'how' is one of {"create_zone", "update_zone", "update_buckets",
+## "change_secret_key"}.  If how="create_zone" then zone_id=None.
+
 def zone_update(traceid, zone_id, body, client_addr, user_id, request, csrf_protect, how):
     logger.debug(f"@@@ traceid: {traceid}")
     logger.debug(f"@@@ zone_id: {zone_id}")
@@ -200,7 +203,7 @@ def zone_update(traceid, zone_id, body, client_addr, user_id, request, csrf_prot
     csrf_protect.validate_csrf(csrf_token)
     zone = body.get("zone")
     logger.debug(f"@@@ api_upsert: {user_id} {zone_id} {zone}")
-    (zone_list, err) = api.api_upsert(traceid, user_id, zone_id, zone, how)
+    (zone_list, err) = api.api_upsert(how, traceid, user_id, zone_id, zone)
     return respond_zone(zone_list, err, None, client_addr, user_id, request)
 
 

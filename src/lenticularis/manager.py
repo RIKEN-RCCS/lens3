@@ -152,7 +152,7 @@ class MinioManager():
 
         minio_param = lenticularis_conf["minio"]
         self.minio_bin = minio_param["minio"]
-        self.minio_http_trace = minio_param["minio_http_trace"]
+        ##self.minio_http_trace = minio_param["minio_http_trace"]
         self.mc_bin = minio_param["mc"]
 
         controller_param = lenticularis_conf["controller"]
@@ -184,8 +184,8 @@ class MinioManager():
 
         self.minioenv["MINIO_ROOT_USER"] = self.MINIO_ROOT_USER
         self.minioenv["MINIO_ROOT_PASSWORD"] = self.MINIO_ROOT_PASSWORD
-        if self.minio_http_trace != "":
-            self.minioenv["MINIO_HTTP_TRACE"] = self.minio_http_trace
+        ##if self.minio_http_trace != "":
+        ##    self.minioenv["MINIO_HTTP_TRACE"] = self.minio_http_trace
         self.minioenv["MINIO_BROWSER"] = "off"
 
 #        self.minioenv["MINIO_CACHE_DRIVES"] = f"/tmp/{self.zoneID}"

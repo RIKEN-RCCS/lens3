@@ -63,8 +63,6 @@
           minio:
       # absolute path to minio
               minio: /usr/local/bin/minio
-      # unused.  leave it as is.
-              minio_http_trace: /var/log/minio_http_trace
       # absolute path to mc
               mc: /usr/local/bin/mc
 

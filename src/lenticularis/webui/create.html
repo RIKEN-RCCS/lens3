@@ -26,7 +26,7 @@
         <span class="label">Group:</span>
         <input v-model="group" size="64" /></div>
       <div>
-        <span class="label">Buckets directory:</span>
+        <span class="label">Buckets directory (absolute path):</span>
         <input v-model="bucketsDir" size="64" :disabled="buckets_directory_disabled" /></div>
       <div v-if="submit_button_visible">
         <button v-on:click="submitZoneToCreate" :disabled="submit_button_disabled">{{submit_button_name}}</button>

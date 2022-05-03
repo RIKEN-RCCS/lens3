@@ -1,6 +1,6 @@
 # Design of Lenticularis-S3
 
-This book is a design document of Lenticularis-S3.
+This is a design document of Lenticularis-S3.
 
 [TOC]
 
@@ -1543,18 +1543,188 @@ Figure 3 Credential
   --config (`--config-dir`)
     --Place in the following directory: `$ PrivateTmp / .mc / {zoneID}`
 
+<!-- GOMI -->
+
+### Updating pool information
+
+        """
+        permission           -- independent from "how"
+        atime_from_arg       -- ditto.   <= include_atime
+        initialize           -- ditto.
+        decrypt              -- ditto.
+
+        must_exist == how not in {None, "create_zone"}
+        delete_zone = how == "delete_zone"
+        create_bucket = how == "update_buckets"
+        change_secret = how == "change_secret_key"
+
+        how :   create_zone {
+                    assert(zone_id is None)
+                    permission=None (default)
+                }
+            |   None {
+                    permission=None (default)
+                }
+            |   update_zone {
+                    permission=None (default)
+                }
+            |   update_buckets {
+                    permission=None (default)
+                }
+            |   change_secret_key {
+                    permission=None (default)
+                }
+            |   delete_zone {
+                    permission=None (default)
+                }
+            |   disable_zone {
+                    permission="denied"
+                }
+            |   enable_zone {
+                    permission="allowed"
+                }
+            ;
+
+        """
+        """
+            Update or insert zone.
+
+            traceid: debug use
+
+            user_id: user ID of zone to be upserted.
+                     if user_id is None, the value from zone["user"] is used.
+                     otherwize zone["user"] should match user_id if it exists.
+
+            zone_ID: zoneID to be updated.
+                     if zoneID is None, new zone is created.
+                     On the latter case, new zoneID is generated and
+                     set to zone["zoneID"]
+                     (if zoneID is not None and the zone does not exist, its error)
+
+            zone: zone values to be created or updated.
+                  see below.
+
+            permission=None,       if supplied, set zone["permission"] to the given value,
+                                   otherwize calculate permission using allow-deny-rules.
+            atime_from_arg=None,   if supplied, set atime on database to the given value.
+
+            Dictionary zone consists of following items:
+              zoneID:           not on db
+              rootSecret:
+              user:
+            * group:
+            * bucketsDir:
+            * buckets:
+            * accessKeys:
+            * directHostnames:
+            * expDate:
+            * status:
+              permission:
+              atime:            not on db
+
+            (* denotes the item is mandatory)
+
+            When creating buckets, supply only "buckets" item:
+            * buckets:
+
+            When changing access keys, supply only "accessKeys" item:
+            * accessKeys:
+
+
+            "buckets" is a list of buckets.
+            buckets consists of following items:
+            * key:
+            * policy:
+
+
+            "accessKeys" is a list of accessKeys.
+            accessKey consists of following items:
+            * accessKeyID:
+            * secretAccessKey:
+            * policyName:
+
+           When changing Secret Access Keys, "secretAccesKey" and/or "policy" may be missing.
+           NOT IMPLEMENTED: When changing policy, "secretAccesKey" may be missing.
+           When creating new access key, "accessKeyID" and/or "secretAccesKey" may be missing.
+
+        we must validate zone before inserting into dictionary.
+        values may be missing in user supplied zone are,
+            "rootSecret", "user", "permission", "accessKeyID", and "secretAccessKey".
+        "user" is set in early step.
+        "rootSecret" and "secretAccessKey" may generated and set at any time.
+        "permission" may be set any time.
+
+
+        "accessKeyID" must generated and set while entire database is locked.
+
+
+        * when creating new zone, "zoneID" must generated while entire database is locked.
+          this means we cannot include "zoneID" in the error report (on error).
+
+        SPECIAL CASE 1:
+            when deleing zone, following dict is used:
+            {"permission": "denied"}
+
+        SPECIAL CASE 2:
+            when changing permission, following dict is used:
+            {}
+        """
+
+
+<!-- NEW -->
+
 ## Design notes
 
 ### Bucket-pool
 
 A bucket-pool has a state reflecting the state of a MinIO instance.
 
-* Bucket-pool states
+* Bucket-pool state (mode)
   * None
   * "initial"
+    * indicates an alias is not set in a MinIO.
   * "ready"
+    * indicates an alias and its access keys are set.
   * "suspended"
   * "deprecated"
+    * indicates a pool will be removed.
   * "error: " + error-description-string
 * Bucket-pool state changes
   * `None -> "initial" -> "ready"`
+
+`initialize_minio` moves the state from "initial" to "ready".
+
+A bucket-pool has another state "status', but it is always "online".
+
+* Bucket-pool state (status)
+  * "online"
+  * "offline"
+
+### Redis database keys
+
+* storage table
+  * ac:pool -> access-time
+  * ar:key -> secret
+  * mo:pool -> mode
+  * pr:: -> list of permissions of users (json)
+  * ru:pool -> pool data (htable)
+  * uu:user -> user info (json)
+
+* process table
+  * mx:host -> route description (htable)
+    * a route description includes:
+        * an host+port of a mux (json)
+        * start-time
+        * last-interrupted-time?
+  * ma:pool -> process description (htable)
+     * a process description includes:
+        * an host of a mux,
+        * an host+port of a MinIO
+        * a pid of a manager
+        * a pid of a MinIO
+  * lk:?? -> (lock?)
+
+* route table
+  * aa:key -> route description (htable)
+  * at:address -> atime
+

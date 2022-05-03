@@ -302,6 +302,21 @@ class ZoneAdm():
         self.tables.zones.printall()
         self.tables.processes.printall()
         self.tables.routes.printall()
+        print("---- memo\n"
+              "  (storage table)\n"
+              "  ac:pool -> access-time : string\n"
+              "  ar:key -> secret : string\n"
+              "  mo:pool -> mode : string\n"
+              "  pr:: -> list of permissions of users (json)\n"
+              "  ru:pool -> pool data (htable)\n"
+              "  uu:user -> user info (json)\n"
+              "  (process table)\n"
+              "  mx:host -> route (htable)\n"
+              "  ma:pool -> ? (htable)\n"
+              "  lk:?? -> (lock)\n"
+              "  (route table)\n"
+              "  aa:key -> route-description\n"
+              "  at:address -> atime")
 
     def fetch_multiplexer_list(self):  # ADMIN
         return self.tables.processes.get_mux_list(None)
@@ -372,150 +387,18 @@ class ZoneAdm():
                     permission=None,
                     atime_from_arg=None,
                     initialize=True,
-                    decrypt=False):  # private use
-        """
-        permission           -- independent from "how"
-        atime_from_arg       -- ditto.   <= include_atime
-        initialize           -- ditto.
-        decrypt              -- ditto.
-
-        must_exist == how not in {None, "create_zone"}
-        delete_zone = how == "delete_zone"
-        create_bucket = how == "update_buckets"
-        change_secret = how == "change_secret_key"
-
-        how :   create_zone {
-                    assert(zone_id is None)
-                    permission=None (default)
-                }
-            |   None {
-                    permission=None (default)
-                }
-            |   update_zone {
-                    permission=None (default)
-                }
-            |   update_buckets {
-                    permission=None (default)
-                }
-            |   change_secret_key {
-                    permission=None (default)
-                }
-            |   delete_zone {
-                    permission=None (default)
-                }
-            |   disable_zone {
-                    permission="denied"
-                }
-            |   enable_zone {
-                    permission="allowed"
-                }
-            ;
-
-        """
-
-        logger.debug("+++"
-                            f" user_id: {user_id} zoneID: {zoneID} zone: <omitted>"
-                            f" permission: {permission}"
-                            f" atime_from_arg: {atime_from_arg}"
-                            f" decrypt: {decrypt}")
-
-        """
-            Update or insert zone.
-
-            traceid: debug use
-
-            user_id: user ID of zone to be upserted.
-                     if user_id is None, the value from zone["user"] is used.
-                     otherwize zone["user"] should match user_id if it exists.
-
-            zone_ID: zoneID to be updated.
-                     if zoneID is None, new zone is created.
-                     On the latter case, new zoneID is generated and
-                     set to zone["zoneID"]
-                     (if zoneID is not None and the zone does not exist, its error)
-
-            zone: zone values to be created or updated.
-                  see below.
-
-            permission=None,       if supplied, set zone["permission"] to the given value,
-                                   otherwize calculate permission using allow-deny-rules.
-            atime_from_arg=None,   if supplied, set atime on database to the given value.
-
-            Dictionary zone consists of following items:
-              zoneID:           not on db
-              rootSecret:
-              user:
-            * group:
-            * bucketsDir:
-            * buckets:
-            * accessKeys:
-            * directHostnames:
-            * expDate:
-            * status:
-              permission:
-              atime:            not on db
-
-            (* denotes the item is mandatory)
-
-            When creating buckets, supply only "buckets" item:
-            * buckets:
-
-            When changing access keys, supply only "accessKeys" item:
-            * accessKeys:
-
-
-            "buckets" is a list of buckets.
-            buckets consists of following items:
-            * key:
-            * policy:
-
-
-            "accessKeys" is a list of accessKeys.
-            accessKey consists of following items:
-            * accessKeyID:
-            * secretAccessKey:
-            * policyName:
-
-           When changing Secret Access Keys, "secretAccesKey" and/or "policy" may be missing.
-           NOT IMPLEMENTED: When changing policy, "secretAccesKey" may be missing.
-           When creating new access key, "accessKeyID" and/or "secretAccesKey" may be missing.
-
-        we must validate zone before inserting into dictionary.
-        values may be missing in user supplied zone are,
-            "rootSecret", "user", "permission", "accessKeyID", and "secretAccessKey".
-        "user" is set in early step.
-        "rootSecret" and "secretAccessKey" may generated and set at any time.
-        "permission" may be set any time.
-
-
-        "accessKeyID" must generated and set while entire database is locked.
-
-
-        ※ when creating new zone, "zoneID" must generated while entire database is locked.
-          this means we cannot include "zoneID" in the error report (on error).
-
-        SPECIAL CASE 1:
-            when deleing zone, following dict is used:
-            {"permission": "denied"}
-
-        SPECIAL CASE 2:
-            when changing permission, following dict is used:
-            {}
-
-        """
-
-        if zoneID is None:  # do update without locking zone
-            return self.update_zone_with_lockdb(traceid, user_id, zoneID, zone, how, permission, atime_from_arg, initialize, decrypt)
+                    decrypt=False):
+        if zoneID is None:
+            ## Update without locking.
+            return self.update_zone_with_lock(traceid, user_id, zoneID, zone, how, permission, atime_from_arg, initialize, decrypt)
 
         lock = LockDB(self.tables.zones)
         key = f"{self.zone_table_lock_pfx}{zoneID}"
         lock_status = False
         try:
             lock.lock(key, self.timeout)
-            # logger.debug(f"@@@ case 2: LOCK SUCCEEDED: {zoneID}")
-            return self.update_zone_with_lockdb(traceid, user_id, zoneID, zone, how, permission, atime_from_arg, initialize, decrypt)
+            return self.update_zone_with_lock(traceid, user_id, zoneID, zone, how, permission, atime_from_arg, initialize, decrypt)
         finally:
-            # logger.debug(f"@@@ UNLOCK {zoneID}")
             lock.unlock()
 
 
@@ -561,122 +444,124 @@ class ZoneAdm():
             fn(_strip_domain(host_fqdn, domain))
 
 
-    def update_zone_with_lockdb(self, traceid, user_id, zone_id, zone, how,
-                                permission=None,
-                                atime_from_arg=None,
-                                initialize=True,
-                                decrypt=False):
-            logger.debug(f"@@@ user_id = {user_id}")
-            logger.debug(f"@@@ zone_id = {zone_id}")
+    def update_zone_with_lock(self, traceid, user_id, zone_id, zone, how,
+                            permission=None,
+                            atime_from_arg=None,
+                            initialize=True,
+                            decrypt=False):
+        logger.debug(f"@@@ user_id = {user_id}")
+        logger.debug(f"@@@ zone_id = {zone_id}")
 
-            existing = self.tables.zones.get_zone(zone_id) if zone_id else None
+        existing = self.tables.zones.get_zone(zone_id) if zone_id else None
 
-            must_exist = how not in {None, "create_zone"}
-            if must_exist and not existing:
-                logger.error(f"no such zone: {zone_id}")
-                raise Exception(f"no such zone: {zone_id}")
+        must_exist = how not in {None, "create_zone"}
+        if must_exist and not existing:
+            logger.error(f"no such zone: {zone_id}")
+            raise Exception(f"no such zone: {zone_id}")
 
-            if existing:
-                _check_zone_owner(user_id, zone_id, existing)
+        if existing:
+            _check_zone_owner(user_id, zone_id, existing)
 
-            delete_zone = how == "delete_zone"
+        delete_zone = how == "delete_zone"
 
+        if delete_zone:
+            (need_initialize, need_uniquify) = (False, False)
+        else:
+            (need_initialize, need_uniquify) = self._prepare_zone(
+             user_id, zone_id, existing, zone, permission, how)
+
+        # if explicitly ordered not to initialize,
+        # set need_initialize to be False
+
+        need_initialize = need_initialize and initialize
+
+        omode = None
+        if not need_initialize:
+            omode = self.fetch_current_mode(zone_id)
+
+        if zone_id:
+            self.set_current_mode(zone_id, "suspended")
+
+        ### XXX can we merge following two tries into one?
+
+        # We will restart minio always, though there
+        # may be no changes have been made to existing zone.
+        # If explicitly ordered not to initialize, do not try
+        # to stop minio (regardless it is running or not).
+
+        try:
+            if existing and initialize:
+                self._clear_route(zone_id, existing)
+                logger.debug(f"@@@ SEND DECOY zone_id = {zone_id}")
+                ## Stop MinIO.
+                status = self.check_mux_access_for_zone(traceid, zone_id, force=False)
+                logger.debug(f"@@@ SEND DECOY STATUS {status}")
+                minioAddr = self.tables.processes.get_minio_address(zone_id)
+                if minioAddr is not None:
+                    logger.debug(f"@@@ COULD NOT STOP MINIO")
+                    raise Exception("could not stop minio")
+        except Exception as e:
+            logger.debug(f"@@@ ignore exception {e}")
+            pass
+
+        if delete_zone:
+            pass
+        else:
+            need_conflict_check = existing is not None
+            zone_id = self._lockdb_and_store_zone(user_id, zone_id, zone, need_conflict_check, need_uniquify)
+            # NOTE: delete ptr here, if user allowed to modify access keys
+            #    in the future lenticularis specification.
+
+        try:
             if delete_zone:
-                (need_initialize, need_uniquify) = (False, False)
+                self.set_current_mode(zone_id, "deprecated")
+            elif need_initialize:
+                self.set_current_mode(zone_id, "initial")
+                self._send_decoy_with_zoneid_ptr(traceid, zone_id)  # trigger initialize minio
             else:
-                (need_initialize, need_uniquify) = self._prepare_zone(
-                 user_id, zone_id, existing, zone, permission, how)
-
-            # if explicitly ordered not to initialize,
-            # set need_initialize to be False
-            need_initialize = need_initialize and initialize
-
-            omode = None
-            if not need_initialize:
-                omode = self.fetch_current_mode(zone_id)
-
-            if zone_id:
-                self.set_current_mode(zone_id, "suspended")
-
-            ### XXX can we merge following two tries into one?
-
-            try:
-                # We will restart minio always, though there
-                # may be no changes have been made to existing zone.
-                # If explicitly ordered not to initialize, do not try
-                # to stop minio (regardless it is running or not).
-                if existing and initialize:
-                    self._clear_route(zone_id, existing)
-                    logger.debug(f"@@@ SEND DECOY zone_id = {zone_id}")
-                    ## Stop MinIO.
-                    status = self.check_mux_access_for_zone(traceid, zone_id, force=False)
-                    logger.debug(f"@@@ SEND DECOY STATUS {status}")
-                    minioAddr = self.tables.processes.get_minio_address(zone_id)
-                    if minioAddr is not None:
-                        logger.debug(f"@@@ COULD NOT STOP MINIO")
-                        raise Exception("could not stop minio")
-            except Exception as e:
-                logger.debug(f"@@@ ignore exception {e}")
                 pass
+        except Exception as e:
+            logger.debug(f"@@@ ignore exception {e}")
+            pass
 
-            if delete_zone:
-                pass
-            else:
-                need_conflict_check = existing is not None
-                zone_id = self._lockdb_and_store_zone(user_id, zone_id, zone, need_conflict_check, need_uniquify)
-                # NOTE: delete ptr here, if user allowed to modify access keys
-                #    in the future lenticularis specification.
-
-            try:
-                if delete_zone:
-                    self.set_current_mode(zone_id, "deprecated")
-                elif need_initialize:
-                    self.set_current_mode(zone_id, "initial")
-                    self._send_decoy_with_zoneid_ptr(traceid, zone_id)  # trigger initialize minio
-                else:
-                    pass
-            except Exception as e:
-                logger.debug(f"@@@ ignore exception {e}")
-                pass
-
-            if delete_zone:
-                self._delete_existing_zone(existing)
-            else:
+        if delete_zone:
+            self._delete_existing_zone(existing)
+        else:
+            logger.debug(f"@@@ INSERT PTR {zone_id} {[e.get('accessKeyID') for e in zone.get('accessKeys')]}")
+            if atime_from_arg:
                 logger.debug(f"@@@ INSERT PTR {zone_id} {[e.get('accessKeyID') for e in zone.get('accessKeys')]}")
-                if atime_from_arg:
-                    logger.debug(f"@@@ INSERT PTR {zone_id} {[e.get('accessKeyID') for e in zone.get('accessKeys')]}")
-                    self.tables.zones.set_atime(zone_id, atime_from_arg)
-                self.tables.zones.ins_ptr(zone_id, zone)
+                self.tables.zones.set_atime(zone_id, atime_from_arg)
+            self.tables.zones.ins_ptr(zone_id, zone)
 
-            if not delete_zone and omode:
-                self.set_current_mode(zone_id, omode)
-                mode = omode
-            elif not initialize:
-                # intentionally leave mode be unset
-                pass
-            else:
-                mode = self.fetch_current_mode(zone_id)
+        if not delete_zone and omode:
+            self.set_current_mode(zone_id, omode)
+            mode = omode
+        elif not initialize:
+            # intentionally leave mode be unset
+            pass
+        else:
+            mode = self.fetch_current_mode(zone_id)
 
-            if delete_zone:
-                if mode is not None:
-                    logger.error(f"delete zone: error: mode is not None: {mode}")
-                    raise Exception(f"delete zone: error: mode is not None: {mode}")
-            elif not initialize:
-                pass
-            elif mode not in {"ready"}:
-                logger.error(f"initialize: error: mode is not ready: {mode}")
-                raise Exception(f"initialize: error: mode is not ready: {mode}")
-            else:
-                pass
+        if delete_zone:
+            if mode is not None:
+                logger.error(f"delete zone: error: mode is not None: {mode}")
+                raise Exception(f"delete zone: error: mode is not None: {mode}")
+        elif not initialize:
+            pass
+        elif mode not in {"ready"}:
+            logger.error(f"initialize: error: mode is not ready: {mode}")
+            raise Exception(f"initialize: error: mode is not ready: {mode}")
+        else:
+            pass
 
-            zone["zoneID"] = zone_id
-            logger.debug(f"@@@ decrypt = {decrypt}")
-            if decrypt:
-                self.decrypt_access_keys(zone)
-            #logger.debug(f"@@@ zone = {zone}")
-            return zone
+        zone["zoneID"] = zone_id
+        logger.debug(f"@@@ decrypt = {decrypt}")
+        if decrypt:
+            self.decrypt_access_keys(zone)
+        #logger.debug(f"@@@ zone = {zone}")
+        return zone
 
-    ### END update_zone_with_lockdb
+    ### END update_zone_with_lock
 
     def _prepare_zone(self, user_id, zone_id, existing, zone, permission, how):
             logger.debug(f"+++")

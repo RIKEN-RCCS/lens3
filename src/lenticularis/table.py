@@ -28,7 +28,7 @@ class StorageZoneTable(TableCommon):
     directHostnamePrefix = "dr:"
     atimePrefix = "ac:"
     modePrefix = "mo:"
-    allowDenyRuleKey = "pr::"  # as value is fixed to ':', so we have two ':'s here.
+    allowDenyRuleKey = "pr::"
     unixUserPrefix = "uu:"
     hashes = {zoneIDPrefix}
     structured = {"buckets", "accessKeys", "directHostnames"}
@@ -177,8 +177,7 @@ class StorageZoneTable(TableCommon):
             delete_all(self.dbase.r, self.unixUserPrefix)
 
     def printall(self):
-        prntall(self.dbase.r, "zone")
-
+        _prntall(self.dbase.r, "zone")
 
 class ProcessTable(TableCommon):
     minioAddrPrefix = "ma:"
@@ -261,7 +260,7 @@ class ProcessTable(TableCommon):
             delete_all(self.dbase.r, self.muxPrefix)
 
     def printall(self):
-        prntall(self.dbase.r, "process")
+        _prntall(self.dbase.r, "process")
 
 
 def zone_to_route(zone):
@@ -362,7 +361,7 @@ class RoutingTable(TableCommon):
         delete_all(self.dbase.r, self.atimePrefix)
 
     def printall(self):
-        prntall(self.dbase.r, "route")
+        _prntall(self.dbase.r, "route")
 
 
 class Tables():
@@ -390,7 +389,7 @@ def get_tables(mux_conf):
     return Tables(zone_table, process_table, routing_table)
 
 
-def prntall(r, name):
+def _prntall(r, name):
     print(f"---- {name}")
     for key in r.scan_iter("*"):
         print(f"{key}")

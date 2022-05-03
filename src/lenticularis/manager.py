@@ -22,7 +22,7 @@ from lenticularis.readconf import read_mux_conf
 from lenticularis.lockdb import LockDB
 from lenticularis.table import get_tables, zone_to_route
 from lenticularis.utility import ERROR_READCONF, ERROR_FORK, ERROR_START_MINIO
-from lenticularis.utility import decrypt_secret, outer_join
+from lenticularis.utility import decrypt_secret, outer_join_list
 from lenticularis.utility import gen_access_key_id, gen_secret_access_key
 from lenticularis.utility import logger, openlog
 from lenticularis.utility import make_clean_env, host_port
@@ -627,57 +627,59 @@ class MinioManager():
             raise
 
 
+    def _install_minio_access_keys_add(self, b):
+        # New Entry (no right hand side)
+        access_key_id = b["accessKeyID"]
+        secret_access_key = b["secretAccessKey"]
+        policy = b["policyName"]
+        logger.debug(f"@@@ CREATE USER: {access_key_id}")
+        r = self.mc.admin_user_add(access_key_id, decrypt_secret(secret_access_key))
+        check_mc_status(r, "mc.admin_user_add")
+        logger.debug(f"@@@ SET_USER_POLICY {access_key_id} {policy}")
+        r = self.mc.admin_policy_set(access_key_id, policy)
+        check_mc_status(r, "mc.admin_policy_set")
+        return []
+
+    def _install_minio_access_keys_delete(self, e):
+        # Deleted Entry (no left hand side)
+        access_key_id = e["accessKey"]
+        logger.debug(f"@@@ DISABLE_USER {access_key_id}")
+        # NOTE: we do dot delete unregistered user here.
+        # r = self.mc.admin_user_remove(access_key_id, no_wait=True)
+        # check_mc_statusXXX(r, "mc.admin_user_remove")
+        p = self.mc.admin_user_disable(access_key_id, no_wait=True)
+        ##children.append((p, "mc.admin_user_disable"))
+        #check_mc_status(r, "mc.admin_user_disable")
+        return [(p, "mc.admin_user_disable")]
+
+    def _install_minio_access_keys_update(self, x):
+        # Updated Entry
+        (b, e) = x
+        access_key_id = b["accessKeyID"]
+        secret_access_key = b["secretAccessKey"]
+        policy = b["policyName"]
+
+        logger.debug(f"@@@ REMOVE USER: {access_key_id}")
+        r = self.mc.admin_user_remove(access_key_id)
+        check_mc_status(r, "mc.admin_user_remove")
+
+        logger.debug(f"@@@ CREATE USER: {access_key_id}")
+        r = self.mc.admin_user_add(access_key_id, decrypt_secret(secret_access_key))
+        check_mc_status(r, "mc.admin_user_add")
+
+        logger.debug(f"@@@ SET_USER_POLICY {access_key_id} {policy}")
+        r = self.mc.admin_policy_set(access_key_id, policy)
+        check_mc_status(r, "mc.admin_policy_set")
+
+        logger.debug(f"@@@ ENABLE_USER {access_key_id}")
+        r = self.mc.admin_user_enable(access_key_id)
+        check_mc_status(r, "mc.admin_user_enable")
+        return []
+
     def install_minio_access_keys(self, zone):
         logger.debug("@@@ +++")
         logger.debug("@@@ install_minio_access_keys")
         children = []
-
-        def _install_minio_access_keys_body(b, e):
-            """CLOSURE WITH children."""
-            logger.debug("@@@ install_minio_access_keys_body")
-            if e is None:  # New Entry
-                access_key_id = b["accessKeyID"]
-                secret_access_key = b["secretAccessKey"]
-                policy = b["policyName"]
-                logger.debug(f"@@@ CREATE USER: {access_key_id}")
-                r = self.mc.admin_user_add(access_key_id, decrypt_secret(secret_access_key))
-                check_mc_status(r, "mc.admin_user_add")
-
-                logger.debug(f"@@@ SET_USER_POLICY {access_key_id} {policy}")
-                r = self.mc.admin_policy_set(access_key_id, policy)
-                check_mc_status(r, "mc.admin_policy_set")
-
-            elif b is None:  # Deleted Entry
-                access_key_id = e["accessKey"]
-
-                logger.debug(f"@@@ DISABLE_USER {access_key_id}")
-                # NOTE: we do dot delete unregistered user here.
-                # r = self.mc.admin_user_remove(access_key_id, no_wait=True)
-                # check_mc_statusXXX(r, "mc.admin_user_remove")
-                p = self.mc.admin_user_disable(access_key_id, no_wait=True)
-                children.append((p, "mc.admin_user_disable"))
-                #check_mc_status(r, "mc.admin_user_disable")
-
-            else:  # Updated Entry
-                access_key_id = b["accessKeyID"]
-                secret_access_key = b["secretAccessKey"]
-                policy = b["policyName"]
-
-                logger.debug(f"@@@ REMOVE USER: {access_key_id}")
-                r = self.mc.admin_user_remove(access_key_id)
-                check_mc_status(r, "mc.admin_user_remove")
-
-                logger.debug(f"@@@ CREATE USER: {access_key_id}")
-                r = self.mc.admin_user_add(access_key_id, decrypt_secret(secret_access_key))
-                check_mc_status(r, "mc.admin_user_add")
-
-                logger.debug(f"@@@ SET_USER_POLICY {access_key_id} {policy}")
-                r = self.mc.admin_policy_set(access_key_id, policy)
-                check_mc_status(r, "mc.admin_policy_set")
-
-                logger.debug(f"@@@ ENABLE_USER {access_key_id}")
-                r = self.mc.admin_user_enable(access_key_id)
-                check_mc_status(r, "mc.admin_user_enable")
 
         access_keys = zone["accessKeys"]
         existing = self.mc.admin_user_list()
@@ -685,43 +687,56 @@ class MinioManager():
 
         logger.debug(f"@@@ access_keys = {access_keys}")
         logger.debug(f"@@@ existing = {existing}")
-        outer_join(access_keys, lambda b: b.get("accessKeyID"),
-                   existing, lambda e: e.get("accessKey"),
-                   _install_minio_access_keys_body)
-
+        (ll, pp, rr) = outer_join_list(access_keys, lambda b: b.get("accessKeyID"),
+                                       existing, lambda e: e.get("accessKey"))
+        for x in ll:
+            logger.debug(f"LLLL x={x}")
+            children.extend(self._install_minio_access_keys_add(x))
+        for x in rr:
+            logger.debug(f"RRRR x={x}")
+            children.extend(self._install_minio_access_keys_delete(x))
+        for x in pp:
+            logger.debug(f"PPPP x={x}")
+            children.extend(self._install_minio_access_keys_update(x))
         return children
+
+
+    def _set_bucket_policy_add(self, b):
+        # New Entry (no right hand side)
+        name = b["key"]
+        logger.debug(f"@@@ MAKE BUCKET: {name}")
+        r = self.mc.make_bucket(name)
+        check_mc_status(r, "mc.make_bucket")
+        policy = b["policy"]
+        logger.debug(f"@@@ SET_BUCKET_POLICY {name} {policy}")
+        r = self.mc.policy_set(name, policy)
+        check_mc_status(r, "mc.policy_set")
+        return []
+
+    def _set_bucket_policy_delete(self, e):
+        # Deleted Entry (no left hand side)
+        logger.debug(f"@@@ ONLY IN E: {e}")
+        name = remove_trailing_shash(e["key"])
+        policy = "none"
+        logger.debug(f"@@@ SET_BUCKET_POLICY {name} {policy}")
+        p = self.mc.policy_set(name, policy, no_wait=True)
+        return [(p, "mc.policy_set")]
+
+    def _set_bucket_policy_update(self, x):
+        # Updated Entry
+        (b, e) = x
+        logger.debug(f"@@@ BOTH: {b} {e}")
+        name = b["key"]
+        policy = b["policy"]
+        logger.debug(f"@@@ SET_BUCKET_POLICY {name} {policy}")
+        r = self.mc.policy_set(name, policy)
+        check_mc_status(r, "mc.policy_set")
+        return []
 
     def set_bucket_policy(self, zone):
         logger.debug("@@@ +++")
         logger.debug("@@@ set_bucket_policy")
         children = []
-
-        def _set_bucket_policy_body(b, e):
-            """CLOSURE WITH children."""
-            logger.debug(f"@@@ set_bucket_policy_body: {b} {e}")
-            if e is None:  # New Entry
-                name = b["key"]
-                logger.debug(f"@@@ MAKE BUCKET: {name}")
-                r = self.mc.make_bucket(name)
-                check_mc_status(r, "mc.make_bucket")
-                policy = b["policy"]
-                logger.debug(f"@@@ SET_BUCKET_POLICY {name} {policy}")
-                r = self.mc.policy_set(name, policy)
-                check_mc_status(r, "mc.policy_set")
-            elif b is None:  # Deleted Entry
-                logger.debug(f"@@@ ONLY IN E: {e}")
-                name = remove_trailing_shash(e["key"])
-                policy = "none"
-                logger.debug(f"@@@ SET_BUCKET_POLICY {name} {policy}")
-                p = self.mc.policy_set(name, policy, no_wait=True)
-                children.append((p, "mc.policy_set"))
-            else:  # Updated Entry
-                logger.debug(f"@@@ BOTH: {b} {e}")
-                name = b["key"]
-                policy = b["policy"]
-                logger.debug(f"@@@ SET_BUCKET_POLICY {name} {policy}")
-                r = self.mc.policy_set(name, policy)
-                check_mc_status(r, "mc.policy_set")
 
         buckets = zone["buckets"]
         existing = self.mc.list_buckets()
@@ -729,10 +744,16 @@ class MinioManager():
 
         logger.debug(f"@@@ buckets = {buckets}")
         logger.debug(f"@@@ existing = {existing}")
-        outer_join(buckets, lambda b: b.get("key"),
-                   existing, lambda e: remove_trailing_shash(e.get("key")),
-                   _set_bucket_policy_body)
+        (ll, pp, rr) = outer_join_list(buckets, lambda b: b.get("key"),
+                                       existing, lambda e: remove_trailing_shash(e.get("key")))
+        for x in ll:
+            children.extend(self._set_bucket_policy_add(x))
+        for x in rr:
+            children.extend(self._set_bucket_policy_delete(x))
+        for x in pp:
+            children.extend(self._set_bucket_policy_update(x))
         return children
+
 
     def stop_minio(self, p):
         logger.debug("@@@ +++")

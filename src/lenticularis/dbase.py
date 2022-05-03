@@ -3,12 +3,12 @@
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
+import time
 import json
-from lenticularis.utility import logger
-from lenticularis.utility import safe_json_loads
 from redis import ConnectionError
 from redis import Redis
-import time
+from lenticularis.utility import logger
+from lenticularis.utility import safe_json_loads
 
 class DBase():
     def __init__(self, host, port, db, password):

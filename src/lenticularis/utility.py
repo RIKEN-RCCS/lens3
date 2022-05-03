@@ -327,6 +327,42 @@ def outer_join(left, lkey, right, rkey, fn):
             right.pop(0)
 
 
+def outer_join_list(left, lkeyfn, right, rkeyfn):
+    """Outer_join but returns three lists of lefts-pairs-rights."""
+    def _comp(l0, r0):
+        lk = lkeyfn(l0)
+        rk = rkeyfn(r0)
+        if lk < rk:
+            return -1
+        elif rk < lk:
+            return 1
+        else:
+            return 0
+
+    ll = sorted(left, key=lkeyfn)
+    rr = sorted(right, key=rkeyfn)
+    lx = []
+    px = []
+    rx = []
+    while ll != [] and rr != []:
+        l0 = ll[0]
+        r0 = rr[0]
+        e = _comp(l0, r0)
+        if e < 0:
+            lx.append(l0)
+            ll.pop(0)
+        elif e > 0:
+            rx.append(r0)
+            rr.pop(0)
+        else:
+            px.append((l0, r0))
+            ll.pop(0)
+            rr.pop(0)
+    lx.extend(ll)
+    rx.extend(rr)
+    return (lx, px, rx)
+
+
 def remove_trailing_shash(s):
     if not s.endswith('/'):
         return s

@@ -177,7 +177,7 @@ class StorageZoneTable(TableCommon):
             delete_all(self.dbase.r, self.unixUserPrefix)
 
     def printall(self):
-        _prntall(self.dbase.r, "zone")
+        _prntall(self.dbase.r, "storage")
 
 class ProcessTable(TableCommon):
     minioAddrPrefix = "ma:"
@@ -361,7 +361,7 @@ class RoutingTable(TableCommon):
         delete_all(self.dbase.r, self.atimePrefix)
 
     def printall(self):
-        _prntall(self.dbase.r, "route")
+        _prntall(self.dbase.r, "routing")
 
 
 class Tables():

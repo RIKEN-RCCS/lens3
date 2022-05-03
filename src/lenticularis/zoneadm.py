@@ -314,7 +314,7 @@ class ZoneAdm():
               "  mx:host -> route (htable)\n"
               "  ma:pool -> ? (htable)\n"
               "  lk:?? -> (lock)\n"
-              "  (route table)\n"
+              "  (routing table)\n"
               "  aa:key -> route-description\n"
               "  at:address -> atime")
 

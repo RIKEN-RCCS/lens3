@@ -61,6 +61,27 @@ def print_json_plain(table_name, outs, format, order=None):
             dump = objdump(d, order=order)
             print(f"{dump}")
 
+def read_allow_deny_rules(path):
+    with open(path, newline='') as f:
+        r = csv.reader(f, delimiter=',', quotechar='"')
+        return [[row[0].lower(), row[1]] for row in r]
+
+def read_user_info(path):
+    with open(path, newline='') as f:
+        r = csv.reader(f, delimiter=',', quotechar='"')
+        return [{"id": row[0], "groups": row[1:]} for row in r]
+
+def user_info_to_csv_row(ui, id):
+    if ui:
+        return [ui["id"]] + ui["groups"]
+    return [id]
+
+def format_mux(m, format):
+    (multiplexer, info) = m
+    if format not in {"json"}:
+        fix_date_format(info, ["last_interrupted_time", "start_time"])
+    return {multiplexer: info}
+
 def _store_unix_user_info_add(zone_adm, b):
     # New Entry (no right hand side)
     logger.debug(f"@@@ >> New {b}")
@@ -241,11 +262,6 @@ class Command():
 
     def fn_insert_allow_deny_rules(self, csvfile):
         logger.debug(f"@@@ INSERT ALLOW DENY RULES")
-
-        def read_allow_deny_rules(path):
-            with open(path, newline='') as f:
-                r = csv.reader(f, delimiter=',', quotechar='"')
-                return [[row[0].lower(), row[1]] for row in r]
         rules = read_allow_deny_rules(csvfile)
         logger.debug(f"@@@ rules = {rules}")
         self.zone_adm.store_allow_deny_rules(rules)
@@ -258,11 +274,6 @@ class Command():
 
     def fn_insert_user_info(self, csvfile):
         logger.debug(f"@@@ INSERT USER INFO")
-
-        def read_user_info(path):
-            with open(path, newline='') as f:
-                r = csv.reader(f, delimiter=',', quotechar='"')
-                return [{"id": row[0], "groups": row[1:]} for row in r]
         user_info = read_user_info(csvfile)
         logger.debug(f"@@@ user_info = {user_info}")
         _store_user_info(self.zone_adm, user_info)
@@ -270,13 +281,10 @@ class Command():
         logger.debug(f"@@@ fixed = {fixed}")
 
     def fn_show_user_info(self):
-        def ui_to_csvrow(ui, id):
-            if ui:
-                return [ui["id"]] + ui["groups"]
-            return [id]
         unix_users = self.zone_adm.list_unixUsers()
         logger.debug(f"@@@ {unix_users}")
-        uis = [ui_to_csvrow(self.zone_adm.fetch_unixUserInfo(id), id) for id in unix_users]
+        uis = [user_info_to_csv_row(self.zone_adm.fetch_unixUserInfo(id), id)
+               for id in unix_users]
         print_json_csv("user info", uis, self.args.format)
 
     def fn_insert_zone(self, zone_id, jsonfile):
@@ -375,13 +383,7 @@ class Command():
 
     def fn_show_multiplexer(self):
         multiplexer_list = sorted(list(self.zone_adm.fetch_multiplexer_list()))
-
-        def fmt_multiplexer(m):
-            (multiplexer, info) = m
-            if self.args.format not in {"json"}:
-                fix_date_format(info, ["last_interrupted_time", "start_time"])
-            return {multiplexer: info}
-        outs = [fmt_multiplexer(m) for m in multiplexer_list]
+        outs = [format_mux(m, self.args.format) for m in multiplexer_list]
         print_json_plain("multiplexers", outs, self.args.format, order=mux_key_order)
 
     def fn_show_server_processes(self):
@@ -409,10 +411,10 @@ class Command():
         (akey_list, host_list, atime_list) = self.zone_adm.fetch_route_list()
         akey_list = [(v, e) for (e, v) in akey_list]
         host_list = [(v, e) for (e, v) in host_list]
-        logger.debug(f"HOST_LIST = {host_list}")
         atime_list = list(atime_list)
         servers = [e for (e, v) in akey_list] + [e for (e, v) in host_list] + [e for (e, v) in atime_list]
         servers = sorted(list(set(servers)))
+        logger.debug(f"HOST_LIST = {host_list}")
         logger.debug(f"SERVERS = {servers}")
 
         def collect_routes_of_server(server):
@@ -433,11 +435,11 @@ class Command():
 
     optbl = {
         "help": fn_usage,
-        "insert-allow-deny-rules": fn_insert_allow_deny_rules,
-        "show-allow-deny-rules": fn_show_allow_deny_rules,
 
         "insert-user-info": fn_insert_user_info,
         "show-user-info": fn_show_user_info,
+        "insert-user-validity": fn_insert_allow_deny_rules,
+        "show-user-validity": fn_show_allow_deny_rules,
 
         "insert-zone": fn_insert_zone,
         "delete-zone": fn_delete_zone,
@@ -448,8 +450,8 @@ class Command():
         "dump-zone": fn_dump_zone,
         "restore-zone": fn_restore_zone,
         "drop-zone": fn_drop_zone,
-        "reset-all": fn_reset_database,
-        "print-all": fn_print_database,
+        "reset-db": fn_reset_database,
+        "print-db": fn_print_database,
 
         "show-multiplexer": fn_show_multiplexer,
 

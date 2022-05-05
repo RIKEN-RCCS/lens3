@@ -125,20 +125,13 @@ def _restore_zone_add(zone_adm, traceid, b):
     logger.debug(f"@@@ >> Insert / Update {user_id} {zone_id}")
     b.pop("zoneID")
     b.pop("mode")
-    zone_adm.upsert_zone(None, traceid, user_id, zone_id, b,
-                         include_atime=True, initialize=False)
+    zone_adm.restore_pool(traceid, user_id, zone_id, b,
+                          include_atime=True, initialize=False)
 
 def _restore_zone_update(zone_adm, traceid, x):
     # Updated Entry
     (b, e) = x
-    user_id = b.get("user")
-    zone_id = b.get("zoneID")
-    logger.debug(f"@@@ >> Insert / Update {user_id} {zone_id}")
-    b.pop("zoneID")
-    b.pop("mode")
-    zone_adm.upsert_zone(None, traceid, user_id, zone_id, b,
-                         include_atime=True,
-                         initialize=False)
+    _restore_zone_add(zone_adm, traceid, b)
 
 
 def pool_key_order(e):
@@ -302,7 +295,8 @@ class Command():
             return
         zone = safe_json_loads(r, parse_int=str)
         user_id = zone["user"]
-        self.zone_adm.upsert_zone(None, traceid, user_id, zone_id, zone)
+        self.zone_adm.restore_pool(traceid, user_id, zone_id, zone,
+                                   include_atime=False, initialize=True)
 
     def fn_delete_zone(self, *zoneIDs):
         logger.debug(f"@@@ DISABLE ZONE")

@@ -215,53 +215,166 @@ class ZoneAdm():
     def delete_unixUserInfo(self, user_id):  # ADMIN
         self.tables.zones.del_unixUserInfo(user_id)
 
-    def upsert_zone(self, how, traceid, user_id, zone_id, zone,
-                    include_atime=False,
+    ####
+
+    def create_pool(self, traceid, user_id, zone_id, zone,
+                    *, include_atime=False,
                     decrypt=False, initialize=True):
+        how = "create_zone"
         ## how=None is for admin commands.  Note that "delete_zone",
         ## "disable_zone", "enable_zone" never appears.
         assert how in {None, "create_zone", "update_zone",
                        "update_buckets", "change_secret_key"}
-        return self._upsert_zone_main_(how, traceid, user_id, zone_id, zone,
-                                       include_atime, decrypt, initialize)
-
-
-    def _upsert_zone_main_(self, how, traceid, user_id, zone_id, zone,
-                       include_atime, decrypt, initialize):
-
-        if not user_id:
-            logger.errror("INTERNAL ERROR: user id is None")
-            raise Exception("INTERNAL ERROR: user id is None")
-
+        assert user_id is not None
+        assert (how == "create_zone") == (zone_id is None)
         if how == "update_buckets":
             _check_create_bucket_keys(zone)
-            return self._do_update_zone(traceid, user_id, zone_id, zone, how, decrypt=decrypt) # let update_zone initialize (default)
-
-        if how == "change_secret_key":
+            return self._do_update_zone(traceid, user_id, zone_id, zone, how, decrypt=decrypt)
+        elif how == "change_secret_key":
             _check_change_secret_keys(zone)
-            return self._do_update_zone(traceid, user_id, zone_id, zone, how, decrypt=decrypt) # let update_zone initialize (default)
+            return self._do_update_zone(traceid, user_id, zone_id, zone, how, decrypt=decrypt)
+        else:
+            ## how in {None, "create_zone", "update_zone"}
+            atime_from_arg = zone.pop("atime", None) if include_atime else None
+            _check_zone_keys(zone)
+            return self._do_update_zone(traceid, user_id, zone_id, zone, how,
+                                        atime_from_arg=atime_from_arg,
+                                        ## owerride behaviour
+                                        initialize=initialize,
+                                        decrypt=decrypt)
 
-        # else: how in {"create_zone", "update_zone", None}
+    def update_pool(self, traceid, user_id, zone_id, zone,
+                    *, include_atime=False,
+                    decrypt=False, initialize=True):
+        how = "update_zone"
+        ## how=None is for admin commands.  Note that "delete_zone",
+        ## "disable_zone", "enable_zone" never appears.
+        assert how in {None, "create_zone", "update_zone",
+                       "update_buckets", "change_secret_key"}
+        assert user_id is not None
+        assert (how == "create_zone") == (zone_id is None)
+        if how == "update_buckets":
+            _check_create_bucket_keys(zone)
+            return self._do_update_zone(traceid, user_id, zone_id, zone, how, decrypt=decrypt)
+        elif how == "change_secret_key":
+            _check_change_secret_keys(zone)
+            return self._do_update_zone(traceid, user_id, zone_id, zone, how, decrypt=decrypt)
+        else:
+            ## how in {None, "create_zone", "update_zone"}
+            atime_from_arg = zone.pop("atime", None) if include_atime else None
+            _check_zone_keys(zone)
+            return self._do_update_zone(traceid, user_id, zone_id, zone, how,
+                                        atime_from_arg=atime_from_arg,
+                                        ## owerride behaviour
+                                        initialize=initialize,
+                                        decrypt=decrypt)
 
-        if how == "create_zone" and zone_id is not None:
-            logger.error("INTERNAL ERROR: zone_id should be None when creating a zone.")
-            raise Exception("INTERNAL ERROR: zone_id should be None when creating a zone.")
+    def update_buckets(self, traceid, user_id, zone_id, zone,
+                       *, include_atime=False,
+                       decrypt=False, initialize=True):
+        how = "update_buckets"
+        ## how=None is for admin commands.  Note that "delete_zone",
+        ## "disable_zone", "enable_zone" never appears.
+        assert how in {None, "create_zone", "update_zone",
+                       "update_buckets", "change_secret_key"}
+        assert user_id is not None
+        assert (how == "create_zone") == (zone_id is None)
+        if how == "update_buckets":
+            _check_create_bucket_keys(zone)
+            return self._do_update_zone(traceid, user_id, zone_id, zone, how, decrypt=decrypt)
+        elif how == "change_secret_key":
+            _check_change_secret_keys(zone)
+            return self._do_update_zone(traceid, user_id, zone_id, zone, how, decrypt=decrypt)
+        else:
+            ## how in {None, "create_zone", "update_zone"}
+            atime_from_arg = zone.pop("atime", None) if include_atime else None
+            _check_zone_keys(zone)
+            return self._do_update_zone(traceid, user_id, zone_id, zone, how,
+                                        atime_from_arg=atime_from_arg,
+                                        ## owerride behaviour
+                                        initialize=initialize,
+                                        decrypt=decrypt)
 
-        atime_from_arg = zone.pop("atime", None) if include_atime else None
-        _check_zone_keys(zone)
+    def change_secret(self, traceid, user_id, zone_id, zone,
+                      *, include_atime=False,
+                      decrypt=False, initialize=True):
+        how = "change_secret_key"
+        ## how=None is for admin commands.  Note that "delete_zone",
+        ## "disable_zone", "enable_zone" never appears.
+        assert how in {None, "create_zone", "update_zone",
+                       "update_buckets", "change_secret_key"}
+        assert user_id is not None
+        assert (how == "create_zone") == (zone_id is None)
+        if how == "update_buckets":
+            _check_create_bucket_keys(zone)
+            return self._do_update_zone(traceid, user_id, zone_id, zone, how, decrypt=decrypt)
+        elif how == "change_secret_key":
+            _check_change_secret_keys(zone)
+            return self._do_update_zone(traceid, user_id, zone_id, zone, how, decrypt=decrypt)
+        else:
+            ## how in {None, "create_zone", "update_zone"}
+            atime_from_arg = zone.pop("atime", None) if include_atime else None
+            _check_zone_keys(zone)
+            return self._do_update_zone(traceid, user_id, zone_id, zone, how,
+                                        atime_from_arg=atime_from_arg,
+                                        ## owerride behaviour
+                                        initialize=initialize,
+                                        decrypt=decrypt)
 
-        logger.debug("@@@"
-                            f" user_id: {user_id}"
-                            f" zone_id: {zone_id}"
-                            f" zone: <omitted>"
-                            f" atime_from_arg: {atime_from_arg}"
-                            f" decrypt: {decrypt}"
-                            )
+    def restore_pool(self, traceid, user_id, zone_id, zone,
+                     *, include_atime, initialize):
+        ## how=None is for admin commands.  Note that "delete_zone",
+        ## "disable_zone", "enable_zone" never appears.
+        how = None
+        assert how in {None, "create_zone", "update_zone",
+                       "update_buckets", "change_secret_key"}
+        assert user_id is not None
+        assert (how == "create_zone") == (zone_id is None)
+        if how == "update_buckets":
+            _check_create_bucket_keys(zone)
+            return self._do_update_zone(traceid, user_id, zone_id, zone, how, decrypt=decrypt)
+        elif how == "change_secret_key":
+            _check_change_secret_keys(zone)
+            return self._do_update_zone(traceid, user_id, zone_id, zone, how, decrypt=decrypt)
+        else:
+            ## how in {None, "create_zone", "update_zone"}
+            atime_from_arg = zone.pop("atime", None) if include_atime else None
+            _check_zone_keys(zone)
+            return self._do_update_zone(traceid, user_id, zone_id, zone, how,
+                                        atime_from_arg=atime_from_arg,
+                                        ## owerride behaviour
+                                        initialize=initialize,
+                                        decrypt=decrypt)
 
-        return self._do_update_zone(traceid, user_id, zone_id, zone, how,
-                                atime_from_arg=atime_from_arg,
-                                initialize=initialize, # owerride behaviour
-                                decrypt=decrypt)
+    ####
+
+    ##def _upsert_zone_(self, how, traceid, user_id, zone_id, zone,
+    ##                  include_atime=False,
+    ##                  decrypt=False, initialize=True):
+    ##    ## how=None is for admin commands.  Note that "delete_zone",
+    ##    ## "disable_zone", "enable_zone" never appears.
+    ##    assert how in {None, "create_zone", "update_zone",
+    ##                   "update_buckets", "change_secret_key"}
+    ##    assert user_id is not None
+    ##    assert (how == "create_zone") == (zone_id is None)
+    ##
+    ##    if how == "update_buckets":
+    ##        _check_create_bucket_keys(zone)
+    ##        return self._do_update_zone(traceid, user_id, zone_id, zone, how, decrypt=decrypt)
+    ##
+    ##    elif how == "change_secret_key":
+    ##        _check_change_secret_keys(zone)
+    ##        return self._do_update_zone(traceid, user_id, zone_id, zone, how, decrypt=decrypt)
+    ##
+    ##    else:
+    ##        ## how in {None, "create_zone", "update_zone"}
+    ##        atime_from_arg = zone.pop("atime", None) if include_atime else None
+    ##        _check_zone_keys(zone)
+    ##        return self._do_update_zone(traceid, user_id, zone_id, zone, how,
+    ##                                    atime_from_arg=atime_from_arg,
+    ##                                    ## owerride behaviour
+    ##                                    initialize=initialize,
+    ##                                    decrypt=decrypt)
 
 
     def delete_zone(self, traceid, user_id, zoneID):  # ADMIN, API

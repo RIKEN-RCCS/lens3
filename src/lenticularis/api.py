@@ -1,4 +1,4 @@
-# Copyright (c) 2022 RIKEN R-CCS.
+# Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
 import base64
@@ -8,6 +8,13 @@ from lenticularis.utility import get_ip_address
 from lenticularis.utility import logger
 from lenticularis.utility import random_str
 import time
+
+
+def _check_pool_owner(user_id, zone):
+    owner = zone.get("user", user_id)
+    if owner != user_id:
+        raise Exception(f"Mismatch in pool owner and authenticated user:"
+                        f" owner={owner} to authn={user_id}")
 
 
 class Api():
@@ -26,43 +33,78 @@ class Api():
             logger.exception(e)
             return ([], f"{e}")
 
-    def api_zone_list(self, traceid, user_id, zoneID):
-        logger.debug(f"@@@ {user_id} {zoneID}")
+    def api_list_pools(self, traceid, user_id, pool_id):
+        logger.debug(f"@@@ {user_id} {pool_id}")
         try:
             (zone_list, _) = self.zone_adm.fetch_zone_list(user_id,
                              decrypt=True, include_atime=True, include_userinfo=True,
-                             zone_id=zoneID)
+                             zone_id=pool_id)
             logger.debug(f"@@@ zone_list: {zone_list}")
             return (zone_list, None)
         except Exception as e:
             logger.exception(e)
             return ([], f"{e}")
 
-    def api_upsert(self, how, traceid, user_id, zoneID, zone):
-        logger.debug(f"@@@ user_id = {user_id}")
-        logger.debug(f"@@@ zoneID = {zoneID}")
-        logger.debug(f"@@@ zone = {zone}")
-        logger.debug(f"@@@ how = {how}")
-        if not user_id:
-            logger.debug("@@@ user is required")
-            raise Exception(f"user is required")
-        if zone.get("user", user_id) != user_id:
-            logger.debug(f"@@@ user mismatch: {zone.get('user')} {user_id}")
-            raise Exception(f"user mismatch")
-        logger.debug(f"@@@ user = {user_id}")
+    def api_create_pool(self, traceid, user_id, pool_id, zone):
         try:
-            zone = self.zone_adm.upsert_zone(how, traceid, user_id, zoneID, zone, decrypt=True)
+            assert user_id is not None
+            _check_pool_owner(user_id, zone)
+            zone = self.zone_adm.create_pool(traceid, user_id, pool_id, zone, decrypt=True)
         except Exception as e:
-            logger.debug(f"@@@ FAILED: {e}")
             logger.exception(e)
             return (None, f"{e}")
-        logger.debug("@@@ DONE")
         return ([zone], None)
 
-    def api_delete(self, traceid, user_id, zoneID):
-        logger.debug(f"@@@ zoneID = {zoneID}")
+    def api_update_pool(self, traceid, user_id, pool_id, zone):
         try:
-            self.zone_adm.delete_zone(traceid, user_id, zoneID)
+            assert user_id is not None
+            _check_pool_owner(user_id, zone)
+            zone = self.zone_adm.update_pool(traceid, user_id, pool_id, zone, decrypt=True)
+        except Exception as e:
+            logger.exception(e)
+            return (None, f"{e}")
+        return ([zone], None)
+
+    def api_update_buckets(self, traceid, user_id, pool_id, zone):
+        try:
+            assert user_id is not None
+            _check_pool_owner(user_id, zone)
+            zone = self.zone_adm.update_buckets(traceid, user_id, pool_id, zone, decrypt=True)
+        except Exception as e:
+            logger.exception(e)
+            return (None, f"{e}")
+        return ([zone], None)
+
+    def api_change_secret(self, traceid, user_id, pool_id, zone):
+        try:
+            assert user_id is not None
+            _check_pool_owner(user_id, zone)
+            zone = self.zone_adm.change_secret(traceid, user_id, pool_id, zone, decrypt=True)
+        except Exception as e:
+            logger.exception(e)
+            return (None, f"{e}")
+        return ([zone], None)
+
+    ##def _api_upsert_(self, how, traceid, user_id, pool_id, zone):
+    ##    if not user_id:
+    ##        logger.debug("@@@ user is required")
+    ##        raise Exception(f"user is required")
+    ##    if zone.get("user", user_id) != user_id:
+    ##        logger.debug(f"@@@ user mismatch: {zone.get('user')} {user_id}")
+    ##        raise Exception(f"user mismatch")
+    ##    logger.debug(f"@@@ user = {user_id}")
+    ##    try:
+    ##        zone = self.zone_adm.upsert_zone(how, traceid, user_id, pool_id, zone, decrypt=True)
+    ##    except Exception as e:
+    ##        logger.debug(f"@@@ FAILED: {e}")
+    ##        logger.exception(e)
+    ##        return (None, f"{e}")
+    ##    logger.debug("@@@ DONE")
+    ##    return ([zone], None)
+
+    def api_delete(self, traceid, user_id, pool_id):
+        try:
+            self.zone_adm.delete_zone(traceid, user_id, pool_id)
         except Exception as e:
             logger.debug(f"@@@ FAILED: {e}")
             logger.exception(e)

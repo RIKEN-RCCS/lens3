@@ -109,102 +109,115 @@ async def app_get_show_ui(request: Request,
 
 
 @app.get("/template")
-async def app_get_zone_template(request: Request,
-                         user_id: str = Depends(get_authorized_user),
-                         traceid: str = Depends(get_traceid),
-                         client_addr: str = Depends(get_client_addr),
-                         csrf_protect: CsrfProtect = Depends()):
+async def app_get_get_template(request: Request,
+                               user_id: str = Depends(get_authorized_user),
+                               traceid: str = Depends(get_traceid),
+                               client_addr: str = Depends(get_client_addr),
+                               csrf_protect: CsrfProtect = Depends()):
     logger.debug(f"APP.GET /template")
     (zone_list, err) = api.api_get_template(traceid, user_id)
     return respond_zone(zone_list, err, csrf_protect, client_addr, user_id, request)
 
 
 @app.get("/zone")
-async def app_get_zone_list(request: Request,
-                         user_id: str = Depends(get_authorized_user),
-                         traceid: str = Depends(get_traceid),
-                         client_addr: str = Depends(get_client_addr),
-                         csrf_protect: CsrfProtect = Depends()):
+async def app_get_list_pools(request: Request,
+                             user_id: str = Depends(get_authorized_user),
+                             traceid: str = Depends(get_traceid),
+                             client_addr: str = Depends(get_client_addr),
+                             csrf_protect: CsrfProtect = Depends()):
     logger.debug(f"APP.GET /zone")
-    (zone_list, err) = api.api_zone_list(traceid, user_id, None)
+    (zone_list, err) = api.api_list_pools(traceid, user_id, None)
     return respond_zone(zone_list, err, csrf_protect, client_addr, user_id, request)
 
 
 @app.get("/zone/{zone_id}")
-async def app_get_zone_get(zone_id: str,
-                         request: Request,
-                         user_id: str = Depends(get_authorized_user),
-                         traceid: str = Depends(get_traceid),
-                         client_addr: str = Depends(get_client_addr),
-                         csrf_protect: CsrfProtect = Depends()):
+async def app_get_get_pool(zone_id: str,
+                           request: Request,
+                           user_id: str = Depends(get_authorized_user),
+                           traceid: str = Depends(get_traceid),
+                           client_addr: str = Depends(get_client_addr),
+                           csrf_protect: CsrfProtect = Depends()):
     logger.debug(f"APP.GET /zone/{zone_id}")
-    (zone_list, err) = api.api_zone_list(traceid, user_id, zone_id)
+    (zone_list, err) = api.api_list_pools(traceid, user_id, zone_id)
     return respond_zone(zone_list, err, csrf_protect, client_addr, user_id, request)
 
 
 @app.post("/zone")
-async def app_post_create_zone(request: Request,
-                           user_id: str = Depends(get_authorized_user),
-                           traceid: str = Depends(get_traceid),
-                           client_addr: str = Depends(get_client_addr),
-                           csrf_protect: CsrfProtect = Depends()):
+async def app_post_create_pool(request: Request,
+                               user_id: str = Depends(get_authorized_user),
+                               traceid: str = Depends(get_traceid),
+                               client_addr: str = Depends(get_client_addr),
+                               csrf_protect: CsrfProtect = Depends()):
     logger.debug(f"APP.POST /zone")
     body = await get_request_body(request)
-    return zone_update(traceid, None, body, client_addr, user_id, request, csrf_protect, "create_zone")
+    ##return zone_update(traceid, None, body, client_addr, user_id, request, csrf_protect, "create_zone")
+    token = body.get("CSRF-Token")
+    csrf_protect.validate_csrf(token)
+    zone = body.get("zone")
+    (zone_list, err) = api.api_create_pool(traceid, user_id, None, zone)
+    return respond_zone(zone_list, err, None, client_addr, user_id, request)
 
 
 @app.put("/zone/{zone_id}")
-async def app_put_upsert_zone(zone_id: str,
-                           request: Request,
-                           user_id: str = Depends(get_authorized_user),
-                           traceid: str = Depends(get_traceid),
-                           client_addr: str = Depends(get_client_addr),
-                           csrf_protect: CsrfProtect = Depends()):
+async def app_put_update_pool(zone_id: str,
+                              request: Request,
+                              user_id: str = Depends(get_authorized_user),
+                              traceid: str = Depends(get_traceid),
+                              client_addr: str = Depends(get_client_addr),
+                              csrf_protect: CsrfProtect = Depends()):
     logger.debug(f"APP.PUT /zone/{zone_id}")
     body = await get_request_body(request)
-    return zone_update(traceid, zone_id, body, client_addr, user_id, request, csrf_protect, "update_zone")
+    ##return zone_update(traceid, zone_id, body, client_addr, user_id, request, csrf_protect, "update_zone")
+    token = body.get("CSRF-Token")
+    csrf_protect.validate_csrf(token)
+    zone = body.get("zone")
+    (zone_list, err) = api.api_update_pool(traceid, user_id, zone_id, zone)
+    return respond_zone(zone_list, err, None, client_addr, user_id, request)
 
 
 @app.put("/zone/{zone_id}/buckets")
-async def app_put_upsert_zone_buckets(zone_id: str,
-                           request: Request,
-                           user_id: str = Depends(get_authorized_user),
-                           traceid: str = Depends(get_traceid),
-                           client_addr: str = Depends(get_client_addr),
-                           csrf_protect: CsrfProtect = Depends()):
+async def app_put_update_buckets(zone_id: str,
+                                 request: Request,
+                                 user_id: str = Depends(get_authorized_user),
+                                 traceid: str = Depends(get_traceid),
+                                 client_addr: str = Depends(get_client_addr),
+                                 csrf_protect: CsrfProtect = Depends()):
     logger.debug(f"APP.PUT /zone/{zone_id}/buckets")
     body = await get_request_body(request)
-    return zone_update(traceid, zone_id, body, client_addr, user_id, request, csrf_protect, "update_buckets")
+    ##return zone_update(traceid, zone_id, body, client_addr, user_id, request, csrf_protect, "update_buckets")
+    token = body.get("CSRF-Token")
+    csrf_protect.validate_csrf(token)
+    zone = body.get("zone")
+    (zone_list, err) = api.api_update_buckets(traceid, user_id, zone_id, zone)
+    return respond_zone(zone_list, err, None, client_addr, user_id, request)
 
 
 @app.put("/zone/{zone_id}/accessKeys")
-async def app_put_upsert_zone_secret(zone_id: str,
-                           request: Request,
-                           user_id: str = Depends(get_authorized_user),
-                           traceid: str = Depends(get_traceid),
-                           client_addr: str = Depends(get_client_addr),
-                           csrf_protect: CsrfProtect = Depends()):
+async def app_put_change_secret(zone_id: str,
+                                request: Request,
+                                user_id: str = Depends(get_authorized_user),
+                                traceid: str = Depends(get_traceid),
+                                client_addr: str = Depends(get_client_addr),
+                                csrf_protect: CsrfProtect = Depends()):
     logger.debug(f"APP.PUT /zone/{zone_id}/accessKeys")
     body = await get_request_body(request)
-    return zone_update(traceid, zone_id, body, client_addr, user_id, request, csrf_protect, "change_secret_key")
+    ##return zone_update(traceid, zone_id, body, client_addr, user_id, request, csrf_protect, "change_secret_key")
+    token = body.get("CSRF-Token")
+    csrf_protect.validate_csrf(token)
+    zone = body.get("zone")
+    (zone_list, err) = api.api_change_secret(traceid, user_id, zone_id, zone)
+    return respond_zone(zone_list, err, None, client_addr, user_id, request)
 
 
 ## 'how' is one of {"create_zone", "update_zone", "update_buckets",
 ## "change_secret_key"}.  If how="create_zone" then zone_id=None.
 
-def zone_update(traceid, zone_id, body, client_addr, user_id, request, csrf_protect, how):
-    logger.debug(f"@@@ traceid: {traceid}")
-    logger.debug(f"@@@ zone_id: {zone_id}")
-    logger.debug(f"@@@ body: {body}")
-    logger.debug(f"@@@ user_id: {user_id}")
-    logger.debug(f"@@@ how: {how}")
-    logger.debug(f"@@@ csrf_protect: {csrf_protect}")
-    csrf_token = body.get("CSRF-Token")
-    csrf_protect.validate_csrf(csrf_token)
-    zone = body.get("zone")
-    logger.debug(f"@@@ api_upsert: {user_id} {zone_id} {zone}")
-    (zone_list, err) = api.api_upsert(how, traceid, user_id, zone_id, zone)
-    return respond_zone(zone_list, err, None, client_addr, user_id, request)
+##def _zone_update_(traceid, zone_id, body, client_addr, user_id, request, csrf_protect, how):
+##    csrf_token = body.get("CSRF-Token")
+##    csrf_protect.validate_csrf(csrf_token)
+##    zone = body.get("zone")
+##    (zone_list, err) = api.api_upsert(how, traceid, user_id, zone_id, zone)
+##    return respond_zone(zone_list, err, None, client_addr, user_id, request)
 
 
 @app.delete("/zone/{zone_id}")

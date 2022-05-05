@@ -20,6 +20,9 @@
     <div id="new_pool" v-if="pool_name_visible">
       <hr />
       <div>
+        <span class="label">POOL</span>
+      </div>
+      <div>
         <span class="label">User:</span>
         <input v-model="user" size="64" disabled /></div>
       <div>
@@ -38,17 +41,20 @@
         <span class="label">BUCKETS</span>
       </div>
       <div>
-        <span class="label">Private:</span>
+        <span class="label">Private (space-delimited list):</span>
         <input v-model="buckets[0]" size="64" /></div>
       <div>
-        <span class="label">Public (read&amp;write for Access Key-less user):</span>
+        <span class="label">Public read&amp;write for key-less access (space-delimited list):</span>
         <input v-model="buckets[1]" size="64" /></div>
       <div>
-        <span class="label">Public (upload only for Access Key-less user):</span>
+        <span class="label">Public upload only for key-less access (space-delimited list):</span>
         <input v-model="buckets[2]" size="64" /></div>
       <div>
-        <span class="label">Public (download only for Access Key-less user):</span>
+        <span class="label">Public download only for key-less access (space-delimited list):</span>
         <input v-model="buckets[3]" size="64" /></div>
+      <div v-if="submit_button_visible">
+        <button v-on:click="submitZoneToCreate" :disabled="submit_button_disabled">{{submit_button_name}}</button>
+      </div>
       <hr />
       <div>
         <span class="label">Create Bucket</span>

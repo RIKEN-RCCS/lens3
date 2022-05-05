@@ -10,24 +10,23 @@ from redis import Redis
 from lenticularis.utility import logger
 from lenticularis.utility import safe_json_loads
 
+
+def _wait_for_redis(r):
+    while True:
+        try:
+            r.ping()
+            logger.debug("Redis is ready")
+            return
+        except ConnectionError as e:
+            logger.debug("Redis is not ready (sleeping).")
+            time.sleep(30)
+
+
 class DBase():
     def __init__(self, host, port, db, password):
-
-        def wait_for_redis():
-            while True:
-                try:
-                    self.r.ping()
-                    logger.debug("@@@ Redis is Ready")
-                    return
-                except ConnectionError as e:
-                    logger.debug("@@@ Redis is not Ready.")
-                    time.sleep(1)
-
         self.r = Redis(host=host, port=port, db=db, password=password,
                              charset="utf-8", decode_responses=True)
-
-        logger.debug(f"@@@ Redis = {self.r}")
-        wait_for_redis()
+        _wait_for_redis(self.r)
 
     def set(self, name, value):
         self.r.set(name, value)

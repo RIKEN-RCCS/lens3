@@ -1,4 +1,4 @@
-# Copyright (c) 2022 RIKEN R-CCS.
+# Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
 from jsonschema import validate
@@ -6,30 +6,31 @@ from lenticularis.utility import dict_diff
 from lenticularis.utility import logger
 
 
-def merge_zone(user_id, existing, zone):
-    def find_and_set(key, *dicts):
-        for d in dicts:
-            val = d.get(key)
-            if val is not None:
-                zone[key] = val
-                break
+def _update_for_key(dict0, key, dict1, overwrite):
+    """Dict-updates for the key.  It skips updating an existing entry
+    unless overwrite.
+    """
+    if dict0.get(key) is None or overwrite:
+        val = dict1.get(key)
+        if val is not None:
+            dict0[key] = val
+    else:
+        pass
 
-    #logger.debug(f"@@@ user_id: {user_id}")
-    #logger.debug(f"@@@ existing: {existing}")
-    #logger.debug(f"@@@ zone: {zone}")
-
+def merge_pool_descriptions(user_id, existing, zone):
+    ## Note it disallows updating "rootSecret" by preferring an
+    ## existing one.
     if not existing:
         existing = {}
     zone["user"] = user_id
-    find_and_set("group", zone, existing)
-    find_and_set("rootSecret", existing)  # do not use the value from `zone`
-    find_and_set("bucketsDir", zone, existing)
-    find_and_set("buckets", zone, existing)
-    find_and_set("accessKeys", zone, existing)
-    find_and_set("directHostnames", zone, existing)
-    find_and_set("expDate", zone, existing)
-    find_and_set("status", zone, existing)
-    #logger.debug(f"@@@ result: {zone}")
+    _update_for_key(zone, "group", existing, False)
+    _update_for_key(zone, "rootSecret", existing, True)
+    _update_for_key(zone, "bucketsDir", existing, False)
+    _update_for_key(zone, "buckets", existing, False)
+    _update_for_key(zone, "accessKeys", existing, False)
+    _update_for_key(zone, "directHostnames", existing, False)
+    _update_for_key(zone, "expDate", existing, False)
+    _update_for_key(zone, "status", existing, False)
 
 
 def compare_access_keys(existing, zone):

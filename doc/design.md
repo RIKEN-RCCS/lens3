@@ -1,8 +1,25 @@
 # Design of Lenticularis-S3
 
-This is a design document of Lenticularis-S3.
+This briefly describes a design of Lenticularis-S3.
 
 [TOC]
+
+## Configuration
+
+```
+reverse-proxy <+-->︎ Mux <+--> MinIO
+               |         +--> MinIO
+               |         +--> MinIO
+               +--> Adm (<---> Mux)
+                    Redis
+```
+
+A reverse-proxy is not a part of Lens3 but it is required for
+operation.  Adm (admin Web-UI) accesses to Mux to manage MinIO.
+
+A Mux is also in charge of starting a MinIO process (through class
+Controller).  A Mux starts a Manager as a daemon, and then, a Manager
+starts a MinIO process and waits until a MinIO process exits.
 
 ## Overview
 

@@ -19,6 +19,9 @@ reverse-proxy, ....  A pseudo user "lens3" is used for the owner of
 the daemons/services.  We also assume RedHat8.5 and Python3.9 at this
 writing (in March 2022).
 
+* Python
+  * 3.9 and later
+
 * Services used
   * Lenticularis Multiplexers
   * Lenticularis Web-UI

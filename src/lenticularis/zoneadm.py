@@ -61,12 +61,12 @@ def _check_zone_keys(zone):
     if not given_keys.issubset(allowed_keys):
         raise Exception(f"upsert_zone: invalid key set {given_keys - allowed_keys}")
 
-def _check_zone_owner(user_id, zone_id, zone):
-    logger.debug(f"+++")
-    if zone["user"] != user_id:
-        existing_user = zone["user"]
-        logger.error(f"user_id mismatch: {user_id} != {existing_user} in {zone_id}")
-        raise Exception(f"user_id mismatch: {user_id} != {existing_user} in {zone_id}")
+def check_pool_owner(user_id, pool_id, pool):
+    ## It uses a user-id as an owner if it is undefined."""
+    owner = pool.get("user", user_id)
+    if owner != user_id:
+        raise Exception(f"Mismatch in pool owner and authenticated user:"
+                        f" owner={owner} to user={user_id}")
 
 def _gen_unique_key(key_generator, allkeys):
     while True:
@@ -215,138 +215,67 @@ class ZoneAdm():
     def delete_unixUserInfo(self, user_id):  # ADMIN
         self.tables.zones.del_unixUserInfo(user_id)
 
-    ####
+    ## how=None is for admin commands.  Note that "delete_zone",
+    ## "disable_zone", "enable_zone" never appears.
 
     def create_pool(self, traceid, user_id, zone_id, zone,
                     *, include_atime=False,
                     decrypt=False, initialize=True):
-        how = "create_zone"
-        ## how=None is for admin commands.  Note that "delete_zone",
-        ## "disable_zone", "enable_zone" never appears.
-        assert how in {None, "create_zone", "update_zone",
-                       "update_buckets", "change_secret_key"}
         assert user_id is not None
-        assert (how == "create_zone") == (zone_id is None)
-        if how == "update_buckets":
-            _check_create_bucket_keys(zone)
-            return self._do_update_zone(traceid, user_id, zone_id, zone, how, decrypt=decrypt)
-        elif how == "change_secret_key":
-            _check_change_secret_keys(zone)
-            return self._do_update_zone(traceid, user_id, zone_id, zone, how, decrypt=decrypt)
-        else:
-            ## how in {None, "create_zone", "update_zone"}
-            atime_from_arg = zone.pop("atime", None) if include_atime else None
-            _check_zone_keys(zone)
-            return self._do_update_zone(traceid, user_id, zone_id, zone, how,
-                                        atime_from_arg=atime_from_arg,
-                                        ## owerride behaviour
-                                        initialize=initialize,
-                                        decrypt=decrypt)
+        assert zone_id is None
+        atime_from_arg = zone.pop("atime", None) if include_atime else None
+        _check_zone_keys(zone)
+        how = "create_zone"
+        return self._do_update_zone(how, traceid, user_id, zone_id, zone,
+                                    atime_from_arg=atime_from_arg,
+                                    initialize=initialize,
+                                    decrypt=decrypt)
 
     def update_pool(self, traceid, user_id, zone_id, zone,
                     *, include_atime=False,
                     decrypt=False, initialize=True):
-        how = "update_zone"
-        ## how=None is for admin commands.  Note that "delete_zone",
-        ## "disable_zone", "enable_zone" never appears.
-        assert how in {None, "create_zone", "update_zone",
-                       "update_buckets", "change_secret_key"}
         assert user_id is not None
-        assert (how == "create_zone") == (zone_id is None)
-        if how == "update_buckets":
-            _check_create_bucket_keys(zone)
-            return self._do_update_zone(traceid, user_id, zone_id, zone, how, decrypt=decrypt)
-        elif how == "change_secret_key":
-            _check_change_secret_keys(zone)
-            return self._do_update_zone(traceid, user_id, zone_id, zone, how, decrypt=decrypt)
-        else:
-            ## how in {None, "create_zone", "update_zone"}
-            atime_from_arg = zone.pop("atime", None) if include_atime else None
-            _check_zone_keys(zone)
-            return self._do_update_zone(traceid, user_id, zone_id, zone, how,
-                                        atime_from_arg=atime_from_arg,
-                                        ## owerride behaviour
-                                        initialize=initialize,
-                                        decrypt=decrypt)
+        assert zone_id is not None
+        atime_from_arg = zone.pop("atime", None) if include_atime else None
+        _check_zone_keys(zone)
+        how = "update_zone"
+        return self._do_update_zone(how, traceid, user_id, zone_id, zone,
+                                    atime_from_arg=atime_from_arg,
+                                    initialize=initialize,
+                                    decrypt=decrypt)
 
     def update_buckets(self, traceid, user_id, zone_id, zone,
                        *, include_atime=False,
                        decrypt=False, initialize=True):
-        how = "update_buckets"
-        ## how=None is for admin commands.  Note that "delete_zone",
-        ## "disable_zone", "enable_zone" never appears.
-        assert how in {None, "create_zone", "update_zone",
-                       "update_buckets", "change_secret_key"}
         assert user_id is not None
-        assert (how == "create_zone") == (zone_id is None)
-        if how == "update_buckets":
-            _check_create_bucket_keys(zone)
-            return self._do_update_zone(traceid, user_id, zone_id, zone, how, decrypt=decrypt)
-        elif how == "change_secret_key":
-            _check_change_secret_keys(zone)
-            return self._do_update_zone(traceid, user_id, zone_id, zone, how, decrypt=decrypt)
-        else:
-            ## how in {None, "create_zone", "update_zone"}
-            atime_from_arg = zone.pop("atime", None) if include_atime else None
-            _check_zone_keys(zone)
-            return self._do_update_zone(traceid, user_id, zone_id, zone, how,
-                                        atime_from_arg=atime_from_arg,
-                                        ## owerride behaviour
-                                        initialize=initialize,
-                                        decrypt=decrypt)
+        assert zone_id is not None
+        _check_create_bucket_keys(zone)
+        how = "update_buckets"
+        return self._do_update_zone(how, traceid, user_id, zone_id, zone,
+                                    decrypt=decrypt)
 
     def change_secret(self, traceid, user_id, zone_id, zone,
                       *, include_atime=False,
                       decrypt=False, initialize=True):
-        how = "change_secret_key"
-        ## how=None is for admin commands.  Note that "delete_zone",
-        ## "disable_zone", "enable_zone" never appears.
-        assert how in {None, "create_zone", "update_zone",
-                       "update_buckets", "change_secret_key"}
         assert user_id is not None
-        assert (how == "create_zone") == (zone_id is None)
-        if how == "update_buckets":
-            _check_create_bucket_keys(zone)
-            return self._do_update_zone(traceid, user_id, zone_id, zone, how, decrypt=decrypt)
-        elif how == "change_secret_key":
-            _check_change_secret_keys(zone)
-            return self._do_update_zone(traceid, user_id, zone_id, zone, how, decrypt=decrypt)
-        else:
-            ## how in {None, "create_zone", "update_zone"}
-            atime_from_arg = zone.pop("atime", None) if include_atime else None
-            _check_zone_keys(zone)
-            return self._do_update_zone(traceid, user_id, zone_id, zone, how,
-                                        atime_from_arg=atime_from_arg,
-                                        ## owerride behaviour
-                                        initialize=initialize,
-                                        decrypt=decrypt)
+        assert zone_id is not None
+        _check_change_secret_keys(zone)
+        how = "change_secret_key"
+        return self._do_update_zone(how, traceid, user_id, zone_id, zone,
+                                    decrypt=decrypt)
 
     def restore_pool(self, traceid, user_id, zone_id, zone,
                      *, include_atime, initialize):
-        ## how=None is for admin commands.  Note that "delete_zone",
-        ## "disable_zone", "enable_zone" never appears.
-        how = None
-        assert how in {None, "create_zone", "update_zone",
-                       "update_buckets", "change_secret_key"}
+        ## how=None is for admin commands.
         assert user_id is not None
-        assert (how == "create_zone") == (zone_id is None)
-        if how == "update_buckets":
-            _check_create_bucket_keys(zone)
-            return self._do_update_zone(traceid, user_id, zone_id, zone, how, decrypt=decrypt)
-        elif how == "change_secret_key":
-            _check_change_secret_keys(zone)
-            return self._do_update_zone(traceid, user_id, zone_id, zone, how, decrypt=decrypt)
-        else:
-            ## how in {None, "create_zone", "update_zone"}
-            atime_from_arg = zone.pop("atime", None) if include_atime else None
-            _check_zone_keys(zone)
-            return self._do_update_zone(traceid, user_id, zone_id, zone, how,
-                                        atime_from_arg=atime_from_arg,
-                                        ## owerride behaviour
-                                        initialize=initialize,
-                                        decrypt=decrypt)
-
-    ####
+        assert zone_id is not None
+        atime_from_arg = zone.pop("atime", None) if include_atime else None
+        _check_zone_keys(zone)
+        how = "restore_zone"
+        return self._do_update_zone(how, traceid, user_id, zone_id, zone,
+                                    atime_from_arg=atime_from_arg,
+                                    initialize=initialize,
+                                    decrypt=decrypt)
 
     ##def _upsert_zone_(self, how, traceid, user_id, zone_id, zone,
     ##                  include_atime=False,
@@ -381,19 +310,21 @@ class ZoneAdm():
         logger.debug(f"+++ {user_id} {zoneID}")
         zone = {"permission": "denied"}
         how = "delete_zone"
-        return self._do_update_zone(traceid, user_id, zoneID, zone, how)
+        return self._do_update_zone(how, traceid, user_id, zoneID, zone)
 
     def disable_zone(self, traceid, user_id, zoneID):  # ADMIN, private
         logger.debug(f"+++ {user_id} {zoneID}")
         zone = {}
         how = "disable_zone"
-        return self._do_update_zone(traceid, user_id, zoneID, zone, how, permission="denied")
+        return self._do_update_zone(how, traceid, user_id, zoneID, zone,
+                                    permission="denied")
 
     def enable_zone(self, traceid, user_id, zoneID):  # ADMIN
         logger.debug(f"+++ {user_id} {zoneID}")
         zone = {}
         how = "enable_zone"
-        return self._do_update_zone(traceid, user_id, zoneID, zone, how, permission="allowed")
+        return self._do_update_zone(how, traceid, user_id, zoneID, zone,
+                                    permission="allowed")
 
     def flush_zone_table(self, everything=False):  # ADMIN
         self.tables.zones.clear_all(everything=everything)
@@ -488,21 +419,25 @@ class ZoneAdm():
         self.tables.routes.clear_all(everything=everything)
 
 
-    def _do_update_zone(self, traceid, user_id, zoneID, zone, how,
-                    permission=None,
-                    atime_from_arg=None,
-                    initialize=True,
-                    decrypt=False):
+    def _do_update_zone(self, how, traceid, user_id, zoneID, zone,
+                        *, permission=None,
+                        atime_from_arg=None,
+                        initialize=True,
+                        decrypt=False):
         if zoneID is None:
             ## Update without locking.
-            return self.update_zone_with_lock(traceid, user_id, zoneID, zone, how, permission, atime_from_arg, initialize, decrypt)
+            return self.update_zone_with_lock(
+                how, traceid, user_id, zoneID, zone,
+                permission, atime_from_arg, initialize, decrypt)
 
         lock = LockDB(self.tables.zones)
         key = f"{self.zone_table_lock_pfx}{zoneID}"
         lock_status = False
         try:
             lock.lock(key, self.timeout)
-            return self.update_zone_with_lock(traceid, user_id, zoneID, zone, how, permission, atime_from_arg, initialize, decrypt)
+            return self.update_zone_with_lock(
+                how, traceid, user_id, zoneID, zone,
+                permission, atime_from_arg, initialize, decrypt)
         finally:
             lock.unlock()
 
@@ -549,31 +484,31 @@ class ZoneAdm():
         fn(_strip_domain(host_fqdn, domain))
 
 
-    def update_zone_with_lock(self, traceid, user_id, zone_id, zone, how,
-                            permission=None,
-                            atime_from_arg=None,
-                            initialize=True,
-                            decrypt=False):
-        logger.debug(f"@@@ user_id = {user_id}")
-        logger.debug(f"@@@ zone_id = {zone_id}")
+    ## how = "create_zone"
+    ## how = "update_zone"
+    ## how = "delete_zone"
+    ## how = "restore_zone"
+    ## how = "disable_zone"
+    ## how = "enable_zone"
+    ## how = "update_buckets"
+    ## how = "change_secret_key"
 
+    def update_zone_with_lock(self, how, traceid, user_id, zone_id, zone,
+                              permission, atime_from_arg,
+                              initialize, decrypt):
         existing = self.tables.zones.get_zone(zone_id) if zone_id else None
 
-        must_exist = how not in {None, "create_zone"}
+        must_exist = how not in {"restore_zone", "create_zone"}
         if must_exist and not existing:
-            logger.error(f"no such zone: {zone_id}")
-            raise Exception(f"no such zone: {zone_id}")
+            raise Exception(f"Non-existing pool is specified: pool={zone_id}")
 
         if existing:
-            _check_zone_owner(user_id, zone_id, existing)
+            check_pool_owner(user_id, zone_id, existing)
 
         delete_zone = how == "delete_zone"
 
-        if delete_zone:
-            (need_initialize, need_uniquify) = (False, False)
-        else:
-            (need_initialize, need_uniquify) = self._prepare_zone(
-             user_id, zone_id, existing, zone, permission, how)
+        (need_initialize, need_uniquify) = self._prepare_zone(
+            user_id, zone_id, existing, zone, permission, how)
 
         # if explicitly ordered not to initialize,
         # set need_initialize to be False
@@ -669,17 +604,21 @@ class ZoneAdm():
     ### END update_zone_with_lock
 
     def _prepare_zone(self, user_id, zone_id, existing, zone, permission, how):
-        if how == "update_buckets":
+        if how == "delete_zone":
+            return (False, False)
+        elif how == "update_buckets":
             return self._prepare_for_update_buckets(how, user_id, zone_id, existing, zone, permission)
         elif how == "change_secret_key":
-            return self._prepare_for_change_secret_key(how, user_id, zone_id, existing, zone, permission)
+            return self._prepare_for_change_secret(how, user_id, zone_id, existing, zone, permission)
         else:
             return self._prepare_for_update_pool(how, user_id, zone_id, existing, zone, permission)
 
     def _prepare_for_update_pool(self, how, user_id, zone_id,
                                  existing, zone, permission):
-        assert how not in {"update_buckets", "change_secret_key"}
-        assert how in {None, "create_zone", "update_zone"}
+        assert how not in {"update_buckets", "change_secret_key",
+                           "delete_zone"}
+        assert how in {"create_zone", "update_zone", "restore_zone",
+                       "disable_zone", "enable_zone"}
 
         merge_pool_descriptions(user_id, existing, zone)
 
@@ -744,8 +683,8 @@ class ZoneAdm():
                            change_secret)
         return (need_initialize, need_uniquify)
 
-    def _prepare_for_change_secret_key(self, how, user_id, zone_id,
-                                       existing, zone, permission):
+    def _prepare_for_change_secret(self, how, user_id, zone_id,
+                                   existing, zone, permission):
         assert how == "change_secret_key"
         assert existing is not None
         assert "accessKeys" in zone

@@ -3,16 +3,16 @@
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
+import os
+from subprocess import Popen, PIPE, DEVNULL
+import sys
 from lenticularis.scheduler import Scheduler
 from lenticularis.utility import logger
 from lenticularis.utility import make_clean_env, host_port
-import os
-from subprocess import Popen, PIPE
-import sys
 
 
 class Controller():
-    """A manager of a MinIO instance."""
+    """A starter of a MinIO instance."""
 
     manager = "lenticularis.manager"
 
@@ -33,17 +33,13 @@ class Controller():
         host is not None  => design.md:2.1
         host is None      => design.md:2.2
         """
-        logger.debug(f"access_key_id={access_key_id} host={host}")
         if host:
-            # Use Direct Hostname to resolve routing
             zone_id = self.tables.zones.get_zoneID_by_directHostname(host)
         elif access_key_id:
-            # Use Access Key ID to resolve routing
-            zone_id = self.tables.zones.get_zoneID_by_access_key_id(access_key_id)
+            zone_id = self.tables.zones.get_pool_by_access_key(access_key_id)
         else:
             zone_id = None
 
-        logger.debug(f"@@@ zone_id: {zone_id}")
         if zone_id is None:
             if host:
                 logger.debug(f"@@@ FAIL 404: unknown host: {host}")
@@ -53,8 +49,7 @@ class Controller():
                 logger.debug("@@@ FAIL 404: No Host nor Access Key ID given")
             return (404, None)
 
-        # schedule host
-        minio_server = self.choose_minio_server(zone_id)
+        minio_server = self._choose_minio_server(zone_id)
 
         logger.debug(f"@@@ minio_server = {minio_server}")
 
@@ -83,36 +78,28 @@ class Controller():
         # logger.debug("@@@ 404 (HARMLESS): reached end of the procedure")
         return (404, zone_id)
 
-    def choose_minio_server(self, zone_id):
-        logger.debug("@@@ +++")
+    def _choose_minio_server(self, zone_id):
+        """Chooses a host to run a MinIO.  It returns None to mean the
+        localhost.
+        """
         minioAddress = self.tables.processes.get_minio_address(zone_id)
         if minioAddress:
             mux_addr = minioAddress["muxAddr"]
             if mux_addr == self.mux_addr:
-                return None  # localhost
+                return None
             return mux_addr
 
         (host, port) = self.scheduler.schedule(zone_id)
         if host == self.mux_addr:
-            logger.debug(f"@@@ localhost -- return None")
-            return None  # localhost
-        logger.debug(f"@@@ other -- return ({host}, {port})")
+            return None
         return host_port(host, port)
 
-        #scheduled_host = self.scheduler.schedule(zone_id)
-        #if scheduled_host[0] == self.mux_addr:
-        #    return None  # localhost
-        #return host_port(scheduled_host[0], scheduled_host[1])
-
     def start_minio(self, traceid, zone_id, access_key_id):
+        """Starts a MinIO under a manager process.  It waits for a manager to
+        write addr:port on stdout and to close stdout/stderr.
         """
-        Call Controller (BOTTOM)
-        """
-        logger.debug("@@@ +++")
-        logger.debug(f"@@@ start_minio")
-
-        cmd = [self.executable, "-m", self.manager]
         node = self.mux_addr
+        cmd = [self.executable, "-m", self.manager]
         args = [node, self.port_min, self.port_max, self.mux_addr,
                 "--configfile", self.configfile]
         env = make_clean_env(os.environ)
@@ -121,16 +108,19 @@ class Controller():
             args.append("--accessByZoneID=True")
         if traceid is not None:
             args.append(f"--traceid={traceid}")
-        logger.debug(f"@@@ cmd = {cmd}")
-        logger.debug(f"@@@ args = {args}")
+
         try:
-            with Popen(cmd + args, stdout=PIPE, env=env) as p:
-                r = p.stdout.readline()
-                logger.debug(f"@@@ readline: r = {r}")
+            ## It waits for a manager to close stdout/stderr.
+            logger.debug(f"Starting a Manager: cmd={cmd+args}")
+            with Popen(cmd + args, stdin=DEVNULL, stdout=PIPE, stderr=PIPE,
+                       env=env) as p:
+                (out, err) = p.communicate()
                 status = p.wait()
-                logger.debug(f"@@@ wait: status = {status}")
+                assert status == 0
         except Exception as e:
-            logger.error(f"Exception: e = {e}")
+            logger.error(f"Starting a Manager failed: exception={e}")
             logger.exception(e)
-            r = ""
-        return r
+            out = ""
+        if err != "":
+            logger.error(f"Output on stderr from a Manager: {err}")
+        return out

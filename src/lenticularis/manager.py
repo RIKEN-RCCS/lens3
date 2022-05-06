@@ -274,6 +274,13 @@ class MinioManager():
             if elapsed_time + self.timeout_margin > self.timeout:
                 logger.warning("lock time exceeded")
 
+    def _tell_controller_minio_starts(self):
+        ## Note it loses stdout/stderr messages after closing.
+        sys.stdout.write(f"{self.minioAddr}\n")
+        sys.stdout.flush()
+        sys.stdout.close()
+        sys.stderr.close()
+
 
     def try_manage_minio(self, port, mode, user, group,
                         bucketsDir, zone, up_minio, need_initialize):
@@ -318,10 +325,8 @@ class MinioManager():
 
                     self.update_tables(p.pid, zone, initial_idle_duration + self.refresh_margin)
 
-                    # Tell caller that MinIO started successfully.
-                    sys.stdout.write(f"{self.minioAddr}\n")
-                    sys.stdout.flush()
-                    sys.stdout.close()
+                    ## Tell the caller that a MinIO started successfully.
+                    self._tell_controller_minio_starts()
 
                     self._check_elapsed_time()
                     logger.debug(f"@@@ UNLOCK {self.zoneID}")

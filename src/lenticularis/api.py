@@ -3,18 +3,12 @@
 
 import base64
 from lenticularis.zoneadm import ZoneAdm
+from lenticularis.zoneadm import check_pool_owner
 from lenticularis.table import get_tables
 from lenticularis.utility import get_ip_address
 from lenticularis.utility import logger
 from lenticularis.utility import random_str
 import time
-
-
-def _check_pool_owner(user_id, zone):
-    owner = zone.get("user", user_id)
-    if owner != user_id:
-        raise Exception(f"Mismatch in pool owner and authenticated user:"
-                        f" owner={owner} to authn={user_id}")
 
 
 class Api():
@@ -48,7 +42,7 @@ class Api():
     def api_create_pool(self, traceid, user_id, pool_id, zone):
         try:
             assert user_id is not None
-            _check_pool_owner(user_id, zone)
+            check_pool_owner(user_id, pool_id, zone)
             zone = self.zone_adm.create_pool(traceid, user_id, pool_id, zone, decrypt=True)
         except Exception as e:
             logger.exception(e)
@@ -58,7 +52,7 @@ class Api():
     def api_update_pool(self, traceid, user_id, pool_id, zone):
         try:
             assert user_id is not None
-            _check_pool_owner(user_id, zone)
+            check_pool_owner(user_id, pool_id, zone)
             zone = self.zone_adm.update_pool(traceid, user_id, pool_id, zone, decrypt=True)
         except Exception as e:
             logger.exception(e)
@@ -68,7 +62,7 @@ class Api():
     def api_update_buckets(self, traceid, user_id, pool_id, zone):
         try:
             assert user_id is not None
-            _check_pool_owner(user_id, zone)
+            check_pool_owner(user_id, pool_id, zone)
             zone = self.zone_adm.update_buckets(traceid, user_id, pool_id, zone, decrypt=True)
         except Exception as e:
             logger.exception(e)
@@ -78,7 +72,7 @@ class Api():
     def api_change_secret(self, traceid, user_id, pool_id, zone):
         try:
             assert user_id is not None
-            _check_pool_owner(user_id, zone)
+            check_pool_owner(user_id, pool_id, zone)
             zone = self.zone_adm.change_secret(traceid, user_id, pool_id, zone, decrypt=True)
         except Exception as e:
             logger.exception(e)

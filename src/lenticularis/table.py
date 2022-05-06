@@ -80,11 +80,11 @@ class StorageZoneTable(TableCommon):
 
     def get_ptr_list(self):
         # logger.debug(f"+++ ")
-        access_key_ptr = scan_strip(self.dbase.r, self.access_key_id_prefix, None, include_value="get")
-        direct_host_ptr = scan_strip(self.dbase.r, self.directHostnamePrefix, None, include_value="get")
+        access_key_ptr = _scan_strip(self.dbase.r, self.access_key_id_prefix, None, include_value="get")
+        direct_host_ptr = _scan_strip(self.dbase.r, self.directHostnamePrefix, None, include_value="get")
         return (list(access_key_ptr), list(direct_host_ptr))
 
-    def get_zoneID_by_access_key_id(self, access_key_id):
+    def get_pool_by_access_key(self, access_key_id):
         # logger.debug(f"+++ {access_key_id}")
         key = f"{self.access_key_id_prefix}{access_key_id}"
         return self.dbase.get(key)
@@ -158,11 +158,11 @@ class StorageZoneTable(TableCommon):
 
     def get_unixUsers_list(self):
         # logger.debug(f"+++ ")
-        return scan_strip(self.dbase.r, self.unixUserPrefix, None)
+        return _scan_strip(self.dbase.r, self.unixUserPrefix, None)
 
     def get_zoneID_list(self, zoneID):
         # logger.debug(f"+++ {zoneID}")
-        return scan_strip(self.dbase.r, self.zoneIDPrefix, zoneID)
+        return _scan_strip(self.dbase.r, self.zoneIDPrefix, zoneID)
 
     def clear_all(self, everything):
         delete_all(self.dbase.r, self.access_key_id_prefix)
@@ -217,7 +217,7 @@ class ProcessTable(TableCommon):
 
     def get_minio_address_list(self, zoneID):
         # logger.debug(f"+++ {zoneID}")
-        return scan_strip(self.dbase.r, self.minioAddrPrefix, zoneID, include_value=self.get_minio_address)
+        return _scan_strip(self.dbase.r, self.minioAddrPrefix, zoneID, include_value=self.get_minio_address)
 
     def set_mux(self, muxID, mux_val, timeout):
         # logger.debug(f"+++ {muxID} {mux_val} {timeout}")
@@ -247,7 +247,7 @@ class ProcessTable(TableCommon):
 
     def get_mux_list(self, muxID):
         # logger.debug(f"+++ {muxID}")
-        return scan_strip(self.dbase.r, self.muxPrefix, muxID, include_value=self.get_mux)
+        return _scan_strip(self.dbase.r, self.muxPrefix, muxID, include_value=self.get_mux)
 
     def clear_all(self, everything):
         """Clears Redis DB.  It leaves entires for multiplexers unless
@@ -350,9 +350,9 @@ class RoutingTable(TableCommon):
         return self.dbase.delete(key)
 
     def get_route_list(self):
-        access_key_route = scan_strip(self.dbase.r, self.access_key_id_prefix, None, include_value="get")
-        direct_host_route = scan_strip(self.dbase.r, self.directHostnamePrefix, None, include_value="get")
-        atime = scan_strip(self.dbase.r, self.atimePrefix, None, include_value="get")
+        access_key_route = _scan_strip(self.dbase.r, self.access_key_id_prefix, None, include_value="get")
+        direct_host_route = _scan_strip(self.dbase.r, self.directHostnamePrefix, None, include_value="get")
+        atime = _scan_strip(self.dbase.r, self.atimePrefix, None, include_value="get")
         return (access_key_route, direct_host_route, atime)
 
     def clear_all(self, everything):
@@ -400,11 +400,14 @@ def delete_all(r, match):
         r.delete(key)
 
 
-def scan_strip(r, prefix, target, include_value=None):
+def _scan_strip(r, prefix, target, include_value=None):
+    """Returns an iterator to scan a table for a prefix+target pattern,
+    where target is * if it is None.  It drops a prefix from the
+    returned key.
+    """
     cursor = "0"
     mkey = target if target else "*"
     match = f"{prefix}{mkey}"
-    logger.debug(f"@@@ match = {match}")
     striplen = len(prefix)
     while cursor != 0:
         (cursor, data) = r.scan(cursor=cursor, match=match)

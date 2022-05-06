@@ -14,34 +14,22 @@ class Scheduler():
         #self.process_table = process_table
         self.tables = tables
 
-    def schedule(self, zoneID):
-        logger.debug("@@@ +++")
-        #logger.debug(f"@@@ zoneID = {zoneID}")
-
+    def schedule(self, zoneID_):
+        """Chooses a least used host for running MinIO."""
         mux_list = self.tables.processes.get_mux_list(None)
         multiplexers = [get_mux_addr(v["mux_conf"]) for (e, v) in mux_list]
+        multiplexers = sorted(list(set(multiplexers)))
 
         if len(multiplexers) == 0:
-            logger.debug(f"@@@ return None (locahost)")
-            return None  # localhost
+            ## Choose the localhost.
+            return None
 
-        # assert(len(multiplexers) > 0)
-
-        server_list = self.tables.processes.get_minio_address_list(None)
-        mux_occupation_list = [process["muxAddr"] for (zone, process) in server_list]
-        logger.debug(f"@@@ mux_occupation_list = {mux_occupation_list}")
-
-        multiplexers = sorted(list(set(multiplexers)))
-        logger.debug(f"@@@ multiplexers = {multiplexers}")
-        mux_names = [host for (host, port) in multiplexers]
-        logger.debug(f"@@@ mux_names = {mux_names}")
-        mux_occupation_count_dic = collections.Counter(mux_occupation_list + mux_names)
-        mux_occupation_count = [(k, v) for k, v in mux_occupation_count_dic.items()]
-        logger.debug(f"@@@ mux_occupation_count = {mux_occupation_count}")
-        mux_occupation_count = sorted(mux_occupation_count, key=lambda e: e[1])
-        logger.debug(f"@@@ mux_occupation_count(sorted) = {mux_occupation_count}")
-        (preferred, _) = mux_occupation_count[0]
-        logger.debug(f"@@@ preferred = {preferred}")
+        servers = self.tables.processes.get_minio_address_list(None)
+        minios = [process["muxAddr"] for (zone, process) in servers]
+        muxs = [host for (host, port) in multiplexers]
+        occupancy = collections.Counter(minios + muxs)
+        occupancy = sorted(occupancy.items(), key=lambda e: e[1])
+        (preferred, _) = occupancy[0]
         selected = next((host, port) for (host, port) in multiplexers if host == preferred)
-        logger.debug(f"@@@ selected = {selected}")
+        assert selected is not None
         return selected

@@ -15,6 +15,9 @@ from lenticularis.utility import normalize_address
 from lenticularis.utility import tracing
 
 
+def _fake_user_id(access_key_id):
+    return f"access-key-id={access_key_id}"
+
 class Multiplexer():
     def __init__(self, mux_conf, tables, controller, node):
         self.node = node
@@ -95,96 +98,68 @@ class Multiplexer():
 
 
     def process_request(self, environ, start_response):
-        """Processes a request from gunicorn."""
+        """Processes a request from gunicorn.  It forwards a request/response
+        to/from MinIO."""
+
         traceid = environ.get("HTTP_X_TRACEID")
-        #threading.current_thread().name = traceid
         tracing.set(traceid)
-        #logger.debug(f"@@@ MUX_MAIN: __CALL__")
-        #logger.debug(f"@@@ environ = {environ}")
 
         ##server_name = environ.get("SERVER_NAME")
         server_port = environ.get("SERVER_PORT")
-
         peer_addr = environ.get("REMOTE_ADDR")
 
-        # DO NOT RETURN HERE UNLESS `remote_addr` is not None.
-        #if remote_addr is None:
-        #    logger.error("missing 'REMOTE_ADDR'")
-        #    return None
-
-        #logger.debug(f"@@@ PEER ADDR {peer_addr}")
-
-        # x_forwarded_for = environ.get("HTTP_X_FORWARDED_FOR")
+        ##x_forwarded_for = environ.get("HTTP_X_FORWARDED_FOR")
+        ##x_forwarded_host = environ.get("HTTP_X_FORWARDED_HOST")
         x_real_ip = environ.get("HTTP_X_REAL_IP")
-        #if not x_real_ip:
-        #    logger.warning(f"HTTP_X_REAL_IP is not set")
         client_addr = x_real_ip if x_real_ip else peer_addr
 
         path = environ.get("RAW_URI")
         request_method = environ.get("REQUEST_METHOD")
         request_proto = environ.get("HTTP_X_FORWARDED_PROTO")
-
-        # NOTUSED forwarded_host = environ.get("HTTP_X_FORWARDED_HOST")
+        request_proto = request_proto if request_proto else "?"
 
         ### X-Remote-User is not set!
         ### AuthKey? << mandatory!!!
 
-        #logger.debug(f"@@@ environ {type(environ)}")
-        #logger.debug(f"@@@ environ {environ}")
-        #user_id = zone_adm.zone_to_user(zone_id)
         host = environ.get("HTTP_HOST")
         host = host if host else "-"
 
         auth = environ.get("HTTP_AUTHORIZATION")
 
-        logger.debug(f"mux on port={server_port} handles a request:"
-                     f" {request_method} {path};"
-                     f" host=({host}),"
-                     f" peer=({peer_addr}),"
-                     f" proto=({request_proto}),"
-                     f" auth=({auth})")
-
-        if not request_proto:
-            logger.warning(f"HTTP_X_FORWARDED_PROTO is not set")
-
-        access_key_id = self.get_access_key_id(auth)
-        logger.debug(f"access_key_id=({access_key_id})")
-
         request_url = f"{request_proto}://{host}{path}"
 
-        if not self.check_access(peer_addr):
-            logger.debug(f"Deny access from peer={peer_addr}")
-            status = "400"  # 400 Bad Request
-            user_id = f"Access_Key_ID:{access_key_id}"
+        logger.debug(f"MUX(port={server_port}) got a request:"
+                     f" {request_method} {request_url};"
+                     f" remote=({peer_addr}),"
+                     f" auth=({auth})")
+
+        access_key_id = self.get_access_key_id(auth)
+
+        if not self.check_accesser(peer_addr):
+            user_id = _fake_user_id(access_key_id)
+            status = "403"
             accesslog(status, client_addr, user_id, request_method, request_url)
+            logger.debug(f"Deny access from remote={peer_addr}")
             start_response(status, [])
             return []
 
-        logger.debug(f"Allow access from peer={peer_addr}")
-
-        #logger.debug(f"@@@ MATCH    {peer_addr}")
-
-        #headers = [(h[5:].replace('_', '-'), environ.get(h))
-        #           for h in environ if h.startswith("HTTP_")]
-        #headers = dict(headers)
-        headers = {h[5:].replace('_', '-'): environ.get(h)
-                   for h in environ if h.startswith("HTTP_")}
-        #logger.debug(f"headers in environ: {headers}")
-
+        q_headers = {h[5:].replace('_', '-'): environ.get(h)
+                     for h in environ if h.startswith("HTTP_")}
         content_type = environ.get("CONTENT_TYPE")
         if content_type:
-            headers["CONTENT-TYPE"] = content_type
-
+            q_headers["CONTENT-TYPE"] = content_type
         content_length = environ.get("CONTENT_LENGTH")
         if content_length:
-            headers["CONTENT-LENGTH"] = content_length
+            q_headers["CONTENT-LENGTH"] = content_length
 
-        # now, lookup the routing table
-        (dest_addr, zone_id) = self.get_dest_addr(traceid, headers)  # minioAddr or muxAddr
-        # (int, None)      => could not resolve zone
-        # (int, string)    => zone successfuly resolved, but could not start minio
-        # (string, string) => success
-        # (string, None)   => should not happen
+        (dest_addr, zone_id) = self.get_dest_addr(traceid, q_headers)
+
+        ## The pair (dest_addr, zone_id) is:
+        ## - (string, string) => success
+        ## - (string, None)   => never
+        ## - (int, None)      => failure in resolving pool-id
+        ## - (int, string)    => failure in starting MinIO
+
         if isinstance(dest_addr, int):
             ## we are here becasuse
             # 1. cannot resolve access key id nor direct name, so that could not get zone_id.
@@ -192,60 +167,49 @@ class Multiplexer():
             status = f"{dest_addr}"
             logger.debug(f"@@@ FAIL: status(dest_addr) = {status}")
             user_id = self._zone_to_user(zone_id) if zone_id else None
-            user_id = user_id if user_id else f"Access_Key_ID:{access_key_id}"
+            user_id = user_id if user_id else _fake_user_id(access_key_id)
             accesslog(status, client_addr, user_id, request_method, request_url)
             start_response(status, [])
             return []
-        logger.debug(f"@@@ SUCCESS: dest_addr = {dest_addr} node = {self.node}")
 
         proto = "http"
         url = f"{proto}://{dest_addr}{path}"
-
         input = environ.get("wsgi.input")
-        #file_wrapper = environ["wsgi.file_wrapper"]
 
-        #sniff = True  # DEBUG FLAG FOR DEVELOPER
-        #              # WARNING: turning on `sniff` makes logger to emit sensitive information. use with grate care.
         sniff = False
-
-        logger.debug(f"@@@ > REQUEST {request_method} {url}")
-        logger.debug(f"@@@ > HEADERS {headers}")
 
         if input and sniff:
             input = Read1Reader(input.reader, sniff=True, sniff_marker=">", use_read=True)
 
-        req = Request(url, data=input, headers=headers, method=request_method)
+        req = Request(url, data=input, headers=q_headers, method=request_method)
         try:
             res = urlopen(req, timeout=self.request_timeout)
             status = f"{res.status}"
-            headers = res.getheaders()
-            logger.debug(f"@@@ < HEADERS {headers}")
-            logger.debug(f"@@@ res = {res}")
-            respiter = self._wrap_res(environ, res, headers, sniff=sniff, sniff_marker="<")
+            r_headers = res.getheaders()
+            respiter = self._wrap_res(environ, res, r_headers, sniff=sniff, sniff_marker="<")
 
         except HTTPError as e:
-            logger.error(f"HTTP ERROR: {request_method} {request_url} => {url} {e}")
-            # logger.exception(e)  # do not record exception detail
-            status = f"{e.status}"
-            headers = [(k, e.headers[k]) for k in e.headers]
-            respiter = self._wrap_res(environ, e, headers, sniff=sniff, sniff_marker="<E")
-            #respiter = file_wrapper(e, sniff=sniff)
+            logger.error(f"urlopen error: url={url} for {request_method} {request_url}; exception={e}")
+            ## logger.exception(e)  # do not record exception detail
+            status = f"{e.code}"
+            r_headers = [(k, e.headers[k]) for k in e.headers]
+            respiter = self._wrap_res(environ, e, r_headers, sniff=sniff, sniff_marker="<E")
 
         except URLError as e:
-            logger.error(f"URL Error {request_method} {request_url} => {url} {e}")
-            # logger.exception(e)  # do not record exception detail
+            logger.error(f"urlopen error: url={url} for {request_method} {request_url}; exception={e}")
+            ## logger.exception(e)  # do not record exception detail
             status = "400"
-            headers = []
+            r_headers = []
             respiter = []
 
         except Exception as e:
-            logger.error(f"EXCEPTION {request_method} {request_url} => {url} {e}")
+            logger.error(f"urlopen error: url={url} for {request_method} {request_url}; exception={e}")
             logger.exception(e)
             try:
-                status = f"{e.status}"
+                status = f"{e.code}"
             except:
-                status = "500"  # 500 Internal Server Error
-            headers = []
+                status = "500"
+            r_headers = []
             respiter = []
 
         if respiter != []:
@@ -256,20 +220,15 @@ class Multiplexer():
             atime = f"{int(time.time())}"
             self.tables.routes.set_atime_by_addr(dest_addr, atime, atime_timeout)
 
-        logger.debug(f"@@@ ZONE_ID {zone_id}")
         user_id = self._zone_to_user(zone_id)
-        logger.debug(f"@@@ ZONE_OWNER {user_id}")
 
-        content_length_downstream = next((v for (k, v) in headers if k.lower() == "content-length"), None)
+        content_length_downstream = next((v for (k, v) in r_headers if k.lower() == "content-length"), None)
 
         accesslog(status, client_addr, user_id, request_method, request_url,
             content_length_upstream=content_length,
             content_length_downstream=content_length_downstream)
 
-        logger.debug(f"@@@ < STATUS {status}")
-        # logger.debug(f"@@@ < HEADERS {headers}")
-        # logger.debug(f"@@@ < RESPITER {respiter}")
-        start_response(status, headers)
+        start_response(status, r_headers)
         return respiter
 
 
@@ -281,30 +240,22 @@ class Multiplexer():
 
 
     def _wrap_res(self, environ, res, headers, sniff=False, sniff_marker=""):
-            if self.unbufferp(headers) or sniff:
-                logger.debug("@@@ READ1READER")
-                return Read1Reader(res, sniff=sniff, sniff_marker=sniff_marker, thunk=res)
-            else:
-                logger.debug("@@@ FILE_WRAPPER")
-                file_wrapper = environ["wsgi.file_wrapper"]
-                return file_wrapper(res)
+        if self.unbufferp(headers) or sniff:
+            return Read1Reader(res, sniff=sniff, sniff_marker=sniff_marker, thunk=res)
+        else:
+            file_wrapper = environ["wsgi.file_wrapper"]
+            return file_wrapper(res)
 
 
-    def check_access(self, peer_addr):
+    def check_accesser(self, peer_addr):
         if peer_addr is None:
-            logger.error("missing 'REMOTE_ADDR'")  # enviornment variable's name is "REMOTE_ADDR", not "PEER_ADDR"
             return False
-        peer_addr = normalize_address(peer_addr)
-        # logger.debug("@@@ +++")
-        # logger.debug(f"@@@ {peer_addr} {self.trusted_proxies}")
-        # logger.debug(f"@@@ {peer_addr} {self.active_multiplexers}")
-        if (peer_addr in self.trusted_proxies or
-            peer_addr in self.active_multiplexers):
+        addr = normalize_address(peer_addr)
+        if (addr in self.trusted_proxies or
+            addr in self.active_multiplexers):
             return True
         self.active_mutilpexers = self.current_active_multiplexers()
-        # logger.debug(f"@@@ TRUSTED_PROXIES = {self.active_mutilpexers}")
-        # logger.debug(f"@@@ peer_addr = {peer_addr}")
-        if peer_addr in self.active_mutilpexers:
+        if addr in self.active_mutilpexers:
             return True
         return False
 
@@ -338,18 +289,14 @@ class Multiplexer():
             r = self.tables.routes.get_route_by_direct_hostname(host)
             zone_id = self.tables.zones.get_zoneID_by_directHostname(host)
         else:
-            access_key_id = self.get_access_key_id(headers.get("AUTHORIZATION"))
-            # logger.debug(f"@@@ access_key_id: {access_key_id}")
+            auth = headers.get("AUTHORIZATION")
+            access_key_id = self.get_access_key_id(auth)
             r = self.tables.routes.get_route_by_access_key(access_key_id)
-            zone_id = self.tables.zones.get_zoneID_by_access_key_id(access_key_id)
+            zone_id = self.tables.zones.get_pool_by_access_key(access_key_id)
+            assert(zone_id is not None)
 
-        if r:  # a route to minio found!
-            logger.debug(f"@@@ SUCCESS: {r}")
-            # assert(zone_id is not None)
-            if not zone_id:
-                # raise Exception("SHOULD NOT HAPPEN: zone_id must defined here")
-                logger.error("SHOULD NOT HAPPEN: zone_id must defined here")
-                return (500, None)
+        if r:
+            ## A route to minio found.
             return (r, zone_id)
 
         return self.controller.route_request(traceid, host, access_key_id)

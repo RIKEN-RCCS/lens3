@@ -253,7 +253,7 @@ def respond_zone(zone_list, err, csrf_protect, client_addr, user_id, request):
     content["time"] = str(int(time.time()))
     accesslog(f"{status_code}", client_addr, user_id, request.method, request.url)
     response = JSONResponse(status_code=status_code, content=content)
-    logger.debug(f"@@@ RESPONSE.CONTENT {content}")
+    ##logger.debug(f"@@@ RESPONSE.CONTENT {content}")
     return response
 
 

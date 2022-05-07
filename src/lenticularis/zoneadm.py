@@ -22,6 +22,17 @@ from lenticularis.zoneutil import compare_buckets, check_policy
 from lenticularis.utility import tracing
 
 
+## Main pool operations are one of the followings and is specified as
+## the HOW argument:
+## - how = "create_zone"
+## - how = "restore_zone"
+## - how = "delete_zone"
+## - how = "update_zone"
+## - how = "disable_zone"
+## - how = "enable_zone"
+## - how = "update_buckets"
+## - how = "change_secret_key"
+
 def _check_bucket_fmt(bucket):
     bucket_keys = set(bucket.keys())
     return bucket_keys == {"key", "policy"}
@@ -215,64 +226,63 @@ class ZoneAdm():
     def delete_unixUserInfo(self, user_id):  # ADMIN
         self.tables.zones.del_unixUserInfo(user_id)
 
-    ## how=None is for admin commands.  Note that "delete_zone",
-    ## "disable_zone", "enable_zone" never appears.
 
-    def create_pool(self, traceid, user_id, zone_id, zone,
-                    *, include_atime=False,
+    def create_pool(self, traceid, user_id, zone_id, zone, *,
+                    include_atime=False,
                     decrypt=False, initialize=True):
         assert user_id is not None
         assert zone_id is None
+        assert initialize == True
         atime_from_arg = zone.pop("atime", None) if include_atime else None
         _check_zone_keys(zone)
         how = "create_zone"
-        return self._do_update_zone(how, traceid, user_id, zone_id, zone,
+        return self._do_create_pool(how, traceid, user_id, zone_id, zone,
                                     atime_from_arg=atime_from_arg,
                                     initialize=initialize,
                                     decrypt=decrypt)
 
-    def update_pool(self, traceid, user_id, zone_id, zone,
-                    *, include_atime=False,
+    def update_pool(self, traceid, user_id, zone_id, zone, *,
+                    include_atime=False,
                     decrypt=False, initialize=True):
         assert user_id is not None
         assert zone_id is not None
         atime_from_arg = zone.pop("atime", None) if include_atime else None
         _check_zone_keys(zone)
         how = "update_zone"
-        return self._do_update_zone(how, traceid, user_id, zone_id, zone,
+        return self._do_update_pool(how, traceid, user_id, zone_id, zone,
                                     atime_from_arg=atime_from_arg,
                                     initialize=initialize,
                                     decrypt=decrypt)
 
-    def update_buckets(self, traceid, user_id, zone_id, zone,
-                       *, include_atime=False,
+    def update_buckets(self, traceid, user_id, zone_id, zone, *,
+                       include_atime=False,
                        decrypt=False, initialize=True):
         assert user_id is not None
         assert zone_id is not None
         _check_create_bucket_keys(zone)
         how = "update_buckets"
-        return self._do_update_zone(how, traceid, user_id, zone_id, zone,
+        return self._do_update_buckets(how, traceid, user_id, zone_id, zone,
                                     decrypt=decrypt)
 
-    def change_secret(self, traceid, user_id, zone_id, zone,
-                      *, include_atime=False,
+    def change_secret(self, traceid, user_id, zone_id, zone, *,
+                      include_atime=False,
                       decrypt=False, initialize=True):
         assert user_id is not None
         assert zone_id is not None
         _check_change_secret_keys(zone)
         how = "change_secret_key"
-        return self._do_update_zone(how, traceid, user_id, zone_id, zone,
+        return self._do_change_secret(how, traceid, user_id, zone_id, zone,
                                     decrypt=decrypt)
 
-    def restore_pool(self, traceid, user_id, zone_id, zone,
-                     *, include_atime, initialize):
-        ## how=None is for admin commands.
+    def restore_pool(self, traceid, user_id, zone_id, zone, *,
+                     include_atime, initialize):
+        ## This is called only from admin commands.
         assert user_id is not None
         assert zone_id is not None
         atime_from_arg = zone.pop("atime", None) if include_atime else None
         _check_zone_keys(zone)
         how = "restore_zone"
-        return self._do_update_zone(how, traceid, user_id, zone_id, zone,
+        return self._do_restore_pool(how, traceid, user_id, zone_id, zone,
                                     atime_from_arg=atime_from_arg,
                                     initialize=initialize,
                                     decrypt=decrypt)
@@ -310,20 +320,20 @@ class ZoneAdm():
         logger.debug(f"+++ {user_id} {zoneID}")
         zone = {"permission": "denied"}
         how = "delete_zone"
-        return self._do_update_zone(how, traceid, user_id, zoneID, zone)
+        return self._do_delete_zone(how, traceid, user_id, zoneID, zone)
 
     def disable_zone(self, traceid, user_id, zoneID):  # ADMIN, private
         logger.debug(f"+++ {user_id} {zoneID}")
         zone = {}
         how = "disable_zone"
-        return self._do_update_zone(how, traceid, user_id, zoneID, zone,
+        return self._do_disable_zone(how, traceid, user_id, zoneID, zone,
                                     permission="denied")
 
     def enable_zone(self, traceid, user_id, zoneID):  # ADMIN
         logger.debug(f"+++ {user_id} {zoneID}")
         zone = {}
         how = "enable_zone"
-        return self._do_update_zone(how, traceid, user_id, zoneID, zone,
+        return self._do_enable_zone(how, traceid, user_id, zoneID, zone,
                                     permission="allowed")
 
     def flush_zone_table(self, everything=False):  # ADMIN
@@ -419,28 +429,142 @@ class ZoneAdm():
         self.tables.routes.clear_all(everything=everything)
 
 
-    def _do_update_zone(self, how, traceid, user_id, zoneID, zone,
-                        *, permission=None,
-                        atime_from_arg=None,
-                        initialize=True,
-                        decrypt=False):
-        if zoneID is None:
-            ## Update without locking.
-            return self.update_zone_with_lock(
-                how, traceid, user_id, zoneID, zone,
-                permission, atime_from_arg, initialize, decrypt)
+    def _lock_pool_table(self, lock, pool_id):
+        key = f"{self.zone_table_lock_pfx}{pool_id}"
+        lockstatus = lock.lock(key, self.timeout)
 
+    def _unlock_pool_table(self, lock, pool_id):
+        lockstatus = lock.unlock()
+
+    def _do_update_zone_(self, how, traceid, user_id, zoneID, zone, *,
+                         permission=None,
+                         atime_from_arg=None,
+                         initialize=True,
+                         decrypt=False):
         lock = LockDB(self.tables.zones)
-        key = f"{self.zone_table_lock_pfx}{zoneID}"
-        lock_status = False
         try:
-            lock.lock(key, self.timeout)
-            return self.update_zone_with_lock(
+            self._lock_pool_table(lock, zoneID)
+            return self._update_zone_with_lock_(
                 how, traceid, user_id, zoneID, zone,
                 permission, atime_from_arg, initialize, decrypt)
         finally:
-            lock.unlock()
+            self._unlock_pool_table(lock, zoneID)
 
+    ####
+
+    def _do_create_pool(self, how, traceid, user_id, zoneID, zone, *,
+                        permission=None,
+                        atime_from_arg=None,
+                        initialize=True,
+                        decrypt=False):
+        lock = LockDB(self.tables.zones)
+        try:
+            self._lock_pool_table(lock, zoneID)
+            return self._create_pool_with_lock(
+                how, traceid, user_id, zoneID, zone,
+                permission, atime_from_arg, initialize, decrypt)
+        finally:
+            self._unlock_pool_table(lock, zoneID)
+
+    def _do_update_pool(self, how, traceid, user_id, zoneID, zone, *,
+                        permission=None,
+                        atime_from_arg=None,
+                        initialize=True,
+                        decrypt=False):
+        lock = LockDB(self.tables.zones)
+        try:
+            self._lock_pool_table(lock, zoneID)
+            return self._update_pool_with_lock(
+                how, traceid, user_id, zoneID, zone,
+                permission, atime_from_arg, initialize, decrypt)
+        finally:
+            self._unlock_pool_table(lock, zoneID)
+
+    def _do_update_buckets(self, how, traceid, user_id, zoneID, zone, *,
+                           permission=None,
+                           atime_from_arg=None,
+                           initialize=True,
+                           decrypt=False):
+        lock = LockDB(self.tables.zones)
+        try:
+            self._lock_pool_table(lock, zoneID)
+            return self._update_pool_with_lock(
+                how, traceid, user_id, zoneID, zone,
+                permission, atime_from_arg, initialize, decrypt)
+        finally:
+            self._unlock_pool_table(lock, zoneID)
+
+    def _do_change_secret(self, how, traceid, user_id, zoneID, zone, *,
+                          permission=None,
+                          atime_from_arg=None,
+                          initialize=True,
+                          decrypt=False):
+        lock = LockDB(self.tables.zones)
+        try:
+            self._lock_pool_table(lock, zoneID)
+            return self._update_pool_with_lock(
+                how, traceid, user_id, zoneID, zone,
+                permission, atime_from_arg, initialize, decrypt)
+        finally:
+            self._unlock_pool_table(lock, zoneID)
+
+    def _do_restore_pool(self, how, traceid, user_id, zoneID, zone, *,
+                         permission=None,
+                         atime_from_arg=None,
+                         initialize=True,
+                         decrypt=False):
+        lock = LockDB(self.tables.zones)
+        try:
+            self._lock_pool_table(lock, zoneID)
+            return self._create_pool_with_lock(
+                how, traceid, user_id, zoneID, zone,
+                permission, atime_from_arg, initialize, decrypt)
+        finally:
+            self._unlock_pool_table(lock, zoneID)
+
+    def _do_delete_zone(self, how, traceid, user_id, zoneID, zone, *,
+                        permission=None,
+                        atime_from_arg=None,
+                        initialize=True,
+                        decrypt=False):
+        lock = LockDB(self.tables.zones)
+        try:
+            self._lock_pool_table(lock, zoneID)
+            return self._delete_pool_with_lock(
+                how, traceid, user_id, zoneID, zone,
+                permission, atime_from_arg, initialize, decrypt)
+        finally:
+            self._unlock_pool_table(lock, zoneID)
+
+    def _do_disable_zone(self, how, traceid, user_id, zoneID, zone, *,
+                         permission=None,
+                         atime_from_arg=None,
+                         initialize=True,
+                         decrypt=False):
+        lock = LockDB(self.tables.zones)
+        try:
+            self._lock_pool_table(lock, zoneID)
+            return self._update_pool_with_lock(
+                how, traceid, user_id, zoneID, zone,
+                permission, atime_from_arg, initialize, decrypt)
+        finally:
+            self._unlock_pool_table(lock, zoneID)
+
+    def _do_enable_zone(self, how, traceid, user_id, zoneID, zone, *,
+                        permission=None,
+                        atime_from_arg=None,
+                        initialize=True,
+                        decrypt=False):
+        lock = LockDB(self.tables.zones)
+        try:
+            self._lock_pool_table(lock, zoneID)
+            return self._update_pool_with_lock(
+                how, traceid, user_id, zoneID, zone,
+                permission, atime_from_arg, initialize, decrypt)
+        finally:
+            self._unlock_pool_table(lock, zoneID)
+
+    ####
 
     def _delete_existing_zone(self, existing):
         logger.debug(f"+++")
@@ -484,18 +608,21 @@ class ZoneAdm():
         fn(_strip_domain(host_fqdn, domain))
 
 
-    ## how = "create_zone"
-    ## how = "update_zone"
-    ## how = "delete_zone"
-    ## how = "restore_zone"
-    ## how = "disable_zone"
-    ## how = "enable_zone"
-    ## how = "update_buckets"
-    ## how = "change_secret_key"
+    def _halt_minio(self, traceid, pool_id, existing):
+        """Stops a MinIO.  It throws an exception to break further processing.
+        """
+        mode = self.fetch_current_mode(pool_id)
+        assert mode == "suspended"
+        self._clear_route(pool_id, existing)
+        status = self.check_mux_access_for_zone(traceid, pool_id, force=False)
+        minioAddr = self.tables.processes.get_minio_address(pool_id)
+        if minioAddr is not None:
+            logger.error(f"COULD NOT STOP MINIO: {minioAddr}")
+        assert minioAddr is None
 
-    def update_zone_with_lock(self, how, traceid, user_id, zone_id, zone,
-                              permission, atime_from_arg,
-                              initialize, decrypt):
+    def _update_zone_with_lock_(self, how, traceid, user_id, zone_id, zone,
+                                permission, atime_from_arg,
+                                initialize, decrypt):
         existing = self.tables.zones.get_zone(zone_id) if zone_id else None
 
         must_exist = how not in {"restore_zone", "create_zone"}
@@ -602,6 +729,165 @@ class ZoneAdm():
         return zone
 
     ### END update_zone_with_lock
+
+    ####
+
+    def _create_pool_with_lock(self, how, traceid, user_id, zone_id, zone,
+                               permission, atime_from_arg,
+                               initialize, decrypt):
+        assert how in {"create_zone", "restore_zone"}
+        if how == "create_zone":
+            assert zone_id is None
+        elif how == "restore_zone":
+            assert zone_id is not None
+
+        existing = self.tables.zones.get_zone(zone_id) if zone_id else None
+        if existing:
+            check_pool_owner(user_id, zone_id, existing)
+
+        (need_initialize, need_uniquify) = self._prepare_zone(
+            user_id, zone_id, existing, zone, permission, how)
+
+        need_initialize = need_initialize and initialize
+
+        omode = None
+        if not need_initialize:
+            omode = self.fetch_current_mode(zone_id)
+        if zone_id:
+            self.set_current_mode(zone_id, "suspended")
+
+        if existing and initialize:
+            ## how = "restore_zone"
+            self._halt_minio(traceid, zone_id, existing)
+
+        ## NO FURTHER PROCESSING IF _halt_minio FAILS.
+
+        need_conflict_check = existing is not None
+        zone_id = self._lockdb_and_store_zone(user_id, zone_id, zone, need_conflict_check, need_uniquify)
+
+        try:
+            if need_initialize:
+                self.set_current_mode(zone_id, "initial")
+                self._send_decoy_with_zoneid_ptr(traceid, zone_id)
+            else:
+                pass
+        except Exception as e:
+            logger.debug(f"@@@ ignore exception {e}")
+            pass
+
+        if atime_from_arg:
+            self.tables.zones.set_atime(zone_id, atime_from_arg)
+        self.tables.zones.ins_ptr(zone_id, zone)
+
+        if omode:
+            self.set_current_mode(zone_id, omode)
+            mode = omode
+        elif not initialize:
+            mode = None
+        else:
+            mode = self.fetch_current_mode(zone_id)
+
+        if initialize and mode not in {"ready"}:
+            logger.error(f"initialize: error: mode is not ready: {mode}")
+            raise Exception(f"initialize: error: mode is not ready: {mode}")
+        else:
+            pass
+
+        zone["zoneID"] = zone_id
+        if decrypt:
+            self.decrypt_access_keys(zone)
+        return zone
+
+    def _update_pool_with_lock(self, how, traceid, user_id, zone_id, zone,
+                               permission, atime_from_arg,
+                               initialize, decrypt):
+        assert how in {"update_zone", "update_buckets" "change_secret_key",
+                       "disable_zone", "enable_zone"}
+        assert how not in {"restore_zone", "create_zone", "delete_zone"}
+        assert zone_id is not None
+        existing = self.tables.zones.get_zone(zone_id)
+        if not existing:
+            raise Exception(f"Non-existing pool is specified: pool={zone_id}")
+        check_pool_owner(user_id, zone_id, existing)
+
+        (need_initialize, need_uniquify) = self._prepare_zone(
+            user_id, zone_id, existing, zone, permission, how)
+
+        need_initialize = need_initialize and initialize
+
+        omode = None
+        if not need_initialize:
+            omode = self.fetch_current_mode(zone_id)
+
+        if zone_id:
+            self.set_current_mode(zone_id, "suspended")
+
+        if initialize:
+            self._halt_minio(traceid, zone_id, existing)
+
+        ## NO FURTHER PROCESSING IF _halt_minio FAILS.
+
+        need_conflict_check = True
+        zone_id = self._lockdb_and_store_zone(user_id, zone_id, zone, need_conflict_check, need_uniquify)
+
+        try:
+            if need_initialize:
+                self.set_current_mode(zone_id, "initial")
+                self._send_decoy_with_zoneid_ptr(traceid, zone_id)  # trigger initialize minio
+            else:
+                pass
+        except Exception as e:
+            logger.debug(f"@@@ ignore exception {e}")
+            pass
+
+        if atime_from_arg:
+            self.tables.zones.set_atime(zone_id, atime_from_arg)
+        self.tables.zones.ins_ptr(zone_id, zone)
+
+        if omode:
+            self.set_current_mode(zone_id, omode)
+            mode = omode
+        elif not initialize:
+            mode = None
+        else:
+            mode = self.fetch_current_mode(zone_id)
+
+        if not initialize:
+            pass
+        elif mode not in {"ready"}:
+            logger.error(f"initialize: error: mode is not ready: {mode}")
+            raise Exception(f"initialize: error: mode is not ready: {mode}")
+        else:
+            pass
+
+        zone["zoneID"] = zone_id
+        if decrypt:
+            self.decrypt_access_keys(zone)
+        return zone
+
+    def _delete_pool_with_lock(self, how, traceid, user_id, zone_id, zone,
+                               permission, atime_from_arg,
+                               initialize, decrypt):
+        assert not initialize
+        assert not decrypt
+        existing = self.tables.zones.get_zone(zone_id) if zone_id else None
+        if not existing:
+            raise Exception(f"Deleting a non-existing pool: pool={zone_id}")
+        check_pool_owner(user_id, zone_id, existing)
+
+        (need_initialize, need_uniquify) = self._prepare_zone(
+            user_id, zone_id, existing, zone, permission, how)
+
+        omode = self.fetch_current_mode(zone_id)
+        self.set_current_mode(zone_id, "suspended")
+        self.set_current_mode(zone_id, "deprecated")
+        self._delete_existing_zone(existing)
+        mode = self.fetch_current_mode(zone_id)
+        assert mode is None
+        zone["zoneID"] = zone_id
+        return zone
+
+    ####
 
     def _prepare_zone(self, user_id, zone_id, existing, zone, permission, how):
         if how == "delete_zone":
@@ -970,6 +1256,8 @@ class ZoneAdm():
         }
 
     def decrypt_access_keys(self, zone):
+        """Decrypts secrets in the pool description for showing to a user.
+        """
         access_keys = zone.get("accessKeys", [])
         for accessKey in access_keys:
             accessKey["secretAccessKey"] = decrypt_secret(accessKey["secretAccessKey"])

@@ -366,7 +366,7 @@ class Command():
 
     def fn_drop_zone(self):
         everything = self.args.everything
-        self.zone_adm.flush_zone_table(everything=everything)
+        self.zone_adm.flush_storage_table(everything=everything)
 
     def fn_reset_database(self):
         everything = self.args.everything

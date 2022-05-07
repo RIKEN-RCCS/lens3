@@ -67,8 +67,8 @@ class Multiplexer():
 
     def current_active_multiplexers(self):
         # logger.debug("@@@ +++")
-        # logger.debug(f"@@@ RDS = {list(self.tables.processes.get_mux_list(None))}")
-        mux_list = self.tables.processes.get_mux_list(None)
+        # logger.debug(f"@@@ RDS = {list(self.tables.process_table.get_mux_list(None))}")
+        mux_list = self.tables.process_table.get_mux_list(None)
         muxs = [v["mux_conf"]["lenticularis"]["multiplexer"]["host"] for (e, v) in mux_list]
         # logger.debug(f"@@@ muxs = {muxs}")
         return set([addr for h in muxs for addr in get_ip_address(h)])
@@ -80,7 +80,7 @@ class Multiplexer():
         mux_info = {"mux_conf": self.mux_conf_subset,
                     "start_time": f"{self.start}",
                     "last_interrupted_time": f"{now}"}
-        self.tables.processes.set_mux(self.mux_key, mux_info,
+        self.tables.process_table.set_mux(self.mux_key, mux_info,
                                int(next_sleep_time + self.refresh_margin))
 
     def timer_interrupt(self, next_sleep_time):
@@ -90,7 +90,7 @@ class Multiplexer():
 
     def __del__(self):
         logger.debug("@@@ MUX_MAIN: __DEL__")
-        self.tables.processes.del_mux(self.mux_key)
+        self.tables.process_table.del_mux(self.mux_key)
 
 
     def __call__(self, environ, start_response):
@@ -218,7 +218,7 @@ class Multiplexer():
             initial_idle_duration = self.watch_interval + jitter + self.mc_info_timelimit
             atime_timeout = initial_idle_duration + self.refresh_margin
             atime = f"{int(time.time())}"
-            self.tables.routes.set_atime_by_addr(dest_addr, atime, atime_timeout)
+            self.tables.routing_table.set_atime_by_addr(dest_addr, atime, atime_timeout)
 
         user_id = self._zone_to_user(zone_id)
 
@@ -233,7 +233,7 @@ class Multiplexer():
 
 
     def _zone_to_user(self, zoneID):  # CODE CLONE @ zoneadm.py
-            zone = self.tables.zones.get_zone(zoneID)
+            zone = self.tables.storage_table.get_zone(zoneID)
             if zone is None:
                 return None
             return zone["user"]
@@ -286,13 +286,13 @@ class Multiplexer():
         host = None
         if host:
             access_key_id = None
-            r = self.tables.routes.get_route_by_direct_hostname(host)
-            zone_id = self.tables.zones.get_zoneID_by_directHostname(host)
+            r = self.tables.routing_table.get_route_by_direct_hostname(host)
+            zone_id = self.tables.storage_table.get_zoneID_by_directHostname(host)
         else:
             auth = headers.get("AUTHORIZATION")
             access_key_id = self.get_access_key_id(auth)
-            r = self.tables.routes.get_route_by_access_key(access_key_id)
-            zone_id = self.tables.zones.get_pool_by_access_key(access_key_id)
+            r = self.tables.routing_table.get_route_by_access_key(access_key_id)
+            zone_id = self.tables.storage_table.get_pool_by_access_key(access_key_id)
             assert(zone_id is not None)
 
         if r:

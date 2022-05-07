@@ -21,7 +21,7 @@ class TableCommon():
         self.dbase = DBase(host, port, db, password)
 
 
-class StorageZoneTable(TableCommon):
+class StorageTable(TableCommon):
 
     zoneIDPrefix = "ru:"
     access_key_id_prefix = "ar:"
@@ -170,8 +170,8 @@ class StorageZoneTable(TableCommon):
         delete_all(self.dbase.r, self.zoneIDPrefix)
         delete_all(self.dbase.r, self.atimePrefix)
         delete_all(self.dbase.r, self.modePrefix)
-        zone_table_lock_pfx = "zk:"
-        delete_all(self.dbase.r, zone_table_lock_pfx)
+        storage_table_lock_pfx = "zk:"
+        delete_all(self.dbase.r, storage_table_lock_pfx)
         if everything:
             delete_all(self.dbase.r, self.allowDenyRuleKey)
             delete_all(self.dbase.r, self.unixUserPrefix)
@@ -365,28 +365,24 @@ class RoutingTable(TableCommon):
 
 
 class Tables():
-    def __init__(self, zone_table, process_table, routing_table):
-        self.zones = zone_table
-        self.processes = process_table
-        self.routes = routing_table
+    def __init__(self, storage_table, process_table, routing_table):
+        self.storage_table = storage_table
+        self.process_table = process_table
+        self.routing_table = routing_table
 
 
 def get_tables(mux_conf):
-
     redis_conf = mux_conf["redis"]
-
     redis_host = redis_conf["host"]
     redis_port = redis_conf["port"]
     redis_password = redis_conf["password"]
-
-    zone_table = StorageZoneTable(redis_host, redis_port, STORAGE_TABLE_ID,
+    _storage_table = StorageTable(redis_host, redis_port, STORAGE_TABLE_ID,
                                   redis_password)
-    process_table = ProcessTable(redis_host, redis_port, PROCESS_TABLE_ID,
-                                 redis_password)
-    routing_table = RoutingTable(redis_host, redis_port, ROUTING_TABLE_ID,
-                                 redis_password)
-
-    return Tables(zone_table, process_table, routing_table)
+    _process_table = ProcessTable(redis_host, redis_port, PROCESS_TABLE_ID,
+                                  redis_password)
+    _routing_table = RoutingTable(redis_host, redis_port, ROUTING_TABLE_ID,
+                                  redis_password)
+    return Tables(_storage_table, _process_table, _routing_table)
 
 
 def _prntall(r, name):

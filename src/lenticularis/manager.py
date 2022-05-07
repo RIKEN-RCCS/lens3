@@ -196,7 +196,7 @@ class MinioManager():
 #        self.minioenv["MINIO_CACHE_WATERMARK_HIGH"] = "90"
 
 ### XXX can we move following block to controller.py?
-        self.lock = LockDB(self.tables.processes)
+        self.lock = LockDB(self.tables.process_table)
         key = f"{self.process_table_lock_pfx}{self.zoneID}"
         lock_status = False
         try:
@@ -217,8 +217,8 @@ class MinioManager():
     def manage_minio(self, port_min, port_max, access_by_zoneID):
         logger.debug(f"@@@ {self.zoneID}")
         now = int(time.time())
-        zone = self.tables.zones.get_zone(self.zoneID)
-        mode = self.tables.zones.get_mode(self.zoneID)
+        zone = self.tables.storage_table.get_zone(self.zoneID)
+        mode = self.tables.storage_table.get_mode(self.zoneID)
 
         user = zone["user"]
         group = zone["group"]
@@ -245,7 +245,7 @@ class MinioManager():
         need_initialize = (permission, mode) == ("allowed", "initial")
         logger.debug(f"@@@ need_initialize = {need_initialize}")
 
-        minioAddress = self.tables.processes.get_minio_address(self.zoneID)
+        minioAddress = self.tables.process_table.get_minio_address(self.zoneID)
         logger.debug(f"@@@ minioAddress = {minioAddress}")
         if minioAddress:
             # zoneID exists in storage zone table (zones). lost the race.
@@ -375,7 +375,7 @@ class MinioManager():
                 return True
 
     def _check_status(self):
-            zone = self.tables.zones.get_zone(self.zoneID)
+            zone = self.tables.storage_table.get_zone(self.zoneID)
             if zone is None:
                 raise LoopBreakException("Access key table erased")
             if zone["permission"] != "allowed":
@@ -384,7 +384,7 @@ class MinioManager():
                 raise LoopBreakException("Credential disabled (status offline)")
 
     def _check_authoritativeness(self):
-            minioAddress = self.tables.processes.get_minio_address(self.zoneID)
+            minioAddress = self.tables.process_table.get_minio_address(self.zoneID)
             if minioAddress is None:
                 # apotosis caused by self entry disappearance
                 raise LoopBreakException("Address table erased")
@@ -431,7 +431,7 @@ class MinioManager():
 
     def _check_activity(self, now):
             # check inactive time
-            atime = self.tables.routes.get_atime_by_addr(self.minioAddr)
+            atime = self.tables.routing_table.get_atime_by_addr(self.minioAddr)
 
             if atime is None:
                 raise LoopBreakException("Keepalive_limit exceeded")
@@ -543,31 +543,31 @@ class MinioManager():
         logger.debug(f"@ timeout: {timeout}")
 
         atime = f"{int(time.time())}"
-        self.tables.routes.set_atime_by_addr(self.minioAddr, atime, timeout)
-        self.tables.zones.set_atime(self.zoneID, atime)
+        self.tables.routing_table.set_atime_by_addr(self.minioAddr, atime, timeout)
+        self.tables.storage_table.set_atime(self.zoneID, atime)
         self.saved_atime = atime
 
         logger.debug(f"@@@ INSERT ROUTE: {self.minioAddress} {self.route}")
-        self.tables.routes.ins_route(self.minioAddr, self.route, timeout)
+        self.tables.routing_table.ins_route(self.minioAddr, self.route, timeout)
         logger.debug(f"@@@ INSERT MINIO ADDRESS: {self.minioAddress}")
-        self.tables.processes.ins_minio_address(self.zoneID, self.minioAddress, timeout)
+        self.tables.process_table.ins_minio_address(self.zoneID, self.minioAddress, timeout)
 
     def refresh_tables(self, timeout):
         timeout = math.ceil(timeout)
         logger.debug(f"@@@ SET EXPIRE: minioAddress = {self.minioAddress}")
         logger.debug(f"@@@ SET EXPIRE: timeout = {timeout}")
-        self.tables.routes.set_atime_expire(self.minioAddr, timeout)
-        self.tables.routes.set_route_expire(self.route, timeout)
-        self.tables.processes.set_minio_address_expire(self.zoneID, timeout)
-        atime = self.tables.routes.get_atime_by_addr(self.minioAddr)
+        self.tables.routing_table.set_atime_expire(self.minioAddr, timeout)
+        self.tables.routing_table.set_route_expire(self.route, timeout)
+        self.tables.process_table.set_minio_address_expire(self.zoneID, timeout)
+        atime = self.tables.routing_table.get_atime_by_addr(self.minioAddr)
         if atime and atime != self.saved_atime:
-            self.tables.zones.set_atime(self.zoneID, atime)
+            self.tables.storage_table.set_atime(self.zoneID, atime)
             self.saved_atime = atime
 
     def clear_tables(self):
         logger.debug("@@@ CLEAR TABLES")
         try:
-            minioAddress = self.tables.processes.get_minio_address(self.zoneID)
+            minioAddress = self.tables.process_table.get_minio_address(self.zoneID)
             if minioAddress is None:
                 logger.debug("@@@ MinIO Address Not Found")
                 return
@@ -576,16 +576,16 @@ class MinioManager():
                 logger.debug("@@@ NOT OWN ENTRY")
                 return
             logger.debug(f"@@@ DELETE MINIO ADDRESS {self.minioAddress}")
-            self.tables.processes.del_minio_address(self.zoneID)
+            self.tables.process_table.del_minio_address(self.zoneID)
             logger.debug("@@@ DELETE ROUTING TABLE")
-            atime = self.tables.routes.get_atime_by_addr(self.minioAddr)
+            atime = self.tables.routing_table.get_atime_by_addr(self.minioAddr)
             if atime and atime != self.saved_atime:
                 logger.debug("@@@ BACKUP ATIME")
-                self.tables.zones.set_atime(self.zoneID, atime)
+                self.tables.storage_table.set_atime(self.zoneID, atime)
             logger.debug("@@@ DELETE ATIME")
-            self.tables.routes.del_atime_by_addr(self.minioAddr)
+            self.tables.routing_table.del_atime_by_addr(self.minioAddr)
             logger.debug("@@@ DELETE ROUTE")
-            self.tables.routes.del_route(self.route)
+            self.tables.routing_table.del_route(self.route)
             logger.debug("@@@ DONE")
         except Exception as e:
             logger.info(f"IGNORE EXCEPTION: {e}")
@@ -796,7 +796,7 @@ class MinioManager():
             return
         elif not up_minio:
             # Stop a running MinIO
-            minioAddress = self.tables.processes.get_minio_address(self.zoneID)
+            minioAddress = self.tables.process_table.get_minio_address(self.zoneID)
             if minioAddress["muxAddr"] != self.muxaddr:
                 logger.error("INTERNAL ERROR: "
                                   "DATABASE OR SCHEDULER MAY CORRUPT. "
@@ -820,13 +820,13 @@ class MinioManager():
         logger.debug("@@@ +++")
         os.kill(supervisorPid, SIGTERM)
         for i in range(self.kill_supervisor_wait):
-            a = self.tables.processes.get_minio_address(self.zoneID)
+            a = self.tables.process_table.get_minio_address(self.zoneID)
             if not a:
                 break
             time.sleep(1)
 
     def set_current_mode(self, zoneID, mode):
-        self.tables.zones.set_mode(zoneID, mode)
+        self.tables.storage_table.set_mode(zoneID, mode)
 
 
 def check_mc_status(r, e):

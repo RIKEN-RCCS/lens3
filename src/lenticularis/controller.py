@@ -34,9 +34,9 @@ class Controller():
         host is None      => design.md:2.2
         """
         if host:
-            zone_id = self.tables.zones.get_zoneID_by_directHostname(host)
+            zone_id = self.tables.storage_table.get_zoneID_by_directHostname(host)
         elif access_key_id:
-            zone_id = self.tables.zones.get_pool_by_access_key(access_key_id)
+            zone_id = self.tables.storage_table.get_pool_by_access_key(access_key_id)
         else:
             zone_id = None
 
@@ -63,9 +63,9 @@ class Controller():
         logger.debug(f"@@@ start_minio => {r}")
 
         if host:
-            r = self.tables.routes.get_route_by_direct_hostname(host)
+            r = self.tables.routing_table.get_route_by_direct_hostname(host)
         elif access_key_id:
-            r = self.tables.routes.get_route_by_access_key(access_key_id)
+            r = self.tables.routing_table.get_route_by_access_key(access_key_id)
         else:
             raise Exception("SHOULD NOT HAPPEN: Host or access_key_id should be given here")
 
@@ -82,7 +82,7 @@ class Controller():
         """Chooses a host to run a MinIO.  It returns None to mean the
         localhost.
         """
-        minioAddress = self.tables.processes.get_minio_address(zone_id)
+        minioAddress = self.tables.process_table.get_minio_address(zone_id)
         if minioAddress:
             mux_addr = minioAddress["muxAddr"]
             if mux_addr == self.mux_addr:

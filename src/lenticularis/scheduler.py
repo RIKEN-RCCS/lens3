@@ -22,7 +22,7 @@ class Scheduler():
 
         if len(multiplexers) == 0:
             ## Choose the localhost.
-            return None
+            return (None, None)
 
         servers = self.tables.process_table.get_minio_address_list(None)
         minios = [process["muxAddr"] for (zone, process) in servers]

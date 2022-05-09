@@ -28,6 +28,7 @@ def get_nparams_of_fn(fn):
     nparams = len(params)
     if nparams > 0:
         v = sig.parameters.get(params[-1])
+        assert v is not None
         varargsp = (v.kind == v.VAR_POSITIONAL)
     else:
         varargsp = False
@@ -188,12 +189,12 @@ def route_key_order(e):
 ##    return f'"{s}"'
 
 class Command():
-    def __init__(self, adm_conf, traceid):
+    def __init__(self, adm_conf, traceid, args, rest):
         self.adm_conf = adm_conf
         self.zone_adm = ZoneAdm(adm_conf)
         self.traceid = traceid
-        self.args = None
-        self.rest = None
+        self.args = args
+        self.rest = rest
 
     def fn_usage(self):
         progname = os.path.basename(sys.argv[0])
@@ -458,28 +459,18 @@ class Command():
         "flush-routing-table": fn_flush_routing_table,
     }
 
-    def main(self, args, rest):
-        adm = self
-        self.args = args
-        self.rest = rest
-        logger.debug(f"@@@ BODY")
-
-        #no_table_ops = {"dump", "restore", "drop", "resetall", "printall"}
-        #table = rest.pop(0) if args.operation not in no_table_ops else ""
-        #key = f"{args.operation}.{table}"
-        #fn = optbl.get(key)
-
-        fn = Command.optbl.get(args.operation)
+    def execute_command(self):
+        fn = Command.optbl.get(self.args.operation)
 
         if fn is None:
-            raise Exception(f"undefined operation: {args.operation}")
+            raise Exception(f"undefined operation: {self.args.operation}")
 
         (nparams, varargsp) = get_nparams_of_fn(fn)
 
-        if not varargsp and len(rest) != nparams:
-            sys.stderr.write("Missing arguments for command.\n")
-            adm.fn_usage()
-        return fn(self, *rest)
+        if not varargsp and len(self.rest) != nparams:
+            sys.stderr.write("Missing/excessive arguments for command.\n")
+            self.fn_usage()
+        return fn(self, *self.rest)
 
 
 def main():
@@ -513,13 +504,11 @@ def main():
     try:
         logger.debug(f"@@@ MAIN")
         ##zone_adm = ZoneAdm(adm_conf)
-        adm = Command(adm_conf, traceid)
-        adm.main(args, rest)
+        adm = Command(adm_conf, traceid, args, rest)
+        adm.execute_command()
     except Exception as e:
-        logger.debug(f"@@@ {e}")
-        logger.exception(e)
-        sys.stderr.write(f"admin_main: {e}\n")
-        adm.fn_usage()
+        sys.stderr.write(f"Executing admin command failed: {e}\n")
+        ##adm.fn_usage()
         sys.exit(ERROR_EXCEPTION)
 
 

@@ -90,9 +90,12 @@ class Controller():
             return mux_addr
 
         (host, port) = self.scheduler.schedule(zone_id)
-        if host == self.mux_addr:
+        if host is None:
             return None
-        return host_port(host, port)
+        elif host == self.mux_addr:
+            return None
+        else:
+            return host_port(host, port)
 
     def start_minio(self, traceid, zone_id, access_key_id):
         """Starts a MinIO under a manager process.  It waits for a manager to
@@ -109,18 +112,18 @@ class Controller():
         if traceid is not None:
             args.append(f"--traceid={traceid}")
 
+        (outs, errs) = (b"", b"")
         try:
             ## It waits for a manager to close stdout/stderr.
             logger.debug(f"Starting a Manager: cmd={cmd+args}")
             with Popen(cmd + args, stdin=DEVNULL, stdout=PIPE, stderr=PIPE,
                        env=env) as p:
-                (out, err) = p.communicate()
+                (outs, errs) = p.communicate()
                 status = p.wait()
                 assert status == 0
         except Exception as e:
             logger.error(f"Starting a Manager failed: exception={e}")
             logger.exception(e)
-            out = ""
-        if err != "":
-            logger.error(f"Output on stderr from a Manager: {err}")
-        return out
+        if errs != b"":
+            logger.debug(f"Output on stderr from a Manager: {errs}")
+        return outs

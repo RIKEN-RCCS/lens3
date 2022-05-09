@@ -30,7 +30,7 @@ def merge_pool_descriptions(user_id, existing, zone):
     _update_for_key(zone, "accessKeys", existing, False)
     _update_for_key(zone, "directHostnames", existing, False)
     _update_for_key(zone, "expDate", existing, False)
-    _update_for_key(zone, "status", existing, False)
+    _update_for_key(zone, "online_status", existing, False)
 
 
 def compare_access_keys(existing, zone):
@@ -164,8 +164,8 @@ def zone_schema(type_number):
             "accessKeys": {"type": "array", "items": access_key},
             "directHostnames": {"type": "array", "items": {"type": "string"}},
             "expDate": type_number,
-            "status": {"type": "string"},
-            "permission": {"type": "string"},
+            "operation_status": {"type": "string"},
+            "online_status": {"type": "string"},
         },
         "required": [
             "user",
@@ -176,8 +176,8 @@ def zone_schema(type_number):
             "accessKeys",
             "directHostnames",
             "expDate",
-            "status",
-            "permission",
+            "operation_status",
+            "online_status",
         ],
         "additionalProperties": False,
     }
@@ -220,8 +220,8 @@ def check_pool_dict_is_sound(dict, user, adm_conf):
     for bucket in dict.get("buckets", []):  # may be absent
         check_policy(bucket["policy"])
 
-    check_status(dict["status"]) # mandatory
-    check_permission(dict["permission"]) # mandatory
+    check_status(dict["online_status"]) # mandatory
+    check_permission(dict["operation_status"]) # mandatory
     for accessKey in dict.get("accessKeys", []):
         check_policy_name(accessKey["policyName"])
 

@@ -192,7 +192,7 @@ function submit_zone(op) {
                                         function(data) {
                                                 show_message(editor_data.submit_button_name + " zone... error: " + JSON.stringify(data));
                                                 render_jsondata(data)
-                                                editor_data.mode = data["zonelist"][0]["mode"]
+                                                editor_data.mode = data["zonelist"][0]["minio_state"]
                                                 editor_data.submit_button_disabled = false;
                                                 editor_data.submit_button_visible = true;
                                                 throw new Error(JSON.stringify(data));
@@ -201,7 +201,7 @@ function submit_zone(op) {
                         response.json().then(function(data) {
                                 show_message(editor_data.submit_button_name + " zone... done: " + JSON.stringify(data));
                                 render_jsondata(data)
-                                editor_data.mode = data["zonelist"][0]["mode"]
+                                editor_data.mode = data["zonelist"][0]["minio_state"]
                                 // update succeeded. do not re-enable button now.
                         })
                 })
@@ -235,8 +235,8 @@ function pullup_zone() {
         zone["accessKeys"] = [{"policyName": "readwrite"}, {"policyName": "readonly"}, {"policyName": "writeonly"}]; // dummy entry
         zone["directHostnames"] = directHostnames;
         zone["expDate"] = parse_rfc3339(editor_data.expDate);
-        zone["status"] = editor_data.status;
-        // ignore "mode", nor "atime"
+        zone["online_status"] = editor_data.status;
+        // ignore "minio_state", nor "atime"
         return zone;
 }
 
@@ -527,24 +527,25 @@ function zone_to_ul_data(zone) {
         return [
                 {text: {label: "Zone ID", value: zone["zoneID"]}},
                 {text: {label: "Endpoint-URL", value: zone["endpoint_url"]}},
-                {text: {label: "Unix User", value: zone["user"]}},
-                {text: {label: "Unix Group", value: zone["group"]}},
-                {text: {label: "Buckets Directory", value: zone["bucketsDir"]}},
-                {text: {label: "Private Buckets", value: scan_buckets(buckets, "none")}},
-                {text: {label: "Public Buckets", value: scan_buckets(buckets, "public")}},
-                {text: {label: "Upload Only Buckets", value: scan_buckets(buckets, "upload")}},
-                {text: {label: "Download Only Buckets", value: scan_buckets(buckets, "download")}},
-                {text: {label: "Access Key ID (RW)", value: rwkey["accessKeyID"]}},
-                {text: {label: "Secret Access Key", value: rwkey["secretAccessKey"]}},
-                {text: {label: "Access Key ID (RO)", value: rokey["accessKeyID"]}},
-                {text: {label: "Secret Access Key", value: rokey["secretAccessKey"]}},
-                {text: {label: "Access Key ID (WO)", value: wokey["accessKeyID"]}},
-                {text: {label: "Secret Access Key", value: wokey["secretAccessKey"]}},
-                {text: {label: "Direct Hostname", value: zone["directHostnames"].join(' ')}},
-                {text: {label: "Expiration Data", value: format_rfc3339_if_not_zero(zone["expDate"])}},
-                {text: {label: "Status", value: zone["status"]}},
-                {text: {label: "Mode", value: zone["mode"]}},
-                {text: {label: "Last Access Time", value: format_rfc3339_if_not_zero(zone["atime"])}},
+                {text: {label: "Unix user", value: zone["user"]}},
+                {text: {label: "Unix group", value: zone["group"]}},
+                {text: {label: "Buckets directory", value: zone["bucketsDir"]}},
+                {text: {label: "Private buckets", value: scan_buckets(buckets, "none")}},
+                {text: {label: "Public buckets", value: scan_buckets(buckets, "public")}},
+                {text: {label: "Public download buckets", value: scan_buckets(buckets, "download")}},
+                {text: {label: "Public upload buckets", value: scan_buckets(buckets, "upload")}},
+                {text: {label: "Access key ID (RW)", value: rwkey["accessKeyID"]}},
+                {text: {label: "Secret access key", value: rwkey["secretAccessKey"]}},
+                {text: {label: "Access key ID (RO)", value: rokey["accessKeyID"]}},
+                {text: {label: "Secret access key", value: rokey["secretAccessKey"]}},
+                {text: {label: "Access key ID (WO)", value: wokey["accessKeyID"]}},
+                {text: {label: "Secret access key", value: wokey["secretAccessKey"]}},
+                {text: {label: "Direct hostname", value: zone["directHostnames"].join(' ')}},
+                {text: {label: "Expiration date", value: format_rfc3339_if_not_zero(zone["expDate"])}},
+                {text: {label: "Permission", value: zone["operation_status"]}},
+                {text: {label: "Status", value: zone["online_status"]}},
+                {text: {label: "MinIO state", value: zone["minio_state"]}},
+                {text: {label: "Last access time", value: format_rfc3339_if_not_zero(zone["atime"])}},
         ];
 }
 
@@ -577,8 +578,8 @@ function set_zone_to_editor_body(zone) {
 
         editor_data.directHostnames = zone["directHostnames"].join(' ');
         editor_data.expDate = format_rfc3339_if_not_zero(zone["expDate"]);
-        editor_data.status = zone["status"];
-        editor_data.mode = zone["mode"];
+        editor_data.status = zone["online_status"];
+        editor_data.mode = zone["minio_state"];
         editor_data.atime = format_rfc3339_if_not_zero(zone["atime"]);
         editor_data.groups = zone["groups"];
         editor_data.directHostnameDomains = zone["directHostnameDomains"];

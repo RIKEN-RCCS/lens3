@@ -65,8 +65,8 @@ def _check_change_secret_keys(zone):
 def _check_zone_keys(zone):
     given_keys = set(zone.keys())
     mandatory_keys = {"group", "bucketsDir", "buckets", "accessKeys",
-                      "directHostnames", "expDate", "status"}
-    allowed_keys = mandatory_keys.union({"user", "rootSecret", "permission"})
+                      "directHostnames", "expDate", "online_status"}
+    allowed_keys = mandatory_keys.union({"user", "rootSecret", "operation_status"})
     if not mandatory_keys.issubset(given_keys):
         raise Exception(f"upsert_zone: invalid key set: missing {mandatory_keys - given_keys}")
     if not given_keys.issubset(allowed_keys):
@@ -199,10 +199,10 @@ class ZoneAdm():
                 and check_permission(user_id, allow_deny_rules) == "allowed"
                 ) else "denied"
 
-            if zone["permission"] != "denied" and not permission:
+            if zone["operation_status"] != "denied" and not permission:
                 disable_zone(traceid, user_id, z_id)
                 fixed.append(z_id)
-                logger.debug(f"permission dropped: {z_id} {user_id} {zone['permission']} => {permission}")
+                logger.debug(f"permission dropped: {z_id} {user_id} {zone['operation_status']} => {permission}")
         return fixed
 
     def store_allow_deny_rules(self, allow_deny_rules):  # ADMIN
@@ -318,7 +318,7 @@ class ZoneAdm():
 
     def delete_zone(self, traceid, user_id, zoneID):  # ADMIN, API
         logger.debug(f"+++ {user_id} {zoneID}")
-        zone = {"permission": "denied"}
+        zone = {"operation_status": "denied"}
         how = "delete_zone"
         return self._do_delete_zone(how, traceid, user_id, zoneID, zone)
 
@@ -1022,10 +1022,10 @@ class ZoneAdm():
         if permission is None:
             ## how not in {"enable_zone", "disable_zone"}
             allow_deny_rules = self.tables.storage_table.get_allow_deny_rules()
-            zone["permission"] = check_permission(user_id, allow_deny_rules)
+            zone["operation_status"] = check_permission(user_id, allow_deny_rules)
         else:
             ## how in {"enable_zone", "disable_zone"}
-            zone["permission"] = permission
+            zone["operation_status"] = permission
 
         #logger.debug(f"@@@ zone = {zone}")
 
@@ -1230,6 +1230,8 @@ class ZoneAdm():
         ui = self.fetch_unixUserInfo(user_id)
         groups = ui.get("groups")
 
+        ## Excluding: "rootSecret".
+
         return {
             "user": user_id,
             "group": groups[0],
@@ -1241,7 +1243,7 @@ class ZoneAdm():
                    {"policyName": "writeonly"}],
             "directHostnames": [],
             "expDate": self.exp_date(),
-            "status": "online",
+            "online_status": "online",
             "groups": groups,
             "atime": "0",
             "directHostnameDomains": self.direct_hostname_domains,
@@ -1257,7 +1259,7 @@ class ZoneAdm():
             accessKey["secretAccessKey"] = decrypt_secret(accessKey["secretAccessKey"])
 
     def _pullup_mode(self, zoneID, zone):
-        zone["mode"] = self.fetch_current_mode(zoneID)
+        zone["minio_state"] = self.fetch_current_mode(zoneID)
 
     def _pullup_atime(self, zoneID, zone):
         # we do not copy atime form routing table here.

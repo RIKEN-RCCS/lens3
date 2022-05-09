@@ -123,7 +123,7 @@ def _restore_zone_add(zone_adm, traceid, b):
     zone_id = b.get("zoneID")
     logger.debug(f"@@@ >> Insert / Update {user_id} {zone_id}")
     b.pop("zoneID")
-    b.pop("mode")
+    b.pop("minio_state")
     zone_adm.restore_pool(traceid, user_id, zone_id, b,
                           include_atime=True, initialize=False)
 
@@ -143,9 +143,9 @@ def pool_key_order(e):
         "buckets",
         "directHostnames",
         "expDate",
-        "status",
-        "permission",
-        "mode",
+        "online_status",
+        "operation_status",
+        "minio_state",
         "atime",
         "accessKeysPtr",
         "directHostnamePtr",

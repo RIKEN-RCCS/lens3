@@ -96,7 +96,7 @@ class StorageTable(TableCommon):
     def set_permission(self, zoneID, permission):
         # logger.debug(f"+++ {zoneID} {permission}")
         key = f"{self.zoneIDPrefix}{zoneID}"
-        return self.dbase.hset(key, "permission", permission, self.structured)
+        return self.dbase.hset(key, "operation_status", permission, self.structured)
 
     def set_atime(self, zoneID, atime):
         # logger.debug(f"+++ {zoneID} {atime}")

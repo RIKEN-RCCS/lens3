@@ -1719,31 +1719,52 @@ A bucket-pool has another state `status`, but it is always "online".
   * "online"
   * "offline"
 
-### Redis database keys
+### Redis database keys (prefixes)
 
-* storage table
-  * ac:pool -> access-time
-  * ar:key -> secret
-  * mo:pool -> mode
+#### storage-table
+
+* storage-table
+  * ac:pool-id -> timestamp
+  * ar:key-id -> pool-id
+  * mo:pool-id -> pool-state
   * pr:: -> list of permissions of users (json)
-  * ru:pool -> pool data (htable)
-  * uu:user -> user info (json)
+  * ru:pool-id -> pool-description (htable)
+  * uu:user -> user-info (json)
+  * dr:host -> pool-id
+  * lk: -> (for locking the whole table)
+  * lk:pool-id -> (for locking a ru:pool-id)
 
-* process table
-  * mx:host -> route description (htable)
-    * a route description includes:
-        * an host+port of a mux (json)
-        * start-time
-        * last-interrupted-time?
-  * ma:pool -> process description (htable)
-     * a process description includes:
-        * an host of a mux,
-        * an host+port of a MinIO
-        * a pid of a manager
-        * a pid of a MinIO
+#### process-table
+
+* process-table
+  * mx:host -> route-description (htable)
+  * ma:pool-id -> process-description (htable)
   * lk:?? -> (lock?)
 
-* route table
-  * aa:key -> route description (htable)
+A route-description includes:
+* an host+port of a mux (json)
+* start-time
+* last-interrupted-time?
+
+A process-description includes:
+* an host of a mux,
+* an host+port of a MinIO
+* a pid of a manager
+* a pid of a MinIO
+
+#### routing-table
+
+* routing-table
+  * aa:key -> route-description (htable)
   * at:address -> atime
 
+### Bucket policy
+
+Public r/w policy is given to a bucket by Lens3-UI.  Lens3-UI invokes
+the mc command, one of the following.
+
+```
+mc policy set upload alias/bucket
+mc policy set download alias/bucket
+mc policy set public alias/bucket
+```

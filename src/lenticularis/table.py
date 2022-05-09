@@ -5,7 +5,6 @@
 
 import json
 from lenticularis.utility import logger
-from lenticularis.utility import safe_json_loads
 from lenticularis.dbase import DBase
 
 
@@ -30,7 +29,7 @@ class StorageTable(TableCommon):
     modePrefix = "mo:"
     allowDenyRuleKey = "pr::"
     unixUserPrefix = "uu:"
-    hashes = {zoneIDPrefix}
+    hashes_ = {zoneIDPrefix}
     structured = {"buckets", "accessKeys", "directHostnames"}
 
     def ins_zone(self, zoneID, dict):
@@ -139,7 +138,7 @@ class StorageTable(TableCommon):
         # logger.debug(f"@@@ v = {v}")
         if not v:
             return []
-        return safe_json_loads(v, parse_int=str)
+        return json.loads(v, parse_int=None)
 
     def ins_unixUserInfo(self, id, uinfo):
         # logger.debug(f"+++ {id} {uinfo}")
@@ -149,7 +148,8 @@ class StorageTable(TableCommon):
     def get_unixUserInfo(self, id):
         # logger.debug(f"+++ {id}")
         key = f"{self.unixUserPrefix}{id}"
-        return safe_json_loads(self.dbase.get(key), parse_int=str)
+        v = self.dbase.get(key)
+        return json.loads(v, parse_int=None) if v is not None else None
 
     def del_unixUserInfo(self, id):
         # logger.debug(f"+++ {id}")
@@ -183,7 +183,7 @@ class ProcessTable(TableCommon):
     minioAddrPrefix = "ma:"
     muxPrefix = "mx:"
     lock_key = "lk:"
-    hashes = {minioAddrPrefix, muxPrefix}
+    hashes_ = {minioAddrPrefix, muxPrefix}
     structured = {"mux_conf"}
 
     def ins_minio_address(self, zoneID, minioAddr, timeout):
@@ -277,7 +277,7 @@ class RoutingTable(TableCommon):
     access_key_id_prefix = "aa:"
     directHostnamePrefix = "da:"
     atimePrefix = "at:"
-    hashes = {}
+    hashes_ = {}
     structured = {}  # not used
 
     def ins_route(self, minioAddr, route, timeout):

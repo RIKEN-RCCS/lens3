@@ -8,14 +8,13 @@ import json
 from redis import ConnectionError
 from redis import Redis
 from lenticularis.utility import logger
-from lenticularis.utility import safe_json_loads
 
 
 def _wait_for_redis(r):
     while True:
         try:
             r.ping()
-            logger.debug("Redis is ready")
+            logger.debug("Redis is ready.")
             return
         except ConnectionError as e:
             logger.debug("Redis is not ready (sleeping).")
@@ -38,10 +37,16 @@ class DBase():
     def hexists(self, name, key):
         return self.r.hexists(name, key)
 
-    def hset_map(self, name, mapping, structured):
-        if structured:
-            mapping = marshal(mapping.copy(), structured)
-        self.r.hset(name, mapping=mapping)
+    def hset_map(self, name, dict, structured):
+        dict = _marshal(dict, structured)
+        self.r.hset(name, mapping=dict)
+
+    def hget_map(self, name, structured, default=None):
+        val = self.r.hgetall(name)
+        if val is None:
+            return default
+        else:
+            return _unmarshal(val, structured)
 
     def hset(self, name, key, val, structured):
         if key in structured:
@@ -50,29 +55,34 @@ class DBase():
 
     def hget(self, name, key, structured, default=None):
         val = self.r.hget(name, key)
-        if val and key in structured:
-            val = safe_json_loads(val, parse_int=str)
-        return val if val is not None else default
-
-    def hget_map(self, name, structured, default=None):
-        val = self.r.hgetall(name)
-        if structured:
-            return unmarshal(val, structured)
-        return val if val is not None else default
+        if val is None:
+            return default
+        elif key in structured:
+            return json.loads(val, parse_int=None)
+        else:
+            return val
 
     def delete(self, name):
         self.r.delete(name)
 
-def marshal(dict, keys):
-    for key in keys:
-        val = dict.get(key)
-        if val is not None:
-            dict[key] = json.dumps(val)
-    return dict
+def _marshal(dict, keys):
+    if keys is None:
+        return dict
+    else:
+        dict = dict.copy()
+        for key in keys:
+            val = dict.get(key)
+            if val is not None:
+                dict[key] = json.dumps(val)
+        return dict
 
-def unmarshal(dict, keys):
-    for key in keys:
-        val = dict.get(key)
-        if val is not None:
-            dict[key] = safe_json_loads(val, parse_int=str)
-    return dict
+def _unmarshal(dict, keys):
+    ### It destructively modifies a dict.
+    if keys is None:
+        return dict
+    else:
+        for key in keys:
+            val = dict.get(key)
+            if val is not None:
+                dict[key] = json.loads(val, parse_int=None)
+        return dict

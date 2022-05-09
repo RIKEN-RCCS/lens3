@@ -15,12 +15,18 @@ operation.  Adm (admin Web-UI) accesses to Mux to manage MinIO.
 
 ## Notes
 
-It works with:
+### Bucket naming
 
-* Path-style bucket naming.  The first part of a path in a URL is
-  considered as a bucket name.
+Lens3 works with the path-style bucket naming.  The first part of a
+path in a URL is considered as a bucket name.
 
-It does not support:
+### Bucket policy
+
+Buckets can be public r/w and private r/w.  The public r/w policy is
+given by Lens3 UI.  The private r/w policy is determied by the
+access-keys associated to the bucket-pool.
+
+### Unsupported
 
 * notifications
 * STS

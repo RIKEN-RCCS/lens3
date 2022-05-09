@@ -280,7 +280,7 @@ def make_clean_env(oenv):
     return {key: val for key, val in oenv.items() if key in keys}
 
 
-def outer_join(left, lkey, right, rkey, fn):
+def _outer_join(left, lkey, right, rkey, fn):
     left = sorted(left, key=lkey)
     right = sorted(right, key=rkey)
 
@@ -328,8 +328,10 @@ def outer_join(left, lkey, right, rkey, fn):
 
 
 def outer_join_list(left, lkeyfn, right, rkeyfn):
-    """Takes an intersection and residues, and returns three lists of
-    lefts-pairs-rights.  Duplicate keys are consumed one by one."""
+    """Takes an intersection and residues, and returns a three-tuple of
+    lefts-pairs-rights.  It does not expect duplicate keys, but such
+    keys are consumed one by one.
+    """
 
     def _comp(l0, r0):
         lk = lkeyfn(l0)
@@ -469,7 +471,7 @@ def host_port(host, port):
         return f"{host}:{port}"
 
 
-def safe_json_loads(s, parse_int=None, default=None):
+def _safe_json_loads(s, parse_int=None, default=None):
     if s is None:
         return default
     return json.loads(s, parse_int=None)

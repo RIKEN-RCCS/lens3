@@ -1,11 +1,12 @@
 # Copyright (c) 2022 RIKEN R-CCS.
 # SPDX-License-Identifier: BSD-2-Clause
 
-from lenticularis.utility import logger
-from lenticularis.utility import safe_json_loads, random_str
 import os
 import sys
+import json
 from subprocess import Popen, PIPE
+from lenticularis.utility import logger
+from lenticularis.utility import random_str
 
 
 class Mc():
@@ -135,7 +136,7 @@ class Mc():
                 logger.debug(f"@@@ WAIT: status, out, err = {status}, {out}, {err}")
                 try:
                     s = out.split(b'\n')
-                    j = [safe_json_loads(e, parse_int=str) for e in s if e != b""]
+                    j = [json.loads(e, parse_int=None) for e in s if e != b""]
                     return mc_reduce_error(j)
                 except Exception as e:
                     logger.debug(f"@@@ EXCEPTION: {e}")

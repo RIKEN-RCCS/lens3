@@ -7,8 +7,8 @@ import argparse
 import csv
 import inspect
 import io
-import json
 import os
+import json
 #import threading
 import sys
 from lenticularis.zoneadm import ZoneAdm
@@ -19,7 +19,6 @@ from lenticularis.utility import logger, openlog
 from lenticularis.utility import objdump
 from lenticularis.utility import outer_join_list
 from lenticularis.utility import random_str
-from lenticularis.utility import safe_json_loads
 from lenticularis.utility import tracing
 
 
@@ -293,7 +292,7 @@ class Command():
             sys.stderr.write(f"{jsonfile}: {e}\n")
             logger.exception(e)
             return
-        zone = safe_json_loads(r, parse_int=str)
+        zone = json.loads(r, parse_int=None)
         user_id = zone["user"]
         self.zone_adm.restore_pool(traceid, user_id, zone_id, zone,
                                    include_atime=False, initialize=True)
@@ -348,7 +347,7 @@ class Command():
         logger.debug(f"@@@ INSERT ZONE")
         with open(dump_file) as f:
             dump_data = f.read()
-        j = safe_json_loads(dump_data, parse_int=str)
+        j = json.loads(dump_data, parse_int=None)
         rules = j["rules"]
         user_info = j["users"]
         zone_list = j["zones"]

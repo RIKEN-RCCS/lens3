@@ -8,6 +8,7 @@ import os
 import sys
 #import threading
 import time
+import json
 from pydantic import BaseModel
 from fastapi.staticfiles import StaticFiles
 from fastapi import Body, Depends, FastAPI, Request, status
@@ -22,7 +23,6 @@ from lenticularis.utility import ERROR_READCONF
 from lenticularis.utility import accesslog
 from lenticularis.utility import logger, openlog
 from lenticularis.utility import normalize_address
-from lenticularis.utility import safe_json_loads
 from lenticularis.utility import tracing
 
 
@@ -261,7 +261,7 @@ async def get_request_body(request):
     body = b""
     async for chunk in request.stream():
         body += chunk
-    return safe_json_loads(body, parse_int=str)
+    return json.loads(body, parse_int=None)
 
 
 @app.middleware("http")

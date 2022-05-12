@@ -3,6 +3,7 @@
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
+import time
 import json
 from lenticularis.utility import logger
 from lenticularis.dbase import DBase
@@ -277,10 +278,44 @@ class RoutingTable(TableCommon):
     access_key_id_prefix = "aa:"
     directHostnamePrefix = "da:"
     atimePrefix = "at:"
+    _endpoint_prefix = "ep:"
+    _timestamp_prefix = "ts:"
+    _bucket_prefix = "bk:"
     hashes_ = {}
-    structured = {}  # not used
+    structured = {}
 
-    def ins_route(self, minioAddr, route, timeout):
+    def set_route(self, pool_id, ep, timeout):
+        key = f"{self._endpoint_prefix}{pool_id}"
+        self.dbase.set(key, ep)
+        ##self.dbase.r.expire(key, timeout)
+        return None
+
+    def get_route(self, pool_id):
+        key = f"{self._endpoint_prefix}{pool_id}"
+        return self.dbase.get(key)
+
+    def delete_route(self, pool_id):
+        key = f"{self._endpoint_prefix}{pool_id}"
+        self.dbase.delete(key)
+        return None
+
+    def set_route_expiry(self, pool_id, timeout):
+        key = f"{self._timestamp_prefix}{pool_id}"
+        ts = int(time.time())
+        self.dbase.set(key, f"{ts}")
+        self.dbase.r.expire(key, timeout)
+        return None
+
+    def get_route_expiry(self, pool_id):
+        key = f"{self._timestamp_prefix}{pool_id}"
+        return self.dbase.get(key)
+
+    def delete_route_expiry(self, pool_id):
+        key = f"{self._timestamp_prefix}{pool_id}"
+        return self.dbase.delete(key)
+
+
+    def ins_route_(self, minioAddr, route, timeout):
         # logger.debug(f"+++ {minioAddr} {route} {timeout}")
         for a in route.get("accessKeys"):
             key = f"{self.access_key_id_prefix}{a}"
@@ -289,10 +324,10 @@ class RoutingTable(TableCommon):
             key = f"{self.directHostnamePrefix}{h}"
             self.dbase.set(key, minioAddr)
         if route:
-            self.set_route_expire(route, timeout)
+            self.set_route_expire_(route, timeout)
         return None
 
-    def del_route(self, route):
+    def del_route_(self, route):
         # logger.debug(f"+++")
         for a in route.get("accessKeys"):
             key = f"{self.access_key_id_prefix}{a}"
@@ -302,7 +337,7 @@ class RoutingTable(TableCommon):
             self.dbase.delete(key)
         return None
 
-    def set_route_expire(self, route, timeout):
+    def set_route_expire_(self, route, timeout):
         # logger.debug(f"+++ {route} {timeout}")
         for a in route.get("accessKeys"):
             key = f"{self.access_key_id_prefix}{a}"
@@ -312,24 +347,26 @@ class RoutingTable(TableCommon):
             self.dbase.r.expire(key, timeout)
         return None
 
-    def get_route_by_access_key(self, access_key_id):
+    def get_route_by_access_key_(self, access_key_id):
         # logger.debug(f"+++ {access_key_id}")
         key = f"{self.access_key_id_prefix}{access_key_id}"
         return self.dbase.get(key)
 
-    def get_route_by_direct_hostname(self, directHostname):
+    def get_route_by_direct_hostname_(self, directHostname):
         # logger.debug(f"+++ {directHostname}")
         key = f"{self.directHostnamePrefix}{directHostname}"
         return self.dbase.get(key)
 
-    def set_atime_expire(self, addr, timeout):
+
+    def set_atime_expire_(self, addr, timeout):
         # logger.debug(f"+++ {addr} {timeout}")
         key = f"{self.atimePrefix}{addr}"
         return self.dbase.r.expire(key, timeout)
 
-    def set_atime_by_addr(self, addr, atime, default_ttl):  # addr: minioAddr or muxAddr
-        # logger.debug(f"+++ {addr} {atime} {default_ttl}")
-        # NOTE: keepttl is not availabe redis<6.0.  we dicided not to use keepttl here.
+    def set_atime_by_addr_(self, addr, atime, default_ttl):
+        ## addr is an endpoint of a minio.
+        ## NOTE: keepttl is not used, because it is available in
+        ## Redis-6.0 and later.
         key = f"{self.atimePrefix}{addr}"
         ttl = self.dbase.r.ttl(key)
         retval = self.dbase.set(key, atime)
@@ -339,23 +376,31 @@ class RoutingTable(TableCommon):
             self.dbase.r.expire(key, default_ttl)
         return retval
 
-    def get_atime_by_addr(self, addr):
+    def get_atime_by_addr_(self, addr):
         # logger.debug(f"+++ {addr}")
         key = f"{self.atimePrefix}{addr}"
         return self.dbase.get(key)
 
-    def del_atime_by_addr(self, addr):
+    def del_atime_by_addr_(self, addr):
         # logger.debug(f"+++ {addr}")
         key = f"{self.atimePrefix}{addr}"
         return self.dbase.delete(key)
 
-    def get_route_list(self):
-        access_key_route = _scan_strip(self.dbase.r, self.access_key_id_prefix, None, include_value="get")
-        direct_host_route = _scan_strip(self.dbase.r, self.directHostnamePrefix, None, include_value="get")
-        atime = _scan_strip(self.dbase.r, self.atimePrefix, None, include_value="get")
-        return (access_key_route, direct_host_route, atime)
 
-    def clear_all(self, everything):
+    def get_route_list(self):
+        return _scan_strip(self.dbase.r, self._endpoint_prefix, None, include_value="get")
+        ##access_key_route = _scan_strip(self.dbase.r, self.access_key_id_prefix, None, include_value="get")
+        ##direct_host_route = _scan_strip(self.dbase.r, self.directHostnamePrefix, None, include_value="get")
+        ##atime = _scan_strip(self.dbase.r, self.atimePrefix, None, include_value="get")
+        ##return (access_key_route, direct_host_route, atime)
+
+    def clear_routing(self, everything):
+        delete_all(self.dbase.r, self._endpoint_prefix)
+        delete_all(self.dbase.r, self._timestamp_prefix)
+        delete_all(self.dbase.r, self._bucket_prefix)
+        delete_all(self.dbase.r, self.atimePrefix)
+
+    def clear_all_(self, everything):
         delete_all(self.dbase.r, self.access_key_id_prefix)
         delete_all(self.dbase.r, self.directHostnamePrefix)
         delete_all(self.dbase.r, self.atimePrefix)

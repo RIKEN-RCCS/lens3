@@ -8,7 +8,7 @@ import string
 import sys
 import time
 from lenticularis.lockdb import LockDB
-from lenticularis.table import get_tables, zone_to_route
+from lenticularis.table import get_tables
 from lenticularis.utility import decrypt_secret, encrypt_secret
 from lenticularis.utility import gen_access_key_id, gen_secret_access_key
 from lenticularis.utility import logger
@@ -342,7 +342,7 @@ class ZoneAdm():
     def reset_database(self, everything=False):  # ADMIN
         self.tables.storage_table.clear_all(everything=everything)
         self.tables.process_table.clear_all(everything=everything)
-        self.tables.routing_table.clear_all(everything=everything)
+        self.tables.routing_table.clear_routing(everything=everything)
 
     def print_database(self):  # ADMIN
         self.tables.storage_table.printall()
@@ -422,11 +422,11 @@ class ZoneAdm():
         logger.debug(f"@@@ SEND DECOY STATUS {status}")
         return status
 
-    def fetch_route_list(self):  # ADMIN
-        return self.tables.routing_table.get_route_list()
+    ##def fetch_route_list(self):  # ADMIN
+    ##    return self.tables.routing_table.get_route_list()
 
     def flush_routing_table(self, everything=False):  # ADMIN
-        self.tables.routing_table.clear_all(everything=everything)
+        self.tables.routing_table.clear_routing(everything=everything)
 
 
     def _lock_pool_entry(self, lock, pool_id):
@@ -1088,14 +1088,10 @@ class ZoneAdm():
 
 
     def _clear_route(self, zone_id, zone):
-        logger.debug(f"+++")
         # we need to flush the routing table entry of zone_id before,
         # to make the controller checks minio_address_table and zone.
-
-        route = zone_to_route(zone)
-        logger.debug(f"@@@ {zone_id} {route}")
-
-        self.tables.routing_table.del_route(route)
+        ##route = zone_to_route(zone)
+        self.tables.routing_table.delete_route(zone_id)
 
     def _lock_and_store_zone(self, user_id, zone_id, zone, need_conflict_check, need_uniquify):
         lock = LockDB(self.tables.storage_table)

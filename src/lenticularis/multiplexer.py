@@ -94,7 +94,14 @@ class Multiplexer():
 
 
     def __call__(self, environ, start_response):
-        return self.process_request(environ, start_response)
+        try:
+            return self.process_request(environ, start_response)
+        except Exception as e:
+            port = environ.get("SERVER_PORT")
+            logger.error(f"Unhandled exception in MUX(port={port}) processing:"
+                         f" exception={e}")
+        start_response("500", [])
+        return []
 
 
     def process_request(self, environ, start_response):
@@ -152,13 +159,17 @@ class Multiplexer():
         if content_length:
             q_headers["CONTENT-LENGTH"] = content_length
 
-        (dest_addr, zone_id) = self.get_dest_addr(traceid, q_headers)
+        logger.debug(f"(MUX)#1")
+
+        (dest_addr, zone_id) = self._get_dest_addr(traceid, q_headers)
 
         ## The pair (dest_addr, zone_id) is:
         ## - (string, string) => success
         ## - (string, None)   => never
         ## - (int, None)      => failure in resolving pool-id
         ## - (int, string)    => failure in starting MinIO
+
+        logger.debug(f"(MUX)#2")
 
         if isinstance(dest_addr, int):
             ## we are here becasuse
@@ -169,6 +180,7 @@ class Multiplexer():
             user_id = self._zone_to_user(zone_id) if zone_id else None
             user_id = user_id if user_id else _fake_user_id(access_key_id)
             accesslog(status, client_addr, user_id, request_method, request_url)
+            logger.debug(f"(MUX) FAILED")
             start_response(status, [])
             return []
 
@@ -218,7 +230,8 @@ class Multiplexer():
             initial_idle_duration = self.watch_interval + jitter + self.mc_info_timelimit
             atime_timeout = initial_idle_duration + self.refresh_margin
             atime = f"{int(time.time())}"
-            self.tables.routing_table.set_atime_by_addr(dest_addr, atime, atime_timeout)
+            self.tables.routing_table.set_atime_by_addr_(dest_addr, atime, atime_timeout)
+            self.tables.routing_table.set_route_expiry(zone_id, atime_timeout)
 
         user_id = self._zone_to_user(zone_id)
 
@@ -228,6 +241,7 @@ class Multiplexer():
             content_length_upstream=content_length,
             content_length_downstream=content_length_downstream)
 
+        logger.debug(f"(MUX) SUCCESS")
         start_response(status, r_headers)
         return respiter
 
@@ -268,7 +282,7 @@ class Multiplexer():
         return True
 
 
-    def get_dest_addr(self, traceid, headers):
+    def _get_dest_addr(self, traceid, headers):
         ## (It drops a host if it is attached by the facade).
         ## (A host may include a port, a facade may not).
 
@@ -286,20 +300,23 @@ class Multiplexer():
         host = None
         if host:
             access_key_id = None
-            r = self.tables.routing_table.get_route_by_direct_hostname(host)
+            r = self.tables.routing_table.get_route_by_direct_hostname_(host)
             zone_id = self.tables.storage_table.get_zoneID_by_directHostname(host)
+            r = self.tables.routing_table.get_route(zone_id)
         else:
             auth = headers.get("AUTHORIZATION")
             access_key_id = self.get_access_key_id(auth)
-            r = self.tables.routing_table.get_route_by_access_key(access_key_id)
+            r = self.tables.routing_table.get_route_by_access_key_(access_key_id)
             zone_id = self.tables.storage_table.get_pool_by_access_key(access_key_id)
-            assert(zone_id is not None)
+            r = self.tables.routing_table.get_route(zone_id)
 
-        if r:
-            ## A route to minio found.
+        if r is not None:
+            ## A route to minio found if r != None.
             return (r, zone_id)
-
-        return self.controller.route_request(traceid, host, access_key_id)
+        else:
+            ## A route to minio not found.
+            (r, zone_id) = self.controller.route_request(traceid, host, access_key_id)
+            return (r, zone_id)
 
 
     def get_access_key_id(self, authorization):

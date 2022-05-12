@@ -1,17 +1,24 @@
 # Configuration of services in Lenticluaris-S3
-----
 
+## Configuration
 
 ```
 reverse-proxy <+-->︎ Mux <+--> MinIO
                |         +--> MinIO
                |         +--> MinIO
-               +--> Adm (<---> Mux)
-Redis
+               +--> Adm
+                    Redis
 ```
 
 A reverse-proxy is not a part of Lens3 but it is required for
-operation.  Adm (admin Web-UI) accesses to Mux to manage MinIO.
+operation.  Mux is a multiplexer and Adm is the administration Web-UI.
+Mux's can be multiple instances in a load-balanced configuration.  Adm
+may access Mux to start a MinIO.  Also, Mux's mutually access each
+other to start a MinIO in multiple Mux configurations.
+
+Mux is in charge of starting a MinIO process (via class Controller).
+Mux starts a Manager process as a daemon, and then, a Manager starts a
+MinIO process and waits until a MinIO process exits.
 
 ## Notes
 
@@ -26,7 +33,8 @@ Buckets can be public r/w and private r/w.  The public r/w policy is
 given by Lens3 UI.  The private r/w policy is determied by the
 access-keys associated to the bucket-pool.
 
-### Unsupported
+### Limitations or unsupported
 
-* notifications
-* STS
+* Coarse authentication: access-keys are assigned to a bucket-pool
+* No STS support
+* No event notifications support

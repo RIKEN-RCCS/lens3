@@ -228,9 +228,9 @@ class Command():
             # fn_drop_zone
             f"{progname} drop-zone\n"
             # fn_reset_database
-            f"{progname} reset-all\n"
+            f"{progname} reset-db\n"
             # fn_print_database
-            f"{progname} print-all\n"
+            f"{progname} print-db\n"
 
             # fn_show_multiplexer
             f"{progname} show-multiplexer\n"
@@ -247,9 +247,9 @@ class Command():
             f"{progname} throw-decoy Zone-ID\n"
 
             # fn_show_routing_table
-            f"{progname} show-routing-table\n"
+            f"{progname} show-routing\n"
             # fn_flush_routing_table
-            f"{progname} flush-routing-table\n"
+            f"{progname} clear-routing\n"
         )
         sys.exit(ERROR_ARGUMENT)
 
@@ -402,26 +402,30 @@ class Command():
         self.zone_adm.check_mux_access_for_zone(traceid, zone_id, force=True)
 
     def fn_show_routing_table(self):
-        (akey_list, host_list, atime_list) = self.zone_adm.fetch_route_list()
-        akey_list = [(v, e) for (e, v) in akey_list]
-        host_list = [(v, e) for (e, v) in host_list]
-        atime_list = list(atime_list)
-        servers = [e for (e, v) in akey_list] + [e for (e, v) in host_list] + [e for (e, v) in atime_list]
-        servers = sorted(list(set(servers)))
-        logger.debug(f"HOST_LIST = {host_list}")
-        logger.debug(f"SERVERS = {servers}")
+        pairs = self.zone_adm.tables.routing_table.get_route_list()
+        print_json_plain("routing table", pairs, self.args.format, order=route_key_order)
 
-        def collect_routes_of_server(server):
-            accessKeys = [akey for (srv, akey) in akey_list if srv == server]
-            hosts = [host for (srv, host) in host_list if srv == server]
-            atime = next((atm for (srv, atm) in atime_list if srv == server), None)
-            routes = {"accessKey": accessKeys, "host": hosts, "atime": atime}
-            if self.args.format not in {"json"}:
-                fix_date_format(routes, ["atime"])
-            return {server: routes}
-
-        outs = [collect_routes_of_server(server) for server in servers]
-        print_json_plain("routing table", outs, self.args.format, order=route_key_order)
+    ##def fn_show_routing_table(self):
+    ##    (akey_list, host_list, atime_list) = self.zone_adm.fetch_route_list()
+    ##    akey_list = [(v, e) for (e, v) in akey_list]
+    ##    host_list = [(v, e) for (e, v) in host_list]
+    ##    atime_list = list(atime_list)
+    ##    servers = [e for (e, v) in akey_list] + [e for (e, v) in host_list] + [e for (e, v) in atime_list]
+    ##    servers = sorted(list(set(servers)))
+    ##    logger.debug(f"HOST_LIST = {host_list}")
+    ##    logger.debug(f"SERVERS = {servers}")
+    ##
+    ##    def collect_routes_of_server(server):
+    ##        accessKeys = [akey for (srv, akey) in akey_list if srv == server]
+    ##        hosts = [host for (srv, host) in host_list if srv == server]
+    ##        atime = next((atm for (srv, atm) in atime_list if srv == server), None)
+    ##        routes = {"accessKey": accessKeys, "host": hosts, "atime": atime}
+    ##        if self.args.format not in {"json"}:
+    ##            fix_date_format(routes, ["atime"])
+    ##        return {server: routes}
+    ##
+    ##    outs = [collect_routes_of_server(server) for server in servers]
+    ##    print_json_plain("routing table", outs, self.args.format, order=route_key_order)
 
     def fn_flush_routing_table(self):
         everything = self.args.everything
@@ -455,8 +459,8 @@ class Command():
 
         "throw-decoy": fn_throw_decoy,
 
-        "show-routing-table": fn_show_routing_table,
-        "flush-routing-table": fn_flush_routing_table,
+        "show-routing": fn_show_routing_table,
+        "clear-routing": fn_flush_routing_table,
     }
 
     def execute_command(self):

@@ -51,32 +51,29 @@ class Controller():
 
         minio_server = self._choose_minio_server(zone_id)
 
-        logger.debug(f"@@@ minio_server = {minio_server}")
-
-        if minio_server:  # run MinIO on another host
+        if minio_server:
+            ## Run MinIO on another host.
             logger.debug(f"@@@ start_minio on {minio_server}")
             return (minio_server, zone_id)
 
-        # run MinIO on localhost
-        logger.debug("@@@ start_minio on localhost")
+        ## Run MinIO on the localhost.
+
         r = self.start_minio(traceid, zone_id, access_key_id)
-        logger.debug(f"@@@ start_minio => {r}")
 
-        if host:
-            r = self.tables.routing_table.get_route_by_direct_hostname(host)
-        elif access_key_id:
-            r = self.tables.routing_table.get_route_by_access_key(access_key_id)
-        else:
-            raise Exception("SHOULD NOT HAPPEN: Host or access_key_id should be given here")
+        ##if host:
+        ##    r = self.tables.routing_table.get_route_by_direct_hostname_(host)
+        ##elif access_key_id:
+        ##    r = self.tables.routing_table.get_route_by_access_key_(access_key_id)
+        ##else:
+        ##    raise Exception("SHOULD NOT HAPPEN: Host or access_key_id should be given here")
 
-        logger.debug(f"@@@ r = {r}")
+        r = self.tables.routing_table.get_route(zone_id)
 
         if r:
-            logger.debug(f"@@@ SUCCESS: Route = {r}")
             return (r, zone_id)
+        else:
+            return (404, zone_id)
 
-        # logger.debug("@@@ 404 (HARMLESS): reached end of the procedure")
-        return (404, zone_id)
 
     def _choose_minio_server(self, zone_id):
         """Chooses a host to run a MinIO.  It returns None to mean the

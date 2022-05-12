@@ -1,7 +1,7 @@
 """A sentinel process for a minio process.  It is started by a
-controller as a daemon (and exits immediately), and then it informs
-the caller about a successful start-up of a minio process by a message
-in stdout.
+controller as a daemon (and exits immediately), and it informs the
+caller about a successful start-up of a minio process by placing a
+message in stdout and closing stdout/stderr.
 """
 
 # Copyright (c) 2022 RIKEN R-CCS
@@ -262,7 +262,7 @@ class MinioManager():
                     jitter = 0
                     initial_idle_duration = self.watch_interval + jitter + self.mc_info_timelimit
 
-                    self.update_tables(p.pid, zone, initial_idle_duration + self.refresh_margin)
+                    self._record_minio_process(p.pid, zone, initial_idle_duration + self.refresh_margin)
 
                     ## Tell the caller that a MinIO started successfully.
                     self._tell_controller_minio_starts()
@@ -367,7 +367,7 @@ class MinioManager():
 
     def _check_activity(self, now):
         # check inactive time
-        atime = self.tables.routing_table.get_atime_by_addr(self.minioAddr)
+        atime = self.tables.routing_table.get_route_expiry(self.zoneID)
 
         if atime is None:
             raise LoopBreakException("Keepalive_limit exceeded")
@@ -467,7 +467,7 @@ class MinioManager():
         sys.exit(0)
 
 
-    def update_tables(self, pid, zone, timeout):
+    def _record_minio_process(self, pid, zone, timeout):
         timeout = math.ceil(timeout)
         self.minioAddress = {
             "muxAddr": self.muxaddr,
@@ -481,29 +481,23 @@ class MinioManager():
         logger.debug(f"@ timeout: {timeout}")
 
         atime = f"{int(time.time())}"
-        self.tables.routing_table.set_atime_by_addr(self.minioAddr, atime, timeout)
+        self.tables.routing_table.set_route_expiry(self.zoneID, timeout)
         self.tables.storage_table.set_atime(self.zoneID, atime)
         self.saved_atime = atime
 
-        logger.debug(f"@@@ INSERT ROUTE: {self.minioAddress} {self.route}")
-        self.tables.routing_table.ins_route(self.minioAddr, self.route, timeout)
-        logger.debug(f"@@@ INSERT MINIO ADDRESS: {self.minioAddress}")
+        self.tables.routing_table.set_route(self.zoneID, self.minioAddr, timeout)
         self.tables.process_table.ins_minio_address(self.zoneID, self.minioAddress, timeout)
 
     def refresh_tables(self, timeout):
         timeout = math.ceil(timeout)
-        logger.debug(f"@@@ SET EXPIRE: minioAddress = {self.minioAddress}")
-        logger.debug(f"@@@ SET EXPIRE: timeout = {timeout}")
-        self.tables.routing_table.set_atime_expire(self.minioAddr, timeout)
-        self.tables.routing_table.set_route_expire(self.route, timeout)
+        self.tables.routing_table.set_route_expiry(self.zoneID, timeout)
         self.tables.process_table.set_minio_address_expire(self.zoneID, timeout)
-        atime = self.tables.routing_table.get_atime_by_addr(self.minioAddr)
+        atime = self.tables.routing_table.get_route_expiry(self.zoneID)
         if atime and atime != self.saved_atime:
             self.tables.storage_table.set_atime(self.zoneID, atime)
             self.saved_atime = atime
 
     def clear_tables(self):
-        logger.debug("@@@ CLEAR TABLES")
         try:
             minioAddress = self.tables.process_table.get_minio_address(self.zoneID)
             if minioAddress is None:
@@ -513,18 +507,13 @@ class MinioManager():
                         "supervisorPid"] != minioAddress.get("supervisorPid"):
                 logger.debug("@@@ NOT OWN ENTRY")
                 return
-            logger.debug(f"@@@ DELETE MINIO ADDRESS {self.minioAddress}")
             self.tables.process_table.del_minio_address(self.zoneID)
-            logger.debug("@@@ DELETE ROUTING TABLE")
-            atime = self.tables.routing_table.get_atime_by_addr(self.minioAddr)
+            atime = self.tables.routing_table.get_route_expiry(self.zoneID)
             if atime and atime != self.saved_atime:
                 logger.debug("@@@ BACKUP ATIME")
                 self.tables.storage_table.set_atime(self.zoneID, atime)
-            logger.debug("@@@ DELETE ATIME")
-            self.tables.routing_table.del_atime_by_addr(self.minioAddr)
-            logger.debug("@@@ DELETE ROUTE")
-            self.tables.routing_table.del_route(self.route)
-            logger.debug("@@@ DONE")
+            self.tables.routing_table.delete_route_expiry(self.zoneID)
+            self.tables.routing_table.delete_route(self.zoneID)
         except Exception as e:
             logger.info(f"IGNORE EXCEPTION: {e}")
             logger.exception(e)

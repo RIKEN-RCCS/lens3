@@ -4,23 +4,6 @@ This briefly describes a design of Lenticularis-S3.
 
 [TOC]
 
-## Configuration
-
-```
-reverse-proxy <+-->︎ Mux <+--> MinIO
-               |         +--> MinIO
-               |         +--> MinIO
-               +--> Adm (<---> Mux)
-                    Redis
-```
-
-A reverse-proxy is not a part of Lens3 but it is required for
-operation.  Adm (admin Web-UI) accesses to Mux to manage MinIO.
-
-A Mux is also in charge of starting a MinIO process (through class
-Controller).  A Mux starts a Manager as a daemon, and then, a Manager
-starts a MinIO process and waits until a MinIO process exits.
-
 ## Overview
 
   + Terminology
@@ -1719,13 +1702,21 @@ A bucket-pool has another state `status`, but it is always "online".
   * "online"
   * "offline"
 
+### Redis database operations
+
+* inserting a pool
+  * lock db -> insert pool -> unlock
+* deleting a pool
+  * lock pool -> lock db -> move to deleling-state
+    -> stop minio -> delete pool -> unlock -> unlock
+
 ### Redis database keys (prefixes)
 
 #### storage-table
 
 * storage-table
   * ac:pool-id -> timestamp
-  * ar:key-id -> pool-id
+  * ar:access-key -> pool-id
   * mo:pool-id -> pool-state
   * pr:: -> list of permissions of users (json)
   * ru:pool-id -> pool-description (htable)
@@ -1737,26 +1728,32 @@ A bucket-pool has another state `status`, but it is always "online".
 #### process-table
 
 * process-table
-  * mx:host -> route-description (htable)
   * ma:pool-id -> process-description (htable)
+  * mx:host -> route-description (htable)
   * lk:?? -> (lock?)
 
 A route-description includes:
-* an host+port of a mux (json)
+* an endpoint of a Mux (json)
 * start-time
 * last-interrupted-time?
 
 A process-description includes:
-* an host of a mux,
-* an host+port of a MinIO
+* a host of a mux,
+* an endpoint of a MinIO
 * a pid of a manager
 * a pid of a MinIO
 
 #### routing-table
 
 * routing-table
-  * aa:key -> route-description (htable)
-  * at:address -> atime
+  * rt:pool-id -> endpoint
+  * ts:pool-id -> access-timestamp
+  * bk:bucket-name -> pool-id
+  * at:endpoint -> atime (* to be unused *)
+  * aa:access-key -> host-port (* to be unused *)
+  * da:host -> host-port (* to be unused *)
+
+A host-port is an address to a MinIO.
 
 ### Bucket policy
 

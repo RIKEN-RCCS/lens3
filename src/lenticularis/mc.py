@@ -1,4 +1,6 @@
-# Copyright (c) 2022 RIKEN R-CCS.
+"""MinIO control.  It runs the mc command to set-up MinIO."""
+
+# Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
 import os
@@ -115,7 +117,7 @@ class Mc():
                         return mc_error("Unknown error")
                     logger.debug(f"@@@ COMMAND ERROR {e}")
                     return [e]
-            logger.debug(f"@@@ SUCCESS: {j}")
+            ##logger.debug(f"@@@ SUCCESS: {j}")
             return j
 
         if no_wait:
@@ -133,7 +135,7 @@ class Mc():
                        env=self.env) as p:
                 (out, err) = p.communicate()
                 status = p.wait()
-                logger.debug(f"@@@ WAIT: status, out, err = {status}, {out}, {err}")
+                ##logger.debug(f"@@@ WAIT: status, out, err = {status}, {out}, {err}")
                 try:
                     s = out.split(b'\n')
                     j = [json.loads(e, parse_int=None) for e in s if e != b""]

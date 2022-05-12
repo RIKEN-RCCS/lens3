@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 import os
+import errno
 import time
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
@@ -15,10 +16,25 @@ from lenticularis.utility import normalize_address
 from lenticularis.utility import tracing
 
 
+_connection_errors = [errno.ETIMEDOUT, errno.ECONNREFUSED,
+                      errno.EHOSTDOWN, errno.EHOSTUNREACH]
+
+
 def _fake_user_id(access_key_id):
     return f"access-key-id={access_key_id}"
 
+def _check_url_error_is_connection_errors(x):
+    if x.errno in _connection_errors:
+        return x.errno
+    elif x.reason is not None and x.reason.errno in _connection_errors:
+        return x.reason.errno
+    else:
+        logger.debug(f"Cannot find errno in URLError={x}")
+        return 0
+
+
 class Multiplexer():
+
     def __init__(self, mux_conf, tables, controller, node):
         self.node = node
         self.mux_key = None  # dummy initial value
@@ -209,8 +225,11 @@ class Multiplexer():
 
         except URLError as e:
             logger.error(f"urlopen error: url={url} for {request_method} {request_url}; exception={e}")
-            ## logger.exception(e)  # do not record exception detail
-            status = "400"
+            if _check_url_error_is_connection_errors(e):
+                ## "Connection refused" etc.
+                logger.debug(f"CLEAR TABLE AND RETRY")
+
+            status = "503"
             r_headers = []
             respiter = []
 
@@ -241,7 +260,7 @@ class Multiplexer():
             content_length_upstream=content_length,
             content_length_downstream=content_length_downstream)
 
-        logger.debug(f"(MUX) SUCCESS")
+        logger.debug(f"(MUX) DONE")
         start_response(status, r_headers)
         return respiter
 

@@ -146,8 +146,6 @@ def _strip_domain(host_fqdn, domain):
 
 class ZoneAdm():
 
-    storage_table_lock_pfx = "zk:"
-
     def __init__(self, adm_conf):
         self.adm_conf = adm_conf
 
@@ -430,7 +428,8 @@ class ZoneAdm():
 
 
     def _lock_pool_entry(self, lock, pool_id):
-        key = f"{self.storage_table_lock_pfx}{pool_id}"
+        lockprefix = self.tables.storage_table.storage_table_lock_prefix
+        key = f"{lockprefix}{pool_id}"
         lockstatus = lock.lock(key, self.timeout)
         return lockstatus
 
@@ -439,7 +438,8 @@ class ZoneAdm():
         return lockstatus
 
     def _lock_pool_table(self, lock):
-        key = f"{self.storage_table_lock_pfx}"
+        lockprefix = self.tables.storage_table.storage_table_lock_prefix
+        key = f"{lockprefix}"
         lockstatus = lock.lock(key, self.timeout)
         return lockstatus
 
@@ -1095,7 +1095,7 @@ class ZoneAdm():
 
     def _lock_and_store_zone(self, user_id, zone_id, zone, need_conflict_check, need_uniquify):
         lock = LockDB(self.tables.storage_table)
-        ##key = f"{self.storage_table_lock_pfx}"
+        ##key = f"{self.storage_table_lock_prefix}"
         lock_status = False
         try:
             ##lock_status = lock.lock(key, self.timeout)

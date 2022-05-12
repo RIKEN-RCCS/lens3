@@ -30,6 +30,7 @@ class StorageTable(TableCommon):
     modePrefix = "mo:"
     allowDenyRuleKey = "pr::"
     unixUserPrefix = "uu:"
+    storage_table_lock_prefix = "zk:"
     hashes_ = {zoneIDPrefix}
     structured = {"buckets", "accessKeys", "directHostnames"}
 
@@ -171,8 +172,7 @@ class StorageTable(TableCommon):
         delete_all(self.dbase.r, self.zoneIDPrefix)
         delete_all(self.dbase.r, self.atimePrefix)
         delete_all(self.dbase.r, self.modePrefix)
-        storage_table_lock_pfx = "zk:"
-        delete_all(self.dbase.r, storage_table_lock_pfx)
+        delete_all(self.dbase.r, self.storage_table_lock_prefix)
         if everything:
             delete_all(self.dbase.r, self.allowDenyRuleKey)
             delete_all(self.dbase.r, self.unixUserPrefix)
@@ -183,7 +183,7 @@ class StorageTable(TableCommon):
 class ProcessTable(TableCommon):
     minioAddrPrefix = "ma:"
     muxPrefix = "mx:"
-    lock_key = "lk:"
+    process_table_lock_prefix = "lk:"
     hashes_ = {minioAddrPrefix, muxPrefix}
     structured = {"mux_conf"}
 
@@ -255,7 +255,7 @@ class ProcessTable(TableCommon):
         everything.
         """
         # logger.debug(f"@@@ FLUSHALL: EVERYTHING = {everything}")
-        delete_all(self.dbase.r, self.lock_key)
+        delete_all(self.dbase.r, self.process_table_lock_prefix)
         delete_all(self.dbase.r, self.minioAddrPrefix)
         if everything:
             delete_all(self.dbase.r, self.muxPrefix)
@@ -265,7 +265,7 @@ class ProcessTable(TableCommon):
 
 
 def zone_to_route(zone):
-    logger.debug(f"zone = {zone}")
+    ##logger.debug(f"zone = {zone}")
     access_keys = [i["accessKeyID"] for i in zone.get("accessKeys", [])]
     directHostnames = zone["directHostnames"]
     return {

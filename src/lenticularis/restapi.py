@@ -34,7 +34,7 @@ except Exception as e:
 
 openlog(adm_conf["lenticularis"]["log_file"],
         **adm_conf["lenticularis"]["log_syslog"])
-logger.info("***** START API *****")
+logger.info("**** START ADM ****")
 
 pkgdir = os.path.dirname(inspect.getfile(lenticularis))
 webui_dir = os.path.join(pkgdir, "webui")

@@ -27,7 +27,7 @@ def app():
 
     openlog(mux_conf["lenticularis"]["log_file"],
             **mux_conf["lenticularis"]["log_syslog"])
-    logger.info("***** START MUXMAIN *****")
+    logger.info("**** START MUX ****")
 
     tables = get_tables(mux_conf)
 

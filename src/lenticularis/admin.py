@@ -502,7 +502,7 @@ def main():
     tracing.set(traceid)
     openlog(adm_conf["lenticularis"]["log_file"],
             **adm_conf["lenticularis"]["log_syslog"])
-    logger.info("***** START ADMIN *****")
+    ##logger.info("**** START ADMIN ****")
     logger.debug(f"traceid = {traceid}")
 
     try:

@@ -15,7 +15,6 @@ from lenticularis.multiplexer import Multiplexer
 from lenticularis.readconf import read_mux_conf, node_envname
 from lenticularis.table import get_tables
 from lenticularis.utility import logger, openlog
-from lenticularis.utility import uniform_distribution_jitter
 
 
 def app():
@@ -31,26 +30,17 @@ def app():
 
     tables = get_tables(mux_conf)
 
-    node = os.environ.get(node_envname)
-    if not node:
-        node = platform.node()
+    hostname = os.environ.get(node_envname)
+    if not hostname:
+        hostname = platform.node()
 
-    logger.info(f"mux is running on a host=({node})")
+    logger.info(f"Mux is running on a host=({hostname})")
 
-    controller = Controller(mux_conf, tables, configfile, node)
-    multiplexer = Multiplexer(mux_conf, tables, controller, node)
+    controller = Controller(mux_conf, tables, configfile, hostname)
+    multiplexer = Multiplexer(mux_conf, tables, controller, hostname)
 
     atexit.register((lambda: multiplexer.__del__()))
 
-    timer_interval = int(mux_conf["lenticularis"]["multiplexer"]["timer_interval"])
-
-    def interval_timer():
-        while True:
-            jitter = uniform_distribution_jitter()
-            sleep_time = timer_interval + jitter
-            multiplexer.timer_interrupt(sleep_time)
-            time.sleep(sleep_time)
-
-    threading.Thread(target=interval_timer, daemon=True).start()
+    threading.Thread(target=multiplexer.periodic_work, daemon=True).start()
 
     return multiplexer

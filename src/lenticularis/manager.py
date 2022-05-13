@@ -63,10 +63,12 @@ def _check_mc_status(r, e):
     # raise Exception(f"error: {e}: mc output is empty")
 
 def _read_stream(s):
-    fd = s.fileno()
+    """Reads a stream if some is available.  It returns a pair of the
+    readout and the state of a stream.
+    """
     outs = b""
     while (s in select.select([s], [], [], 0)[0]):
-        r = s.readline()
+        r = s.read1()
         if r == b"":
             return (outs, True)
         outs += r
@@ -76,9 +78,9 @@ def _read_stream(s):
 class MinioManager():
     alarm_cause = None
 
-    def _sigalrm(n, stackframe):
-            logger.debug(f"@@@ raise AlarmException [{self.alarm_cause}]")
-            raise AlarmException(self.alarm_cause)
+    def _sigalrm(self, n, stackframe):
+        logger.debug(f"@@@ raise AlarmException [{self.alarm_cause}]")
+        raise AlarmException(self.alarm_cause)
 
     def _sigterm(self, n, stackframe):
         logger.debug("@@@ raiseException TerminateException")
@@ -94,12 +96,10 @@ class MinioManager():
 
 
     def _manager_main(self, zoneID, access_by_zoneID, args, mux_conf):
-        logger.debug("@@@ +++")
-
         signal(SIGALRM, self._sigalrm)
 
         self.zoneID = zoneID
-        use_zone_id_as_minio_root_user = args.useTrueAccount
+        use_pool_id_for_minio_root_user = args.useTrueAccount
         port_min = int(args.port_min)
         port_max = int(args.port_max)
         logger.debug(f"zoneID = {self.zoneID}")
@@ -131,13 +131,18 @@ class MinioManager():
 
         self.tables = get_tables(mux_conf)
 
+        zone = self.tables.storage_table.get_zone(zoneID)
+        if zone is None:
+            logger.error(f"Manager failed: no pool found for pool={zoneID}")
+            return
+
         env = make_clean_env(os.environ)
         self.minioenv = env
         self.mcenv = env.copy()
 
-        if use_zone_id_as_minio_root_user:
+        if use_pool_id_for_minio_root_user:
             self.MINIO_ROOT_USER = self.zoneID
-            self.MINIO_ROOT_PASSWORD = decrypt_secret(self.entry["rootSecret"])
+            self.MINIO_ROOT_PASSWORD = decrypt_secret(zone["rootSecret"])
         else:
             self.MINIO_ROOT_USER = gen_access_key_id()
             self.MINIO_ROOT_PASSWORD = gen_secret_access_key()
@@ -184,6 +189,8 @@ class MinioManager():
         zone = self.tables.storage_table.get_zone(self.zoneID)
         mode = self.tables.storage_table.get_mode(self.zoneID)
 
+        assert zone is not None
+
         user = zone["user"]
         group = zone["group"]
         bucketsDir = zone["bucketsDir"]
@@ -226,14 +233,14 @@ class MinioManager():
         random.shuffle(ports)
 
         for port in ports:
-            if self._try_manage_minio(port, mode, user, group,
-                                      bucketsDir, zone, up_minio, need_initialize):
+            if self._try_start_minio(port, mode, user, group,
+                                     bucketsDir, zone, up_minio, need_initialize):
                 break
         # VIRTUALLY NOT REACHED
         return
 
-    def _try_manage_minio(self, port, mode, user, group,
-                          bucketsDir, zone, up_minio, need_initialize):
+    def _try_start_minio(self, port, mode, user, group,
+                         bucketsDir, zone, up_minio, need_initialize):
         address = f":{port}"
         cmd = [self.sudo, "-u", user, "-g", group, self.minio_bin,
                "server", "--anonymous", "--address", address, bucketsDir]
@@ -295,22 +302,18 @@ class MinioManager():
         signal(SIGTERM, self._sigterm)
         signal(SIGCHLD, SIG_IGN)
 
-        stdout_d = p.stdout.fileno()
-        stderr_d = p.stderr.fileno()
-
         try:
             jitter = 0
             next_idle_duration = self.watch_interval + jitter + self.mc_info_timelimit
             self._refresh_tables(next_idle_duration + self.refresh_margin)
             down_count = 0
             while True:
-                readfds = [stdout_d, stderr_d]
-
                 # when a signal is delivered *here*, response will delay in
                 # `watch_interval + jitter` seconds.
 
-                readable, _, _ = select.select(
-                                readfds, [], [], self.watch_interval + jitter)
+                timeo = self.watch_interval + jitter
+                (readable, _, _) = select.select(
+                    [p.stdout, p.stderr], [], [], timeo)
                 ##logger.debug(f"@@@ READABLE = {readable}")
 
                 now = int(time.time())
@@ -318,15 +321,13 @@ class MinioManager():
                 self._check_status()
                 self._check_authoritativeness()
 
-                if stderr_d in readable:
-                    ##self._check_minio_stderr(p, stderr_d)
+                if p.stderr in readable:
                     (errs, closed) = _read_stream(p.stderr)
-                    logger.debug(f"Message from Minio stderr=({errs})")
+                    logger.info(f"Message on MinIO stderr=({errs})")
 
-                if stdout_d in readable:
-                    ##self._check_minio_stdout(p, stdout_d)
+                if p.stdout in readable:
                     (outs, closed) = _read_stream(p.stdout)
-                    logger.debug(f"Message from Minio stdout=({outs})")
+                    logger.info(f"Message on MinIO stdout=({outs})")
                     if closed:
                         ## MinIO is now absent.  Quit the loop.
                         raise LoopBreakException("MinIO closed it's stdout")
@@ -384,6 +385,7 @@ class MinioManager():
                 r = p.stdout.readline()
                 outs += r
             except Exception:
+                r = b""
                 pass
             if r == b"":
                 ## Got an eof, presumably it is an error.
@@ -398,12 +400,12 @@ class MinioManager():
                     elif outs.find(_minio_response_unwritable_storage) != -1:
                         raise Exception(f"Error from MinIO: {outs}")
                     else:
-                        return False
+                        raise Exception(f"Error from MinIO: {outs}")
                 else:
                     return False
             if r.startswith(_minio_expected_response):
                 ##urls = r.decode().split()[1:]
-                logger.debug(f"Message from minio stdout=({outs})")
+                logger.debug(f"Message on MinIO stdout=({outs})")
                 return True
 
     def _check_elapsed_time(self):
@@ -430,19 +432,6 @@ class MinioManager():
                         "supervisorPid"] != minioAddress.get("supervisorPid"):
             # apotosis caused by self entry disappearance
             raise LoopBreakException("Another controller owns address table")
-
-    def _check_minio_stdout(self, p, stdout_d):
-        ##r = os.read(stdout_d, 512)
-        (outs, closed) = _read_stream(p.stdout)
-        logger.debug(f"Message from Minio stdout=({outs})")
-        if closed:
-            ## MinIO is now absent.  Quit the loop.
-            raise LoopBreakException("MinIO closed it's stdout")
-
-    def _check_minio_stderr(self, p, stderr_d):
-        ##r = os.read(stderr_d, 512)
-        (errs, closed) = _read_stream(p.stderr)
-        logger.debug(f"Message from Minio stderr=({errs})")
 
     def _check_minio_health(self):
         # FIXME: XXX USE FOLLOWING METHOD IS RECOMMENDED:
@@ -742,6 +731,7 @@ class MinioManager():
         elif not up_minio:
             # Stop a running MinIO
             minioAddress = self.tables.process_table.get_minio_address(self.zoneID)
+            assert minioAddress is not None
             if minioAddress["muxAddr"] != self.muxaddr:
                 logger.error("INTERNAL ERROR: "
                                   "DATABASE OR SCHEDULER MAY CORRUPT. "

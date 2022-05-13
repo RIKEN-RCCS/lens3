@@ -23,7 +23,7 @@ def main():
     elif args.target == "api":
         start_api()
     else:
-        assert false
+        assert False
     sys.exit(1)
 
 

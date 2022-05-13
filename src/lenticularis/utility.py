@@ -36,15 +36,19 @@ SECRET_ACCESS_KEY_LEN = 48
 
 
 class HostnameFilter(logging.Filter):
-    hostname = platform.node()
+    def __init__(self):
+        self.hostname = platform.node()
+
     def filter(self, record):
-        record.hostname = self.hostname
+        ##record.hostname = self.hostname
+        setattr(record, "hostname", self.hostname)
         return True
 
 
 class MicrosecondFilter(logging.Filter):
     def filter(self, record):
-        record.microsecond = format_rfc3339_z(time.time())
+        ##record.microsecond = format_rfc3339_z(time.time())
+        setattr(record, "microsecond", format_rfc3339_z(time.time()))
         return True
 
 
@@ -280,51 +284,51 @@ def make_clean_env(oenv):
     return {key: val for key, val in oenv.items() if key in keys}
 
 
-def _outer_join(left, lkey, right, rkey, fn):
-    left = sorted(left, key=lkey)
-    right = sorted(right, key=rkey)
-
-    def compar_nonetype(a, b):
-        if a is None and b is None:
-            return 0
-        if a is None:
-            return 1
-        if b is None:
-            return -1
-
-    def compar(a, b):
-        if a is None or b is None:
-            return compar_nonetype(a, b)
-
-        ak = lkey(a)
-        bk = rkey(b)
-
-        if ak < bk:
-            return -1
-        if bk < ak:
-            return 1
-        return 0
-
-    def car(lst):
-        if lst == []:
-            return None
-        return lst[0]
-
-    while left != [] or right != []:
-        le = car(left)
-        ri = car(right)
-
-        e = compar(le, ri)
-        if e < 0:
-            fn(le, None)
-            left.pop(0)
-        elif e > 0:
-            fn(None, ri)
-            right.pop(0)
-        else:
-            fn(le, ri)
-            left.pop(0)
-            right.pop(0)
+##def _outer_join(left, lkey, right, rkey, fn):
+##    left = sorted(left, key=lkey)
+##    right = sorted(right, key=rkey)
+##
+##    def compar_nonetype(a, b):
+##        if a is None and b is None:
+##            return 0
+##        if a is None:
+##            return 1
+##        if b is None:
+##            return -1
+##
+##    def compar(a, b):
+##        if a is None or b is None:
+##            return compar_nonetype(a, b)
+##
+##        ak = lkey(a)
+##        bk = rkey(b)
+##
+##        if ak < bk:
+##            return -1
+##        if bk < ak:
+##            return 1
+##        return 0
+##
+##    def car(lst):
+##        if lst == []:
+##            return None
+##        return lst[0]
+##
+##    while left != [] or right != []:
+##        le = car(left)
+##        ri = car(right)
+##
+##        e = compar(le, ri)
+##        if e < 0:
+##            fn(le, None)
+##            left.pop(0)
+##        elif e > 0:
+##            fn(None, ri)
+##            right.pop(0)
+##        else:
+##            fn(le, ri)
+##            left.pop(0)
+##            right.pop(0)
 
 
 def outer_join_list(left, lkeyfn, right, rkeyfn):
@@ -487,17 +491,17 @@ def uniq_d(lis):
     return dups
 
 
+def log_access(status_, client_, user_, method_, url_, *,
+                  upstream=None, downstream=None):
+    access_time = format_rfc3339_z(time.time())
+    user_ = user_ if user_ else "-"
+    upstream = upstream if upstream else "-"
+    downstream = downstream if downstream else "-"
+    logger.debug(f"{access_time} {status_} {client_} {user_} {method_} {url_} {upstream} {downstream}")
+    return
+
+
 def normalize_address(ip):
     if ip.startswith("::ffff:"):
         ip = ip[7:]
     return ip
-
-
-def accesslog(status, client_addr, user, method, url,
-              content_length_upstream=None,
-              content_length_downstream=None):
-    access_time = format_rfc3339_z(time.time())
-    user = user if user else "-"
-    content_length_upstream = content_length_upstream if content_length_upstream else "-"
-    content_length_downstream = content_length_downstream if content_length_downstream else "-"
-    logger.debug(f"{access_time} {status} {client_addr} {user} {method} {url} {content_length_upstream} {content_length_downstream}")

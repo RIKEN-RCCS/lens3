@@ -35,7 +35,7 @@ class StorageTable(TableCommon):
     structured = {"buckets", "accessKeys", "directHostnames"}
 
     def ins_zone(self, zoneID, dict):
-        # logger.debug(f"+++ {zoneID} {dict}")
+        ##logger.debug(f"ins_zone {zoneID} {dict}")
         key = f"{self.zoneIDPrefix}{zoneID}"
         return self.dbase.hset_map(key, dict, self.structured)
 
@@ -81,8 +81,8 @@ class StorageTable(TableCommon):
 
     def get_ptr_list(self):
         # logger.debug(f"+++ ")
-        access_key_ptr = _scan_strip(self.dbase.r, self.access_key_id_prefix, None, include_value="get")
-        direct_host_ptr = _scan_strip(self.dbase.r, self.directHostnamePrefix, None, include_value="get")
+        access_key_ptr = _scan_strip(self.dbase.r, self.access_key_id_prefix, None, get_value="get")
+        direct_host_ptr = _scan_strip(self.dbase.r, self.directHostnamePrefix, None, get_value="get")
         return (list(access_key_ptr), list(direct_host_ptr))
 
     def get_pool_by_access_key(self, access_key_id):
@@ -218,7 +218,7 @@ class ProcessTable(TableCommon):
 
     def get_minio_address_list(self, zoneID):
         # logger.debug(f"+++ {zoneID}")
-        return _scan_strip(self.dbase.r, self.minioAddrPrefix, zoneID, include_value=self.get_minio_address)
+        return _scan_strip(self.dbase.r, self.minioAddrPrefix, zoneID, get_value=self.get_minio_address)
 
     def set_mux(self, muxID, mux_val, timeout):
         # logger.debug(f"+++ {muxID} {mux_val} {timeout}")
@@ -247,8 +247,7 @@ class ProcessTable(TableCommon):
         return self.dbase.delete(key)
 
     def get_mux_list(self, muxID):
-        # logger.debug(f"+++ {muxID}")
-        return _scan_strip(self.dbase.r, self.muxPrefix, muxID, include_value=self.get_mux)
+        return _scan_strip(self.dbase.r, self.muxPrefix, muxID, get_value=self.get_mux)
 
     def clear_all(self, everything):
         """Clears Redis DB.  It leaves entires for multiplexers unless
@@ -388,10 +387,10 @@ class RoutingTable(TableCommon):
 
 
     def get_route_list(self):
-        return _scan_strip(self.dbase.r, self._endpoint_prefix, None, include_value="get")
-        ##access_key_route = _scan_strip(self.dbase.r, self.access_key_id_prefix, None, include_value="get")
-        ##direct_host_route = _scan_strip(self.dbase.r, self.directHostnamePrefix, None, include_value="get")
-        ##atime = _scan_strip(self.dbase.r, self.atimePrefix, None, include_value="get")
+        return _scan_strip(self.dbase.r, self._endpoint_prefix, None, get_value="get")
+        ##access_key_route = _scan_strip(self.dbase.r, self.access_key_id_prefix, None, get_value="get")
+        ##direct_host_route = _scan_strip(self.dbase.r, self.directHostnamePrefix, None, get_value="get")
+        ##atime = _scan_strip(self.dbase.r, self.atimePrefix, None, get_value="get")
         ##return (access_key_route, direct_host_route, atime)
 
     def clear_routing(self, everything):
@@ -441,7 +440,7 @@ def delete_all(r, match):
         r.delete(key)
 
 
-def _scan_strip(r, prefix, target, include_value=None):
+def _scan_strip(r, prefix, target, *, get_value=None):
     """Returns an iterator to scan a table for a prefix+target pattern,
     where target is * if it is None.  It drops a prefix from the
     returned key.
@@ -454,11 +453,11 @@ def _scan_strip(r, prefix, target, include_value=None):
         (cursor, data) = r.scan(cursor=cursor, match=match)
         for item in data:
             key = item[striplen:]
-            if include_value == "get":
+            if get_value == "get":
                 val = r.get(item)
                 yield (key, val)
-            elif include_value is not None:
-                val = include_value(key)
+            elif get_value is not None:
+                val = get_value(key)
                 yield (key, val)
             else:
                 yield key

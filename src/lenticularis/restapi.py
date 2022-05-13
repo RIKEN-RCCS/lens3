@@ -20,9 +20,9 @@ import lenticularis
 from lenticularis.api import Api
 from lenticularis.readconf import read_adm_conf
 from lenticularis.utility import ERROR_READCONF
-from lenticularis.utility import accesslog
-from lenticularis.utility import logger, openlog
 from lenticularis.utility import normalize_address
+from lenticularis.utility import log_access
+from lenticularis.utility import logger, openlog
 from lenticularis.utility import tracing
 
 
@@ -66,7 +66,7 @@ def csrf_protect_exception_handler(request: Request,
     content = {"detail": exc.message}
     user_id = request.headers.get("X-REMOTE-USER")
     client_addr = request.headers.get("X-REAL-IP")
-    accesslog(f"{exc.status_code}", client_addr, user_id, request.method, request.url)
+    log_access(f"{exc.status_code}", client_addr, user_id, request.method, request.url)
     return JSONResponse(status_code=exc.status_code, content=content)
 
 
@@ -98,7 +98,7 @@ async def app_get_show_ui(request: Request,
     logger.debug(f"APP.GET /")
     logger.debug(f"traceid={traceid}")
     code = status.HTTP_200_OK
-    accesslog(f"{code}", client_addr, user_id, request.method, request.url)
+    log_access(f"{code}", client_addr, user_id, request.method, request.url)
     ##traceid = traceid if traceid is not None else "12345"
     ##headers = {"X-TRACEID": traceid}
     ##(headers=headers,)
@@ -251,7 +251,7 @@ def respond_zone(zone_list, err, csrf_protect, client_addr, user_id, request):
     if csrf_protect:
         content["CSRF-Token"] = csrf_protect.generate_csrf()
     content["time"] = str(int(time.time()))
-    accesslog(f"{status_code}", client_addr, user_id, request.method, request.url)
+    log_access(f"{status_code}", client_addr, user_id, request.method, request.url)
     response = JSONResponse(status_code=status_code, content=content)
     ##logger.debug(f"@@@ RESPONSE.CONTENT {content}")
     return response
@@ -285,7 +285,7 @@ async def validate_session(request: Request, call_next):
         content = {"status": "error", "reason": f"Configuration error (trusted_proxies)."}
         status_code = status.HTTP_403_FORBIDDEN
         # Access log contains client_addr, but peer_addr.
-        accesslog(f"{status_code}", client_addr, user_id, request.method, request.url)
+        log_access(f"{status_code}", client_addr, user_id, request.method, request.url)
         return JSONResponse(status_code=status_code, content=content)
 
     if not api.api_check_user(user_id):
@@ -293,7 +293,7 @@ async def validate_session(request: Request, call_next):
         content = {"status": "error", "reason": f"{user_id}: no such user"}
         content["time"] = str(int(time.time()))
         status_code = status.HTTP_401_UNAUTHORIZED
-        accesslog(f"{status_code}", client_addr, user_id, request.method, request.url)
+        log_access(f"{status_code}", client_addr, user_id, request.method, request.url)
         return JSONResponse(status_code=status_code, content=content)
 
     #logger.debug(f"request={request} method={request.method} url={request.url}")

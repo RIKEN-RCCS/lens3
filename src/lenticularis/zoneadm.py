@@ -165,23 +165,20 @@ class ZoneAdm():
 
         self.tables = get_tables(adm_conf)
 
-    ### COMMON ENTRY POINTS ###
 
-    def refresh_multiplexer_list(self):  # private use
-        mux_list = self.tables.process_table.get_mux_list(None)
-        # logger.debug(f"@@@ mux_list => {mux_list}")
-        multiplexers = [get_mux_addr(v["mux_conf"]) for (e, v) in mux_list]
-        multiplexers = sorted(list(set(multiplexers)))
-        logger.debug(f"@@@ self.tables.process_table.get_mux_list() => {multiplexers}")
-        logger.debug(f"@@@ SELF.MULTIPLEXERS = {multiplexers}")
+    def _refresh_multiplexer_list(self):
+        muxlist = self.tables.process_table.get_mux_list(None)
+        multiplexerlist = [get_mux_addr(v["mux_conf"]) for (e, v) in muxlist]
+        multiplexers = sorted(list(set(multiplexerlist)))
         return multiplexers
 
-    def fix_affected_zone(self, traceid):  # ADMIN
+    def fix_affected_zone(self, traceid):
         allow_deny_rules = self.tables.storage_table.get_allow_deny_rules()
         fixed = []
         for z_id in self.tables.storage_table.get_zoneID_list(None):
             logger.debug(f"@@@ z_id = {z_id}")
             zone = self.tables.storage_table.get_zone(z_id)
+            assert zone is not None
             user_id = zone["user"]
 
             ui = self.fetch_unixUserInfo(user_id)
@@ -198,30 +195,30 @@ class ZoneAdm():
                 ) else "denied"
 
             if zone["operation_status"] != "denied" and not permission:
-                disable_zone(traceid, user_id, z_id)
+                self.disable_zone(traceid, user_id, z_id)
                 fixed.append(z_id)
                 logger.debug(f"permission dropped: {z_id} {user_id} {zone['operation_status']} => {permission}")
         return fixed
 
-    def store_allow_deny_rules(self, allow_deny_rules):  # ADMIN
+    def store_allow_deny_rules(self, allow_deny_rules):
         self.tables.storage_table.ins_allow_deny_rules(allow_deny_rules)
 
-    def fetch_allow_deny_rules(self):  # ADMIN
+    def fetch_allow_deny_rules(self):
         return self.tables.storage_table.get_allow_deny_rules()
 
-    def list_unixUsers(self):  # ADMIN
+    def list_unixUsers(self):
         return list(self.tables.storage_table.get_unixUsers_list())
 
-    def store_unixUserInfo(self, user_id, uinfo):  # ADMIN
+    def store_unixUserInfo(self, user_id, uinfo):
         self.tables.storage_table.ins_unixUserInfo(user_id, uinfo)
 
-    def fetch_unixUserInfo(self, user_id):  # ADMIN
+    def fetch_unixUserInfo(self, user_id):
         return self.tables.storage_table.get_unixUserInfo(user_id)
 
     def check_user(self, user_id):  # API
         return self.fetch_unixUserInfo(user_id) is not None
 
-    def delete_unixUserInfo(self, user_id):  # ADMIN
+    def delete_unixUserInfo(self, user_id):
         self.tables.storage_table.del_unixUserInfo(user_id)
 
 
@@ -281,9 +278,9 @@ class ZoneAdm():
         _check_zone_keys(zone)
         how = "restore_zone"
         return self._do_restore_pool(how, traceid, user_id, zone_id, zone,
-                                    atime_from_arg=atime_from_arg,
-                                    initialize=initialize,
-                                    decrypt=decrypt)
+                                     atime_from_arg=atime_from_arg,
+                                     initialize=initialize,
+                                     decrypt=False)
 
     ##def _upsert_zone_(self, how, traceid, user_id, zone_id, zone,
     ##                  include_atime=False,
@@ -314,35 +311,35 @@ class ZoneAdm():
     ##                                    decrypt=decrypt)
 
 
-    def delete_zone(self, traceid, user_id, zoneID):  # ADMIN, API
+    def delete_zone(self, traceid, user_id, zoneID):
         logger.debug(f"+++ {user_id} {zoneID}")
         zone = {"operation_status": "denied"}
         how = "delete_zone"
         return self._do_delete_zone(how, traceid, user_id, zoneID, zone)
 
-    def disable_zone(self, traceid, user_id, zoneID):  # ADMIN, private
+    def disable_zone(self, traceid, user_id, zoneID):
         logger.debug(f"+++ {user_id} {zoneID}")
         zone = {}
         how = "disable_zone"
         return self._do_disable_zone(how, traceid, user_id, zoneID, zone,
                                     permission="denied")
 
-    def enable_zone(self, traceid, user_id, zoneID):  # ADMIN
+    def enable_zone(self, traceid, user_id, zoneID):
         logger.debug(f"+++ {user_id} {zoneID}")
         zone = {}
         how = "enable_zone"
         return self._do_enable_zone(how, traceid, user_id, zoneID, zone,
                                     permission="allowed")
 
-    def flush_storage_table(self, everything=False):  # ADMIN
+    def flush_storage_table(self, everything=False):
         self.tables.storage_table.clear_all(everything=everything)
 
-    def reset_database(self, everything=False):  # ADMIN
+    def reset_database(self, everything=False):
         self.tables.storage_table.clear_all(everything=everything)
         self.tables.process_table.clear_all(everything=everything)
         self.tables.routing_table.clear_routing(everything=everything)
 
-    def print_database(self):  # ADMIN
+    def print_database(self):
         self.tables.storage_table.printall()
         self.tables.process_table.printall()
         self.tables.routing_table.printall()
@@ -362,19 +359,19 @@ class ZoneAdm():
               "  aa:key -> route-description\n"
               "  at:address -> atime")
 
-    def fetch_multiplexer_list(self):  # ADMIN
+    def fetch_multiplexer_list(self):
         return self.tables.process_table.get_mux_list(None)
 
-    def fetch_process_list(self):  # ADMIN
+    def fetch_process_list(self):
         return self.tables.process_table.get_minio_address_list(None)
 
-    def delete_process(self, processID):  # ADMIN
+    def delete_process(self, processID):
         return self.tables.process_table.del_minio_address(processID)
 
-    def flush_process_table(self, everything=False):  # ADMIN
+    def flush_process_table(self, everything=False):
         self.tables.process_table.clear_all(everything=everything)
 
-    def check_mux_access_for_zone(self, traceid, zoneID, force, access_key_id=None):  # ADMIN
+    def check_mux_access_for_zone(self, traceid, zoneID, force, access_key_id=None):
         """Tries to access a multiplexer of the zone, if minio of the zone is
         running. force=True to send a decoy regardless minio is
         running or not. if there are no zone, do nothing.
@@ -383,7 +380,7 @@ class ZoneAdm():
         logger.debug(f"zone={zoneID}, access_key={access_key_id}, force={force}")
 
         minioAddr = self.tables.process_table.get_minio_address(zoneID)
-        multiplexers = self.refresh_multiplexer_list()
+        multiplexers = self._refresh_multiplexer_list()
         logger.debug(f"@@@ MULTIPLEXERS = {multiplexers}")
         if minioAddr:
             ## SEND PACKET TO MULTPLEXER OF THE MINIO, NOT MINIO ITSELF.
@@ -411,7 +408,8 @@ class ZoneAdm():
                 ## Done if neither access-key nor zone.
                 logger.debug(f"No check, as neither access-key nor zone.")
                 return ""
-            access_key_id = zone["accessKeys"][0]["accessKeyID"]  # any key is suffice.
+            ## Choose any key in the list.
+            access_key_id = zone["accessKeys"][0]["accessKeyID"]
         facade_hostname = self.facade_hostname
         status = check_mux_access(traceid,
                                    host,
@@ -420,10 +418,10 @@ class ZoneAdm():
         logger.debug(f"@@@ SEND DECOY STATUS {status}")
         return status
 
-    ##def fetch_route_list(self):  # ADMIN
+    ##def fetch_route_list(self):
     ##    return self.tables.routing_table.get_route_list()
 
-    def flush_routing_table(self, everything=False):  # ADMIN
+    def flush_routing_table(self, everything=False):
         self.tables.routing_table.clear_routing(everything=everything)
 
 
@@ -575,7 +573,7 @@ class ZoneAdm():
 
     ####
 
-    def _delete_existing_zone(self, existing):
+    def _delete_existing_zone(self, zone_id, existing):
         logger.debug(f"+++")
         logger.debug(f"@@@ del_mode {zone_id}")
         self.tables.storage_table.del_mode(zone_id)
@@ -889,7 +887,7 @@ class ZoneAdm():
         omode = self.fetch_current_mode(zone_id)
         self.set_current_mode(zone_id, "suspended")
         self.set_current_mode(zone_id, "deprecated")
-        self._delete_existing_zone(existing)
+        self._delete_existing_zone(zone_id, existing)
         mode = self.fetch_current_mode(zone_id)
         assert mode is None
         zone["zoneID"] = zone_id
@@ -1198,19 +1196,20 @@ class ZoneAdm():
         finally:
             self.tables.storage_table.del_ptr(zone_id, zoneID_accessible_zone)
 
-    def fetch_current_mode(self, zoneID):  # private use
+    def fetch_current_mode(self, zoneID):
         return self.tables.storage_table.get_mode(zoneID)
 
-    def set_current_mode(self, zoneID, state):  # private use
+    def set_current_mode(self, zoneID, state):
         o = self.fetch_current_mode(zoneID)
         logger.debug(f"pool-state change pool=({zoneID}): {o} to {state}")
         self.tables.storage_table.set_mode(zoneID, state)
 
-    def zone_to_user(self, zoneID):  # ADMIN, multiplexer   CODE CLONE @ multiplexer.py
+    def zone_to_user(self, zoneID):
+        ## ADMIN, multiplexer   CODE CLONE @ multiplexer.py
         zone = self.tables.storage_table.get_zone(zoneID)
         return zone["user"] if zone else None
 
-    def exp_date(self):  # private use
+    def exp_date(self):
         now = int(time.time())
         maxExpDate = int(self.system_settings_param["allowed_maximum_zone_exp_date"])
         logger.debug(f"@@@ maxExpDate = {maxExpDate}")
@@ -1222,8 +1221,9 @@ class ZoneAdm():
         logger.debug(f"@@@ timeleft = {expDate - now}")
         return str(expDate)
 
-    def generate_template(self, user_id):  # API
+    def generate_template(self, user_id):
         ui = self.fetch_unixUserInfo(user_id)
+        assert ui is not None
         groups = ui.get("groups")
 
         ## Excluding: "rootSecret".
@@ -1282,11 +1282,14 @@ class ZoneAdm():
         groups = None
         if include_userinfo:
             ui = self.fetch_unixUserInfo(user_id)
-            groups = ui.get("groups")
+            groups = ui.get("groups") if ui is not None else None
         zone_list = []
         broken_zones = []
         if extra_info:
             (access_key_ptr, direct_host_ptr) = self.tables.storage_table.get_ptr_list()
+        else:
+            (access_key_ptr, direct_host_ptr) = (None, None)
+
         for zoneID in self.tables.storage_table.get_zoneID_list(zone_id):
             #logger.debug(f"@@@ zoneID = {zoneID}")
             zone = self.tables.storage_table.get_zone(zoneID)
@@ -1319,7 +1322,7 @@ class ZoneAdm():
         # logger.debug(f"@@@ {zone_list} {broken_zones}")
         return (zone_list, broken_zones)
 
-    def endpoint_urls(self, zone):  # private use
+    def endpoint_urls(self, zone):
         template = self.system_settings_param["endpoint_url"]
         return ([template.format(hostname=h)
                  for h in [self.facade_hostname]] +

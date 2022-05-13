@@ -207,9 +207,9 @@ class Command():
             f"{progname} show-allow-deny-rules\n"
 
             # fn_insert_user_info
-            f"{progname} insert-user-info file\n"
+            f"{progname} add-user-list file\n"
             # fn_show_user_info
-            f"{progname} show-user-info\n"
+            f"{progname} show-user-list\n"
 
             # fn_insert_zone
             f"{progname} insert-zone Zone-ID jsonfile\n"
@@ -230,7 +230,7 @@ class Command():
             # fn_reset_database
             f"{progname} reset-db\n"
             # fn_print_database
-            f"{progname} print-db\n"
+            f"{progname} list-db\n"
 
             # fn_show_multiplexer
             f"{progname} show-multiplexer\n"
@@ -258,7 +258,7 @@ class Command():
         rules = read_allow_deny_rules(csvfile)
         logger.debug(f"@@@ rules = {rules}")
         self.zone_adm.store_allow_deny_rules(rules)
-        fixed = self.zone_adm.fix_affected_zone(traceid)
+        fixed = self.zone_adm.fix_affected_zone(self.traceid)
         logger.debug(f"@@@ fixed = {fixed}")
 
     def fn_show_allow_deny_rules(self):
@@ -270,7 +270,7 @@ class Command():
         user_info = read_user_info(csvfile)
         logger.debug(f"@@@ user_info = {user_info}")
         _store_user_info(self.zone_adm, user_info)
-        fixed = self.zone_adm.fix_affected_zone(traceid)
+        fixed = self.zone_adm.fix_affected_zone(self.traceid)
         logger.debug(f"@@@ fixed = {fixed}")
 
     def fn_show_user_info(self):
@@ -295,26 +295,26 @@ class Command():
             return
         zone = json.loads(r, parse_int=None)
         user_id = zone["user"]
-        self.zone_adm.restore_pool(traceid, user_id, zone_id, zone,
+        self.zone_adm.restore_pool(self.traceid, user_id, zone_id, zone,
                                    include_atime=False, initialize=True)
 
     def fn_delete_zone(self, *zoneIDs):
         logger.debug(f"@@@ DISABLE ZONE")
         for zone_id in zoneIDs:
             user_id = self.zone_adm.zone_to_user(zone_id)
-            self.zone_adm.delete_zone(traceid, user_id, zone_id)
+            self.zone_adm.delete_zone(self.traceid, user_id, zone_id)
 
     def fn_disable_zone(self, *zoneIDs):
         logger.debug(f"@@@ DISABLE ZONE")
         for zone_id in zoneIDs:
             user_id = self.zone_adm.zone_to_user(zone_id)
-            self.zone_adm.disable_zone(traceid, user_id, zone_id)
+            self.zone_adm.disable_zone(self.traceid, user_id, zone_id)
 
     def fn_enable_zone(self, *zoneIDs):
         logger.debug(f"@@@ ENABLE ZONE")
         for zone_id in zoneIDs:
             user_id = self.zone_adm.zone_to_user(zone_id)
-            self.zone_adm.enable_zone(traceid, user_id, zone_id)
+            self.zone_adm.enable_zone(self.traceid, user_id, zone_id)
 
     def fn_show_zone(self, *zoneIDs):
         decrypt = False
@@ -358,11 +358,11 @@ class Command():
         (ll, pp, rr) = outer_join_list(zone_list, lambda b: b.get("zoneID"),
                                        existing, lambda e: e.get("zoneID"))
         for x in rr:
-            _restore_zone_delete(self.zone_adm, traceid, x)
+            _restore_zone_delete(self.zone_adm, self.traceid, x)
         for x in ll:
-            _restore_zone_add(self.zone_adm, traceid, x)
+            _restore_zone_add(self.zone_adm, self.traceid, x)
         for x in pp:
-            _restore_zone_update(self.zone_adm, traceid, x)
+            _restore_zone_update(self.zone_adm, self.traceid, x)
 
     def fn_drop_zone(self):
         everything = self.args.everything
@@ -399,7 +399,7 @@ class Command():
 
     def fn_throw_decoy(self, zone_id):
         logger.debug(f"@@@ THROW DECOY zone_id = {zone_id}")
-        self.zone_adm.check_mux_access_for_zone(traceid, zone_id, force=True)
+        self.zone_adm.check_mux_access_for_zone(self.traceid, zone_id, force=True)
 
     def fn_show_routing_table(self):
         pairs = self.zone_adm.tables.routing_table.get_route_list()
@@ -434,8 +434,8 @@ class Command():
     optbl = {
         "help": fn_usage,
 
-        "insert-user-info": fn_insert_user_info,
-        "show-user-info": fn_show_user_info,
+        "add-user-list": fn_insert_user_info,
+        "show-user-list": fn_show_user_info,
         "insert-user-validity": fn_insert_allow_deny_rules,
         "show-user-validity": fn_show_allow_deny_rules,
 
@@ -449,7 +449,7 @@ class Command():
         "restore-zone": fn_restore_zone,
         "drop-zone": fn_drop_zone,
         "reset-db": fn_reset_database,
-        "print-db": fn_print_database,
+        "list-db": fn_print_database,
 
         "show-multiplexer": fn_show_multiplexer,
 

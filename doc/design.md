@@ -1702,40 +1702,29 @@ A bucket-pool has another state `status`, but it is always "online".
   * "online"
   * "offline"
 
-### Redis database operations
-
-* inserting a pool
-  * lock db -> insert pool -> unlock
-* deleting a pool
-  * lock pool -> lock db -> move to deleling-state
-    -> stop minio -> delete pool -> unlock -> unlock
-
-### Redis database keys (prefixes)
+## Redis database keys (prefixes)
 
 #### storage-table
 
-* storage-table
-  * ac:pool-id -> timestamp
-  * ar:access-key -> pool-id
-  * mo:pool-id -> pool-state
-  * pr:: -> list of permissions of users (json)
-  * ru:pool-id -> pool-description (htable)
-  * uu:user -> user-info (json)
-  * dr:host -> pool-id
-  * lk: -> (for locking the whole table)
-  * lk:pool-id -> (for locking a ru:pool-id)
+| Key           | Value         | Description   |
+| ----          | ----          | ----          |
+| ru:pool-id    | pool-description |(htable)|
+| ar:access-key | pool-id       |       |
+| mo:pool-id    | pool-state    |       |
+| ac:pool-id    | timestamp     |       |
+| pr::          | list-of-permissions-of-users |(json)|
+| uu:user       | user-info     |(json)|
+| dr:host       | pool-id       |       |
+| lk:           | -             |(for locking the whole table)|
+| lk:pool-id    | -             |(for locking a ru:pool-id)|
 
 #### process-table
 
-* process-table
-  * ma:pool-id -> process-description (htable)
-  * mx:host -> route-description (htable)
-  * lk:?? -> (lock?)
-
-A route-description includes:
-* an endpoint of a Mux (json)
-* start-time
-* last-interrupted-time?
+| Key           | Value         | Description   |
+| ----          | ----          | ----          |
+| ma:pool-id    | process-description |(htable)|
+| mx:endpoint   | mux-description |(htable)|
+| lk:??         | -> (lock?)
 
 A process-description includes:
 * a host of a mux,
@@ -1743,19 +1732,22 @@ A process-description includes:
 * a pid of a manager
 * a pid of a MinIO
 
+A mux-description includes:
+* an endpoint of a Mux (json)
+* start-time
+* last-interrupted-time?
+
 #### routing-table
 
-* routing-table
-  * rt:pool-id -> endpoint
-  * ts:pool-id -> access-timestamp
-  * bk:bucket-name -> pool-id
-  * at:endpoint -> atime (* to be unused *)
-  * aa:access-key -> host-port (* to be unused *)
-  * da:host -> host-port (* to be unused *)
+| Key           | Value         | Description   |
+| ----          | ----          | ----          |
+| rt:pool-id    | endpoint      | |
+| bk:bucket-name | pool-id      | |
+| ts:pool-id    | timestamp     | Timestamp on the last access |
 
-A host-port is an address to a MinIO.
+An endpoint is a pair of "host:port" referring to a MinIO.
 
-### Bucket policy
+## Bucket policy
 
 Public r/w policy is given to a bucket by Lens3-UI.  Lens3-UI invokes
 the mc command, one of the following.
@@ -1765,3 +1757,17 @@ mc policy set upload alias/bucket
 mc policy set download alias/bucket
 mc policy set public alias/bucket
 ```
+
+## Redis database operations
+
+* inserting a pool
+  * lock db -> insert pool -> unlock
+* deleting a pool
+  * lock pool -> lock db -> move to deleling-state
+    -> stop minio -> delete pool -> unlock -> unlock
+
+## Mux processes
+
+There exists multiple Mux processes for a Mux service, as it is
+started as a Gunicorn service.  Some book-keeping periodical
+operations are performed more frequently than expected.

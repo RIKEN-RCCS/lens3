@@ -4,13 +4,10 @@ install::
 	pip3 install --user -r requirements.txt
 
 pyright::
-	(cd src; pyright lenticularis/*.py) > /tmp/pyright-output.txt
+	(cd src; pyright lenticularis/*.py) > pyright-output.txt
 
-typestub::
+typestubs::
 	(cd src; pyright --createstub lenticularis.scheduler)
 
-ARCHIVE=/tmp/archive-$$(date +%Y%m%d).zip
-FORMAT=zip
-
-archive::
-	git archive HEAD --format=$(FORMAT) -o $(ARCHIVE)
+pylint::
+	(cd src/lenticularis; pylint *.py) > pylint-output.txt

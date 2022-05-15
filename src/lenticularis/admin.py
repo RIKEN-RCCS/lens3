@@ -145,7 +145,7 @@ def pool_key_order(e):
         "directHostnames",
         "expDate",
         "online_status",
-        "operation_status",
+        "admission_status",
         "minio_state",
         "atime",
         "accessKeysPtr",

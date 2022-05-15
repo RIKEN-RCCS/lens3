@@ -66,7 +66,7 @@ def _check_zone_keys(zone):
     given_keys = set(zone.keys())
     mandatory_keys = {"group", "bucketsDir", "buckets", "accessKeys",
                       "directHostnames", "expDate", "online_status"}
-    allowed_keys = mandatory_keys.union({"user", "rootSecret", "operation_status"})
+    allowed_keys = mandatory_keys.union({"user", "rootSecret", "admission_status"})
     if not mandatory_keys.issubset(given_keys):
         raise Exception(f"upsert_zone: invalid key set: missing {mandatory_keys - given_keys}")
     if not given_keys.issubset(allowed_keys):
@@ -167,7 +167,7 @@ class ZoneAdm():
 
 
     def _refresh_multiplexer_list(self):
-        muxlist = self.tables.process_table.get_mux_list(None)
+        muxlist = self.tables.process_table.get_mux_list()
         multiplexerlist = [get_mux_addr(v["mux_conf"]) for (e, v) in muxlist]
         multiplexers = sorted(list(set(multiplexerlist)))
         return multiplexers
@@ -194,10 +194,10 @@ class ZoneAdm():
                 and check_permission(user_id, allow_deny_rules) == "allowed"
                 ) else "denied"
 
-            if zone["operation_status"] != "denied" and not permission:
+            if zone["admission_status"] != "denied" and not permission:
                 self.disable_zone(traceid, user_id, z_id)
                 fixed.append(z_id)
-                logger.debug(f"permission dropped: {z_id} {user_id} {zone['operation_status']} => {permission}")
+                logger.debug(f"permission dropped: {z_id} {user_id} {zone['admission_status']} => {permission}")
         return fixed
 
     def store_allow_deny_rules(self, allow_deny_rules):
@@ -313,7 +313,7 @@ class ZoneAdm():
 
     def delete_zone(self, traceid, user_id, zoneID):
         logger.debug(f"+++ {user_id} {zoneID}")
-        zone = {"operation_status": "denied"}
+        zone = {"admission_status": "denied"}
         how = "delete_zone"
         return self._do_delete_zone(how, traceid, user_id, zoneID, zone)
 
@@ -360,7 +360,7 @@ class ZoneAdm():
               "  at:address -> atime")
 
     def fetch_multiplexer_list(self):
-        return self.tables.process_table.get_mux_list(None)
+        return self.tables.process_table.get_mux_list()
 
     def fetch_process_list(self):
         return self.tables.process_table.get_minio_address_list(None)
@@ -1020,10 +1020,10 @@ class ZoneAdm():
         if permission is None:
             ## how not in {"enable_zone", "disable_zone"}
             allow_deny_rules = self.tables.storage_table.get_allow_deny_rules()
-            zone["operation_status"] = check_permission(user_id, allow_deny_rules)
+            zone["admission_status"] = check_permission(user_id, allow_deny_rules)
         else:
             ## how in {"enable_zone", "disable_zone"}
-            zone["operation_status"] = permission
+            zone["admission_status"] = permission
 
         #logger.debug(f"@@@ zone = {zone}")
 

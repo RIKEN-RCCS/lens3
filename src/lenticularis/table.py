@@ -98,7 +98,7 @@ class StorageTable(TableCommon):
     def set_permission(self, zoneID, permission):
         # logger.debug(f"+++ {zoneID} {permission}")
         key = f"{self.zoneIDPrefix}{zoneID}"
-        return self.dbase.hset(key, "operation_status", permission, self.structured)
+        return self.dbase.hset(key, "admission_status", permission, self.structured)
 
     def set_atime(self, zoneID, atime):
         # logger.debug(f"+++ {zoneID} {atime}")
@@ -181,28 +181,28 @@ class StorageTable(TableCommon):
         _prntall(self.dbase.r, "storage")
 
 class ProcessTable(TableCommon):
-    minioAddrPrefix = "ma:"
-    muxPrefix = "mx:"
+    _minio_process_prefix = "ma:"
+    _mux_list_prefix = "mx:"
     process_table_lock_prefix = "lk:"
-    hashes_ = {minioAddrPrefix, muxPrefix}
+    hashes_ = {_minio_process_prefix, _mux_list_prefix}
     structured = {"mux_conf"}
 
     def ins_minio_address(self, zoneID, minioAddr, timeout):
         # logger.debug(f"+++ {zoneID} {minioAddr} {timeout}")
         # logger.debug(f"@@@ MINIO_ADDRESS INSERT {zoneID} {minioAddr}")
-        key = f"{self.minioAddrPrefix}{zoneID}"
+        key = f"{self._minio_process_prefix}{zoneID}"
         self.set_minio_address_expire(zoneID, timeout)
         return self.dbase.hset_map(key, minioAddr, self.structured)
 
     def del_minio_address(self, zoneID):
         # logger.debug(f"+++ {zoneID}")
         # logger.debug(f"@@@ MINIO_ADDRESS DELETE {zoneID}")
-        key = f"{self.minioAddrPrefix}{zoneID}"
+        key = f"{self._minio_process_prefix}{zoneID}"
         return self.dbase.delete(key)
 
     def get_minio_address(self, zoneID):
         # logger.debug(f"+++ {zoneID}")
-        key = f"{self.minioAddrPrefix}{zoneID}"
+        key = f"{self._minio_process_prefix}{zoneID}"
         if not self.dbase.hexists(key, "minioAddr"):
             # logger.debug(f"@@@ MINIO_ADDRESS GET {zoneID} None")
             return None
@@ -212,17 +212,17 @@ class ProcessTable(TableCommon):
 
     def set_minio_address_expire(self, zoneID, timeout):
         # logger.debug(f"+++ {zoneID} {timeout}")
-        key = f"{self.minioAddrPrefix}{zoneID}"
+        key = f"{self._minio_process_prefix}{zoneID}"
         self.dbase.r.expire(key, timeout)
         return None
 
     def get_minio_address_list(self, zoneID):
         # logger.debug(f"+++ {zoneID}")
-        return _scan_strip(self.dbase.r, self.minioAddrPrefix, zoneID, get_value=self.get_minio_address)
+        return _scan_strip(self.dbase.r, self._minio_process_prefix, zoneID, get_value=self.get_minio_address)
 
     def set_mux(self, muxID, mux_val, timeout):
         # logger.debug(f"+++ {muxID} {mux_val} {timeout}")
-        key = f"{self.muxPrefix}{muxID}"
+        key = f"{self._mux_list_prefix}{muxID}"
         r = self.dbase.hset_map(key, mux_val, self.structured)
         if timeout:
             self.set_mux_expire(muxID, timeout)
@@ -230,24 +230,24 @@ class ProcessTable(TableCommon):
 
     def set_mux_expire(self, muxID, timeout):
         # logger.debug(f"+++ {muxID} {timeout}")
-        key = f"{self.muxPrefix}{muxID}"
+        key = f"{self._mux_list_prefix}{muxID}"
         self.dbase.r.expire(key, timeout)
         return None
 
     def get_mux(self, muxID):
-        # logger.debug(f"+++ {muxID}")
-        key = f"{self.muxPrefix}{muxID}"
+        key = f"{self._mux_list_prefix}{muxID}"
         if not self.dbase.hexists(key, "mux_conf"):
             return None
         return self.dbase.hget_map(key, self.structured)
 
-    def del_mux(self, muxID):
+    def del_mux_(self, muxID):
         # logger.debug(f"+++ {muxID}")
-        key = f"{self.muxPrefix}{muxID}"
+        key = f"{self._mux_list_prefix}{muxID}"
         return self.dbase.delete(key)
 
-    def get_mux_list(self, muxID):
-        return _scan_strip(self.dbase.r, self.muxPrefix, muxID, get_value=self.get_mux)
+    def get_mux_list(self):
+        return _scan_strip(self.dbase.r, self._mux_list_prefix, None,
+                           get_value=self.get_mux)
 
     def clear_all(self, everything):
         """Clears Redis DB.  It leaves entires for multiplexers unless
@@ -255,9 +255,9 @@ class ProcessTable(TableCommon):
         """
         # logger.debug(f"@@@ FLUSHALL: EVERYTHING = {everything}")
         delete_all(self.dbase.r, self.process_table_lock_prefix)
-        delete_all(self.dbase.r, self.minioAddrPrefix)
+        delete_all(self.dbase.r, self._minio_process_prefix)
         if everything:
-            delete_all(self.dbase.r, self.muxPrefix)
+            delete_all(self.dbase.r, self._mux_list_prefix)
 
     def printall(self):
         _prntall(self.dbase.r, "process")
@@ -451,10 +451,10 @@ def _scan_strip(r, prefix, target, *, get_value=None):
     striplen = len(prefix)
     while cursor != 0:
         (cursor, data) = r.scan(cursor=cursor, match=match)
-        for item in data:
-            key = item[striplen:]
+        for rawkey in data:
+            key = rawkey[striplen:]
             if get_value == "get":
-                val = r.get(item)
+                val = r.get(rawkey)
                 yield (key, val)
             elif get_value is not None:
                 val = get_value(key)

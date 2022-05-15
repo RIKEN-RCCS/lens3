@@ -542,8 +542,8 @@ function zone_to_ul_data(zone) {
                 {text: {label: "Secret access key", value: wokey["secretAccessKey"]}},
                 {text: {label: "Direct hostname", value: zone["directHostnames"].join(' ')}},
                 {text: {label: "Expiration date", value: format_rfc3339_if_not_zero(zone["expDate"])}},
-                {text: {label: "Permission", value: zone["operation_status"]}},
-                {text: {label: "Status", value: zone["online_status"]}},
+                {text: {label: "Permission", value: zone["admission_status"]}},
+                {text: {label: "Enabled", value: zone["online_status"]}},
                 {text: {label: "MinIO state", value: zone["minio_state"]}},
                 {text: {label: "Last access time", value: format_rfc3339_if_not_zero(zone["atime"])}},
         ];

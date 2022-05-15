@@ -164,7 +164,7 @@ def zone_schema(type_number):
             "accessKeys": {"type": "array", "items": access_key},
             "directHostnames": {"type": "array", "items": {"type": "string"}},
             "expDate": type_number,
-            "operation_status": {"type": "string"},
+            "admission_status": {"type": "string"},
             "online_status": {"type": "string"},
         },
         "required": [
@@ -176,7 +176,7 @@ def zone_schema(type_number):
             "accessKeys",
             "directHostnames",
             "expDate",
-            "operation_status",
+            "admission_status",
             "online_status",
         ],
         "additionalProperties": False,
@@ -217,11 +217,12 @@ def check_pool_dict_is_sound(dict, user, adm_conf):
     in situ checks are defined in `check_zone_values'
     """
 
-    for bucket in dict.get("buckets", []):  # may be absent
-        check_policy(bucket["policy"])
+    ## "buckets" may be absent.
 
-    check_status(dict["online_status"]) # mandatory
-    check_permission(dict["operation_status"]) # mandatory
+    for bucket in dict.get("buckets", []):
+        check_policy(bucket["policy"])
+    check_status(dict["online_status"])
+    check_permission(dict["admission_status"])
     for accessKey in dict.get("accessKeys", []):
         check_policy_name(accessKey["policyName"])
 

@@ -36,6 +36,7 @@ def _check_url_error_is_connection_errors(x):
 class Multiplexer():
 
     def __init__(self, mux_conf, tables, controller, hostname):
+        self._verbose = False
         ##self.node = hostname
         self._mux_host = hostname
         self.tables = tables
@@ -108,13 +109,14 @@ class Multiplexer():
 
 
     def _list_mux_ip_addresses(self):
-        muxlist = self.tables.process_table.get_mux_list(None)
+        muxlist = self.tables.process_table.get_mux_list()
         muxs = [v["mux_conf"]["lenticularis"]["multiplexer"]["host"] for (e, v) in muxlist]
         return set([addr for h in muxs for addr in get_ip_address(h)])
 
 
     def _register_mux_info(self, sleeptime):
-        logger.debug(f"Updating mux info periodically {sleeptime}.")
+        if self._verbose:
+            logger.debug(f"Updating Mux info periodically, interval={sleeptime}.")
         now = time.time()
         mux_info = {"mux_conf": self.mux_conf_subset,
                     "start_time": f"{self.start}",
@@ -266,10 +268,10 @@ class Multiplexer():
 
 
     def _zone_to_user(self, zoneID):  # CODE CLONE @ zoneadm.py
-            zone = self.tables.storage_table.get_zone(zoneID)
-            if zone is None:
-                return None
-            return zone["user"]
+        zone = self.tables.storage_table.get_zone(zoneID)
+        if zone is None:
+            return None
+        return zone["user"]
 
 
     def _wrap_res(self, environ, res, headers, sniff=False, sniff_marker=""):

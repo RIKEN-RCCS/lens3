@@ -29,6 +29,7 @@ lenticularis:
         watch_interval: 30
         keepalive_limit: 600
         allowed_down_count: 3
+        minio_startup_timeout: 60
         max_lock_duration: 60
         mc_info_timelimit: 20
         mc_stop_timelimit: 20

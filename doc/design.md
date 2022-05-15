@@ -1712,7 +1712,7 @@ Note that a bucket-pool has another state `status`, but it is always
 | ar:access-key | pool-id       |       |
 | mo:pool-id    | pool-state    |       |
 | ac:pool-id    | timestamp     |       |
-| pr::          | list-of-permissions-of-users |(json)|
+| pr::          | list-of-admissions-of-users |(json)|
 | uu:user       | user-info     |(json)|
 | dr:host       | pool-id       |       |
 | lk:           | -             |(for locking the whole table)|
@@ -1723,7 +1723,7 @@ Note that a bucket-pool has another state `status`, but it is always
 | Key           | Value         | Description   |
 | ----          | ----          | ----          |
 | ma:pool-id    | process-description |(htable)|
-| mx:endpoint   | mux-description |(htable)|
+| mx:Mux-endpoint | Mux-description |(htable)|
 | lk:??         | -> (lock?)
 
 A process-description includes:
@@ -1733,7 +1733,7 @@ A process-description includes:
 * a pid of a MinIO
 
 A mux-description includes:
-* an endpoint of a Mux (json)
+* an endpoint of a Mux (host + port)
 * start-time
 * last-interrupted-time?
 
@@ -1741,11 +1741,9 @@ A mux-description includes:
 
 | Key           | Value         | Description   |
 | ----          | ----          | ----          |
-| rt:pool-id    | endpoint      | |
+| ep:pool-id    | MinIO-endpoint | |
 | bk:bucket-name | pool-id      | |
 | ts:pool-id    | timestamp     | Timestamp on the last access |
-
-An endpoint is a pair of "host:port" referring to a MinIO.
 
 ## Bucket policy
 

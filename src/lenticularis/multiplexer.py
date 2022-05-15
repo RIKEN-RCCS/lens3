@@ -12,6 +12,7 @@ from urllib.error import HTTPError, URLError
 from lenticularis.utility import Read1Reader, parse_s3_auth
 from lenticularis.utility import get_ip_address
 from lenticularis.utility import normalize_address
+from lenticularis.utility import host_port
 from lenticularis.utility import log_access
 from lenticularis.utility import logger
 from lenticularis.utility import tracing
@@ -63,15 +64,6 @@ class Multiplexer():
         self.mc_info_timelimit = int(controller_conf["mc_info_timelimit"])
         self.refresh_margin = int(controller_conf["refresh_margin"])
 
-        self.mux_conf_subset = {
-            "lenticularis": {
-                "multiplexer": {
-                    "host": self._mux_host,
-                    "port": self._mux_port,
-                },
-            },
-        }
-
         # we do not need register mux_info here,
         # as muxmain is going to call timer_interrupt at once.
         # self._register_mux_info()
@@ -109,20 +101,19 @@ class Multiplexer():
 
 
     def _list_mux_ip_addresses(self):
-        muxlist = self.tables.process_table.get_mux_list()
-        muxs = [v["mux_conf"]["lenticularis"]["multiplexer"]["host"] for (e, v) in muxlist]
-        return set([addr for h in muxs for addr in get_ip_address(h)])
+        muxs = self.tables.process_table.get_mux_list()
+        return set([addr for (h, p) in muxs for addr in get_ip_address(h)])
 
 
     def _register_mux_info(self, sleeptime):
         if self._verbose:
             logger.debug(f"Updating Mux info periodically, interval={sleeptime}.")
         now = time.time()
-        mux_info = {"mux_conf": self.mux_conf_subset,
+        mux_desc = {"host": self._mux_host, "port": self._mux_port,
                     "start_time": f"{self.start}",
                     "last_interrupted_time": f"{now}"}
-        ep = self._mux_host
-        self.tables.process_table.set_mux(ep, mux_info,
+        ep = host_port(self._mux_host, self._mux_port)
+        self.tables.process_table.set_mux(ep, mux_desc,
                                           int(sleeptime + self.refresh_margin))
 
     def _process_request(self, environ, start_response):
@@ -250,8 +241,8 @@ class Multiplexer():
             jitter = 0  # NOTE: fixed to 0
             initial_idle_duration = self.watch_interval + jitter + self.mc_info_timelimit
             atime_timeout = initial_idle_duration + self.refresh_margin
-            atime = f"{int(time.time())}"
-            self.tables.routing_table.set_atime_by_addr_(dest_addr, atime, atime_timeout)
+            ##atime = f"{int(time.time())}"
+            ##self.tables.routing_table.set_atime_by_addr_(dest_addr, atime, atime_timeout)
             self.tables.routing_table.set_route_expiry(zone_id, atime_timeout)
 
         user_id = self._zone_to_user(zone_id)
@@ -327,7 +318,7 @@ class Multiplexer():
         else:
             auth = headers.get("AUTHORIZATION")
             access_key_id = self._get_access_key_id(auth)
-            r = self.tables.routing_table.get_route_by_access_key_(access_key_id)
+            ##r = self.tables.routing_table.get_route_by_access_key_(access_key_id)
             zone_id = self.tables.storage_table.get_pool_by_access_key(access_key_id)
             r = self.tables.routing_table.get_route(zone_id)
 

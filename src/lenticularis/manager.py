@@ -510,8 +510,8 @@ class MinioManager():
         try:
             alarm(self.mc_info_timelimit)
             self.alarm_cause = "check_minio_info"
-            (p, r) = self.mc.admin_info()
-            assert p is None
+            (p_, r) = self.mc.admin_info()
+            assert p_ is None
             ##logger.debug(f"@@@ r = {r}")
             _check_mc_status(r, "mc.admin_info")
             alarm(0)
@@ -601,8 +601,8 @@ class MinioManager():
         children = []
 
         access_keys = zone["accessKeys"]
-        (p, existing) = self.mc.admin_user_list()
-        assert p is None
+        (p_, existing) = self.mc.admin_user_list()
+        assert p_ is None
         _check_mc_status(existing, "mc.admin_user_list")
 
         (ll, pp, rr) = outer_join_list(access_keys, lambda b: b.get("accessKeyID"),
@@ -623,11 +623,11 @@ class MinioManager():
         access_key_id = b["accessKeyID"]
         secret_access_key = b["secretAccessKey"]
         policy = b["policyName"]
-        (p, r) = self.mc.admin_user_add(access_key_id, decrypt_secret(secret_access_key))
-        assert p is None
+        (p_, r) = self.mc.admin_user_add(access_key_id, decrypt_secret(secret_access_key))
+        assert p_ is None
         _check_mc_status(r, "mc.admin_user_add")
-        (p, r) = self.mc.admin_policy_set(access_key_id, policy)
-        assert p is None
+        (p_, r) = self.mc.admin_policy_set(access_key_id, policy)
+        assert p_ is None
         _check_mc_status(r, "mc.admin_policy_set")
         return []
 
@@ -635,12 +635,12 @@ class MinioManager():
         access_key_id = e["accessKey"]
         if False:
             ## NOTE: Do not delete unregistered user here.
-            (p, r) = self.mc.admin_user_disable(access_key_id, no_wait=True)
-            assert r is None
+            (p, r_) = self.mc.admin_user_disable(access_key_id, no_wait=True)
+            assert r_ is None
             return [(p, "mc.admin_user_disable")]
         else:
-            (p, r) = self.mc.admin_user_remove(access_key_id)
-            assert p is None
+            (p_, r) = self.mc.admin_user_remove(access_key_id)
+            assert p_ is None
             _check_mc_status(r, "mc.admin_user_remove")
             return []
 
@@ -650,21 +650,21 @@ class MinioManager():
         secret_access_key = b["secretAccessKey"]
         policy = b["policyName"]
 
-        (p, r) = self.mc.admin_user_remove(access_key_id)
-        assert p is None
+        (p_, r) = self.mc.admin_user_remove(access_key_id)
+        assert p_ is None
         _check_mc_status(r, "mc.admin_user_remove")
 
         secret = decrypt_secret(secret_access_key)
-        (p, r) = self.mc.admin_user_add(access_key_id, secret)
-        assert p is None
+        (p_, r) = self.mc.admin_user_add(access_key_id, secret)
+        assert p_ is None
         _check_mc_status(r, "mc.admin_user_add")
 
-        (p, r) = self.mc.admin_policy_set(access_key_id, policy)
-        assert p is None
+        (p_, r) = self.mc.admin_policy_set(access_key_id, policy)
+        assert p_ is None
         _check_mc_status(r, "mc.admin_policy_set")
 
-        (p, r) = self.mc.admin_user_enable(access_key_id)
-        assert p is None
+        (p_, r) = self.mc.admin_user_enable(access_key_id)
+        assert p_ is None
         _check_mc_status(r, "mc.admin_user_enable")
         return []
 
@@ -675,8 +675,8 @@ class MinioManager():
         children = []
 
         buckets = zone["buckets"]
-        (p, existing) = self.mc.list_buckets()
-        assert p is None
+        (p_, existing) = self.mc.list_buckets()
+        assert p_ is None
         _check_mc_status(existing, "mc.list_buckets")
 
         logger.debug(f"@@@ buckets = {buckets}")
@@ -697,28 +697,28 @@ class MinioManager():
 
     def _set_bucket_policy_add(self, b):
         name = b["key"]
-        (p, r) = self.mc.make_bucket(name)
-        assert p is None
+        (p_, r) = self.mc.make_bucket(name)
+        assert p_ is None
         _check_mc_status(r, "mc.make_bucket")
         policy = b["policy"]
-        (p, r) = self.mc.policy_set(name, policy)
-        assert p is None
+        (p_, r) = self.mc.policy_set(name, policy)
+        assert p_ is None
         _check_mc_status(r, "mc.policy_set")
         return []
 
     def _set_bucket_policy_delete(self, e):
         name = remove_trailing_shash(e["key"])
         policy = "none"
-        (p, r) = self.mc.policy_set(name, policy, no_wait=True)
-        assert r is None
+        (p, r_) = self.mc.policy_set(name, policy, no_wait=True)
+        assert r_ is None
         return [(p, "mc.policy_set")]
 
     def _set_bucket_policy_update(self, x):
         (b, e) = x
         name = b["key"]
         policy = b["policy"]
-        (p, r) = self.mc.policy_set(name, policy)
-        assert p is None
+        (p_, r) = self.mc.policy_set(name, policy)
+        assert p_ is None
         _check_mc_status(r, "mc.policy_set")
         return []
 
@@ -729,8 +729,8 @@ class MinioManager():
         try:
             alarm(self.mc_stop_timelimit)
             self.alarm_cause = "stop_minio"
-            (p, r) = self.mc.admin_service_stop()
-            assert p is None
+            (p_, r) = self.mc.admin_service_stop()
+            assert p_ is None
             _check_mc_status(r, "mc.admin_service_stop")
             alarm(0)
             self.alarm_cause = None
@@ -742,6 +742,7 @@ class MinioManager():
             logger.error(f"IGNORE EXCEPTION (service stop): {e}")
             logger.exception(e)
             # pass  # ignore any exceptions
+
         try:
             p_status = p.wait()
             logger.debug(f"@@@ STATUS = {p_status}")

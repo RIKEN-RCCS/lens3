@@ -12,8 +12,12 @@ from lenticularis.dbase import DBase
 # Redis DB number.
 
 STORAGE_TABLE_ID = 0
-PROCESS_TABLE_ID = 2
-ROUTING_TABLE_ID = 4
+PROCESS_TABLE_ID = 1
+ROUTING_TABLE_ID = 2
+
+
+def _get_mux_host_port(desc):
+    return (desc["host"], desc["port"])
 
 
 class TableCommon():
@@ -22,21 +26,20 @@ class TableCommon():
 
 
 class StorageTable(TableCommon):
-
-    zoneIDPrefix = "ru:"
-    access_key_id_prefix = "ar:"
+    _pool_desc_prefix = "ru:"
+    _access_key_id_prefix = "ar:"
     directHostnamePrefix = "dr:"
     atimePrefix = "ac:"
     modePrefix = "mo:"
     allowDenyRuleKey = "pr::"
-    unixUserPrefix = "uu:"
+    _unix_user_prefix = "uu:"
     storage_table_lock_prefix = "zk:"
-    hashes_ = {zoneIDPrefix}
+    hashes_ = {_pool_desc_prefix}
     structured = {"buckets", "accessKeys", "directHostnames"}
 
     def ins_zone(self, zoneID, dict):
         ##logger.debug(f"ins_zone {zoneID} {dict}")
-        key = f"{self.zoneIDPrefix}{zoneID}"
+        key = f"{self._pool_desc_prefix}{zoneID}"
         return self.dbase.hset_map(key, dict, self.structured)
 
     def ins_ptr(self, zoneID, dict):
@@ -45,7 +48,7 @@ class StorageTable(TableCommon):
         for a in dict.get("accessKeys"):
             access_key_id = a.get("accessKeyID")
             if access_key_id:
-                key = f"{self.access_key_id_prefix}{access_key_id}"
+                key = f"{self._access_key_id_prefix}{access_key_id}"
                 self.dbase.set(key, zoneID)
         ## directHostnames must exist.
         for directHostname in dict.get("directHostnames"):
@@ -55,7 +58,7 @@ class StorageTable(TableCommon):
 
     def del_zone(self, zoneID):
         # logger.debug(f"+++ {zoneID}")
-        return self.dbase.delete(f"{self.zoneIDPrefix}{zoneID}")
+        return self.dbase.delete(f"{self._pool_desc_prefix}{zoneID}")
 
     def del_ptr(self, zoneID, dict):
         # logger.debug(f"+++ {zoneID} {dict}")
@@ -64,7 +67,7 @@ class StorageTable(TableCommon):
             access_key_id = a.get("accessKeyID")
             if access_key_id:
                 # logger.debug(f"@@@ del_ptr access_key_id {access_key_id}")
-                key = f"{self.access_key_id_prefix}{access_key_id}"
+                key = f"{self._access_key_id_prefix}{access_key_id}"
                 self.dbase.delete(key)
         for directHostname in dict.get("directHostnames", []):  # directHostname may be absent
             # logger.debug(f"@@@ del_ptr directHostname {directHostname}")
@@ -74,20 +77,20 @@ class StorageTable(TableCommon):
 
     def get_zone(self, zoneID):
         # logger.debug(f"+++ {zoneID}")
-        key = f"{self.zoneIDPrefix}{zoneID}"
+        key = f"{self._pool_desc_prefix}{zoneID}"
         if not self.dbase.hexists(key, "user"):
             return None
         return self.dbase.hget_map(key, self.structured)
 
     def get_ptr_list(self):
         # logger.debug(f"+++ ")
-        access_key_ptr = _scan_strip(self.dbase.r, self.access_key_id_prefix, None, get_value="get")
-        direct_host_ptr = _scan_strip(self.dbase.r, self.directHostnamePrefix, None, get_value="get")
+        access_key_ptr = _scan_table(self.dbase.r, self._access_key_id_prefix, None, value="get")
+        direct_host_ptr = _scan_table(self.dbase.r, self.directHostnamePrefix, None, value="get")
         return (list(access_key_ptr), list(direct_host_ptr))
 
     def get_pool_by_access_key(self, access_key_id):
         # logger.debug(f"+++ {access_key_id}")
-        key = f"{self.access_key_id_prefix}{access_key_id}"
+        key = f"{self._access_key_id_prefix}{access_key_id}"
         return self.dbase.get(key)
 
     def get_zoneID_by_directHostname(self, directHostname):
@@ -97,7 +100,7 @@ class StorageTable(TableCommon):
 
     def set_permission(self, zoneID, permission):
         # logger.debug(f"+++ {zoneID} {permission}")
-        key = f"{self.zoneIDPrefix}{zoneID}"
+        key = f"{self._pool_desc_prefix}{zoneID}"
         return self.dbase.hset(key, "admission_status", permission, self.structured)
 
     def set_atime(self, zoneID, atime):
@@ -142,50 +145,51 @@ class StorageTable(TableCommon):
             return []
         return json.loads(v, parse_int=None)
 
-    def ins_unixUserInfo(self, id, uinfo):
+    def ins_unix_user_info(self, id, uinfo):
         # logger.debug(f"+++ {id} {uinfo}")
-        key = f"{self.unixUserPrefix}{id}"
+        key = f"{self._unix_user_prefix}{id}"
         return self.dbase.set(key, json.dumps(uinfo))
 
-    def get_unixUserInfo(self, id):
+    def get_unix_user_info(self, id):
         # logger.debug(f"+++ {id}")
-        key = f"{self.unixUserPrefix}{id}"
+        key = f"{self._unix_user_prefix}{id}"
         v = self.dbase.get(key)
         return json.loads(v, parse_int=None) if v is not None else None
 
-    def del_unixUserInfo(self, id):
+    def del_unix_user_info(self, id):
         # logger.debug(f"+++ {id}")
-        key = f"{self.unixUserPrefix}{id}"
+        key = f"{self._unix_user_prefix}{id}"
         return self.dbase.delete(key)
 
     def get_unixUsers_list(self):
-        # logger.debug(f"+++ ")
-        return _scan_strip(self.dbase.r, self.unixUserPrefix, None)
+        kk = _scan_table(self.dbase.r, self._unix_user_prefix, None)
+        return [k for (k, _) in kk]
 
-    def get_zoneID_list(self, zoneID):
-        # logger.debug(f"+++ {zoneID}")
-        return _scan_strip(self.dbase.r, self.zoneIDPrefix, zoneID)
+    def list_pool_ids(self, zoneID):
+        kk = _scan_table(self.dbase.r, self._pool_desc_prefix, zoneID)
+        return [k for (k, _) in kk]
 
     def clear_all(self, everything):
-        delete_all(self.dbase.r, self.access_key_id_prefix)
+        delete_all(self.dbase.r, self._access_key_id_prefix)
         delete_all(self.dbase.r, self.directHostnamePrefix)
-        delete_all(self.dbase.r, self.zoneIDPrefix)
+        delete_all(self.dbase.r, self._pool_desc_prefix)
         delete_all(self.dbase.r, self.atimePrefix)
         delete_all(self.dbase.r, self.modePrefix)
         delete_all(self.dbase.r, self.storage_table_lock_prefix)
         if everything:
             delete_all(self.dbase.r, self.allowDenyRuleKey)
-            delete_all(self.dbase.r, self.unixUserPrefix)
+            delete_all(self.dbase.r, self._unix_user_prefix)
 
     def printall(self):
         _prntall(self.dbase.r, "storage")
+
 
 class ProcessTable(TableCommon):
     _minio_process_prefix = "ma:"
     _mux_list_prefix = "mx:"
     process_table_lock_prefix = "lk:"
     hashes_ = {_minio_process_prefix, _mux_list_prefix}
-    structured = {"mux_conf"}
+    structured = {}
 
     def ins_minio_address(self, zoneID, minioAddr, timeout):
         # logger.debug(f"+++ {zoneID} {minioAddr} {timeout}")
@@ -218,36 +222,34 @@ class ProcessTable(TableCommon):
 
     def get_minio_address_list(self, zoneID):
         # logger.debug(f"+++ {zoneID}")
-        return _scan_strip(self.dbase.r, self._minio_process_prefix, zoneID, get_value=self.get_minio_address)
+        return _scan_table(self.dbase.r, self._minio_process_prefix, zoneID, value=self.get_minio_address)
 
-    def set_mux(self, muxID, mux_val, timeout):
-        # logger.debug(f"+++ {muxID} {mux_val} {timeout}")
-        key = f"{self._mux_list_prefix}{muxID}"
-        r = self.dbase.hset_map(key, mux_val, self.structured)
+    def set_mux(self, mux_ep, mux_desc, timeout):
+        key = f"{self._mux_list_prefix}{mux_ep}"
+        r = self.dbase.hset_map(key, mux_desc, self.structured)
         if timeout:
-            self.set_mux_expire(muxID, timeout)
+            self._set_mux_expiry(mux_ep, timeout)
         return r
 
-    def set_mux_expire(self, muxID, timeout):
-        # logger.debug(f"+++ {muxID} {timeout}")
-        key = f"{self._mux_list_prefix}{muxID}"
+    def get_mux(self, mux_ep):
+        key = f"{self._mux_list_prefix}{mux_ep}"
+        return self.dbase.hget_map(key, self.structured)
+
+    def del_mux_(self, mux_ep):
+        key = f"{self._mux_list_prefix}{mux_ep}"
+        return self.dbase.delete(key)
+
+    def _set_mux_expiry(self, mux_ep, timeout):
+        key = f"{self._mux_list_prefix}{mux_ep}"
         self.dbase.r.expire(key, timeout)
         return None
 
-    def get_mux(self, muxID):
-        key = f"{self._mux_list_prefix}{muxID}"
-        if not self.dbase.hexists(key, "mux_conf"):
-            return None
-        return self.dbase.hget_map(key, self.structured)
-
-    def del_mux_(self, muxID):
-        # logger.debug(f"+++ {muxID}")
-        key = f"{self._mux_list_prefix}{muxID}"
-        return self.dbase.delete(key)
-
     def get_mux_list(self):
-        return _scan_strip(self.dbase.r, self._mux_list_prefix, None,
-                           get_value=self.get_mux)
+        vv = _scan_table(self.dbase.r, self._mux_list_prefix, None,
+                         value=self.get_mux)
+        mm0 = [_get_mux_host_port(v) for (k, v) in vv]
+        mm1 = sorted(list(set(mm0)))
+        return mm1
 
     def clear_all(self, everything):
         """Clears Redis DB.  It leaves entires for multiplexers unless
@@ -274,12 +276,11 @@ def zone_to_route(zone):
 
 
 class RoutingTable(TableCommon):
-    access_key_id_prefix = "aa:"
-    directHostnamePrefix = "da:"
-    atimePrefix = "at:"
     _endpoint_prefix = "ep:"
     _timestamp_prefix = "ts:"
     _bucket_prefix = "bk:"
+    _host_style_prefix = "da:"
+    _atime_prefix = "at:"
     hashes_ = {}
     structured = {}
 
@@ -313,60 +314,22 @@ class RoutingTable(TableCommon):
         key = f"{self._timestamp_prefix}{pool_id}"
         return self.dbase.delete(key)
 
-
-    def ins_route_(self, minioAddr, route, timeout):
-        # logger.debug(f"+++ {minioAddr} {route} {timeout}")
-        for a in route.get("accessKeys"):
-            key = f"{self.access_key_id_prefix}{a}"
-            self.dbase.set(key, minioAddr)
-        for h in route.get("directHostnames"):
-            key = f"{self.directHostnamePrefix}{h}"
-            self.dbase.set(key, minioAddr)
-        if route:
-            self.set_route_expire_(route, timeout)
-        return None
-
-    def del_route_(self, route):
-        # logger.debug(f"+++")
-        for a in route.get("accessKeys"):
-            key = f"{self.access_key_id_prefix}{a}"
-            self.dbase.delete(key)
-        for h in route.get("directHostnames"):
-            key = f"{self.directHostnamePrefix}{h}"
-            self.dbase.delete(key)
-        return None
-
-    def set_route_expire_(self, route, timeout):
-        # logger.debug(f"+++ {route} {timeout}")
-        for a in route.get("accessKeys"):
-            key = f"{self.access_key_id_prefix}{a}"
-            self.dbase.r.expire(key, timeout)
-        for h in route.get("directHostnames"):
-            key = f"{self.directHostnamePrefix}{h}"
-            self.dbase.r.expire(key, timeout)
-        return None
-
-    def get_route_by_access_key_(self, access_key_id):
-        # logger.debug(f"+++ {access_key_id}")
-        key = f"{self.access_key_id_prefix}{access_key_id}"
-        return self.dbase.get(key)
-
     def get_route_by_direct_hostname_(self, directHostname):
         # logger.debug(f"+++ {directHostname}")
-        key = f"{self.directHostnamePrefix}{directHostname}"
+        key = f"{self._host_style_prefix}{directHostname}"
         return self.dbase.get(key)
 
 
     def set_atime_expire_(self, addr, timeout):
         # logger.debug(f"+++ {addr} {timeout}")
-        key = f"{self.atimePrefix}{addr}"
+        key = f"{self._atime_prefix}{addr}"
         return self.dbase.r.expire(key, timeout)
 
     def set_atime_by_addr_(self, addr, atime, default_ttl):
         ## addr is an endpoint of a minio.
         ## NOTE: keepttl is not used, because it is available in
         ## Redis-6.0 and later.
-        key = f"{self.atimePrefix}{addr}"
+        key = f"{self._atime_prefix}{addr}"
         ttl = self.dbase.r.ttl(key)
         retval = self.dbase.set(key, atime)
         if ttl > 0:
@@ -375,34 +338,18 @@ class RoutingTable(TableCommon):
             self.dbase.r.expire(key, default_ttl)
         return retval
 
-    def get_atime_by_addr_(self, addr):
-        # logger.debug(f"+++ {addr}")
-        key = f"{self.atimePrefix}{addr}"
-        return self.dbase.get(key)
-
-    def del_atime_by_addr_(self, addr):
-        # logger.debug(f"+++ {addr}")
-        key = f"{self.atimePrefix}{addr}"
-        return self.dbase.delete(key)
-
-
     def get_route_list(self):
-        return _scan_strip(self.dbase.r, self._endpoint_prefix, None, get_value="get")
-        ##access_key_route = _scan_strip(self.dbase.r, self.access_key_id_prefix, None, get_value="get")
-        ##direct_host_route = _scan_strip(self.dbase.r, self.directHostnamePrefix, None, get_value="get")
-        ##atime = _scan_strip(self.dbase.r, self.atimePrefix, None, get_value="get")
-        ##return (access_key_route, direct_host_route, atime)
+        return _scan_table(self.dbase.r, self._endpoint_prefix, None, value="get")
 
     def clear_routing(self, everything):
         delete_all(self.dbase.r, self._endpoint_prefix)
         delete_all(self.dbase.r, self._timestamp_prefix)
         delete_all(self.dbase.r, self._bucket_prefix)
-        delete_all(self.dbase.r, self.atimePrefix)
+        delete_all(self.dbase.r, self._atime_prefix)
 
     def clear_all_(self, everything):
-        delete_all(self.dbase.r, self.access_key_id_prefix)
-        delete_all(self.dbase.r, self.directHostnamePrefix)
-        delete_all(self.dbase.r, self.atimePrefix)
+        delete_all(self.dbase.r, self._host_style_prefix)
+        delete_all(self.dbase.r, self._atime_prefix)
 
     def printall(self):
         _prntall(self.dbase.r, "routing")
@@ -440,24 +387,25 @@ def delete_all(r, match):
         r.delete(key)
 
 
-def _scan_strip(r, prefix, target, *, get_value=None):
+def _scan_table(r, prefix, target, *, value=None):
     """Returns an iterator to scan a table for a prefix+target pattern,
-    where target is * if it is None.  It drops a prefix from the
-    returned key.
+    where target is * if it is None.  It drops the prefix from the
+    returned key.  It returns key+value pairs, where value is None if
+    value= is not specified.
     """
-    cursor = "0"
-    mkey = target if target else "*"
-    match = f"{prefix}{mkey}"
+    target = target if target else "*"
+    pattern = f"{prefix}{target}"
     striplen = len(prefix)
+    cursor = "0"
     while cursor != 0:
-        (cursor, data) = r.scan(cursor=cursor, match=match)
+        (cursor, data) = r.scan(cursor=cursor, match=pattern)
         for rawkey in data:
             key = rawkey[striplen:]
-            if get_value == "get":
+            if value == "get":
                 val = r.get(rawkey)
                 yield (key, val)
-            elif get_value is not None:
-                val = get_value(key)
+            elif value is not None:
+                val = value(key)
                 yield (key, val)
             else:
-                yield key
+                yield (key, None)

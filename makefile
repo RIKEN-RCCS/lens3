@@ -7,7 +7,7 @@ pyright::
 	(cd src; pyright lenticularis/*.py) > pyright-output.txt
 
 typestubs::
-	(cd src; pyright --createstub lenticularis.scheduler)
+	(cd src; pyright --createstub lenticularis.table)
 
 pylint::
 	(cd src/lenticularis; pylint *.py) > pylint-output.txt

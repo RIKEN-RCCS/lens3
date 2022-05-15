@@ -85,18 +85,18 @@ def format_mux(m, format):
 def _store_unix_user_info_add(zone_adm, b):
     # New Entry (no right hand side)
     logger.debug(f"@@@ >> New {b}")
-    zone_adm.store_unixUserInfo(b["id"], b)
+    zone_adm.store_unix_user_info(b["id"], b)
 
 def _store_unix_user_info_delete(zone_adm, e):
     # Deleted Entry (no left hand side)
     logger.debug(f"@@@ >> Delete {e}")
-    zone_adm.delete_unixUserInfo(e)
+    zone_adm.delete_unix_user_info(e)
 
 def _store_unix_user_info_update(zone_adm, x):
     # Updated Entry
     (b, e) = x
     logger.debug(f"@@@ >> Update {b} {e}")
-    zone_adm.store_unixUserInfo(b["id"], b)
+    zone_adm.store_unix_user_info(b["id"], b)
 
 def _store_user_info(zone_adm, user_info):
     existing = zone_adm.list_unixUsers()
@@ -276,7 +276,7 @@ class Command():
     def fn_show_user_info(self):
         unix_users = self.zone_adm.list_unixUsers()
         logger.debug(f"@@@ {unix_users}")
-        uis = [user_info_to_csv_row(self.zone_adm.fetch_unixUserInfo(id), id)
+        uis = [user_info_to_csv_row(self.zone_adm.fetch_unix_user_info(id), id)
                for id in unix_users]
         print_json_csv("user info", uis, self.args.format)
 
@@ -339,7 +339,7 @@ class Command():
     def fn_dump_zone(self):
         rules = self.zone_adm.fetch_allow_deny_rules()
         unix_users = self.zone_adm.list_unixUsers()
-        users = [self.zone_adm.fetch_unixUserInfo(id) for id in unix_users]
+        users = [self.zone_adm.fetch_unix_user_info(id) for id in unix_users]
         (zone_list, _) = self.zone_adm.fetch_zone_list(None, include_atime=True)
         dump_data = json.dumps({"rules": rules, "users": users, "zones": zone_list})
         print(dump_data)

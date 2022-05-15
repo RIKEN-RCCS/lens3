@@ -6,13 +6,14 @@
 import os
 import sys
 import json
-from subprocess import Popen, PIPE
+from subprocess import Popen, DEVNULL, PIPE
 from lenticularis.utility import logger
 from lenticularis.utility import random_str
 
 
 class Mc():
     def __init__(self, mc, env):
+        self._verbose = False
         self.mc = mc
         self.env = env
 
@@ -103,65 +104,59 @@ class Mc():
                                 f"{self._alias}/{bucket}")
 
 
-    def _make_mc_error_list(self, message):
-        ee = [{"status": "error", "error": {"message": message}}]
-        logger.debug(f"@@@ ERROR: {ee}")
-        return ee
+    def _make_mc_error(self, message):
+        return {"status": "error", "error": {"message": message}}
 
-    def _mc_reduce_error_message(self, ee):
-        for e in ee:
-            if e.get("status") != "success":
-                m = e.get("error")
+    def _simplify_mc_messages(self, ee):
+        """Simplifies messages from mc, by choosing one if some errors
+        happened."""
+        for s in ee:
+            if s.get("status") != "success":
+                e = s.get("error")
+                if e is None:
+                    return [self._make_mc_error("Unknown error")]
+                m = e.get("message")
                 if m is None:
-                    logger.debug("@@@ UNKNOWN ERROR 1")
-                    return self._make_mc_error_list("Unknown error")
-                message = m.get("message")
-                if message is None:
-                    logger.debug("@@@ UNKNOWN ERROR 2")
-                    return self._make_mc_error_list("Unknown error")
-                logger.debug(f"@@@ COMMAND ERROR {e}")
-                return [e]
-        ##logger.debug(f"@@@ SUCCESS: {ee}")
-        return ee
+                    return [self._make_mc_error("Unknown error")]
+                return ([s], False)
+        return (ee, True)
 
     def _execute_cmd(self, no_wait, *args):
-        if self._alias is None or self._config_dir is None:
-            raise Exception("mc command called without setting an alias.")
-        cmd = [self.mc, "--json", f"--config-dir={self._config_dir}"] + list(args)
-        ##logger.debug(f"@@@ CMD {cmd} ({no_wait})")
-
-        if no_wait:
-            logger.debug(f"@@@ no wait!")
-            p = Popen(cmd, stdin=PIPE, stdout=PIPE, stderr=PIPE, env=self.env)
-            #status = unwait(cmd, self.env)
-            #if status != 0:
-            #    logger.error(f"unwait exited with non-zero status: {status}")
-            #    return [{"status": "error", "casuse": "unwait failed", "exit_code": f"{status}"}]
-            #return [{"status": "success"}]
-            return (p, None)
-
+        assert self._alias is not None and self._config_dir is not None
+        cmd = ([self.mc, "--json", f"--config-dir={self._config_dir}"]
+               + list(args))
         try:
-            logger.debug(f"@@@ Popen({cmd})")
-            with Popen(cmd, stdin=PIPE, stdout=PIPE, stderr=PIPE,
-                       env=self.env) as p:
+            p = Popen(cmd, stdin=DEVNULL, stdout=PIPE, stderr=PIPE,
+                      env=self.env)
+            if no_wait:
+                return (p, None)
+
+            with p:
                 (outs, errs) = p.communicate()
                 status = p.wait()
-                logger.debug(f"Run mc command: cmd={cmd}; status={status}, outs=({outs}), errs=({errs})")
+                if (self._verbose):
+                    logger.debug(f"Running mc command: cmd={cmd};"
+                                 f" status={status},"
+                                 f" outs=({outs}), errs=({errs})")
                 try:
-                    s = outs.split(b'\n')
-                    j = [json.loads(e, parse_int=None) for e in s if e != b""]
-                    r = self._mc_reduce_error_message(j)
+                    s = outs.split(b"\n")
+                    ee = [json.loads(e, parse_int=None) for e in s if e != b""]
+                    (r, ok) = self._simplify_mc_messages(ee)
+                    if ok:
+                        logger.debug(f"Running mc command OK: cmd={cmd}")
+                    else:
+                        logger.debug(f"Running mc command failed: cmd={cmd};"
+                                     f" error={r}")
                     return (None, r)
                 except Exception as e:
-                    logger.debug(f"@@@ EXCEPTION: {e}")
+                    logger.error(f"json.loads failed: exception={e}")
                     logger.exception(e)
-                    r = self._make_mc_error_list(f"{e}")
+                    r = [self._make_mc_error(f"{outs}")]
                     return (None, r)
-                # NOTREACHED
         except Exception as e:
-            logger.debug(f"@@@ EXCEPTION: {e}")
-            logger.exception(e)  # [, AlarmException]
-            r = self._make_mc_error_list(f"{e}")
+            logger.error(f"Popen failed: cmd={cmd}; exception={e}")
+            logger.exception(e)
+            r = [self._make_mc_error(f"{e}")]
             return (None, r)
 
 

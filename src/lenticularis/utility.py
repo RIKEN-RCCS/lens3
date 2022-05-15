@@ -420,13 +420,6 @@ def dict_diff(e, z):
     return r
 
 
-def get_mux_addr(v):
-    lenticularis_param = v["lenticularis"]
-    host = lenticularis_param["multiplexer"]["host"]
-    port = lenticularis_param["multiplexer"]["port"]
-    return (host, port)
-
-
 def uniform_distribution_jitter():
     return random.random() * 2  # NOTE: FIXED VALUE
 

@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 import collections
+from lenticularis.utility import sha1
 from lenticularis.utility import logger
-from lenticularis.utility import sha1, get_mux_addr
 
 
 class Scheduler():
@@ -16,9 +16,7 @@ class Scheduler():
 
     def schedule(self, zoneID_):
         """Chooses a least used host for running MinIO."""
-        mux_list = self.tables.process_table.get_mux_list()
-        multiplexers = [get_mux_addr(v["mux_conf"]) for (e, v) in mux_list]
-        multiplexers = sorted(list(set(multiplexers)))
+        multiplexers = self.tables.process_table.get_mux_list()
 
         if len(multiplexers) == 0:
             ## Choose the localhost.

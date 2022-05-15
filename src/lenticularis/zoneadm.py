@@ -12,7 +12,7 @@ from lenticularis.table import get_tables
 from lenticularis.utility import decrypt_secret, encrypt_secret
 from lenticularis.utility import gen_access_key_id, gen_secret_access_key
 from lenticularis.utility import logger
-from lenticularis.utility import pick_one, check_permission, get_mux_addr
+from lenticularis.utility import pick_one, check_permission
 from lenticularis.utility import check_mux_access, host_port
 from lenticularis.utility import uniq_d
 from lenticularis.zoneutil import check_zone_schema, check_pool_dict_is_sound
@@ -143,6 +143,20 @@ def _strip_domain(host_fqdn, domain):
     domain_len = 1 + len(domain)
     return host_fqdn[:-domain_len]
 
+def _choose_any_access_key(pooldesc):
+    """Accesses pooldesc["accessKeys"][0]["accessKeyID"], but checks are
+    inserted for Pyright.
+    """
+    keys = pooldesc.get("accessKeys", [])
+    pair = keys[0] if keys else None
+    return pair.get("accessKeyID", None) if pair else None
+
+def _list_access_keys(pooldesc):
+    keys = pooldesc.get("accessKeys", [])
+    ids = [pair.get("accessKeyID", None) if pair else None
+           for pair in keys]
+    return [k for k in ids if k is not None]
+
 
 class ZoneAdm():
 
@@ -166,22 +180,16 @@ class ZoneAdm():
         self.tables = get_tables(adm_conf)
 
 
-    def _refresh_multiplexer_list(self):
-        muxlist = self.tables.process_table.get_mux_list()
-        multiplexerlist = [get_mux_addr(v["mux_conf"]) for (e, v) in muxlist]
-        multiplexers = sorted(list(set(multiplexerlist)))
-        return multiplexers
-
     def fix_affected_zone(self, traceid):
         allow_deny_rules = self.tables.storage_table.get_allow_deny_rules()
         fixed = []
-        for z_id in self.tables.storage_table.get_zoneID_list(None):
+        for z_id in self.tables.storage_table.list_pool_ids(None):
             logger.debug(f"@@@ z_id = {z_id}")
             zone = self.tables.storage_table.get_zone(z_id)
             assert zone is not None
             user_id = zone["user"]
 
-            ui = self.fetch_unixUserInfo(user_id)
+            ui = self.fetch_unix_user_info(user_id)
             if ui:
                 groups = ui.get("groups", [])
                 group = zone.get("group")
@@ -209,17 +217,17 @@ class ZoneAdm():
     def list_unixUsers(self):
         return list(self.tables.storage_table.get_unixUsers_list())
 
-    def store_unixUserInfo(self, user_id, uinfo):
-        self.tables.storage_table.ins_unixUserInfo(user_id, uinfo)
+    def store_unix_user_info(self, user_id, uinfo):
+        self.tables.storage_table.ins_unix_user_info(user_id, uinfo)
 
-    def fetch_unixUserInfo(self, user_id):
-        return self.tables.storage_table.get_unixUserInfo(user_id)
+    def fetch_unix_user_info(self, user_id):
+        return self.tables.storage_table.get_unix_user_info(user_id)
 
     def check_user(self, user_id):  # API
-        return self.fetch_unixUserInfo(user_id) is not None
+        return self.fetch_unix_user_info(user_id) is not None
 
-    def delete_unixUserInfo(self, user_id):
-        self.tables.storage_table.del_unixUserInfo(user_id)
+    def delete_unix_user_info(self, user_id):
+        self.tables.storage_table.del_unix_user_info(user_id)
 
 
     def create_pool(self, traceid, user_id, zone_id, zone, *,
@@ -380,7 +388,7 @@ class ZoneAdm():
         logger.debug(f"zone={zoneID}, access_key={access_key_id}, force={force}")
 
         minioAddr = self.tables.process_table.get_minio_address(zoneID)
-        multiplexers = self._refresh_multiplexer_list()
+        multiplexers = self.tables.process_table.get_mux_list()
         logger.debug(f"@@@ MULTIPLEXERS = {multiplexers}")
         if minioAddr:
             ## SEND PACKET TO MULTPLEXER OF THE MINIO, NOT MINIO ITSELF.
@@ -409,7 +417,7 @@ class ZoneAdm():
                 logger.debug(f"No check, as neither access-key nor zone.")
                 return ""
             ## Choose any key in the list.
-            access_key_id = zone["accessKeys"][0]["accessKeyID"]
+            access_key_id = _choose_any_access_key(zone)
         facade_hostname = self.facade_hostname
         status = check_mux_access(traceid,
                                    host,
@@ -586,7 +594,7 @@ class ZoneAdm():
         logger.debug("@@@ DONE")
 
     def _check_user_group(self, user_id, zone):
-        ui = self.fetch_unixUserInfo(user_id)
+        ui = self.fetch_unix_user_info(user_id)
         groups = ui.get("groups") if ui else []
         group = zone.get("group") if zone else None
         if group not in groups:
@@ -1108,42 +1116,24 @@ class ZoneAdm():
         return zone_id
 
     def _get_all_keys(self, zone_id):
-        allkeys = set()
-        for z_id in self.tables.storage_table.get_zoneID_list(None):
-            #logger.debug(f"@@@ z_id = {z_id}")
-            if z_id == zone_id:
+        ## (IT DOSE NOT EXCLUDE OF IDS OF GIVEN POOL).
+        pools = set(self.tables.storage_table.list_pool_ids(None))
+        keys = []
+        for id in pools:
+            desc = self.tables.storage_table.get_zone(id)
+            if desc is None:
                 continue
-            allkeys.add(z_id)
-            z = self.tables.storage_table.get_zone(z_id)
-            #logger.debug(f"@@@ z = {z}")
-            if z is None:
-                continue
-            #logger.debug(f"@@@ A allkeys = {allkeys}")
-            zz = z.get("accessKeys", [])
-            #logger.debug(f"@@@ B accessKeys = {type(zz)} {zz}")
-            #for access_key in zz:
-                #logger.debug(f"@@@ C access_key = {type(access_key)}")
-                #logger.debug(f"@@@ C access_key = {access_key}")
-                #logger.debug(f"@@@ D access_key_id = {access_key['accessKeyID']}")
-            kk = [access_key["accessKeyID"] for access_key in z.get("accessKeys", [])]
-            #logger.debug(f"@@@ E kk = {kk}")
-
-            allkeys = allkeys.union(set([access_key["accessKeyID"] for access_key in z.get("accessKeys", [])]))
-
-            #logger.debug(f"@@@ F")
-        #logger.debug(f"@@@ allkeys = {allkeys}")
-        return allkeys
+            ids = _list_access_keys(desc)
+            keys.extend(ids)
+        return pools.union(set(keys))
 
     def _uniquify_zone(self, user_id, zone_id, zone):
-        logger.debug(f"+++")
-        logger.debug(f"@@@ UNIQUIFY")
         reasons = []
         num_zones_of_user = 0
 
-        logger.debug(f"@@@ get_allkeys")
         allkeys = self._get_all_keys(zone_id)
+        logger.debug(f"AHO all-keys={allkeys}")
         allkeys_orig = allkeys.copy()
-        #logger.debug(f"@@@ allkeys = {allkeys}")
 
         if not zone_id:
             zone_id = _gen_unique_key(gen_access_key_id, allkeys)
@@ -1154,27 +1144,18 @@ class ZoneAdm():
             if not access_key.get("accessKeyID"):
                 access_key["accessKeyID"] = _gen_unique_key(gen_access_key_id, allkeys)
 
-        #logger.debug(f"@@@ allkeys = {allkeys}")
-        logger.debug(f"@@@ newkeys = {allkeys - allkeys_orig}")
-
-        logger.debug(f"@@@ zone_id = {zone_id}")
-        for z_id in self.tables.storage_table.get_zoneID_list(None):
-            logger.debug(f"@@@ z_id = {z_id}")
+        for z_id in self.tables.storage_table.list_pool_ids(None):
             if z_id == zone_id:
                 continue
             z = self.tables.storage_table.get_zone(z_id)
             if z is None:
                 continue
-            # logger.debug(f"@@@ z_id = {z_id}, z = {z}")
             reasons += check_conflict(zone_id, zone, z_id, z)
             if z.get("user") == user_id:
                 num_zones_of_user += 1
-        logger.debug(f"@@@ reasons = {reasons}")
 
         if reasons != []:
             raise Exception(f"update_zone: conflict with another zone: {reasons}")
-
-        logger.debug(f"@@@ num_zones_of_user = {num_zones_of_user}")
 
         if num_zones_of_user > self.max_zone_per_user:
             raise Exception(f"update_zone: too many zones (limit per user exceeded)")
@@ -1222,7 +1203,7 @@ class ZoneAdm():
         return str(expDate)
 
     def generate_template(self, user_id):
-        ui = self.fetch_unixUserInfo(user_id)
+        ui = self.fetch_unix_user_info(user_id)
         assert ui is not None
         groups = ui.get("groups")
 
@@ -1281,7 +1262,7 @@ class ZoneAdm():
         # logger.debug(f"@@@ zone_id = {zone_id}")
         groups = None
         if include_userinfo:
-            ui = self.fetch_unixUserInfo(user_id)
+            ui = self.fetch_unix_user_info(user_id)
             groups = ui.get("groups") if ui is not None else None
         zone_list = []
         broken_zones = []
@@ -1290,7 +1271,7 @@ class ZoneAdm():
         else:
             (access_key_ptr, direct_host_ptr) = (None, None)
 
-        for zoneID in self.tables.storage_table.get_zoneID_list(zone_id):
+        for zoneID in self.tables.storage_table.list_pool_ids(zone_id):
             #logger.debug(f"@@@ zoneID = {zoneID}")
             zone = self.tables.storage_table.get_zone(zoneID)
 

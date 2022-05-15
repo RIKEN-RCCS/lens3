@@ -19,7 +19,7 @@ class Controller():
     def __init__(self, mux_conf, tables, configfile, node):
         self.tables = tables
         self.configfile = configfile
-        self.mux_addr = node
+        self._mux_host = node
         self.executable = sys.executable
         self.scheduler = Scheduler(tables)
         lenticularis_conf = mux_conf["lenticularis"]
@@ -82,14 +82,14 @@ class Controller():
         minioAddress = self.tables.process_table.get_minio_address(zone_id)
         if minioAddress:
             mux_addr = minioAddress["muxAddr"]
-            if mux_addr == self.mux_addr:
+            if mux_addr == self._mux_host:
                 return None
             return mux_addr
 
         (host, port) = self.scheduler.schedule(zone_id)
         if host is None:
             return None
-        elif host == self.mux_addr:
+        elif host == self._mux_host:
             return None
         else:
             return host_port(host, port)
@@ -98,9 +98,9 @@ class Controller():
         """Starts a MinIO under a manager process.  It waits for a manager to
         write addr:port on stdout and to close stdout/stderr.
         """
-        node = self.mux_addr
+        node = self._mux_host
         cmd = [self.executable, "-m", self.manager]
-        args = [node, self.port_min, self.port_max, self.mux_addr,
+        args = [node, self.port_min, self.port_max, self._mux_host,
                 "--configfile", self.configfile]
         env = make_clean_env(os.environ)
         env["LENTICULARIS_ZONE_ID"] = zone_id

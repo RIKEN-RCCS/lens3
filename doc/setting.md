@@ -34,7 +34,7 @@ writing (in March 2022).
   * `lens3-admin:lens3` -- a pseudo user for administraion
 
 * Used files and directories
-  * /usr/lib/systemd/system/lenticularis-api.service
+  * /usr/lib/systemd/system/lenticularis-adm.service
   * /usr/lib/systemd/system/lenticularis-mux.service
   * /usr/lib/systemd/system/lenticularis-redis.service
   * /etc/lenticularis/adm-config.yaml
@@ -92,27 +92,6 @@ $ curl https://dl.min.io/client/mc/release/linux-amd64/mc -o /tmp/mc
 # install -m 755 -c /tmp/mc ~/bin/mc
 ```
 
-## Start Redis
-
-* Change the fields of redis.conf.
-  * bind: Network interfaces; localhost by default
-  * port: A port for Redis
-  * requirepass: A passhprase for Redis
-
-```
-# vi /etc/redis.conf
-```
-
-* Start/restart Redis
-
-```
-# systemctl enable redis
-# systemctl restart redis
-```
-
-* Note: Starting Redis will file when the file owner of
-  /etc/redis.conf is not "redis".
-
 ## Enable local http connections
 
 * Let SELinux accept connections inside a local host.
@@ -167,6 +146,38 @@ See [overview.md](overview.md).
       # firewall-cmd --reload
       ```
 
+## Start Redis
+
+* Copy the Redis configuration file
+  * Configuration file: `/etc/lenticularis/redis.conf`
+* Change the fields of redis.conf.
+  * bind: Network interfaces; localhost by default
+  * port: A port for Redis
+  * requirepass: A passhprase for Redis
+
+```
+# mkdir -p /etc/lenticularis
+# cp $TOP/unit-file/redis/redis.conf /etc/lenticularis/redis.conf
+# vi /etc/lenticularis/redis.conf
+```
+
+* Copy the systemd unit file for Redis
+
+```
+# cp $TOP/unit-file/redis/lenticularis-redis.service /usr/lib/systemd/system/
+```
+
+* Start/restart Redis
+
+```
+# systemctl daemon-reload
+# systemctl enable lenticularis-redis
+# systemctl start lenticularis-redis
+```
+
+* Note: Starting Redis will fail when the file owner of
+  /etc/lenticularis/redis.conf is not "lens3".
+
 ## Setup Web-UI
 
 * Copy the Web-UI configuration file
@@ -174,7 +185,7 @@ See [overview.md](overview.md).
 
 ```
 # mkdir -p /etc/lenticularis
-# cp $TOP/unit-file/webui/adm-config.yaml.in /etc/lenticularis/adm-config.yaml
+# cp $TOP/unit-file/adm/adm-config.yaml.in /etc/lenticularis/adm-config.yaml
 # vi /etc/lenticularis/adm-config.yaml
 # chown lens3:lens3 /etc/lenticularis/adm-config.yaml
 # chmod o-rwx /etc/lenticularis/adm-config.yaml
@@ -191,11 +202,11 @@ See [overview.md](overview.md).
 * Copy the systemd unit file for Web-UI
 
 ```
-# cp $TOP/unit-file/webui/lenticularis-api.service /usr/lib/systemd/system/
+# cp $TOP/unit-file/adm/lenticularis-adm.service /usr/lib/systemd/system/
 ```
 
 * Modify it if necessary
-  * See the template `$TOP/unit-file/multiplexer/lenticularis-api.service.in`
+  * See the template `$TOP/unit-file/mux/lenticularis-adm.service.in`
   * Replace placeholders: @API_USER@, @ADM_CONFIG@
 
 ## Setup sudoers for Multiplexer
@@ -204,7 +215,7 @@ See [overview.md](overview.md).
   * Modify it if necessary
 
 ```
-# cp $TOP/unit-file/multiplexer/lenticularis-sudoers /etc/sudoers.d/
+# cp $TOP/unit-file/mux/lenticularis-sudoers /etc/sudoers.d/
 # chmod -w /etc/sudoers.d/lenticularis-sudoers
 # chmod o-rwx /etc/sudoers.d/lenticularis-sudoers
 ```
@@ -232,22 +243,21 @@ See [overview.md](overview.md).
 * Copy the systemd unit file for Multiplexer
 
 ```
-# cp $TOP/unit-file/multiplexer/lenticularis-mux.service /usr/lib/systemd/system/
+# cp $TOP/unit-file/mux/lenticularis-mux.service /usr/lib/systemd/system/
 ```
 
 * Modify it if necessary
-  * See the template `$TOP/unit-file/multiplexer/lenticularis-mux.service.in`
+  * See the template `$TOP/unit-file/mux/lenticularis-mux.service.in`
   * Replace placeholders: @MUX_USER@, @MUX_CONFIG@
 
 ## Start services (Web-UI and Muxiplexer)
 
 ```
 # systemctl daemon-reload
-# systemctl enable lenticularis-api
-# systemctl start lenticularis-api
+# systemctl enable lenticularis-adm
+# systemctl start lenticularis-adm
 # systemctl enable lenticularis-mux
 # systemctl start lenticularis-mux
-
 ```
 
 ## Register users
@@ -300,7 +310,7 @@ $ systemctl status nginx
 * Web-UI status
 
 ```
-$ systemctl status lenticularis-api
+$ systemctl status lenticularis-adm
 ```
 
 * Multiplexer status

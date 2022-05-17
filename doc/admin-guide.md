@@ -77,7 +77,7 @@ Administrator's Guide of Lenticularis
 
     - Users
       - System Account (daemon owner)
-        - In this documents we use `_lent8` as an example.  (see `install.md`)
+        - In this documents we use `_lens3` as an example.  (see `install.md`)
         - Daemon owner can use sudo to switch any end user and run MinIO
         - Only daemon owner can read configuration file
       - Administrator
@@ -163,7 +163,7 @@ Administrator's Guide of Lenticularis
 
   + Commands for Administrator
     - All commands can be run by administrator's account (`admin`)
-      or daemon owner's account (`_lent8`).
+      or daemon owner's account (`_lens3`).
       - Administrator's account must be able to read setting file 
        (`/etc/lenticularis/adm-config.yaml`) to use commands.
 

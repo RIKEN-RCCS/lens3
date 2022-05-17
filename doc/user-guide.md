@@ -25,9 +25,9 @@ User's Manual of Lenticularis
 
   + Registration Procedure
     1. Obtain access information to the WebUI from the system administrator.
-       (assume `https://console.lent8.example.com/` in this example)
+       (assume `https://console.lens3.example.com/` in this example)
     2. In figure 1, shows the initial screen of
-       `https://console.lent8.example.com/`, no zone is registered here.
+       `https://console.lens3.example.com/`, no zone is registered here.
     3. To start creating a new zone, click "New Entry" button (figure 2).
       - Fill zone information.
       - Allowed maximum number of zones per user is limited by system settings.
@@ -104,7 +104,7 @@ User's Manual of Lenticularis
       | Download: [downloadonly1, downloadonly2, ...                          ] |
       | Upload:   [uploadonly1, uploadonly2, ...                              ] |
       |                                                                         |
-      | Direct Hostname:   [                   ] .lent8.example.com             |
+      | Direct Hostname:   [                   ] .lens3.example.com             |
       |  (case insensitive)                                                     |
       |                                                                         |
       | Expiration DateTime: [ 2022-01-01 00:00:00 UTC                        ] |
@@ -135,7 +135,7 @@ User's Manual of Lenticularis
       | Access Key ID:       rY1suSeCOnDaxaPre0CC                               |
       | Secret Access Key:   5cYFotoSB9ujG2VAdhXcyunHqXZv7tZwVm5wX76ptR7L0FvF   |
       |                                                                         |
-      | Endpoint URL(s):     https://lent8.example.com/                         |
+      | Endpoint URL(s):     https://lens3.example.com/                         |
       |                                                                         |
       | Direct Hostname:                                                        |
       | Buckets Directory:   /vol0000/rccs-aot/a00000/work                      |
@@ -160,8 +160,8 @@ User's Manual of Lenticularis
       | Access Key ID(R):    9FX1Y8IeIgSBMAslBGY3                               |
       | Secret Access Key(R):kMl6AEvuNoihBOTyo2SS2oSBYVrmAxeQJFf3whYQ0stpMxzN   |
       |                                                                         |
-      | Endpoint URL(s):     https://lent8.example.com/                         |
-      |                      https://a0release.lent8.example.com/               |
+      | Endpoint URL(s):     https://lens3.example.com/                         |
+      |                      https://a0release.lens3.example.com/               |
       | Buckets Directory:   /vol0000/rccs-aot/a00000/release                   |
       | Expiration DateTime: Unlimited                                          |
       | Status:              Offline                                            |
@@ -232,7 +232,7 @@ User's Manual of Lenticularis
     aws_access_key_id = WoRKvRhrdaMNSlkZcJCB
     aws_secret_access_key = DzZv57R8wBIuVZdtAkE1uK1HoebLPMzKM6obA4IDqOhaLIBf
 
-    $ ENDPOINT_URL=http://lent8.example.com/
+    $ ENDPOINT_URL=http://lens3.example.com/
     $ aws --endpoint-url=$ENDPOINT_URL s3 ls s3://wrk-bucket1/
     ```
 

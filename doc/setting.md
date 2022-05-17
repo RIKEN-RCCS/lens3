@@ -279,8 +279,8 @@ user2,group2a
 * Register user list to the system by `lenticularis-admin` command
 
 ```
-lens3-admin$ lenticularis-admin insert user-info {csv-file}
-lens3-admin$ lenticularis-admin show user-info
+lens3-admin$ lenticularis-admin -c adm-config.yaml insert-user-info {csv-file}
+lens3-admin$ lenticularis-admin -c adm-config.yaml show-user-info
 ```
 
 * Prepare a list of users allowed to access
@@ -302,7 +302,7 @@ lens3-admin$ lenticularis-admin show allow-deny-rules --format=json
 *  Redis status
 
 ```
-$ systemctl status redis
+$ systemctl status lenticularis-redis
 ```
 
 * Nginx status
@@ -320,14 +320,14 @@ $ systemctl status lenticularis-adm
 * Multiplexer status
 
 ```
-$ systemctl status lenticularis-mux.service
-lens3-admin$ lenticularis-admin show multiplexer
+$ systemctl status lenticularis-mux
+lens3-admin$ lenticularis-admin -c adm-config.yaml show-mux
 ```
 
 ## Access test
 
 * Access website by a browser, and create a zone.
-  * URL: `http://webui.lent8.example.com/`
+  * URL: `http://webui.lens3.example.com/`
 
 * Access to the create zone by S3 client.
     * Use Access Key created above.
@@ -338,12 +338,12 @@ user$ cat <<EOF > $HOME/.aws/credentials
 aws_access_key_id = zHb9uscWUDgcJ9ZdYzr6
 aws_secret_access_key = uDUHMYKSmbqyqB1MGYN57CWMC8eXNHwUL4pcNwROu3xWgpsO
 EOF
-user$ AWS_PROFILE=user1 ENDPOINT_URL=https://lent8.example.com \
+user$ AWS_PROFILE=user1 ENDPOINT_URL=https://lens3.example.com \
 aws s3 ls s3://
 ```
 
     - Access following website by Web Browser, again.
-      - URL: `http://webui.lent8.example.com/`
+      - URL: `http://webui.lens3.example.com/`
       - Create public bucket
 
 ```
@@ -353,7 +353,7 @@ Public (download only for Access Key-less user): bucket2
       - Register direct hostname
 
 ```
-Direct Hostname (label or FQDN): release.lent8.example.com
+Direct Hostname (label or FQDN): release.lens3.example.com
 ```
 
     - Back to client host.
@@ -362,13 +362,13 @@ Direct Hostname (label or FQDN): release.lent8.example.com
 ```
 user$ tmpfile=$(mktemp)
 user$ date > $tmpfile
-user$ AWS_PROFILE=user1 ENDPOINT_URL=https://lent8.example.com \
+user$ AWS_PROFILE=user1 ENDPOINT_URL=https://lens3.example.com \
 user$ aws s3 cp $tmpfile s3://bucket2/foo
 ```
 
     - Try to access the public object via directHostname.
 
 ```
-stranger$ ENDPOINT_URL=https://release.lent8.example.com
+stranger$ ENDPOINT_URL=https://release.lens3.example.com
 stranger$ curl -k $ENDPOINT_URL/bucket2/foo
 ```

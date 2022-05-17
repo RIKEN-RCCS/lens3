@@ -44,7 +44,7 @@
 
           multiplexer:
       # set facade hostname
-              facade_hostname: lent8.example.com
+              facade_hostname: lens3.example.com
 
           controller:
       # maximum allowed time during initializing a zone
@@ -62,10 +62,10 @@
       # function name that validate direct hostname
               direct_hostname_validator: flat
       # Direct Hostname Domain
-              direct_hostname_domain: lent8.example.com
+              direct_hostname_domain: lens3.example.com
       # reserved domain names, preventing end users to accidentally use webui hostname.
               reserved_hostnames:
-                  - webui.lent8.example.com
+                  - webui.lens3.example.com
       # time limit of connecting to multiplexer (for sending decoy)
               decoy_connection_timeout: 60
 

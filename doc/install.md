@@ -89,9 +89,9 @@ Install Manual of Lenticularis
         WebUI Hostname to API node.
 
     - In this document, we use following examples:
-      - Delegate Hostname      : `lent8.example.com`
-      - Direct Hostname Domain : `lent8.example.com`
-      - WebUI Hostname         : `webui.lent8.example.com`
+      - Delegate Hostname      : `lens3.example.com`
+      - Direct Hostname Domain : `lens3.example.com`
+      - WebUI Hostname         : `webui.lens3.example.com`
       - Delegate Hostname, subdomain of Direct Hostname Domain, and WebUI 
         Hostname should point reverse-proxy node.
       - Reverse Proxy's Certificate should valid for all above domain names.
@@ -167,11 +167,11 @@ Install Manual of Lenticularis
 
   + API daemon owner
     - Create account as API daemon owner on API node.
-    - In this example, we use `_lent8:_lent8`.
+    - In this example, we use `_lens3:_lens3`.
     - Procedure
       ```
-      # groupadd -K GID_MIN=100 -K GID_MAX=499 _lent8
-      # useradd -m -K UID_MIN=100 -K UID_MAX=499 -g _lent8 _lent8
+      # groupadd -K GID_MIN=100 -K GID_MAX=499 _lens3
+      # useradd -m -K UID_MIN=100 -K UID_MAX=499 -g _lens3 _lens3
       ```
 
   + Administrator's Account
@@ -181,17 +181,17 @@ Install Manual of Lenticularis
     - Procedure
       ```
       # useradd -m -U admin
-      # usermod -a -G _lent8 admin
+      # usermod -a -G _lens3 admin
       ```
 
   + Multiplexer Owner
     - Create account as multiplexer owner on multiplexer node.
-    - In this example, we use `_lent8:_lent8`.
+    - In this example, we use `_lens3:_lens3`.
     - May share with API daemon owner.
     - Procedure
       ```
-      # groupadd -K GID_MIN=100 -K GID_MAX=499 _lent8
-      # useradd -m -K UID_MIN=100 -K UID_MAX=499 -g _lent8 _lent8
+      # groupadd -K GID_MIN=100 -K GID_MAX=499 _lens3
+      # useradd -m -K UID_MIN=100 -K UID_MAX=499 -g _lens3 _lens3
       ```
 
 # Install API
@@ -206,7 +206,7 @@ Install Manual of Lenticularis
       ```
       $ cd $SRCDIR
       # su admin -c "pip3 install -r requirements.txt --user"
-      # su _lent8 -c "pip3 install -r requirements.txt --user"
+      # su _lens3 -c "pip3 install -r requirements.txt --user"
       ```
 
 # Install Multiplexer
@@ -222,7 +222,7 @@ Install Manual of Lenticularis
     - Procedure
       ```
       $ cd $SRCDIR
-      # su _lent8 -c "pip3 install -r requirements.txt --user"
+      # su _lens3 -c "pip3 install -r requirements.txt --user"
       ```
 
   + Install MinIO and Mc
@@ -302,7 +302,7 @@ Install Manual of Lenticularis
       # In this example, Direct Hostname also matches webui section's
       # server_name.  NGINX prefer exact match (webui section's definition)
       # rather than wildcard match (this section).
-          server_name lent8.example.com *.lent8.example.com;
+          server_name lens3.example.com *.lens3.example.com;
 
           client_max_body_size 0;
           proxy_buffering off;
@@ -357,7 +357,7 @@ Install Manual of Lenticularis
           index index.html;
 
       # hostname of WebUI
-          server_name webui.lent8.example.com;
+          server_name webui.lens3.example.com;
 
       # designate wildcard certificate (key and crt)
           ssl_certificate_key "/etc/nginx/server_certificates/server.key";
@@ -438,7 +438,7 @@ Install Manual of Lenticularis
 
     - Secure configuration file
       ```
-      # chown _lent8:_lent8 /etc/lenticularis/adm-config.yaml
+      # chown _lens3:_lens3 /etc/lenticularis/adm-config.yaml
       # chmod 440 /etc/lenticularis/adm-config.yaml
       ```
 
@@ -486,10 +486,10 @@ Install Manual of Lenticularis
       # function name that validate direct hostname 
               direct_hostname_validator: flat
       # Direct Hostname Domain
-              direct_hostname_domain: lent8.example.com
+              direct_hostname_domain: lens3.example.com
       # reserved domain names, preventing end users to accidentally use webui hostname.
               reserved_hostnames:
-                  - webui.lent8.example.com
+                  - webui.lens3.example.com
       # time limit of connecting to multiplexer (for sending decoy)
               decoy_connection_timeout: 60
 
@@ -556,7 +556,7 @@ Install Manual of Lenticularis
 
       [Service]
       # API daemon's owner
-      User = _lent8
+      User = _lens3
       WorkingDirectory = /
       # set absolute path to adm-config.yaml to LENTICULARIS_ADM_CONFIG
       Environment = LENTICULARIS_ADM_CONFIG=/etc/lenticularis/adm-config.yaml
@@ -592,7 +592,7 @@ Install Manual of Lenticularis
       ```
       # cat <<-EOF | sudo dd of=/etc/sudoers.d/lenticularis 2>/dev/null
           Defaults env_keep += "MINIO_ROOT_USER MINIO_ROOT_PASSWORD MINIO_HTTP_TRACE MINIO_BROWSER"
-          _lent8	ALL=(ALL, !root)	NOPASSWD: /usr/local/bin/minio
+          _lens3	ALL=(ALL, !root)	NOPASSWD: /usr/local/bin/minio
       EOF
       ```
 
@@ -616,7 +616,7 @@ Install Manual of Lenticularis
       ```
     - Secure configuration file
       ```
-      # chown _lent8:_lent8 /etc/lenticularis/mux-config.yaml
+      # chown _lens3:_lens3 /etc/lenticularis/mux-config.yaml
       # chmod 440 /etc/lenticularis/mux-config.yaml
       ```
 
@@ -735,7 +735,7 @@ Install Manual of Lenticularis
 
       [Service]
       # multiplexer daemon's owner
-      User = _lent8
+      User = _lens3
       WorkingDirectory = /
       # set absolute path to mux-config.yaml to LENTICULARIS_MUX_CONFIG
       Environment = LENTICULARIS_MUX_CONFIG=/etc/lenticularis/mux-config.yaml
@@ -833,7 +833,7 @@ Install Manual of Lenticularis
       ```
 
     - Access following website by Web Browser, and create a zone.
-      - URL: `http://webui.lent8.example.com/`
+      - URL: `http://webui.lens3.example.com/`
 
     - Access to the create zone by S3 client.
       - Use Access Key created above.
@@ -843,12 +843,12 @@ Install Manual of Lenticularis
         aws_access_key_id = zHb9uscWUDgcJ9ZdYzr6
         aws_secret_access_key = uDUHMYKSmbqyqB1MGYN57CWMC8eXNHwUL4pcNwROu3xWgpsO
         EOF
-        user$ AWS_PROFILE=user1 ENDPOINT_URL=https://lent8.example.com \
+        user$ AWS_PROFILE=user1 ENDPOINT_URL=https://lens3.example.com \
         aws s3 ls s3://
         ```
 
     - Access following website by Web Browser, again.
-      - URL: `http://webui.lent8.example.com/`
+      - URL: `http://webui.lens3.example.com/`
       - Create public bucket
         ```
         Public (download only for Access Key-less user): bucket2
@@ -856,7 +856,7 @@ Install Manual of Lenticularis
 
       - Register direct hostname
         ```
-        Direct Hostname (label or FQDN): release.lent8.example.com
+        Direct Hostname (label or FQDN): release.lens3.example.com
         ```
 
     - Back to client host.
@@ -864,13 +864,13 @@ Install Manual of Lenticularis
         ```
         user$ tmpfile=$(mktemp)
         user$ date > $tmpfile
-        user$ AWS_PROFILE=user1 ENDPOINT_URL=https://lent8.example.com \
+        user$ AWS_PROFILE=user1 ENDPOINT_URL=https://lens3.example.com \
         user$ aws s3 cp $tmpfile s3://bucket2/foo
         ```
 
     - Try to access the public object via directHostname.
       ```
-      stranger$ ENDPOINT_URL=https://release.lent8.example.com
+      stranger$ ENDPOINT_URL=https://release.lens3.example.com
       stranger$ curl -k $ENDPOINT_URL/bucket2/foo
       ```
 

@@ -1,16 +1,23 @@
-# (Minimal) Setup of Lenticularis-S3
+# Setup of Lenticularis-S3 (Minimal)
 
-## Configuration
+## Outline
 
 ```
 reverse-proxy <-->︎ Mux (multiplexer) <--> MinIO
                                      <--> MinIO
                                      <--> ...
                                      <--> MinIO
-              <--> Adm (pool-manager web-ui)
+              <--> Adm (administration web-ui)
                    Redis
 ```
 
+The steps are:
+* Prepare prerequisite software and install Lens3
+* Setup reverse-proxy
+* Start Redis
+* Start Web-UI service
+* Start multiplexer service
+* Register users
 
 ## Assuption
 
@@ -34,8 +41,8 @@ writing (in March 2022).
 
 * Related user IDs
   * `nginx`
-  * `lens3:lens3` -- a pseudo user for daemons
-  * `lens3-admin:lens3` -- a pseudo user for administraion
+  * `lens3:lens3` -- a pseudo user for services
+  * `lens3-admin:lens3` -- a pseudo user for administration
 
 * Used files and directories
   * /usr/lib/systemd/system/lenticularis-adm.service
@@ -49,7 +56,7 @@ writing (in March 2022).
   * /etc/nginx/private/htpasswd
   * /run/lenticularis-redis (temporary)
 
-## Setup pseudo users for daemons
+## Setup pseudo users for services
 
 ```
 # groupadd -K GID_MIN=100 -K GID_MAX=499 lens3
@@ -276,11 +283,11 @@ user1,group1a,group1b,group1c
 user2,group2a
 ```
 
-* Register user list to the system by `lenticularis-admin` command
+* Register a user list to Lens3 by `lenticularis-admin` command
 
 ```
-lens3-admin$ lenticularis-admin -c adm-config.yaml insert-user-info {csv-file}
-lens3-admin$ lenticularis-admin -c adm-config.yaml show-user-info
+lens3-admin$ lenticularis-admin -c adm-config.yaml load-user-list {csv-file}
+lens3-admin$ lenticularis-admin -c adm-config.yaml show-user-list
 ```
 
 * Prepare a list of users allowed to access
@@ -290,11 +297,11 @@ lens3-admin$ lenticularis-admin -c adm-config.yaml show-user-info
 allow,user1,user2
 ```
 
-* Register allow-deny-rule to the system by `lenticularis-admin` command.
+* Register permit-list to Lens3 by `lenticularis-admin` command.
 
 ```
-lens3-admin$ lenticularis-admin insert allow-deny-rules {csv-file}
-lens3-admin$ lenticularis-admin show allow-deny-rules --format=json
+lens3-admin$ lenticularis-admin -c adm-config.yaml load-permit-list {csv-file}
+lens3-admin$ lenticularis-admin -c adm-config.yaml show-permit-list --format=json
 ```
 
 ## Check the status
@@ -321,7 +328,7 @@ $ systemctl status lenticularis-adm
 
 ```
 $ systemctl status lenticularis-mux
-lens3-admin$ lenticularis-admin -c adm-config.yaml show-mux
+lens3-admin$ lenticularis-admin -c adm-config.yaml show-muxs
 ```
 
 ## Access test

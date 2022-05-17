@@ -202,12 +202,12 @@ class Command():
             f"USAGE:\n"
             f"{progname} help\n"
             # fn_insert_allow_deny_rules
-            f"{progname} insert-allow-deny-rules file\n"
+            f"{progname} load-permit-list file\n"
             # fn_show_allow_deny_rules
-            f"{progname} show-allow-deny-rules\n"
+            f"{progname} show-permit-list\n"
 
             # fn_insert_user_info
-            f"{progname} add-user-list file\n"
+            f"{progname} load-user-list file\n"
             # fn_show_user_info
             f"{progname} show-user-list\n"
 
@@ -233,7 +233,7 @@ class Command():
             f"{progname} list-db\n"
 
             # fn_show_multiplexer
-            f"{progname} show-multiplexer\n"
+            f"{progname} show-muxs\n"
             # f"{progname} flush-multiplexer\n" NOT IMPLEMENTED
 
             # fn_show_server_processes
@@ -434,10 +434,10 @@ class Command():
     optbl = {
         "help": fn_usage,
 
-        "add-user-list": fn_insert_user_info,
+        "load-user-list": fn_insert_user_info,
         "show-user-list": fn_show_user_info,
-        "insert-user-validity": fn_insert_allow_deny_rules,
-        "show-user-validity": fn_show_allow_deny_rules,
+        "load-permit-list": fn_insert_allow_deny_rules,
+        "show-permit-list": fn_show_allow_deny_rules,
 
         "insert-zone": fn_insert_zone,
         "delete-zone": fn_delete_zone,
@@ -451,7 +451,7 @@ class Command():
         "reset-db": fn_reset_database,
         "list-db": fn_print_database,
 
-        "show-multiplexer": fn_show_multiplexer,
+        "show-muxs": fn_show_multiplexer,
 
         "show-server-processes": fn_show_server_processes,
         "flush-server-processes": fn_flush_server_processes,

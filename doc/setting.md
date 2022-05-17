@@ -3,20 +3,24 @@
 ## Configuration
 
 ```
-reverse-proxy <-->︎ multiplexer <--> MinIO
-                               <--> MinIO
-                               <--> MinIO
-              <--> pool-manager (web-ui)
-                   redis
+reverse-proxy <-->︎ Mux (multiplexer) <--> MinIO
+                                     <--> MinIO
+                                     <--> ...
+                                     <--> MinIO
+              <--> Adm (pool-manager web-ui)
+                   Redis
 ```
 
 
 ## Assuption
 
-Some number of services running for Lenticularis-S3 as shown in the
-configuration section.  In this setup, we assume Nginx as a
-reverse-proxy, ....  A pseudo user "lens3" is used for the owner of
-the daemons/services.  We also assume RedHat8.5 and Python3.9 at this
+Some number of services are needed for Lenticularis-S3 as shown in the
+configuration figure.  In this setup, we assume Nginx as a
+reverse-proxy.  Mux and Adm are Gunicorn services, and we assume Mux
+runs at port=8004 and Adm at port=8003.  A reverse-proxy should be
+setup for Mux and Adm ports.  Also Redis is needed, and Redis runs at
+port=6378.  A pseudo user "lens3" is used for the owner of the
+daemons/services.  We also assume RedHat8.5 and Python3.9 at this
 writing (in March 2022).
 
 * Python

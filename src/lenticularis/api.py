@@ -83,8 +83,8 @@ class Api():
     ##    if not user_id:
     ##        logger.debug("@@@ user is required")
     ##        raise Exception(f"user is required")
-    ##    if zone.get("user", user_id) != user_id:
-    ##        logger.debug(f"@@@ user mismatch: {zone.get('user')} {user_id}")
+    ##    if zone.get("owner_uid", user_id) != user_id:
+    ##        logger.debug(f"@@@ user mismatch: {zone.get('owner_uid')} {user_id}")
     ##        raise Exception(f"user mismatch")
     ##    logger.debug(f"@@@ user = {user_id}")
     ##    try:

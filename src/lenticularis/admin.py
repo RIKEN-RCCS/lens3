@@ -113,14 +113,14 @@ def _store_user_info(zone_adm, user_info):
 
 def _restore_zone_delete(zone_adm, traceid, e):
     # Deleted Entry (no left hand side)
-    user_id = e.get("user")
+    user_id = e.get("owner_uid")
     zone_id = e.get("zoneID")
     logger.debug(f"@@@ >> Delete {user_id} {zone_id}")
     zone_adm.delete_zone(traceid, user_id, zone_id)
 
 def _restore_zone_add(zone_adm, traceid, b):
     # New Entry (no right hand side)
-    user_id = b.get("user")
+    user_id = b.get("owner_uid")
     zone_id = b.get("zoneID")
     logger.debug(f"@@@ >> Insert / Update {user_id} {zone_id}")
     b.pop("zoneID")
@@ -136,23 +136,24 @@ def _restore_zone_update(zone_adm, traceid, x):
 
 def pool_key_order(e):
     order = [
-        "user",
-        "group",
-        "rootSecret",
-        "accessKeys",
-        "bucketsDir",
+        "owner_uid",
+        "owner_gid",
+        "root_secret",
+        "access_keys",
+        "pool_directory",
         "buckets",
-        "directHostnames",
-        "expDate",
+        "direct_hostnames",
+        "expiration_date",
         "online_status",
         "admission_status",
         "minio_state",
         "atime",
+        ##AHO
         "accessKeysPtr",
         "directHostnamePtr",
-        "accessKeyID",
-        "secretAccessKey",
-        "policyName",
+        "access_key",
+        "secret_key",
+        "policy_name",
         "key",
         "ptr",
         "policy"]
@@ -171,14 +172,16 @@ def mux_key_order(e):
 
 def proc_key_order(e):
     order = [
-        "minioAddr",
-        "minioPid",
-        "muxAddr",
-        "supervisorPid"]
+        "minio_ep",
+        "minio_pid",
+        "mux_host",
+        "mux_port",
+        "manager_pid"]
     return order.index(e) if e in order else len(order)
 
 def route_key_order(e):
     order = [
+        ##AHO
         "accessKey",
         "host",
         "atime"]
@@ -294,7 +297,7 @@ class Command():
             logger.exception(e)
             return
         zone = json.loads(r, parse_int=None)
-        user_id = zone["user"]
+        user_id = zone["owner_uid"]
         self.zone_adm.restore_pool(self.traceid, user_id, zone_id, zone,
                                    include_atime=False, initialize=True)
 
@@ -330,7 +333,7 @@ class Command():
             if zoneIDs != set() and zone_id not in zoneIDs:
                 continue
             if self.args.format not in {"json"}:
-                fix_date_format(zone, ["atime", "expDate"])
+                fix_date_format(zone, ["atime", "expiration_date"])
             zone.pop("zoneID")
             outs.append({zone_id: zone})
         print_json_plain("zones", outs, self.args.format, order=pool_key_order)
@@ -402,7 +405,7 @@ class Command():
         self.zone_adm.check_mux_access_for_zone(self.traceid, zone_id, force=True)
 
     def fn_show_routing_table(self):
-        pairs = self.zone_adm.tables.routing_table.get_route_list()
+        pairs = self.zone_adm.tables.routing_table.list_routes()
         print_json_plain("routing table", pairs, self.args.format, order=route_key_order)
 
     ##def fn_show_routing_table(self):

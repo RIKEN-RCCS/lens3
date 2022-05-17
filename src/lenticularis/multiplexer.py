@@ -70,7 +70,7 @@ class Multiplexer():
 
     def __del__(self):
         logger.debug("@@@ MUX_MAIN: __DEL__")
-        self.tables.process_table.del_mux(self._mux_host)
+        self.tables.process_table.delete_mux(self._mux_host)
 
 
     def __call__(self, environ, start_response):
@@ -100,7 +100,7 @@ class Multiplexer():
 
 
     def _list_mux_ip_addresses(self):
-        muxs = self.tables.process_table.get_mux_list()
+        muxs = self.tables.process_table.list_muxs()
         return set([addr for (h, p) in muxs for addr in get_ip_address(h)])
 
 
@@ -252,7 +252,7 @@ class Multiplexer():
         zone = self.tables.storage_table.get_zone(zoneID)
         if zone is None:
             return None
-        return zone["user"]
+        return zone["owner_uid"]
 
 
     def _wrap_res(self, environ, res, headers, sniff=False, sniff_marker=""):

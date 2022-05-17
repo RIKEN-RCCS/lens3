@@ -229,12 +229,12 @@ function pullup_zone() {
         directHostnames = push_direct_hostnames(directHostnames,
                                 editor_data.directHostnameDomains,
                                 editor_data.directHostnames);
-        zone["group"] = editor_data.group;
-        zone["bucketsDir"] = editor_data.bucketsDir;
+        zone["owner_gid"] = editor_data.group;
+        zone["pool_directory"] = editor_data.bucketsDir;
         zone["buckets"] = buckets;
-        zone["accessKeys"] = [{"policyName": "readwrite"}, {"policyName": "readonly"}, {"policyName": "writeonly"}]; // dummy entry
-        zone["directHostnames"] = directHostnames;
-        zone["expDate"] = parse_rfc3339(editor_data.expDate);
+        zone["access_keys"] = [{"policy_name": "readwrite"}, {"policy_name": "readonly"}, {"policy_name": "writeonly"}]; // dummy entry
+        zone["direct_hostnames"] = directHostnames;
+        zone["expiration_date"] = parse_rfc3339(editor_data.expDate);
         zone["online_status"] = editor_data.status;
         // ignore "minio_state", nor "atime"
         return zone;
@@ -248,7 +248,7 @@ function compose_create_dict(csrf_token) {
 
 function compose_update_dict(csrf_token) {
         var zone = pullup_zone();
-        zone["accessKeys"] = editor_data.accessKeys; // overwrite a dummy entry
+        zone["access_keys"] = editor_data.accessKeys; // overwrite a dummy entry
         var dict = {"zone": zone};
         return stringify_dict(dict, csrf_token);
 }
@@ -263,7 +263,7 @@ function compose_create_bucket_dict(csrf_token, key, policy) {
 }
 
 function compose_access_key_update_dict(csrf_token, accessKeyID ) {
-        var zone = {"accessKeys": [{"accessKeyID": accessKeyID}]};
+        var zone = {"access_keys": [{"access_key": accessKeyID}]};
         var dict = {"zone": zone};
         return stringify_dict(dict, csrf_token);
 }
@@ -519,7 +519,7 @@ function get_zone_list_body(zone_list) {
 
 function zone_to_ul_data(zone) {
         var buckets = zone["buckets"];
-        var accessKeys = zone["accessKeys"];
+        var accessKeys = zone["access_keys"];
         var rwkey = chooseAccessKey(accessKeys, "readwrite");
         var rokey = chooseAccessKey(accessKeys, "readonly");
         var wokey = chooseAccessKey(accessKeys, "writeonly");
@@ -527,21 +527,21 @@ function zone_to_ul_data(zone) {
         return [
                 {text: {label: "Zone ID", value: zone["zoneID"]}},
                 {text: {label: "Endpoint-URL", value: zone["endpoint_url"]}},
-                {text: {label: "Unix user", value: zone["user"]}},
-                {text: {label: "Unix group", value: zone["group"]}},
-                {text: {label: "Buckets directory", value: zone["bucketsDir"]}},
+                {text: {label: "Unix user", value: zone["owner_uid"]}},
+                {text: {label: "Unix group", value: zone["owner_gid"]}},
+                {text: {label: "Buckets directory", value: zone["pool_directory"]}},
                 {text: {label: "Private buckets", value: scan_buckets(buckets, "none")}},
                 {text: {label: "Public buckets", value: scan_buckets(buckets, "public")}},
                 {text: {label: "Public download buckets", value: scan_buckets(buckets, "download")}},
                 {text: {label: "Public upload buckets", value: scan_buckets(buckets, "upload")}},
-                {text: {label: "Access key ID (RW)", value: rwkey["accessKeyID"]}},
-                {text: {label: "Secret access key", value: rwkey["secretAccessKey"]}},
-                {text: {label: "Access key ID (RO)", value: rokey["accessKeyID"]}},
-                {text: {label: "Secret access key", value: rokey["secretAccessKey"]}},
-                {text: {label: "Access key ID (WO)", value: wokey["accessKeyID"]}},
-                {text: {label: "Secret access key", value: wokey["secretAccessKey"]}},
-                {text: {label: "Direct hostname", value: zone["directHostnames"].join(' ')}},
-                {text: {label: "Expiration date", value: format_rfc3339_if_not_zero(zone["expDate"])}},
+                {text: {label: "Access key ID (RW)", value: rwkey["access_key"]}},
+                {text: {label: "Secret access key", value: rwkey["secret_key"]}},
+                {text: {label: "Access key ID (RO)", value: rokey["access_key"]}},
+                {text: {label: "Secret access key", value: rokey["secret_key"]}},
+                {text: {label: "Access key ID (WO)", value: wokey["access_key"]}},
+                {text: {label: "Secret access key", value: wokey["secret_key"]}},
+                {text: {label: "Direct hostname", value: zone["direct_hostnames"].join(' ')}},
+                {text: {label: "Expiration date", value: format_rfc3339_if_not_zero(zone["expiration_date"])}},
                 {text: {label: "Permission", value: zone["admission_status"]}},
                 {text: {label: "Enabled", value: zone["online_status"]}},
                 {text: {label: "MinIO state", value: zone["minio_state"]}},
@@ -550,15 +550,15 @@ function zone_to_ul_data(zone) {
 }
 
 function set_zone_to_editor_body(zone) {
-        var accessKeys = zone["accessKeys"];
+        var accessKeys = zone["access_keys"];
         var rwkey = chooseAccessKey(accessKeys, "readwrite");
         var rokey = chooseAccessKey(accessKeys, "readonly");
         var wokey = chooseAccessKey(accessKeys, "writeonly");
 
         editor_data.zoneID = zone["zoneID"];
-        editor_data.user = zone["user"];
-        editor_data.group = zone["group"];
-        editor_data.bucketsDir = zone["bucketsDir"];
+        editor_data.user = zone["owner_uid"];
+        editor_data.group = zone["owner_gid"];
+        editor_data.bucketsDir = zone["pool_directory"];
         var buckets = zone["buckets"];
         for (var i = 0; i < policies.length; i++) {
                 editor_data.buckets[i] = scan_buckets(buckets, policies[i]);
@@ -566,18 +566,18 @@ function set_zone_to_editor_body(zone) {
 
         // for chenge secret
         editor_data.accessKeys = accessKeys;
-        editor_data.accessKeyIDrw = rwkey["accessKeyID"];
-        editor_data.accessKeyIDro = rokey["accessKeyID"];
-        editor_data.accessKeyIDwo = wokey["accessKeyID"];
-        editor_data.secretAccessKeyrw = rwkey["secretAccessKey"];
-        editor_data.secretAccessKeyro = rokey["secretAccessKey"];
-        editor_data.secretAccessKeywo = wokey["secretAccessKey"];
+        editor_data.accessKeyIDrw = rwkey["access_key"];
+        editor_data.accessKeyIDro = rokey["access_key"];
+        editor_data.accessKeyIDwo = wokey["access_key"];
+        editor_data.secretAccessKeyrw = rwkey["secret_key"];
+        editor_data.secretAccessKeyro = rokey["secret_key"];
+        editor_data.secretAccessKeywo = wokey["secret_key"];
 
         editor_data.key = "";           // for bucket creation
         editor_data.policy = "";        // ditto.
 
-        editor_data.directHostnames = zone["directHostnames"].join(' ');
-        editor_data.expDate = format_rfc3339_if_not_zero(zone["expDate"]);
+        editor_data.directHostnames = zone["direct_hostnames"].join(' ');
+        editor_data.expDate = format_rfc3339_if_not_zero(zone["expiration_date"]);
         editor_data.status = zone["online_status"];
         editor_data.mode = zone["minio_state"];
         editor_data.atime = format_rfc3339_if_not_zero(zone["atime"]);
@@ -633,7 +633,7 @@ function format_rfc3339_if_not_zero(d) {
 function chooseAccessKey(accessKeys, policyName) {
         for (var i = 0; i < accessKeys.length; i++) {
                 var accessKey = accessKeys[i];
-                if (accessKey["policyName"] == policyName) {
+                if (accessKey["policy_name"] == policyName) {
                         return accessKey;
                 }
         }

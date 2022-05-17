@@ -18,33 +18,33 @@ def _update_for_key(dict0, key, dict1, overwrite):
         pass
 
 def merge_pool_descriptions(user_id, existing, zone):
-    ## Note it disallows updating "rootSecret" by preferring an
+    ## Note it disallows updating "root_secret" by preferring an
     ## existing one.
     if not existing:
         existing = {}
-    zone["user"] = user_id
-    _update_for_key(zone, "group", existing, False)
-    _update_for_key(zone, "rootSecret", existing, True)
-    _update_for_key(zone, "bucketsDir", existing, False)
+    zone["owner_uid"] = user_id
+    _update_for_key(zone, "owner_gid", existing, False)
+    _update_for_key(zone, "root_secret", existing, True)
+    _update_for_key(zone, "pool_directory", existing, False)
     _update_for_key(zone, "buckets", existing, False)
-    _update_for_key(zone, "accessKeys", existing, False)
-    _update_for_key(zone, "directHostnames", existing, False)
-    _update_for_key(zone, "expDate", existing, False)
+    _update_for_key(zone, "access_keys", existing, False)
+    _update_for_key(zone, "direct_hostnames", existing, False)
+    _update_for_key(zone, "expiration_date", existing, False)
     _update_for_key(zone, "online_status", existing, False)
 
 
 def compare_access_keys(existing, zone):
     if existing is None:
         return []
-    e = existing.get("accessKeys")
-    z = zone.get("accessKeys")
+    e = existing.get("access_keys")
+    z = zone.get("access_keys")
     if (e, z) == (None, None):
         return []
 
     if z is None:
         return []
-    e_dic = {i.get("accessKeyID"): i for i in e}
-    z_dic = {i.get("accessKeyID"): i for i in z}
+    e_dic = {i.get("access_key"): i for i in e}
+    z_dic = {i.get("access_key"): i for i in z}
     #logger.debug(f"@@@ {e_dic} {z_dic}")
     return dict_diff(e_dic, z_dic)
 
@@ -52,8 +52,8 @@ def compare_access_keys(existing, zone):
 def compare_buckets_directory(existing, zone):
     if existing is None:
         return []
-    e = existing.get("bucketsDir")
-    z = zone.get("bucketsDir")
+    e = existing.get("pool_directory")
+    z = zone.get("pool_directory")
     if z is None:
         return []
     if e != z:
@@ -80,11 +80,11 @@ def check_conflict(zoneID, zone, z_id, z):
     reasons = []
 
     def zone_keys(zoneID, zone):
-        return set([zoneID] + [e.get("accessKeyID")
-                   for e in zone.get("accessKeys")])
+        return set([zoneID] + [e.get("access_key")
+                   for e in zone.get("access_keys")])
 
     def direct_hostnames(zone):
-        return set(zone.get("directHostnames"))
+        return set(zone.get("direct_hostnames"))
 
     #logger.debug(f"@@@ z_id = {z_id}")
     #logger.debug(f"@@@ zone = {zone}")
@@ -101,14 +101,14 @@ def check_conflict(zoneID, zone, z_id, z):
         reasons.append({"Zone ID / Access Key ID": i})
 
     # check buckets directories
-    new = {zone["bucketsDir"]}
-    old = {z["bucketsDir"]}
+    new = {zone["pool_directory"]}
+    old = {z["pool_directory"]}
     #logger.debug(f"@@@ new = {new}")
     #logger.debug(f"@@@ old = {old}")
     i = new.intersection(old)
     if new == old:
         #logger.debug(f"@@@ DIR CONFLICT {new}")
-        reasons.append({"bucketsDir": i})
+        reasons.append({"pool_directory": i})
 
     # check Direct Hostnames
     new = direct_hostnames(zone)
@@ -141,14 +141,14 @@ def zone_schema(type_number):
     access_key = {
         "type": "object",
         "properties": {
-            "accessKeyID": {"type": "string"},
-            "secretAccessKey": {"type": "string"},
-            "policyName": {"type": "string"},
+            "access_key": {"type": "string"},
+            "secret_key": {"type": "string"},
+            "policy_name": {"type": "string"},
         },
         "required": [
-            "accessKeyID",
-            "secretAccessKey",
-            "policyName",
+            "access_key",
+            "secret_key",
+            "policy_name",
         ],
         "additionalProperties": False,
     }
@@ -156,26 +156,26 @@ def zone_schema(type_number):
     return {
         "type": "object",
         "properties": {
-            "user": {"type": "string"},
-            "group": {"type": "string"},
-            "rootSecret": {"type": "string"},
-            "bucketsDir": {"type": "string"},
+            "owner_uid": {"type": "string"},
+            "owner_gid": {"type": "string"},
+            "root_secret": {"type": "string"},
+            "pool_directory": {"type": "string"},
             "buckets": {"type": "array", "items": bucket},
-            "accessKeys": {"type": "array", "items": access_key},
-            "directHostnames": {"type": "array", "items": {"type": "string"}},
-            "expDate": type_number,
+            "access_keys": {"type": "array", "items": access_key},
+            "direct_hostnames": {"type": "array", "items": {"type": "string"}},
+            "expiration_date": type_number,
             "admission_status": {"type": "string"},
             "online_status": {"type": "string"},
         },
         "required": [
-            "user",
-            "group",
-            "rootSecret",
-            "bucketsDir",
+            "owner_uid",
+            "owner_gid",
+            "root_secret",
+            "pool_directory",
             "buckets",
-            "accessKeys",
-            "directHostnames",
-            "expDate",
+            "access_keys",
+            "direct_hostnames",
+            "expiration_date",
             "admission_status",
             "online_status",
         ],
@@ -223,10 +223,10 @@ def check_pool_dict_is_sound(dict, user, adm_conf):
         check_policy(bucket["policy"])
     check_status(dict["online_status"])
     check_permission(dict["admission_status"])
-    for accessKey in dict.get("accessKeys", []):
-        check_policy_name(accessKey["policyName"])
+    for accessKey in dict.get("access_keys", []):
+        check_policy_name(accessKey["policy_name"])
 
-    check_number(dict["expDate"])
+    check_number(dict["expiration_date"])
     check_number(dict.get("atime", "0"))  # may be absent
 
     # XXX fixme check_policy()

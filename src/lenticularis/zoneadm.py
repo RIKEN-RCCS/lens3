@@ -9,6 +9,7 @@ import sys
 import time
 from lenticularis.lockdb import LockDB
 from lenticularis.table import get_tables
+from lenticularis.table import StorageTable
 from lenticularis.utility import decrypt_secret, encrypt_secret
 from lenticularis.utility import gen_access_key_id, gen_secret_access_key
 from lenticularis.utility import logger
@@ -39,8 +40,8 @@ def _check_bucket_fmt(bucket):
 
 def _check_access_key_fmt(access_key):
     access_key_keys = set(access_key.keys())
-    return ({"accessKeyID"}.issubset(access_key_keys) and
-            access_key_keys.issubset({"accessKeyID", "secretAccessKey", "policyName"}))
+    return ({"access_key"}.issubset(access_key_keys) and
+            access_key_keys.issubset({"access_key", "secret_key", "policy_name"}))
 
 def _check_create_bucket_keys(zone):
     """ zone ::= {"buckets": [{"key": bucket_name,
@@ -52,21 +53,24 @@ def _check_create_bucket_keys(zone):
         raise Exception(f"update_buckets: invalid bucket: {zone}")
 
 def _check_change_secret_keys(zone):
-    """ zone ::= {"accessKeys": [accessKey]}
-        accessKey ::= {"accessKeyID": access_key_id,
-                       "secretAccessKey": secret (optional),
-                       "policyName": policy (optional) }
+    """ zone ::= {"access_keys": [accessKey]}
+        accessKey ::= {"access_key": access_key_id,
+                       "secret_key": secret (optional),
+                       "policy_name": policy (optional) }
     """
-    if zone.keys() != {"accessKeys"}:
+    if zone.keys() != {"access_keys"}:
         raise Exception(f"update_secret_keys: invalid key set: {set(zone.keys())}")
-    if not all(_check_access_key_fmt(access_key) for access_key in zone["accessKeys"]):
+    if not all(_check_access_key_fmt(access_key) for access_key in zone["access_keys"]):
         raise Exception(f"change_secret_key: invalid accessKey: {zone}")
 
 def _check_zone_keys(zone):
     given_keys = set(zone.keys())
-    mandatory_keys = {"group", "bucketsDir", "buckets", "accessKeys",
-                      "directHostnames", "expDate", "online_status"}
-    allowed_keys = mandatory_keys.union({"user", "rootSecret", "admission_status"})
+    mandatory_keys = StorageTable.pool_desc_required_keys
+    optional_keys = StorageTable.pool_desc_optional_keys
+    allowed_keys = mandatory_keys.union(optional_keys)
+    ##mandatory_keys = {"owner_gid", "pool_directory", "buckets", "access_keys",
+    ##                  "direct_hostnames", "expiration_date", "online_status"}
+    ##allowed_keys = mandatory_keys.union({"user", "root_secret", "admission_status"})
     if not mandatory_keys.issubset(given_keys):
         raise Exception(f"upsert_zone: invalid key set: missing {mandatory_keys - given_keys}")
     if not given_keys.issubset(allowed_keys):
@@ -74,7 +78,8 @@ def _check_zone_keys(zone):
 
 def check_pool_owner(user_id, pool_id, pool):
     ## It uses a user-id as an owner if it is undefined."""
-    owner = pool.get("user", user_id)
+    ##AHO
+    owner = pool.get("owner_uid", user_id)
     if owner != user_id:
         raise Exception(f"Mismatch in pool owner and authenticated user:"
                         f" owner={owner} to user={user_id}")
@@ -144,16 +149,16 @@ def _strip_domain(host_fqdn, domain):
     return host_fqdn[:-domain_len]
 
 def _choose_any_access_key(pooldesc):
-    """Accesses pooldesc["accessKeys"][0]["accessKeyID"], but checks are
+    """Accesses pooldesc["access_keys"][0]["access_key"], but checks are
     inserted for Pyright.
     """
-    keys = pooldesc.get("accessKeys", [])
+    keys = pooldesc.get("access_keys", [])
     pair = keys[0] if keys else None
-    return pair.get("accessKeyID", None) if pair else None
+    return pair.get("access_key", None) if pair else None
 
 def _list_access_keys(pooldesc):
-    keys = pooldesc.get("accessKeys", [])
-    ids = [pair.get("accessKeyID", None) if pair else None
+    keys = pooldesc.get("access_keys", [])
+    ids = [pair.get("access_key", None) if pair else None
            for pair in keys]
     return [k for k in ids if k is not None]
 
@@ -187,12 +192,12 @@ class ZoneAdm():
             logger.debug(f"@@@ z_id = {z_id}")
             zone = self.tables.storage_table.get_zone(z_id)
             assert zone is not None
-            user_id = zone["user"]
+            user_id = zone["owner_uid"]
 
             ui = self.fetch_unix_user_info(user_id)
             if ui:
                 groups = ui.get("groups", [])
-                group = zone.get("group")
+                group = zone.get("owner_gid")
             else:
                 groups = []
                 group = None
@@ -368,13 +373,13 @@ class ZoneAdm():
               "  at:address -> atime")
 
     def fetch_multiplexer_list(self):
-        return self.tables.process_table.get_mux_list()
+        return self.tables.process_table.list_muxs()
 
     def fetch_process_list(self):
-        return self.tables.process_table.get_minio_address_list(None)
+        return self.tables.process_table.list_minio_procs(None)
 
     def delete_process(self, processID):
-        return self.tables.process_table.del_minio_address(processID)
+        return self.tables.process_table.delete_minio_proc(processID)
 
     def flush_process_table(self, everything=False):
         self.tables.process_table.clear_all(everything=everything)
@@ -387,14 +392,14 @@ class ZoneAdm():
 
         logger.debug(f"zone={zoneID}, access_key={access_key_id}, force={force}")
 
-        minioAddr = self.tables.process_table.get_minio_address(zoneID)
-        multiplexers = self.tables.process_table.get_mux_list()
+        procdesc = self.tables.process_table.get_minio_proc(zoneID)
+        multiplexers = self.tables.process_table.list_muxs()
         logger.debug(f"@@@ MULTIPLEXERS = {multiplexers}")
-        if minioAddr:
+        if procdesc:
             ## SEND PACKET TO MULTPLEXER OF THE MINIO, NOT MINIO ITSELF.
-            mux_name = minioAddr.get("muxAddr")
+            mux_name = procdesc.get("mux_host")
             logger.debug(f"@@@ MUX_NAME = {mux_name}")
-            # host = minioAddr.get("minioAddr")  ### DO NOT SEND
+            # host = procdesc.get("minio_ep")  ### DO NOT SEND
             multiplexer = next(((host, port) for (host, port) in multiplexers if host == mux_name), None)
             if multiplexer is None:
                 multiplexer = pick_one(multiplexers)
@@ -427,7 +432,7 @@ class ZoneAdm():
         return status
 
     ##def fetch_route_list(self):
-    ##    return self.tables.routing_table.get_route_list()
+    ##    return self.tables.routing_table.list_routes()
 
     def flush_routing_table(self, everything=False):
         self.tables.routing_table.clear_routing(everything=everything)
@@ -587,7 +592,7 @@ class ZoneAdm():
         self.tables.storage_table.del_mode(zone_id)
         logger.debug(f"@@@ del_atime {zone_id}")
         self.tables.storage_table.del_atime(zone_id)
-        logger.debug(f"@@@ DELETE PTR {zone_id} {[e.get('accessKeyID') for e in existing.get('accessKeys')]}")
+        logger.debug(f"@@@ DELETE PTR {zone_id} {[e.get('access_key') for e in existing.get('access_keys')]}")
         self.tables.storage_table.del_ptr(zone_id, existing)
         logger.debug("@@@ del_zone")
         self.tables.storage_table.del_zone(zone_id)
@@ -596,7 +601,7 @@ class ZoneAdm():
     def _check_user_group(self, user_id, zone):
         ui = self.fetch_unix_user_info(user_id)
         groups = ui.get("groups") if ui else []
-        group = zone.get("group") if zone else None
+        group = zone.get("owner_gid") if zone else None
         if group not in groups:
             raise Exception(f"invalid group: {group}")
 
@@ -630,10 +635,10 @@ class ZoneAdm():
         assert mode == "suspended"
         self._clear_route(pool_id, existing)
         status = self.check_mux_access_for_zone(traceid, pool_id, force=False)
-        minioAddr = self.tables.process_table.get_minio_address(pool_id)
-        if minioAddr is not None:
-            logger.error(f"COULD NOT STOP MINIO: {minioAddr}")
-        assert minioAddr is None
+        procdesc = self.tables.process_table.get_minio_proc(pool_id)
+        if procdesc is not None:
+            logger.error(f"COULD NOT STOP MINIO: {procdesc}")
+        assert procdesc is None
 
     ##def _update_zone_with_lock_(self, how, traceid, user_id, zone_id, zone,
     ##                            permission, atime_from_arg,
@@ -678,8 +683,8 @@ class ZoneAdm():
     ##            ## Stop MinIO.
     ##            status = self.check_mux_access_for_zone(traceid, zone_id, force=False)
     ##            logger.debug(f"@@@ SEND DECOY STATUS {status}")
-    ##            minioAddr = self.tables.process_table.get_minio_address(zone_id)
-    ##            if minioAddr is not None:
+    ##            procdesc = self.tables.process_table.get_minio_proc(zone_id)
+    ##            if procdesc is not None:
     ##                logger.debug(f"@@@ COULD NOT STOP MINIO")
     ##                raise Exception("could not stop minio")
     ##    except Exception as e:
@@ -709,9 +714,9 @@ class ZoneAdm():
     ##    if delete_zone:
     ##        self._delete_existing_zone(existing)
     ##    else:
-    ##        logger.debug(f"@@@ INSERT PTR {zone_id} {[e.get('accessKeyID') for e in zone.get('accessKeys')]}")
+    ##        logger.debug(f"@@@ INSERT PTR {zone_id} {[e.get('access_key') for e in zone.get('access_keys')]}")
     ##        if atime_from_arg:
-    ##            logger.debug(f"@@@ INSERT PTR {zone_id} {[e.get('accessKeyID') for e in zone.get('accessKeys')]}")
+    ##            logger.debug(f"@@@ INSERT PTR {zone_id} {[e.get('access_key') for e in zone.get('access_keys')]}")
     ##            self.tables.storage_table.set_atime(zone_id, atime_from_arg)
     ##        self.tables.storage_table.ins_ptr(zone_id, zone)
     ##
@@ -986,23 +991,23 @@ class ZoneAdm():
                                    existing, zone, permission):
         assert how == "change_secret_key"
         assert existing is not None
-        assert "accessKeys" in zone
+        assert "access_keys" in zone
 
-        new_keys = zone.pop("accessKeys")
+        new_keys = zone.pop("access_keys")
         if len(new_keys) != 1:
             raise Exception(f"Changing secret for too few/many access-keys: keys={new_keys}")
         newkey = new_keys[0]
-        keyid = newkey["accessKeyID"]
+        keyid = newkey["access_key"]
 
         merge_pool_descriptions(user_id, existing, zone)
 
-        access_keys = zone.get("accessKeys", [])
-        if not any(k["accessKeyID"] == keyid for k in access_keys):
+        access_keys = zone.get("access_keys", [])
+        if not any(k["access_key"] == keyid for k in access_keys):
             raise Exception(f"Changing secret for a non-existing key: key={keyid}")
         for k in access_keys:
-            if k["accessKeyID"] == keyid:
+            if k["access_key"] == keyid:
                 ## Let `regularize_zone` generate a new secret access key.
-                k["secretAccessKey"] = ""
+                k["secret_key"] = ""
                 break
         ## assert(permission is None)
         need_uniquify = self._regularize_pool_dict(user_id, existing, zone, permission)
@@ -1023,7 +1028,7 @@ class ZoneAdm():
         return (need_initialize, need_uniquify)
 
     def _regularize_pool_dict(self, user_id, existing, zone, permission):
-        _encrypt_or_generate(zone, "rootSecret")
+        _encrypt_or_generate(zone, "root_secret")
 
         if permission is None:
             ## how not in {"enable_zone", "disable_zone"}
@@ -1048,17 +1053,17 @@ class ZoneAdm():
             # bucket name and policy will be checed in `check_zone_values`
 
         need_uniquify = False
-        access_keys = zone.get("accessKeys", [])
+        access_keys = zone.get("access_keys", [])
         for accessKey in access_keys:
-            if not accessKey.get("accessKeyID"):  # (unset) or ""
-                accessKey["accessKeyID"] = ""   # temporary value
-                need_uniquify = True   # accessKeyID is updated in uniquify_zone
+            if not accessKey.get("access_key"):  # (unset) or ""
+                accessKey["access_key"] = ""   # temporary value
+                need_uniquify = True   # access_key is updated in uniquify_zone
 
-            _encrypt_or_generate(accessKey, "secretAccessKey")
+            _encrypt_or_generate(accessKey, "secret_key")
 
-            if not accessKey.get("policyName"):  # (unset) or ""
-                accessKey["policyName"] = "readwrite"
-            # policyName will be checked in `check_pool_dict_is_sound`
+            if not accessKey.get("policy_name"):  # (unset) or ""
+                accessKey["policy_name"] = "readwrite"
+            # policy_name will be checked in `check_pool_dict_is_sound`
 
         logger.debug(f"@@@ CHECK_SCHEMA")
         check_zone_schema(zone, user_id)
@@ -1066,15 +1071,15 @@ class ZoneAdm():
         check_pool_dict_is_sound(zone, user_id, self.adm_conf)
         self._check_zone_values(user_id, zone)
 
-        directHostnames = zone["directHostnames"]
+        directHostnames = zone["direct_hostnames"]
         logger.debug(f"@@@ directHostnames = {directHostnames}")
-        zone["directHostnames"] = [e.lower() for e in directHostnames]
+        zone["direct_hostnames"] = [e.lower() for e in directHostnames]
 
         return need_uniquify
 
     def _check_zone_values(self, user_id, zone):
         logger.debug(f"+++")
-        num_hostnames_of_zone = len(zone.get("directHostnames"))
+        num_hostnames_of_zone = len(zone.get("direct_hostnames"))
 
         logger.debug(f"@@@ num_hostnames_of_zone = {num_hostnames_of_zone}")
 
@@ -1082,10 +1087,10 @@ class ZoneAdm():
             raise Exception(f"update_zone: too many direct hostnames (limit per zone exceeded)")
 
         maxExpDate = int(self.system_settings_param["allowed_maximum_zone_exp_date"])
-        if int(zone["expDate"]) > maxExpDate:
+        if int(zone["expiration_date"]) > maxExpDate:
             raise Exception(f"update_zone: expiration date is beyond the system limit")
 
-        for h in zone.get("directHostnames", []):
+        for h in zone.get("direct_hostnames", []):
             self._check_direct_hostname(h)
 
         self._check_user_group(user_id, zone)
@@ -1108,7 +1113,7 @@ class ZoneAdm():
             lock_status = self._lock_pool_table(lock)
             if need_conflict_check or need_uniquify:
                 zone_id = self._uniquify_zone(user_id, zone_id, zone)
-            self.tables.storage_table.ins_zone(zone_id, zone)
+            self.tables.storage_table.set_pool(zone_id, zone)
             self.tables.storage_table.set_atime(zone_id, "0")
         finally:
             ##lock.unlock()
@@ -1139,10 +1144,10 @@ class ZoneAdm():
             zone_id = _gen_unique_key(gen_access_key_id, allkeys)
             logger.debug(f"@@@ zone_id = {zone_id}")
 
-        access_keys = zone.get("accessKeys", [])
+        access_keys = zone.get("access_keys", [])
         for access_key in access_keys:
-            if not access_key.get("accessKeyID"):
-                access_key["accessKeyID"] = _gen_unique_key(gen_access_key_id, allkeys)
+            if not access_key.get("access_key"):
+                access_key["access_key"] = _gen_unique_key(gen_access_key_id, allkeys)
 
         for z_id in self.tables.storage_table.list_pool_ids(None):
             if z_id == zone_id:
@@ -1151,7 +1156,7 @@ class ZoneAdm():
             if z is None:
                 continue
             reasons += check_conflict(zone_id, zone, z_id, z)
-            if z.get("user") == user_id:
+            if z.get("owner_uid") == user_id:
                 num_zones_of_user += 1
 
         if reasons != []:
@@ -1163,9 +1168,9 @@ class ZoneAdm():
         return zone_id
 
     def _send_decoy_with_zoneid_ptr(self, traceid, zone_id):
-        temp_access_keys = [{"accessKeyID": zone_id}]
-        zoneID_accessible_zone = {"accessKeys": temp_access_keys,
-                                  "directHostnames": []}
+        temp_access_keys = [{"access_key": zone_id}]
+        zoneID_accessible_zone = {"access_keys": temp_access_keys,
+                                  "direct_hostnames": []}
         try:
             self.tables.storage_table.ins_ptr(zone_id, zoneID_accessible_zone)
             ## Trigger initialize.
@@ -1188,7 +1193,7 @@ class ZoneAdm():
     def zone_to_user(self, zoneID):
         ## ADMIN, multiplexer   CODE CLONE @ multiplexer.py
         zone = self.tables.storage_table.get_zone(zoneID)
-        return zone["user"] if zone else None
+        return zone["owner_uid"] if zone else None
 
     def exp_date(self):
         now = int(time.time())
@@ -1207,33 +1212,33 @@ class ZoneAdm():
         assert ui is not None
         groups = ui.get("groups")
 
-        ## Excluding: "rootSecret".
+        ## Excluding: "root_secret".
 
         return {
-            "user": user_id,
-            "group": groups[0],
-            "bucketsDir": "",
+            "owner_uid": user_id,
+            "owner_gid": groups[0],
+            "pool_directory": "",
             "buckets": [],
-            "accessKeys": [
-                   {"policyName": "readwrite"},
-                   {"policyName": "readonly"},
-                   {"policyName": "writeonly"}],
-            "directHostnames": [],
-            "expDate": self.exp_date(),
+            "access_keys": [
+                   {"policy_name": "readwrite"},
+                   {"policy_name": "readonly"},
+                   {"policy_name": "writeonly"}],
+            "direct_hostnames": [],
+            "expiration_date": self.exp_date(),
             "online_status": "online",
             "groups": groups,
             "atime": "0",
             "directHostnameDomains": self.direct_hostname_domains,
             "facadeHostname": self.facade_hostname,
-            "endpoint_url": self.endpoint_urls({"directHostnames": []})
+            "endpoint_url": self.endpoint_urls({"direct_hostnames": []})
         }
 
     def decrypt_access_keys(self, zone):
         """Decrypts secrets in the pool description for showing to a user.
         """
-        access_keys = zone.get("accessKeys", [])
+        access_keys = zone.get("access_keys", [])
         for accessKey in access_keys:
-            accessKey["secretAccessKey"] = decrypt_secret(accessKey["secretAccessKey"])
+            accessKey["secret_key"] = decrypt_secret(accessKey["secret_key"])
 
     def _pullup_mode(self, zoneID, zone):
         zone["minio_state"] = self.fetch_current_mode(zoneID)
@@ -1247,6 +1252,7 @@ class ZoneAdm():
         zone["atime"] = atime
 
     def _pullup_ptr(self, zoneID, zone, access_key_ptr, direct_host_ptr):
+        ##AHO
         zone["accessKeysPtr"] = [{"key": e, "ptr": v} for (e, v) in access_key_ptr if v == zoneID]
         zone["directHostnamePtr"] = [{"key": e, "ptr": v} for (e, v) in direct_host_ptr if v == zoneID]
 
@@ -1280,7 +1286,7 @@ class ZoneAdm():
                 broken_zones.append(zoneID)
                 continue
 
-            if user_id and zone["user"] != user_id:
+            if user_id and zone["owner_uid"] != user_id:
                 continue
 
             zone["zoneID"] = zoneID
@@ -1308,4 +1314,4 @@ class ZoneAdm():
         return ([template.format(hostname=h)
                  for h in [self.facade_hostname]] +
                 [template.format(hostname=h)
-                 for h in zone.get("directHostnames", [])])
+                 for h in zone.get("direct_hostnames", [])])

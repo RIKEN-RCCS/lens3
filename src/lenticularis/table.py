@@ -26,7 +26,7 @@ class TableCommon():
 
 
 class StorageTable(TableCommon):
-    _pool_desc_prefix = "ru:"
+    _pool_desc_prefix = "po:"
     _access_key_id_prefix = "ar:"
     directHostnamePrefix = "dr:"
     atimePrefix = "ac:"
@@ -35,23 +35,37 @@ class StorageTable(TableCommon):
     _unix_user_prefix = "uu:"
     storage_table_lock_prefix = "zk:"
     hashes_ = {_pool_desc_prefix}
-    structured = {"buckets", "accessKeys", "directHostnames"}
+    structured = {"buckets", "access_keys", "direct_hostnames"}
 
-    def ins_zone(self, zoneID, dict):
-        ##logger.debug(f"ins_zone {zoneID} {dict}")
+    ## See zone_schema for json schema.
+
+    pool_desc_required_keys = {
+        "owner_gid", "pool_directory", "buckets", "access_keys",
+        "direct_hostnames", "expiration_date", "online_status"}
+    pool_desc_optional_keys = {
+        "owner_uid", "root_secret", "admission_status"}
+
+    _pool_desc_keys = pool_desc_required_keys.union(pool_desc_optional_keys)
+
+    _access_keys_keys = {
+        "policy_name", "access_key", "secret_key"}
+
+
+    def set_pool(self, zoneID, pooldesc):
+        assert set(pooldesc.keys()).issubset(self._pool_desc_keys)
         key = f"{self._pool_desc_prefix}{zoneID}"
-        return self.dbase.hset_map(key, dict, self.structured)
+        return self.dbase.hset_map(key, pooldesc, self.structured)
 
     def ins_ptr(self, zoneID, dict):
         # logger.debug(f"+++ {zoneID} {dict}")
         ## accessKeys must exist.
-        for a in dict.get("accessKeys"):
-            access_key_id = a.get("accessKeyID")
+        for a in dict.get("access_keys"):
+            access_key_id = a.get("access_key")
             if access_key_id:
                 key = f"{self._access_key_id_prefix}{access_key_id}"
                 self.dbase.set(key, zoneID)
         ## directHostnames must exist.
-        for directHostname in dict.get("directHostnames"):
+        for directHostname in dict.get("direct_hostnames"):
             key = f"{self.directHostnamePrefix}{directHostname}"
             self.dbase.set(key, zoneID)
         return None
@@ -63,13 +77,13 @@ class StorageTable(TableCommon):
     def del_ptr(self, zoneID, dict):
         # logger.debug(f"+++ {zoneID} {dict}")
         # logger.debug(f"@@@ del_ptr zoneID {zoneID} dict {dict}")
-        for a in dict.get("accessKeys", []):  # accessKeys may be absent
-            access_key_id = a.get("accessKeyID")
+        for a in dict.get("access_keys", []):  # access_keys may be absent
+            access_key_id = a.get("access_key")
             if access_key_id:
                 # logger.debug(f"@@@ del_ptr access_key_id {access_key_id}")
                 key = f"{self._access_key_id_prefix}{access_key_id}"
                 self.dbase.delete(key)
-        for directHostname in dict.get("directHostnames", []):  # directHostname may be absent
+        for directHostname in dict.get("direct_hostnames", []):  # directHostname may be absent
             # logger.debug(f"@@@ del_ptr directHostname {directHostname}")
             key = f"{self.directHostnamePrefix}{directHostname}"
             self.dbase.delete(key)
@@ -78,7 +92,7 @@ class StorageTable(TableCommon):
     def get_zone(self, zoneID):
         # logger.debug(f"+++ {zoneID}")
         key = f"{self._pool_desc_prefix}{zoneID}"
-        if not self.dbase.hexists(key, "user"):
+        if not self.dbase.hexists(key, "owner_uid"):
             return None
         return self.dbase.hget_map(key, self.structured)
 
@@ -191,40 +205,44 @@ class ProcessTable(TableCommon):
     hashes_ = {_minio_process_prefix, _mux_list_prefix}
     structured = {}
 
-    def ins_minio_address(self, zoneID, minioAddr, timeout):
-        # logger.debug(f"+++ {zoneID} {minioAddr} {timeout}")
-        # logger.debug(f"@@@ MINIO_ADDRESS INSERT {zoneID} {minioAddr}")
-        key = f"{self._minio_process_prefix}{zoneID}"
-        self.set_minio_address_expire(zoneID, timeout)
-        return self.dbase.hset_map(key, minioAddr, self.structured)
+    ## See _record_minio_process for the content of a MinIO process.
+    ## See _register_mux_info for the content of a Mux description.
 
-    def del_minio_address(self, zoneID):
-        # logger.debug(f"+++ {zoneID}")
-        # logger.debug(f"@@@ MINIO_ADDRESS DELETE {zoneID}")
+    _minio_desc_keys = {
+        "mux_host", "mux_port", "minio_ep", "minio_pid", "manager_pid"}
+
+    _mux_desc_keys = {
+        "host", "port", "start_time", "last_interrupted_time"}
+
+
+    def set_minio_proc(self, zoneID, procdesc, timeout):
+        assert set(procdesc.keys()) == self._minio_desc_keys
+        key = f"{self._minio_process_prefix}{zoneID}"
+        self.set_minio_proc_expiry(zoneID, timeout)
+        return self.dbase.hset_map(key, procdesc, self.structured)
+
+    def get_minio_proc(self, zoneID):
+        key = f"{self._minio_process_prefix}{zoneID}"
+        if not self.dbase.hexists(key, "minio_ep"):
+            return None
+        procdesc = self.dbase.hget_map(key, self.structured)
+        return procdesc
+
+    def delete_minio_proc(self, zoneID):
         key = f"{self._minio_process_prefix}{zoneID}"
         return self.dbase.delete(key)
 
-    def get_minio_address(self, zoneID):
-        # logger.debug(f"+++ {zoneID}")
-        key = f"{self._minio_process_prefix}{zoneID}"
-        if not self.dbase.hexists(key, "minioAddr"):
-            # logger.debug(f"@@@ MINIO_ADDRESS GET {zoneID} None")
-            return None
-        minioAddr = self.dbase.hget_map(key, self.structured)
-        # logger.debug(f"@@@ MINIO_ADDRESS GET {zoneID} {minioAddr}")
-        return minioAddr
-
-    def set_minio_address_expire(self, zoneID, timeout):
-        # logger.debug(f"+++ {zoneID} {timeout}")
+    def set_minio_proc_expiry(self, zoneID, timeout):
         key = f"{self._minio_process_prefix}{zoneID}"
         self.dbase.r.expire(key, timeout)
         return None
 
-    def get_minio_address_list(self, zoneID):
-        # logger.debug(f"+++ {zoneID}")
-        return _scan_table(self.dbase.r, self._minio_process_prefix, zoneID, value=self.get_minio_address)
+    def list_minio_procs(self, zoneID):
+        return _scan_table(self.dbase.r, self._minio_process_prefix, zoneID, value=self.get_minio_proc)
+
 
     def set_mux(self, mux_ep, mux_desc, timeout):
+        assert set(mux_desc.keys()) == self._mux_desc_keys
         key = f"{self._mux_list_prefix}{mux_ep}"
         r = self.dbase.hset_map(key, mux_desc, self.structured)
         if timeout:
@@ -235,7 +253,7 @@ class ProcessTable(TableCommon):
         key = f"{self._mux_list_prefix}{mux_ep}"
         return self.dbase.hget_map(key, self.structured)
 
-    def del_mux(self, mux_ep):
+    def delete_mux(self, mux_ep):
         key = f"{self._mux_list_prefix}{mux_ep}"
         return self.dbase.delete(key)
 
@@ -244,7 +262,7 @@ class ProcessTable(TableCommon):
         self.dbase.r.expire(key, timeout)
         return None
 
-    def get_mux_list(self):
+    def list_muxs(self):
         vv = _scan_table(self.dbase.r, self._mux_list_prefix, None,
                          value=self.get_mux)
         mm0 = [_get_mux_host_port(v) for (k, v) in vv]
@@ -267,35 +285,36 @@ class ProcessTable(TableCommon):
 
 def zone_to_route(zone):
     ##logger.debug(f"zone = {zone}")
-    access_keys = [i["accessKeyID"] for i in zone.get("accessKeys", [])]
-    directHostnames = zone["directHostnames"]
+    access_keys = [i["access_key"] for i in zone.get("access_keys", [])]
+    directHostnames = zone["direct_hostnames"]
     return {
-        "accessKeys": access_keys,
-        "directHostnames": directHostnames,
+        "access_keys": access_keys,
+        "direct_hostnames": directHostnames,
     }
 
 
 class RoutingTable(TableCommon):
-    _endpoint_prefix = "ep:"
+    _minio_ep_prefix = "ep:"
     _timestamp_prefix = "ts:"
-    _bucket_prefix = "bk:"
+    _bucket_prefix = "bu:"
     _host_style_prefix = "da:"
     _atime_prefix = "at:"
     hashes_ = {}
     structured = {}
 
     def set_route(self, pool_id, ep, timeout):
-        key = f"{self._endpoint_prefix}{pool_id}"
+        assert isinstance(ep, str)
+        key = f"{self._minio_ep_prefix}{pool_id}"
         self.dbase.set(key, ep)
         ##self.dbase.r.expire(key, timeout)
         return None
 
     def get_route(self, pool_id):
-        key = f"{self._endpoint_prefix}{pool_id}"
+        key = f"{self._minio_ep_prefix}{pool_id}"
         return self.dbase.get(key)
 
     def delete_route(self, pool_id):
-        key = f"{self._endpoint_prefix}{pool_id}"
+        key = f"{self._minio_ep_prefix}{pool_id}"
         self.dbase.delete(key)
         return None
 
@@ -319,6 +338,8 @@ class RoutingTable(TableCommon):
         key = f"{self._host_style_prefix}{directHostname}"
         return self.dbase.get(key)
 
+    def list_routes(self):
+        return _scan_table(self.dbase.r, self._minio_ep_prefix, None, value="get")
 
     def set_atime_expire_(self, addr, timeout):
         # logger.debug(f"+++ {addr} {timeout}")
@@ -338,11 +359,9 @@ class RoutingTable(TableCommon):
             self.dbase.r.expire(key, default_ttl)
         return retval
 
-    def get_route_list(self):
-        return _scan_table(self.dbase.r, self._endpoint_prefix, None, value="get")
 
     def clear_routing(self, everything):
-        delete_all(self.dbase.r, self._endpoint_prefix)
+        delete_all(self.dbase.r, self._minio_ep_prefix)
         delete_all(self.dbase.r, self._timestamp_prefix)
         delete_all(self.dbase.r, self._bucket_prefix)
         delete_all(self.dbase.r, self._atime_prefix)

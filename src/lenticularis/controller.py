@@ -74,9 +74,9 @@ class Controller():
         """Chooses a host to run a MinIO.  It returns None to mean the
         localhost.
         """
-        minioAddress = self.tables.process_table.get_minio_address(zone_id)
-        if minioAddress:
-            mux_addr = minioAddress["muxAddr"]
+        procdesc = self.tables.process_table.get_minio_proc(zone_id)
+        if procdesc:
+            mux_addr = procdesc["mux_host"]
             if mux_addr == self._mux_host:
                 return None
             return mux_addr

@@ -16,14 +16,14 @@ class Scheduler():
 
     def schedule(self, zoneID_):
         """Chooses a least used host for running MinIO."""
-        multiplexers = self.tables.process_table.get_mux_list()
+        multiplexers = self.tables.process_table.list_muxs()
 
         if len(multiplexers) == 0:
             ## Choose the localhost.
             return (None, None)
 
-        servers = self.tables.process_table.get_minio_address_list(None)
-        minios = [process["muxAddr"] for (zone, process) in servers]
+        servers = self.tables.process_table.list_minio_procs(None)
+        minios = [procdesc["mux_host"] for (zone, procdesc) in servers]
         muxs = [host for (host, port) in multiplexers]
         occupancy = collections.Counter(minios + muxs)
         occupancy = sorted(occupancy.items(), key=lambda e: e[1])

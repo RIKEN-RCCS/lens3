@@ -6,18 +6,16 @@
 import codecs
 import hashlib
 import json
-import logging
-import logging.handlers
-#from logging import getLogger
-#from logging.handlers import SysLogHandler
 import platform
 import random
 import string
 import time
-from urllib.request import Request, urlopen
-#from urllib.error
-import urllib.error
 import socket
+import select
+from urllib.request import Request, urlopen
+import urllib.error
+import logging
+import logging.handlers
 import traceback
 import contextvars
 
@@ -331,10 +329,10 @@ def make_clean_env(oenv):
 ##            right.pop(0)
 
 
-def outer_join_list(left, lkeyfn, right, rkeyfn):
+def list_diff3(left, lkeyfn, right, rkeyfn):
     """Takes an intersection and residues, and returns a three-tuple of
-    lefts-pairs-rights.  It does not expect duplicate keys, but such
-    keys are consumed one by one.
+    left-residues, intersection-pairs, and right-residues.  It does
+    not expect duplicate keys, but such keys are consumed one by one.
     """
 
     def _comp(l0, r0):
@@ -421,7 +419,8 @@ def dict_diff(e, z):
 
 
 def uniform_distribution_jitter():
-    return random.random() * 2  # NOTE: FIXED VALUE
+    ## NOTE: FIX VALUE.
+    return random.random() * 2
 
 
 def get_ip_address(host):
@@ -498,3 +497,29 @@ def normalize_address(ip):
     if ip.startswith("::ffff:"):
         ip = ip[7:]
     return ip
+
+
+def wait_one_line_on_stdout(p, timeout):
+    """Waits until a line is on stdout.  A returned line can be more than
+    one.  Note that a closure is undetectable on pipes created by
+    Popen (until a subprocess exits).  It drains stdout/stderr and
+    returns (outs, errs).
+    """
+    (outs, errs, closed) = (b"", b"", False)
+    ss = [p.stdout, p.stderr]
+    while ss != [] and not b"\n" in outs and not closed:
+        (readable, _, _) = select.select(ss, [], [], timeout)
+        if readable == []:
+            break
+        if p.stderr in readable:
+            e0 = p.stderr.read1()
+            if (e0 == b""):
+                ss = [s for s in ss if s != p.stderr]
+            errs += e0
+        if p.stdout in readable:
+            o0 = p.stdout.read1()
+            if (o0 == b""):
+                ss = [s for s in ss if s != p.stdout]
+                closed = True
+            outs += o0
+    return (outs, errs, closed)

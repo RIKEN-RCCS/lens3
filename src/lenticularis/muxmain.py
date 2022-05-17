@@ -1,4 +1,4 @@
-"""A gunicorn main started as a service."""
+"""A Mux-main started as a gunicorn service."""
 
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
@@ -14,6 +14,7 @@ from lenticularis.controller import Controller
 from lenticularis.multiplexer import Multiplexer
 from lenticularis.readconf import read_mux_conf, node_envname
 from lenticularis.table import get_tables
+from lenticularis.utility import host_port
 from lenticularis.utility import logger, openlog
 
 
@@ -30,14 +31,17 @@ def app():
 
     tables = get_tables(mux_conf)
 
-    hostname = os.environ.get(node_envname)
-    if not hostname:
-        hostname = platform.node()
+    mux_host = os.environ.get(node_envname)
+    if not mux_host:
+        mux_host = platform.node()
 
-    logger.info(f"Mux is running on a host=({hostname})")
+    gunicorn_conf = mux_conf["gunicorn"]
+    mux_port = gunicorn_conf["port"]
+    ep = host_port(mux_host, mux_port)
+    logger.info(f"Mux is running on a host=({ep})")
 
-    controller = Controller(mux_conf, tables, configfile, hostname)
-    multiplexer = Multiplexer(mux_conf, tables, controller, hostname)
+    controller = Controller(mux_conf, tables, configfile, mux_host, mux_port)
+    multiplexer = Multiplexer(mux_conf, tables, controller, mux_host, mux_port)
 
     atexit.register((lambda: multiplexer.__del__()))
 

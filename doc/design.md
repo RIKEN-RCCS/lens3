@@ -1726,16 +1726,18 @@ Note that a bucket-pool has another state `status`, but it is always
 | mx:Mux-endpoint | Mux-description |(htable)|
 | lk:??         | -> (lock?)
 
-A process-description includes:
+A process-description is a htable record {muxAddr : string, minioAddr
+: string, minioPid : int', supervisorPid : int}, where muxAddr is a
+host name, minioAddr is an endpoint.
+
 * a host of a mux,
 * an endpoint of a MinIO
 * a pid of a manager
 * a pid of a MinIO
 
-A mux-description includes:
-* an endpoint of a Mux (host + port)
-* start-time
-* last-interrupted-time?
+A Mux-description is a htable record {host : string, port : int,
+start_time : string, last_interrupted_time : string}.  an host+port is
+an endpoint of a Mux.  start-time ...  last-interrupted-time? ...
 
 #### routing-table
 
@@ -1756,7 +1758,7 @@ mc policy set download alias/bucket
 mc policy set public alias/bucket
 ```
 
-## Redis database operations
+### Redis database operations
 
 * inserting a pool
   * lock db -> insert pool -> unlock
@@ -1764,8 +1766,28 @@ mc policy set public alias/bucket
   * lock pool -> lock db -> move to deleling-state
     -> stop minio -> delete pool -> unlock -> unlock
 
-## Mux processes
+Redis client routines catches socket related exceptions (including
+ConnectionError and TimeoutError).  Others are not checked at all by
+Lens3.
 
-There exists multiple Mux processes for a Mux service, as it is
+### Mux processes
+
+There exists multiple Mux processes for a single Mux service, as it is
 started as a Gunicorn service.  Some book-keeping periodical
-operations are performed more frequently than expected.
+operations (in background threads) are performed more frequently than
+expected.
+
+### MinIO client
+
+Note that alias commands are local (not connect to a MinIO).
+
+### A Manager process
+
+A Manager becomes a session leader (by calling setsid), and a MinIO
+process will be terminated when a Manager exits.
+
+### RANDOM MEMO
+
+Note: Python Popen seems to dup a PIPE fd and does not close the
+original.  It results in that a closure of stdout/stderr in a
+subprocess cannot be detected at the parent.

@@ -25,9 +25,7 @@ class Mc():
 
 
     def alias_set(self, url, zoneID, minioRootUser, minioRootSecret, confdir):
-        logger.debug("@@@ ALIAS SET")
-        logger.debug(f"@@@ ALIAS SET {minioRootUser}")
-        logger.debug(f"@@@ ALIAS SET {minioRootSecret}")
+        ##logger.debug("@@@ ALIAS SET")
         #tmpdir = "/tmp"
         if len(zoneID) > 0:
             sortkey = f"{ord(zoneID[0]):02x}"
@@ -36,7 +34,6 @@ class Mc():
         self._alias = f"{zoneID}{random_str(12).lower()}"
         #self._config_dir = f"{tmpdir}/.mc/{sortkey}/{self._alias}"
         self._config_dir = confdir
-        logger.debug(f"@@@ CONFDIR: {self._config_dir}, ALIAS: {self._alias}")
         (p, r) = self._execute_cmd(False, "alias", "set", self._alias, url,
                                    minioRootUser, minioRootSecret, "--api", "S3v4")
         assert p is None
@@ -47,6 +44,7 @@ class Mc():
         return self
 
     def alias_remove(self):
+        ##logger.debug("@@@ ALIAS REMOVE")
         (p, r) = self._execute_cmd(False, "alias", "remove", self._alias)
         assert p is None
         self._alias = None
@@ -54,52 +52,52 @@ class Mc():
             raise Exception(r[0]["error"]["message"])
 
     def admin_info(self):
-        logger.debug("@@@ ADMIN INFO")
+        ##logger.debug("@@@ ADMIN INFO")
         return self._execute_cmd(False, "admin", "info", self._alias)
 
     def admin_policy_set(self, access_key_id, policy):
-        logger.debug("@@@ SET USER POLICY")
+        ##logger.debug("@@@ SET USER POLICY")
         return self._execute_cmd(False, "admin", "policy", "set", self._alias,
                                 policy, f"user={access_key_id}")
 
     def admin_service_stop(self):
-        logger.debug("@@@ ADMIN STOP MINIO")
+        ##logger.debug("@@@ ADMIN STOP MINIO")
         return self._execute_cmd(False, "admin", "service", "stop", self._alias)
 
     def admin_user_add(self, access_key_id, secret_access_key):
-        logger.debug("@@@ ADMIN USER ADD")
+        ##logger.debug("@@@ ADMIN USER ADD")
         return self._execute_cmd(False, "admin", "user", "add", self._alias,
                                 access_key_id, secret_access_key)
 
     def admin_user_disable(self, access_key_id, no_wait=False):
-        logger.debug("@@@ ADMIN USER DISABLE")
+        ##logger.debug("@@@ ADMIN USER DISABLE")
         return self._execute_cmd(no_wait, "admin", "user", "disable", self._alias,
                                 access_key_id)
 
     def admin_user_enable(self, access_key_id):
-        logger.debug("@@@ ADMIN USER ENABLE")
+        ##logger.debug("@@@ ADMIN USER ENABLE")
         return self._execute_cmd(False, "admin", "user", "enable", self._alias,
                                 access_key_id)
 
     def admin_user_list(self):
-        logger.debug("@@@ ADMIN USER LIST")
+        ##logger.debug("@@@ ADMIN USER LIST")
         return self._execute_cmd(False, "admin", "user", "list", self._alias)
 
     def admin_user_remove(self, access_key_id):
-        logger.debug("@@@ ADMIN USER REMOVE")
+        ##logger.debug("@@@ ADMIN USER REMOVE")
         return self._execute_cmd(False, "admin", "user", "remove", self._alias,
                                 access_key_id)
 
     def list_buckets(self):
-        logger.debug("@@@ LIST BUCKETS")
+        ##logger.debug("@@@ LIST BUCKETS")
         return self._execute_cmd(False, "ls", f"{self._alias}")
 
     def make_bucket(self, bucket):
-        logger.debug("@@@ MAKE BUCKET")
+        ##logger.debug("@@@ MAKE BUCKET")
         return self._execute_cmd(False, "mb", f"{self._alias}/{bucket}")
 
     def policy_set(self, bucket, policy, no_wait=False):
-        logger.debug("@@@ POLICY SET")
+        ##logger.debug("@@@ POLICY SET")
         return self._execute_cmd(no_wait, "policy", "set", policy,
                                 f"{self._alias}/{bucket}")
 

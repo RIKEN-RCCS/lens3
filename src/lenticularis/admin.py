@@ -17,7 +17,7 @@ from lenticularis.utility import ERROR_READCONF, ERROR_EXCEPTION, ERROR_ARGUMENT
 from lenticularis.utility import format_rfc3339_z
 from lenticularis.utility import logger, openlog
 from lenticularis.utility import objdump
-from lenticularis.utility import outer_join_list
+from lenticularis.utility import list_diff3
 from lenticularis.utility import random_str
 from lenticularis.utility import tracing
 
@@ -101,8 +101,8 @@ def _store_unix_user_info_update(zone_adm, x):
 def _store_user_info(zone_adm, user_info):
     existing = zone_adm.list_unixUsers()
     logger.debug(f"@@@ existing = {existing}")
-    (ll, pp, rr) = outer_join_list(user_info, lambda b: b.get("id"),
-                                   existing, lambda e: e)
+    (ll, pp, rr) = list_diff3(user_info, lambda b: b.get("id"),
+                              existing, lambda e: e)
     for x in ll:
         _store_unix_user_info_add(zone_adm, x)
     for x in rr:
@@ -355,8 +355,8 @@ class Command():
         self.zone_adm.store_allow_deny_rules(rules)
         _store_user_info(self.zone_adm, user_info)
         (existing, _) = self.zone_adm.fetch_zone_list(None)
-        (ll, pp, rr) = outer_join_list(zone_list, lambda b: b.get("zoneID"),
-                                       existing, lambda e: e.get("zoneID"))
+        (ll, pp, rr) = list_diff3(zone_list, lambda b: b.get("zoneID"),
+                                  existing, lambda e: e.get("zoneID"))
         for x in rr:
             _restore_zone_delete(self.zone_adm, self.traceid, x)
         for x in ll:

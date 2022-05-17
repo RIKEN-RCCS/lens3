@@ -458,7 +458,7 @@ class ZoneAdm():
     ##                     atime_from_arg=None,
     ##                     initialize=True,
     ##                     decrypt=False):
-    ##    lock = LockDB(self.tables.storage_table)
+    ##    lock = LockDB(self.tables.storage_table, "Adm")
     ##    try:
     ##        self._lock_pool_entry(lock, zoneID)
     ##        return self._update_zone_with_lock_(
@@ -472,7 +472,7 @@ class ZoneAdm():
                         atime_from_arg=None,
                         initialize=True,
                         decrypt=False):
-        lock = LockDB(self.tables.storage_table)
+        lock = LockDB(self.tables.storage_table, "Adm")
         try:
             self._lock_pool_entry(lock, zoneID)
             return self._create_pool_with_lock(
@@ -486,7 +486,7 @@ class ZoneAdm():
                         atime_from_arg=None,
                         initialize=True,
                         decrypt=False):
-        lock = LockDB(self.tables.storage_table)
+        lock = LockDB(self.tables.storage_table, "Adm")
         try:
             self._lock_pool_entry(lock, zoneID)
             return self._update_pool_with_lock(
@@ -500,7 +500,7 @@ class ZoneAdm():
                            atime_from_arg=None,
                            initialize=True,
                            decrypt=False):
-        lock = LockDB(self.tables.storage_table)
+        lock = LockDB(self.tables.storage_table, "Adm")
         try:
             self._lock_pool_entry(lock, zoneID)
             return self._update_pool_with_lock(
@@ -514,7 +514,7 @@ class ZoneAdm():
                           atime_from_arg=None,
                           initialize=True,
                           decrypt=False):
-        lock = LockDB(self.tables.storage_table)
+        lock = LockDB(self.tables.storage_table, "Adm")
         try:
             self._lock_pool_entry(lock, zoneID)
             return self._update_pool_with_lock(
@@ -528,7 +528,7 @@ class ZoneAdm():
                          atime_from_arg=None,
                          initialize=True,
                          decrypt=False):
-        lock = LockDB(self.tables.storage_table)
+        lock = LockDB(self.tables.storage_table, "Adm")
         try:
             self._lock_pool_entry(lock, zoneID)
             return self._create_pool_with_lock(
@@ -542,7 +542,7 @@ class ZoneAdm():
                         atime_from_arg=None,
                         initialize=True,
                         decrypt=False):
-        lock = LockDB(self.tables.storage_table)
+        lock = LockDB(self.tables.storage_table, "Adm")
         try:
             self._lock_pool_entry(lock, zoneID)
             return self._delete_pool_with_lock(
@@ -556,7 +556,7 @@ class ZoneAdm():
                          atime_from_arg=None,
                          initialize=True,
                          decrypt=False):
-        lock = LockDB(self.tables.storage_table)
+        lock = LockDB(self.tables.storage_table, "Adm")
         try:
             self._lock_pool_entry(lock, zoneID)
             return self._update_pool_with_lock(
@@ -570,7 +570,7 @@ class ZoneAdm():
                         atime_from_arg=None,
                         initialize=True,
                         decrypt=False):
-        lock = LockDB(self.tables.storage_table)
+        lock = LockDB(self.tables.storage_table, "Adm")
         try:
             self._lock_pool_entry(lock, zoneID)
             return self._update_pool_with_lock(
@@ -1100,7 +1100,7 @@ class ZoneAdm():
         self.tables.routing_table.delete_route(zone_id)
 
     def _lock_and_store_zone(self, user_id, zone_id, zone, need_conflict_check, need_uniquify):
-        lock = LockDB(self.tables.storage_table)
+        lock = LockDB(self.tables.storage_table, "Adm")
         ##key = f"{self.storage_table_lock_prefix}"
         lock_status = False
         try:

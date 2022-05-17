@@ -1,7 +1,7 @@
-"""A sentinel process for a minio process.  It is started by a
-controller as a daemon (and exits immediately), and it informs the
-caller about a successful start-up of a minio process by placing a
-message in stdout and closing stdout/stderr.
+"""A sentinel process for a MinIO process.  It is started by a
+Controller as a daemon (and exits immediately), and it informs the
+caller about a successful start-up of a MinIO by placing a one line
+message on stdout.
 """
 
 # Copyright (c) 2022 RIKEN R-CCS
@@ -19,32 +19,26 @@ import sys
 import tempfile
 import threading
 import time
+import contextlib
 from lenticularis.mc import Mc
 from lenticularis.readconf import read_mux_conf
 from lenticularis.lockdb import LockDB
 from lenticularis.table import get_tables, zone_to_route
 from lenticularis.utility import ERROR_READCONF, ERROR_FORK, ERROR_START_MINIO
-from lenticularis.utility import decrypt_secret, outer_join_list
+from lenticularis.utility import decrypt_secret, list_diff3
 from lenticularis.utility import gen_access_key_id, gen_secret_access_key
-from lenticularis.utility import logger, openlog
 from lenticularis.utility import make_clean_env, host_port
 from lenticularis.utility import remove_trailing_shash, uniform_distribution_jitter
+from lenticularis.utility import wait_one_line_on_stdout
+from lenticularis.utility import logger, openlog
 from lenticularis.utility import tracing
-
-
-class TerminateException(Exception):
-    pass
 
 
 class AlarmException(Exception):
     pass
 
 
-class LoopBreakException(Exception):
-    pass
-
-
-class NoStartRequiredException(Exception):
+class _Termination(Exception):
     pass
 
 
@@ -83,16 +77,18 @@ class MinioManager():
         raise AlarmException(self.alarm_cause)
 
     def _sigterm(self, n, stackframe):
-        logger.debug("@@@ raiseException TerminateException")
+        logger.debug("Manager got a sigterm.")
         signal(SIGTERM, SIG_IGN)
-        raise TerminateException()
+        raise _Termination("Manager got a sigterm.")
 
     def _tell_controller_minio_starts(self):
-        ## Note it loses stdout/stderr messages after closing.
+        ## Note closure is not detected by the reader-side.
         sys.stdout.write(f"{self._minio_ep}\n")
         sys.stdout.flush()
         sys.stdout.close()
         sys.stderr.close()
+        contextlib.redirect_stdout(None)
+        contextlib.redirect_stderr(None)
 
     def _finish_subprocess(self, p):
         logger.debug(f"_finish_subprocess unimplemented.")
@@ -112,26 +108,24 @@ class MinioManager():
 
         self.zoneID = zoneID
         use_pool_id_for_minio_root_user = args.useTrueAccount
+        self._mux_host = args.host
+        self._mux_port = args.port
         port_min = int(args.port_min)
         port_max = int(args.port_max)
-        logger.debug(f"zoneID = {self.zoneID}")
-        logger.debug(f"PORT = [{port_min}, {port_max})")
-        self.muxaddr = args.muxaddr
+        self._mux_ep = args.host
 
         lenticularis_conf = mux_conf["lenticularis"]
-        self.host = args.node
-        logger.debug("@@@ {args.node}")
 
         minio_param = lenticularis_conf["minio"]
         ##self.minio_http_trace = minio_param["minio_http_trace"]
-        self.minio_bin = minio_param["minio"]
-        self.mc_bin = minio_param["mc"]
+        self._bin_minio = minio_param["minio"]
+        self._bin_mc = minio_param["mc"]
 
         controller_param = lenticularis_conf["controller"]
         self.sudo = controller_param["sudo"]
         self.watch_interval = int(controller_param["watch_interval"])
         self._lock_timeout = int(controller_param["minio_startup_timeout"])
-        ## NOTE: FIXED VALUE: timeout_margin
+        ## NOTE: FIX VALUE of timeout_margin.
         self.timeout_margin = 2
         self.keepalive_limit = int(controller_param["keepalive_limit"])
         self.allowed_down_count = int(controller_param["allowed_down_count"])
@@ -147,11 +141,11 @@ class MinioManager():
         zone = self.tables.storage_table.get_zone(zoneID)
         if zone is None:
             logger.error(f"Manager failed: no pool found for pool={zoneID}")
-            return
+            return False
 
         env = make_clean_env(os.environ)
-        self.minioenv = env
-        self.mcenv = env.copy()
+        self._env_minio = env
+        self._env_mc = env.copy()
 
         if use_pool_id_for_minio_root_user:
             self.MINIO_ROOT_USER = self.zoneID
@@ -160,36 +154,39 @@ class MinioManager():
             self.MINIO_ROOT_USER = gen_access_key_id()
             self.MINIO_ROOT_PASSWORD = gen_secret_access_key()
 
-        self.minioenv["MINIO_ROOT_USER"] = self.MINIO_ROOT_USER
-        self.minioenv["MINIO_ROOT_PASSWORD"] = self.MINIO_ROOT_PASSWORD
+        self._env_minio["MINIO_ROOT_USER"] = self.MINIO_ROOT_USER
+        self._env_minio["MINIO_ROOT_PASSWORD"] = self.MINIO_ROOT_PASSWORD
         ##if self.minio_http_trace != "":
-        ##    self.minioenv["MINIO_HTTP_TRACE"] = self.minio_http_trace
-        self.minioenv["MINIO_BROWSER"] = "off"
+        ##    self._env_minio["MINIO_HTTP_TRACE"] = self.minio_http_trace
+        self._env_minio["MINIO_BROWSER"] = "off"
 
-        ## self.minioenv["MINIO_CACHE_DRIVES"] = f"/tmp/{self.zoneID}"
-        ## self.minioenv["MINIO_CACHE_EXCLUDE"] = ""
-        ## self.minioenv["MINIO_CACHE_QUOTA"] = "80"
-        ## self.minioenv["MINIO_CACHE_AFTER"] = "3"
-        ## self.minioenv["MINIO_CACHE_WATERMARK_LOW"] = "70"
-        ## self.minioenv["MINIO_CACHE_WATERMARK_HIGH"] = "90"
+        ## self._env_minio["MINIO_CACHE_DRIVES"] = f"/tmp/{self.zoneID}"
+        ## self._env_minio["MINIO_CACHE_EXCLUDE"] = ""
+        ## self._env_minio["MINIO_CACHE_QUOTA"] = "80"
+        ## self._env_minio["MINIO_CACHE_AFTER"] = "3"
+        ## self._env_minio["MINIO_CACHE_WATERMARK_LOW"] = "70"
+        ## self._env_minio["MINIO_CACHE_WATERMARK_HIGH"] = "90"
 
-        self.lock = LockDB(self.tables.process_table)
+        self.lock = LockDB(self.tables.process_table, "Man")
         lockprefix = self.tables.process_table.process_table_lock_prefix
         key = f"{lockprefix}{self.zoneID}"
-        lock_status = False
-        try:
-            lock_status = self.lock.trylock(key, self._lock_timeout)
-            if lock_status:
-                self._lock_start = int(time.time())
-                self._manage_minio(port_min, port_max, access_by_zoneID)
-        finally:
-            if lock_status:
-                self.lock.unlock()
+        ok = False
+        while True:
+            self._lock_start = int(time.time())
+            locked = self.lock.trylock(key, self._lock_timeout)
+            if not locked:
+                ## NOTE: FIX VALUE.
+                delay = 0.2
+                self.lock.wait_for_lock(key, delay)
+                continue
             else:
-                logger.debug(f"@@@ WAIT4_UNLOCK {self.zoneID}")
-                delay = 0.2  # NOTE: FIXED VALUE
-                self.lock.wait4_unlock(key, delay)
-        return
+                break
+        try:
+            ok = self._manage_minio(port_min, port_max, access_by_zoneID)
+        finally:
+            if self.lock.key is not None:
+                self.lock.unlock()
+        return ok
 
 
     def _manage_minio(self, port_min, port_max, access_by_zoneID):
@@ -233,11 +230,12 @@ class MinioManager():
         p = self._try_start_minio(ports, mode, user, group,
                                   bucketsDir, zone, up_minio, need_initialize)
         if p is None:
-            return
-        else:
-            self._setup_and_watch_minio(p, mode, user, group,
-                                        bucketsDir, zone, up_minio, need_initialize)
-        return
+            return False
+
+        ok = self._setup_and_watch_minio(p, mode, user, group,
+                                         bucketsDir, zone, up_minio, need_initialize)
+
+        return ok
 
 
     def _try_start_minio(self, ports, mode, user, group,
@@ -245,15 +243,15 @@ class MinioManager():
         p = None
         for port in ports:
             address = f":{port}"
-            cmd = [self.sudo, "-u", user, "-g", group, self.minio_bin,
+            cmd = [self.sudo, "-u", user, "-g", group, self._bin_minio,
                    "server", "--anonymous", "--address", address, bucketsDir]
-            logger.debug(f"Starting minio with: {cmd}")
+            logger.info(f"Starting minio with: {cmd}")
             p = Popen(cmd, stdin=DEVNULL, stdout=PIPE, stderr=PIPE,
-                      env=self.minioenv)
+                      env=self._env_minio)
             try:
                 (ok, error_is_nonfatal) = self._wait_for_minio_to_come_up(p)
                 if ok:
-                    host = self.host
+                    host = self._mux_host
                     self._minio_ep = host_port(host, port)
                     return p
                 elif error_is_nonfatal:
@@ -265,7 +263,7 @@ class MinioManager():
             except Exception as e:
                 ## (e is SubprocessError, OSError, ValueError, usually).
                 logger.error(f"Starting minio failed with exception={e}")
-                self._set_pool_state("inoperable", "process_failure")
+                self._set_pool_state("inoperable", "MinIO does not start.")
                 self._minio_ep = None
                 return None
         assert p is None
@@ -279,7 +277,7 @@ class MinioManager():
         indefinitely.
         """
 
-        ## It also expects that minio outputs the following lines at a
+        ## It expects that minio outputs the following lines at a
         ## successful start (to stdout):
         ## > "API: http://xx.xx.xx.xx:9000  http://127.0.0.1:9000"
         ## > "RootUser: minioadmin"
@@ -287,38 +285,43 @@ class MinioManager():
 
         outs = b""
         while True:
-            try:
-                r = p.stdout.readline()
-                outs += r
-            except Exception:
-                r = b""
-                pass
-            if r == b"":
-                ## Got an eof, presumably it is an error.
+            (outs, errs, closed) = wait_one_line_on_stdout(p, None)
+            if closed:
+                ## A closure is presumably an error.
                 self._finish_subprocess(p)
                 p_status = p.wait()
+                (e_, _) = _read_stream(p.stderr)
+                errs += e_
                 if outs.find(_minio_error_response) != -1:
                     if outs.find(_minio_response_port_in_use) != -1:
                         logger.debug(f"Starting minio failed with"
-                                     f" wait-status={p_status} outs={outs}")
+                                     f" wait-status={p_status}"
+                                     f" outs=({outs}) errs=({errs})")
                         return (False, True)
                     elif outs.find(_minio_response_unwritable_storage) != -1:
-                        self._set_pool_state("inoperable", "unwritable_storage")
-                        logger.debug(f"Starting minio failed with"
-                                     f" wait-status={p_status} outs={outs}")
+                        reason = "Storage is unwritable."
+                        self._set_pool_state("inoperable",
+                                             "Storage is unwritable.")
+                        logger.info(f"Starting minio failed with"
+                                    f" wait-status={p_status}"
+                                    f" outs=({outs}) errs=({errs})")
                         return (False, False)
                     else:
-                        self._set_pool_state("inoperable", "process_failure")
+                        self._set_pool_state("inoperable",
+                                             "MinIO failed with an error.")
                         logger.error(f"Starting minio failed with"
-                                     f" wait-status={p_status} outs={outs}")
+                                     f" wait-status={p_status}"
+                                     f" outs=({outs}) errs=({errs})")
                         return (False, False)
                 else:
-                    self._set_pool_state("inoperable", "process_failure")
+                    self._set_pool_state("inoperable",
+                                         "MinIO process failed.")
                     logger.error(f"Starting minio failed with"
-                                 f" wait-status={p_status} outs={outs}")
+                                 f" wait-status={p_status}"
+                                 f" outs=({outs}) errs=({errs})")
                     return (False, False)
-            if r.startswith(_minio_expected_response):
-                logger.debug(f"Message on MinIO stdout=({outs})")
+            if outs.startswith(_minio_expected_response):
+                logger.info(f"Message on MinIO outs=({outs}) errs=({errs})")
                 return (True, False)
 
 
@@ -326,40 +329,40 @@ class MinioManager():
                                bucketsDir, zone, up_minio, need_initialize):
         assert self._minio_ep is not None
 
-        self.mc = Mc(self.mc_bin, self.mcenv)
-        with tempfile.TemporaryDirectory() as confdir:
+        self.mc = Mc(self._bin_mc, self._env_mc)
+        with tempfile.TemporaryDirectory() as configdir:
             with self.mc.alias_set(f"http://{self._minio_ep}",
                                    self.zoneID,
                                    self.MINIO_ROOT_USER,
                                    self.MINIO_ROOT_PASSWORD,
-                                   confdir):
-
-                if need_initialize:
-                    try:
+                                   configdir):
+                try:
+                    if need_initialize:
+                        ## _setup_minio may raise an exception.
                         self._setup_minio(p, zone)
-                    except Exception as e:
-                        self._stop_minio(p)
-                        raise
+                        return False
 
-                if not up_minio:
-                    self._stop_minio(p)
+                    if not up_minio:
+                        self._check_elapsed_time()
+                        logger.debug("Starting MinIO is not required.")
+                        return False
+
+                    jitter = 0
+                    initial_idle_duration = self.watch_interval + jitter + self.mc_info_timelimit
+
+                    timeo = initial_idle_duration + self.refresh_margin
+                    self._record_minio_process(p.pid, zone, timeo)
+
+                    self._tell_controller_minio_starts()
+
                     self._check_elapsed_time()
-                    raise NoStartRequiredException(
-                                         "Starting MinIO is not required (N)")
-                jitter = 0
-                initial_idle_duration = self.watch_interval + jitter + self.mc_info_timelimit
+                    self.lock.unlock()
 
-                self._record_minio_process(p.pid, zone, initial_idle_duration + self.refresh_margin)
+                    self._watch_minio(p)
+                finally:
+                    self._clear_tables()
+                    self._stop_minio(p)
 
-                ## Tell the caller that a MinIO started successfully.
-                self._tell_controller_minio_starts()
-
-                self._check_elapsed_time()
-                self.lock.unlock()
-
-                self._watch_minio(p)
-                ## VIRTUALLY NOT REACHED
-                assert False
                 return True
 
 
@@ -426,14 +429,15 @@ class MinioManager():
 
                 if p.stderr in readable:
                     (errs, closed) = _read_stream(p.stderr)
-                    logger.info(f"Message on MinIO stderr=({errs})")
+                    if errs != b"":
+                        logger.info(f"Message on MinIO stderr=({errs})")
 
                 if p.stdout in readable:
                     (outs, closed) = _read_stream(p.stdout)
-                    logger.info(f"Message on MinIO stdout=({outs})")
+                    if outs != b"":
+                        logger.info(f"Message on MinIO stdout=({outs})")
                     if closed:
-                        ## MinIO is now absent.  Quit the loop.
-                        raise LoopBreakException("MinIO closed it's stdout")
+                        raise _Termination("MinIO closed stdout.")
 
                 if readable == []:
                     # following funcall will take upto self.mc_info_timelimit
@@ -455,26 +459,17 @@ class MinioManager():
                 next_idle_duration = self.watch_interval + jitter + self.mc_info_timelimit
                 self._refresh_tables(next_idle_duration + self.refresh_margin)
 
-        except LoopBreakException as e:
-            logger.info(f"Break Watch Loop: {e}")
-            # logger.exception(e)  # do not record exception detail
-            pass
-
-        except TerminateException as e:
-            logger.debug("@@@ INTERUPPTED (SIGTERM)")
-            # logger.exception(e)  # do not record exception detail
+        except _Termination as e:
+            ## logger.exception(e)
             pass
 
         except Exception as e:
-            logger.info(f"EXCEPTION {e}")
+            logger.error(f"Manager failed: exception={e}")
             logger.exception(e)
             pass
 
-        self._clear_tables()
-        self._stop_minio(p)
-
         logger.debug(f"Manager for {self._minio_ep} exits.")
-        sys.exit(0)
+        return
 
 
     def _check_elapsed_time(self):
@@ -486,21 +481,21 @@ class MinioManager():
     def _check_status(self):
         zone = self.tables.storage_table.get_zone(self.zoneID)
         if zone is None:
-            raise LoopBreakException("Access key table erased")
+            raise _Termination("Access key table erased")
         if zone["admission_status"] != "allowed":
-            raise LoopBreakException("Credential disabled (psermission denied)")
+            raise _Termination("Credential disabled (psermission denied)")
         if zone["online_status"] != "online":
-            raise LoopBreakException("Credential disabled (status offline)")
+            raise _Termination("Credential disabled (status offline)")
 
     def _check_authoritativeness(self):
         minioAddress = self.tables.process_table.get_minio_address(self.zoneID)
         if minioAddress is None:
             # apotosis caused by self entry disappearance
-            raise LoopBreakException("Address table erased")
+            raise _Termination("Address table erased")
         if self.minioAddress[
                         "supervisorPid"] != minioAddress.get("supervisorPid"):
             # apotosis caused by self entry disappearance
-            raise LoopBreakException("Another controller owns address table")
+            raise _Termination("Another controller owns address table")
 
     def _check_minio_health(self):
         # FIXME: XXX USE FOLLOWING METHOD IS RECOMMENDED:
@@ -531,23 +526,23 @@ class MinioManager():
         atime = self.tables.routing_table.get_route_expiry(self.zoneID)
 
         if atime is None:
-            raise LoopBreakException("Keepalive_limit exceeded")
+            raise _Termination("Keepalive_limit exceeded")
 
         atime = int(atime)
         elapsed_time = now - atime
         logger.debug(f"@@@ timeleft = {self.keepalive_limit - elapsed_time}")
         if elapsed_time > self.keepalive_limit:
-            raise LoopBreakException("Keepalive_limit exceeded")
+            raise _Termination("Keepalive_limit exceeded")
 
     def _check_key_validity(self, now):
         if now >= self.expDate:
             logger.info(f"CHECK KEY VALIDITY: Access Key Expired: {self.zoneID}")
-            raise LoopBreakException("Credential expired")
+            raise _Termination("Credential expired")
 
     def _record_minio_process(self, pid, zone, timeout):
         timeout = math.ceil(timeout)
         self.minioAddress = {
-            "muxAddr": self.muxaddr,
+            "muxAddr": self._mux_ep,
             "minioAddr": self._minio_ep,
             "minioPid": f"{pid}",
             "supervisorPid": f"{os.getpid()}",
@@ -605,7 +600,7 @@ class MinioManager():
         assert p_ is None
         _check_mc_status(existing, "mc.admin_user_list")
 
-        (ll, pp, rr) = outer_join_list(access_keys, lambda b: b.get("accessKeyID"),
+        (ll, pp, rr) = list_diff3(access_keys, lambda b: b.get("accessKeyID"),
                                        existing, lambda e: e.get("accessKey"))
 
         logger.debug(f"Setup MinIO on access-keys:"
@@ -681,8 +676,8 @@ class MinioManager():
 
         logger.debug(f"@@@ buckets = {buckets}")
         logger.debug(f"@@@ existing = {existing}")
-        (ll, pp, rr) = outer_join_list(buckets, lambda b: b.get("key"),
-                                       existing, lambda e: remove_trailing_shash(e.get("key")))
+        (ll, pp, rr) = list_diff3(buckets, lambda b: b.get("key"),
+        existing, lambda e: remove_trailing_shash(e.get("key")))
 
         logger.debug(f"Setup MinIO on bucket-policy:"
                      f" add={ll}, delete={rr}, update={pp}")
@@ -763,10 +758,10 @@ class MinioManager():
             # Stop a running MinIO
             minioAddress = self.tables.process_table.get_minio_address(self.zoneID)
             assert minioAddress is not None
-            if minioAddress["muxAddr"] != self.muxaddr:
+            if minioAddress["muxAddr"] != self._mux_ep:
                 logger.error("INTERNAL ERROR: "
                                   "DATABASE OR SCHEDULER MAY CORRUPT. "
-                                  f"{minioAddress['muxAddr']} {self.muxaddr}")
+                                  f"{minioAddress['muxAddr']} {self._mux_ep}")
                 logger.debug("@@@ return immidiately")
                 return
             else:
@@ -799,19 +794,19 @@ class MinioManager():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("node")
+    parser.add_argument("host")
+    parser.add_argument("port")
     parser.add_argument("port_min")
     parser.add_argument("port_max")
-    parser.add_argument("muxaddr")
     parser.add_argument("--configfile")
     parser.add_argument("--useTrueAccount", type=bool, default=False)
-        #action=argparse.BooleanOptionalAction  -- was introduced in Python3.9
+    #action=argparse.BooleanOptionalAction  -- was introduced in Python3.9
     parser.add_argument("--accessByZoneID", type=bool, default=False)
-        #action=argparse.BooleanOptionalAction  -- was introduced in Python3.9
+    #action=argparse.BooleanOptionalAction  -- was introduced in Python3.9
     parser.add_argument("--traceid")
     args = parser.parse_args()
 
-    zoneID = os.environ.get("LENTICULARIS_ZONE_ID")
+    zoneID = os.environ.get("LENTICULARIS_POOL_ID")
     access_by_zoneID = args.accessByZoneID
 
     try:
@@ -825,28 +820,18 @@ def main():
     openlog(mux_conf["lenticularis"]["log_file"],
             **mux_conf["lenticularis"]["log_syslog"])
 
-    ##logger.debug("main")
-    ##logger.debug(f"traceid: {args.traceid}")
-    ##logger.debug(f"zoneID: {zoneID}")
-    ##logger.debug(f"port_min: {args.port_min}")
-    ##logger.debug(f"port_max: {args.port_max}")
-    ##logger.debug(f"muxaddr: {args.muxaddr}")
-    ##logger.debug(f"useTrueAccount: {args.useTrueAccount}")
-    ##logger.debug(f"accessByZoneID: {args.accessByZoneID}")
-    ##logger.debug(f"env: {os.environ}")
-
     try:
         pid = os.fork()
         if pid != 0:
-            ## parent.
+            ## (parent).
             sys.exit(0)
     except OSError as e:
         logger.error(f"fork failed: {os.strerror(e.errno)}")
         sys.exit(ERROR_FORK)
 
-    ## child.
+    ## (A Manager be a session leader).
 
-    logger.info(f"**** Starting a manager process (pool={zoneID}). ****")
+    logger.info(f"**** Starting a Manager process (pool={zoneID}). ****")
 
     try:
         os.setsid()
@@ -861,18 +846,14 @@ def main():
         pass
 
     manager = MinioManager()
+    ok = False
     try:
-        manager._manager_main(zoneID, access_by_zoneID, args, mux_conf)
-    except NoStartRequiredException as e:
-        logger.debug(f"{zoneID} NoStartRequiredException: {e}")
-        # logger.exception(e)  # do not record exception detail
-        pass
+        ok = manager._manager_main(zoneID, access_by_zoneID, args, mux_conf)
     except Exception as e:
-        logger.error(f"{zoneID} Exception: {e}")
+        logger.error(f"Manager for pool={zoneID} failed: exception={e}")
         logger.exception(e)
 
-    ## (Never here normally).
-    sys.exit(ERROR_START_MINIO)
+    sys.exit(0)
 
 
 if __name__ == "__main__":

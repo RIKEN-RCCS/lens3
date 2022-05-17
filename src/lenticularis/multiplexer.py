@@ -36,17 +36,16 @@ def _check_url_error_is_connection_errors(x):
 
 class Multiplexer():
 
-    def __init__(self, mux_conf, tables, controller, hostname):
+    def __init__(self, mux_conf, tables, controller, host, port):
         self._verbose = False
-        ##self.node = hostname
-        self._mux_host = hostname
+        ##self.node = host
+        self._mux_host = host
+        self._mux_port = port
         self.tables = tables
         self.controller = controller
         self.start = time.time()
         gunicorn_conf = mux_conf["gunicorn"]
         lenticularis_conf = mux_conf["lenticularis"]
-
-        self._mux_port = gunicorn_conf["port"]
 
         multiplexer_conf = lenticularis_conf["multiplexer"]
         self.facade_hostname = multiplexer_conf["facade_hostname"].lower()
@@ -173,21 +172,12 @@ class Multiplexer():
 
         logger.debug(f"(MUX)#1")
 
-        (dest_addr, zone_id) = self._get_dest_addr(traceid, q_headers)
-
-        ## The pair (dest_addr, zone_id) is:
-        ## - (string, string) => success
-        ## - (string, None)   => never
-        ## - (int, None)      => failure in resolving pool-id
-        ## - (int, string)    => failure in starting MinIO
+        (dest_addr, code, zone_id) = self._get_dest_addr(traceid, q_headers)
 
         logger.debug(f"(MUX)#2")
 
-        if isinstance(dest_addr, int):
-            ## we are here becasuse
-            # 1. cannot resolve access key id nor direct name, so that could not get zone_id.
-            # 2. succeeded to resolve zone_id, but failed to start minio.
-            status = f"{dest_addr}"
+        if dest_addr is None:
+            status = f"{code}"
             logger.debug(f"@@@ FAIL: status(dest_addr) = {status}")
             user_id = self._zone_to_user(zone_id) if zone_id else None
             user_id = user_id if user_id else _fake_user_id(access_key_id)
@@ -323,12 +313,12 @@ class Multiplexer():
             r = self.tables.routing_table.get_route(zone_id)
 
         if r is not None:
-            ## A route to minio found if r != None.
-            return (r, zone_id)
+            ## A MinIO endpoint exists.
+            return (r, 200, zone_id)
         else:
-            ## A route to minio not found.
-            (r, zone_id) = self.controller.route_request(traceid, host, access_key_id)
-            return (r, zone_id)
+            ## A route to minio is not found.
+            (r, code, zone_id) = self.controller.start_minio_service(traceid, host, access_key_id)
+            return (r, code, zone_id)
 
 
     def _get_access_key_id(self, authorization):

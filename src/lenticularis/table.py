@@ -235,7 +235,7 @@ class ProcessTable(TableCommon):
         key = f"{self._mux_list_prefix}{mux_ep}"
         return self.dbase.hget_map(key, self.structured)
 
-    def del_mux_(self, mux_ep):
+    def del_mux(self, mux_ep):
         key = f"{self._mux_list_prefix}{mux_ep}"
         return self.dbase.delete(key)
 

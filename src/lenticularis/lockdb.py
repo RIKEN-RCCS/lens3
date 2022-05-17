@@ -1,51 +1,53 @@
-# Copyright (c) 2022 RIKEN R-CCS.
+"""Redis table locker (not a lock, a lock is named by a key)."""
+
+# Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
-from lenticularis.utility import logger
 import time
+import platform
+from lenticularis.utility import logger
 
 
 class LockDB():
 
-    def __init__(self, table):
-        self.r = table.dbase.r
+    def __init__(self, table, locker_name):
+        self._r = table.dbase.r
         self.key = None
-        self.tinfo = dict()
+        self.lock_start = 0
+        self._locker_name = locker_name
+        self._tinfo = dict()
+
 
     def trylock(self, key, timeout):
-        logger.debug(f"@@@ TRY LOCK: [{key}] {timeout}")
-
-        if not self.r.setnx(key, "1"):
-            logger.debug(f"@@@ LOCK FAILED: [{key}]")
-            v = self.r.get(key);
-            logger.debug(f"@@@ LOCK FAILED: already set: {v}")
+        """Takes a lock and returns true."""
+        ts = int(time.time() * 1000)
+        kn = f"{self._locker_name}{ts}"
+        if self._r.setnx(key, kn) == 0:
+            v = self._r.get(key)
             return False
-        logger.debug(f"@@@ LOCKED: [{key}]")
-        self.lock_start = time.time()
-        self.r.expire(key, timeout)
         self.key = key
-        logger.debug(f"@@@ EXPIRE: {timeout}")
+        self.lock_start = ts
+        self._r.expire(key, timeout)
         return True
 
+
     def lock(self, key, timeout):
-        delay = 0.2  # NOTE: FIXED VALUE
+        ## NOTE: FIX VALUE.
+        delay = 0.2
         while not self.trylock(key, timeout):
-            self.wait4_unlock(key, delay)
+            self.wait_for_lock(key, delay)
+
 
     def unlock(self):
-        if self.key is None:
-            return
-        try:
-            key = self.key
-            self.key = None
-            self.r.delete(key)
-        finally:
-            duration = time.time() - self.lock_start if self.lock_start else 0
-            logger.debug(f"@@@ UNLOCK: {self.key} DURATION: {duration}")
-            self.key = None  # if interrupted, abondon lock.
+        assert self.key is not None
+        kn = f"{self._locker_name}{self.lock_start}"
+        v = self._r.get(self.key)
+        if v != kn:
+            logger.error(f"UNLOCKING OTHERS: locker={kn} holder={v}")
+        self._r.delete(self.key)
+        self.key = None
 
-    def wait4_unlock(self, key, delay):
-        logger.debug(f"@@@ WAIT4: [{key}]")
-        while self.r.exists(key):
+
+    def wait_for_lock(self, key, delay):
+        while self._r.exists(key):
             time.sleep(delay)
-        logger.debug(f"@@@ UNLOCKED: [{key}]")

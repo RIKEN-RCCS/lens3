@@ -1,13 +1,13 @@
 [Unit]
-Description=Redis persistent key-value database
+Description=Redis for Lenticularis-S3
 After=network.target
 
 [Service]
 ExecStart=/usr/bin/redis-server /etc/lenticularis/redis.conf --supervised systemd
 ExecStop=/usr/libexec/redis-shutdown
 Type=notify
-User=redis
-Group=redis
+User=lens3
+Group=lens3
 RuntimeDirectory=lenticularis-redis
 RuntimeDirectoryMode=0755
 

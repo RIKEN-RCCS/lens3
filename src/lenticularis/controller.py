@@ -1,4 +1,4 @@
-"""A manager of a MinIO instance."""
+"""A starter of a Manager of a MinIO."""
 
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
@@ -6,20 +6,26 @@
 import os
 from subprocess import Popen, PIPE, DEVNULL
 import sys
+import select
 from lenticularis.scheduler import Scheduler
-from lenticularis.utility import logger
 from lenticularis.utility import make_clean_env, host_port
+from lenticularis.utility import wait_one_line_on_stdout
+from lenticularis.utility import logger
 
 
 class Controller():
-    """A starter of a MinIO instance."""
+    """A starter of a Manager of a MinIO."""
 
     manager = "lenticularis.manager"
 
-    def __init__(self, mux_conf, tables, configfile, node):
+
+    def __init__(self, mux_conf, tables, configfile, host, port):
+        gunicorn_conf = mux_conf["gunicorn"]
+
         self.tables = tables
         self.configfile = configfile
-        self._mux_host = node
+        self._mux_host = host
+        self._mux_port = port
         self.executable = sys.executable
         self.scheduler = Scheduler(tables)
         lenticularis_conf = mux_conf["lenticularis"]
@@ -27,12 +33,8 @@ class Controller():
         self.port_min = controller_param["port_min"]
         self.port_max = controller_param["port_max"]
 
-    def route_request(self, traceid, host, access_key_id):
-        """
-        Controller (TOP)
-        host is not None  => design.md:2.1
-        host is None      => design.md:2.2
-        """
+
+    def start_minio_service(self, traceid, host, access_key_id):
         if host:
             zone_id = self.tables.storage_table.get_zoneID_by_directHostname(host)
         elif access_key_id:
@@ -47,35 +49,28 @@ class Controller():
                 logger.debug(f"@@@ FAIL 404: unknown key: {access_key_id}")
             else:
                 logger.debug("@@@ FAIL 404: No Host nor Access Key ID given")
-            return (404, None)
+            return (None, 404, None)
 
-        minio_server = self._choose_minio_server(zone_id)
+        minio_server = self._choose_server_host(zone_id)
 
         if minio_server:
             ## Run MinIO on another host.
             logger.debug(f"@@@ start_minio on {minio_server}")
-            return (minio_server, zone_id)
+            return (minio_server, 200, zone_id)
 
-        ## Run MinIO on the localhost.
+        ## Run a MinIO on the localhost.
 
-        r = self.start_minio(traceid, zone_id, access_key_id)
-
-        ##if host:
-        ##    r = self.tables.routing_table.get_route_by_direct_hostname_(host)
-        ##elif access_key_id:
-        ##    r = self.tables.routing_table.get_route_by_access_key_(access_key_id)
-        ##else:
-        ##    raise Exception("SHOULD NOT HAPPEN: Host or access_key_id should be given here")
-
+        ok = self._start_manager(traceid, zone_id, access_key_id)
+        if not ok:
+            return (None, 503, zone_id)
         r = self.tables.routing_table.get_route(zone_id)
-
         if r:
-            return (r, zone_id)
+            return (r, 200, zone_id)
         else:
-            return (404, zone_id)
+            return (None, 503, zone_id)
 
 
-    def _choose_minio_server(self, zone_id):
+    def _choose_server_host(self, zone_id):
         """Chooses a host to run a MinIO.  It returns None to mean the
         localhost.
         """
@@ -94,33 +89,39 @@ class Controller():
         else:
             return host_port(host, port)
 
-    def start_minio(self, traceid, zone_id, access_key_id):
+
+    def _start_manager(self, traceid, zone_id, access_key_id):
         """Starts a MinIO under a manager process.  It waits for a manager to
-        write addr:port on stdout and to close stdout/stderr.
+        write a message host:port on stdout.
         """
-        node = self._mux_host
         cmd = [self.executable, "-m", self.manager]
-        args = [node, self.port_min, self.port_max, self._mux_host,
+        args = [self._mux_host, self._mux_port, self.port_min, self.port_max,
                 "--configfile", self.configfile]
         env = make_clean_env(os.environ)
-        env["LENTICULARIS_ZONE_ID"] = zone_id
+        env["LENTICULARIS_POOL_ID"] = zone_id
         if access_key_id == zone_id:
             args.append("--accessByZoneID=True")
         if traceid is not None:
             args.append(f"--traceid={traceid}")
 
+        ok = False
         (outs, errs) = (b"", b"")
         try:
-            ## It waits for a manager to close stdout/stderr.
+            ## It waits for a Manager to write a line on stdout.
             logger.debug(f"Starting a Manager: cmd={cmd+args}")
             with Popen(cmd + args, stdin=DEVNULL, stdout=PIPE, stderr=PIPE,
                        env=env) as p:
-                (outs, errs) = p.communicate()
-                status = p.wait()
-                assert status == 0
+                ##(outs, errs) = p.communicate()
+                (outs, errs, closed) = wait_one_line_on_stdout(p, None)
+                p_status = p.wait()
+                assert p_status == 0
+                ok = True
+                logger.debug(f"A Manager started.")
         except Exception as e:
             logger.error(f"Starting a Manager failed: exception={e}")
             logger.exception(e)
+        if outs != b"":
+            logger.debug(f"Output on stdout from a Manager: {outs}")
         if errs != b"":
-            logger.debug(f"Output on stderr from a Manager: {errs}")
-        return outs
+            logger.info(f"Output on stderr from a Manager: {errs}")
+        return ok

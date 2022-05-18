@@ -105,7 +105,7 @@ $ curl https://dl.min.io/client/mc/release/linux-amd64/mc -o /tmp/mc
 
 ## Prepare a log-file directory.
 
-* Create a directory for logging (as root).
+* Create a directory for logging (as root)
 
 ```
 # mkdir /var/tmp/lenticularis
@@ -114,11 +114,11 @@ $ curl https://dl.min.io/client/mc/release/linux-amd64/mc -o /tmp/mc
 # ls -dlZ /var/tmp/lenticularis
 ```
 
-It is expected `ls` will show ... "system_u:object_r:tmp_t:s0".
+It is expected ls will show ... "system_u:object_r:tmp_t:s0".
 
 ## Enable local http connections
 
-* Let SELinux accept connections inside a local host.
+* Let SELinux accept connections inside a local host
 
 ```
 # semanage port -a -t http_port_t -p tcp 8003
@@ -128,10 +128,9 @@ It is expected `ls` will show ... "system_u:object_r:tmp_t:s0".
 # setsebool -P httpd_can_network_connect 1
 ```
 
-## Start reverse-proxy
+## Start a reverse-proxy
 
 It is highly site dependent.
-See [overview.md](overview.md).
 
 * Copy a configuration file to /etc/nginx/conf.d/
   * A sample file is in $TOP/nginx/lens3proxy.conf
@@ -179,29 +178,27 @@ See [overview.md](overview.md).
   * bind: Network interfaces; localhost by default
   * port: A port for Redis
   * requirepass: A passhprase for Redis
+* Change the owner of redis.conf
+
+Note: Starting Redis will fail when the file owner of
+/etc/lenticularis/redis.conf is not "lens3".
 
 ```
 # mkdir -p /etc/lenticularis
 # cp $TOP/unit-file/redis/redis.conf /etc/lenticularis/redis.conf
 # vi /etc/lenticularis/redis.conf
+# chown lens3:lens3 /etc/lenticularis/redis.conf
+# chmod o-rwx /etc/lenticularis/redis.conf
 ```
 
-* Copy the systemd unit file for Redis
+* Copy the systemd unit file for Redis, and start/restart Redis
 
 ```
 # cp $TOP/unit-file/redis/lenticularis-redis.service /usr/lib/systemd/system/
-```
-
-* Start/restart Redis
-
-```
 # systemctl daemon-reload
 # systemctl enable lenticularis-redis
 # systemctl start lenticularis-redis
 ```
-
-* Note: Starting Redis will fail when the file owner of
-  /etc/lenticularis/redis.conf is not "lens3".
 
 ## Setup Web-UI
 

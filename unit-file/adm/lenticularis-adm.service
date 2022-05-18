@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 User=lens3
 Group=lens3
-WorkingDirectory=/tmp
+WorkingDirectory=/var/tmp
 Environment=LENTICULARIS_ADM_CONFIG=/etc/lenticularis/adm-config.yaml
 StandardOutput=journal
 StandardError=journal

@@ -92,7 +92,7 @@ $ pip3 install --user -r requirements.txt
 
 Install MinIO binaries minio and mc from min.io.
 
-* Do as "lens3"
+* Download files as "lens3"
 
 ```
 $ cd ~
@@ -103,6 +103,19 @@ $ curl https://dl.min.io/client/mc/release/linux-amd64/mc -o /tmp/mc
 # install -m 755 -c /tmp/mc ~/bin/mc
 ```
 
+## Prepare a log-file directory.
+
+* Create a directory for logging (as root).
+
+```
+# mkdir /var/tmp/lenticularis
+# chown lens3:lens3 /var/tmp/lenticularis
+# chcon -u system_u -t tmp_t /var/tmp/lenticularis
+# ls -dlZ /var/tmp/lenticularis
+```
+
+It is expected `ls` will show ... "system_u:object_r:tmp_t:s0".
+
 ## Enable local http connections
 
 * Let SELinux accept connections inside a local host.
@@ -110,6 +123,7 @@ $ curl https://dl.min.io/client/mc/release/linux-amd64/mc -o /tmp/mc
 ```
 # semanage port -a -t http_port_t -p tcp 8003
 # semanage port -a -t http_port_t -p tcp 8004
+# semanage port -a -t redis_port_t -p tcp 6378
 # semanage port --list
 # setsebool -P httpd_can_network_connect 1
 ```

@@ -1,6 +1,6 @@
 redis:
     host: localhost
-    port: 6379
+    port: 6378
     password: ZXjmrOLwQ8Ri51pb5FI79z51gAHfIQ4oMvtWrG8q
 
 gunicorn:
@@ -8,7 +8,7 @@ gunicorn:
     workers: 4
     threads: 4
     timeout: 60
-    log_file: "/var/tmp/lenticularis/gunicorn-mux-log"
+    log_file: "/var/tmp/lenticularis/lens3-gunicorn-mux-log"
     log_level: debug
     #log_syslog_facility: LOCAL7
     reload: yes
@@ -27,7 +27,7 @@ lenticularis:
         port_min: 9000
         port_max: 9999
         watch_interval: 30
-        keepalive_limit: 600
+        keepalive_limit: 1800
         allowed_down_count: 3
         minio_startup_timeout: 60
         max_lock_duration: 60

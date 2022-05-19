@@ -464,6 +464,8 @@ performed by cron, since Lens3 does nothing on the backup.  Lens3 uses
 See Redis documents for more information: [Redis
 persistence](https://redis.io/docs/manual/persistence/)
 
+## Redis Service
+
 Lens3 calls "redis-shutdown" with a fake configuration
 "lenticularis/redis" in lenticularis-redis.service.  It lets point to
 a file "/etc/lenticularis/redis.conf" in result.

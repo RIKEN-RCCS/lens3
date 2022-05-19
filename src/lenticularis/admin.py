@@ -242,7 +242,7 @@ class Command():
             # f"{progname} flush-multiplexer\n" NOT IMPLEMENTED
 
             # fn_show_server_processes
-            f"{progname} show-server-processes\n"
+            f"{progname} show-minios\n"
             # fn_flush_server_processes
             f"{progname} flush-server-processes\n"
             # fn_delete_server_processes ...
@@ -458,7 +458,7 @@ class Command():
 
         "show-muxs": fn_show_multiplexer,
 
-        "show-server-processes": fn_show_server_processes,
+        "show-minios": fn_show_server_processes,
         "flush-server-processes": fn_flush_server_processes,
         "delete-server-processes": fn_delete_server_processes,
 

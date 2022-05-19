@@ -1722,22 +1722,16 @@ Note that a bucket-pool has another state `status`, but it is always
 
 | Key           | Value         | Description   |
 | ----          | ----          | ----          |
-| ma:pool-id    | process-description |(htable)|
+| mm:pool-id    | proc-description |(htable)|
 | mx:Mux-endpoint | Mux-description |(htable)|
 | lk:??         | -> (lock?)
 
-A process-description is a htable record {muxAddr : string, minioAddr
-: string, minioPid : int', supervisorPid : int}, where muxAddr is a
-host name, minioAddr is an endpoint.
+A proc-description is a htable record of a MinIO process: {"mux_host",
+"mux_port", "minio_ep", "minio_pid", "manager_pid"}.
 
-* a host of a mux,
-* an endpoint of a MinIO
-* a pid of a manager
-* a pid of a MinIO
-
-A Mux-description is a htable record {host : string, port : int,
-start_time : string, last_interrupted_time : string}.  an host+port is
-an endpoint of a Mux.  start-time ...  last-interrupted-time? ...
+A Mux-description is a htable record: {"host", "port", "start_time",
+"last_interrupted_time"}, where a host+port is an endpoint of a Mux.
+start-time ...  last-interrupted-time? ...
 
 #### routing-table
 

@@ -1,7 +1,6 @@
-Administrator's Guide of Lenticularis
-==========================================================
+# Lenticularis-S3 Administration Guide
 
-# System Overview
+## System Overview
 
   + Hardware
     - The system requires following nodes:
@@ -108,11 +107,11 @@ Administrator's Guide of Lenticularis
     - All log is stored in /var/log/local7
       - Facility can be changed by configuration file
 
-# Installation
+## Installation
 
   - See `install.md`
 
-# Databases (Information)
+## Databases (Information)
 
   In this section describes databases stored on redis by Lenticularis.
 
@@ -159,7 +158,7 @@ Administrator's Guide of Lenticularis
         session to redirect.
       - Dynamic.
 
-# System Management
+## System Management
 
   + Commands for Administrator
     - All commands can be run by administrator's account (`admin`)
@@ -453,4 +452,15 @@ Administrator's Guide of Lenticularis
         - (a), (b) and, (c) implies manager switches authorized users only.
         - Exception: Administrator can bypass this mechanism.
 
-[eof]
+## Redis DB Backup
+
+Lens3 uses "Snapshotting" of the database to a file.  The interval of
+taking a snapshot and the file location can be found under the
+keywords "save", "dbfilename", and "dir" in the configuration
+"/etc/lenticularis/redis.conf".  Lens3 does nothing on backup.  So,
+daily copying of snapshots or something should be performed by cron.
+Lens3 uses by default "save 600 10000" for 15 minutes and 10,000
+updates .
+
+See Redis documents for more information: [Redis
+persistence](https://redis.io/docs/manual/persistence/)

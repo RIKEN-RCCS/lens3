@@ -11,14 +11,15 @@ import os
 import json
 #import threading
 import sys
+import traceback
 from lenticularis.zoneadm import ZoneAdm
 from lenticularis.readconf import read_adm_conf
 from lenticularis.utility import ERROR_READCONF, ERROR_EXCEPTION, ERROR_ARGUMENT
 from lenticularis.utility import format_rfc3339_z
-from lenticularis.utility import logger, openlog
 from lenticularis.utility import objdump
 from lenticularis.utility import list_diff3
 from lenticularis.utility import random_str
+from lenticularis.utility import logger, openlog
 from lenticularis.utility import tracing
 
 
@@ -34,9 +35,9 @@ def get_nparams_of_fn(fn):
         varargsp = False
     return (nparams - 1, varargsp)
 
-def fix_date_format(dic, keys):
+def fix_date_format(dict, keys):
     for key in keys:
-        dic[key] = format_rfc3339_z(float(dic[key]))
+        dict[key] = format_rfc3339_z(float(dict[key]))
 
 def print_json_csv(table_name, c, format):
     if format in {"json"}:
@@ -77,10 +78,10 @@ def user_info_to_csv_row(ui, id):
     return [id]
 
 def format_mux(m, format):
-    (multiplexer, info) = m
+    (ep, desc) = m
     if format not in {"json"}:
-        fix_date_format(info, ["last_interrupted_time", "start_time"])
-    return {multiplexer: info}
+        fix_date_format(desc, ["last_interrupted_time", "start_time"])
+    return {ep: desc}
 
 def _store_unix_user_info_add(zone_adm, b):
     # New Entry (no right hand side)
@@ -140,7 +141,7 @@ def pool_key_order(e):
         "owner_gid",
         "root_secret",
         "access_keys",
-        "pool_directory",
+        "buckets_directory",
         "buckets",
         "direct_hostnames",
         "expiration_date",
@@ -159,15 +160,15 @@ def pool_key_order(e):
         "policy"]
     return order.index(e) if e in order else len(order)
 
-def mux_key_order(e):
+def _mux_key_order(e):
     order = [
+        "host",
+        "port",
         "mux_conf",
         "start_time",
         "last_interrupted_time",
         "lenticularis",
-        "multiplexer",
-        "host",
-        "port"]
+        "multiplexer"]
     return order.index(e) if e in order else len(order)
 
 def proc_key_order(e):
@@ -204,6 +205,7 @@ class Command():
         sys.stderr.write(
             f"USAGE:\n"
             f"{progname} help\n"
+
             # fn_insert_allow_deny_rules
             f"{progname} load-permit-list file\n"
             # fn_show_allow_deny_rules
@@ -223,7 +225,7 @@ class Command():
             # fn_enable_zone ...
             f"{progname} enable-zone Zone-ID...\n"
             # fn_show_zone ...
-            f"{progname} show-zone [--decrypt] [Zone-ID...]\n"
+            f"{progname} show-zone [--decrypt] [pool-id ...]\n"
             # fn_dump_zone
             f"{progname} dump-zone\n"
             # fn_restore_zone
@@ -379,9 +381,9 @@ class Command():
         self.zone_adm.print_database()
 
     def fn_show_multiplexer(self):
-        multiplexer_list = sorted(list(self.zone_adm.fetch_multiplexer_list()))
-        outs = [format_mux(m, self.args.format) for m in multiplexer_list]
-        print_json_plain("multiplexers", outs, self.args.format, order=mux_key_order)
+        muxs = sorted(list(self.zone_adm.fetch_multiplexer_list()))
+        outs = [format_mux(m, self.args.format) for m in muxs]
+        print_json_plain("muxs", outs, self.args.format, order=_mux_key_order)
 
     def fn_show_server_processes(self):
         process_list = sorted(list(self.zone_adm.fetch_process_list()))
@@ -515,6 +517,7 @@ def main():
         adm.execute_command()
     except Exception as e:
         sys.stderr.write(f"Executing admin command failed: {e}\n")
+        print(traceback.format_exc())
         ##adm.fn_usage()
         sys.exit(ERROR_EXCEPTION)
 

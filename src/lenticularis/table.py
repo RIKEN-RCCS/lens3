@@ -17,6 +17,7 @@ ROUTING_TABLE_ID = 2
 
 
 def _get_mux_host_port(desc):
+    ## (for pyright).
     return (desc["host"], desc["port"])
 
 
@@ -40,7 +41,7 @@ class StorageTable(TableCommon):
     ## See zone_schema for json schema.
 
     pool_desc_required_keys = {
-        "owner_gid", "pool_directory", "buckets", "access_keys",
+        "owner_gid", "buckets_directory", "buckets", "access_keys",
         "direct_hostnames", "expiration_date", "online_status"}
     pool_desc_optional_keys = {
         "owner_uid", "root_secret", "admission_status"}
@@ -199,10 +200,10 @@ class StorageTable(TableCommon):
 
 
 class ProcessTable(TableCommon):
-    _minio_process_prefix = "ma:"
-    _mux_list_prefix = "mx:"
+    _minio_process_prefix = "mm:"
+    _mux_desc_prefix = "mx:"
     process_table_lock_prefix = "lk:"
-    hashes_ = {_minio_process_prefix, _mux_list_prefix}
+    hashes_ = {_minio_process_prefix, _mux_desc_prefix}
     structured = {}
 
     ## See _record_minio_process for the content of a MinIO process.
@@ -243,31 +244,36 @@ class ProcessTable(TableCommon):
 
     def set_mux(self, mux_ep, mux_desc, timeout):
         assert set(mux_desc.keys()) == self._mux_desc_keys
-        key = f"{self._mux_list_prefix}{mux_ep}"
+        key = f"{self._mux_desc_prefix}{mux_ep}"
         r = self.dbase.hset_map(key, mux_desc, self.structured)
         if timeout:
             self._set_mux_expiry(mux_ep, timeout)
         return r
 
     def get_mux(self, mux_ep):
-        key = f"{self._mux_list_prefix}{mux_ep}"
+        key = f"{self._mux_desc_prefix}{mux_ep}"
         return self.dbase.hget_map(key, self.structured)
 
     def delete_mux(self, mux_ep):
-        key = f"{self._mux_list_prefix}{mux_ep}"
+        key = f"{self._mux_desc_prefix}{mux_ep}"
         return self.dbase.delete(key)
 
     def _set_mux_expiry(self, mux_ep, timeout):
-        key = f"{self._mux_list_prefix}{mux_ep}"
+        key = f"{self._mux_desc_prefix}{mux_ep}"
         self.dbase.r.expire(key, timeout)
         return None
 
     def list_muxs(self):
-        vv = _scan_table(self.dbase.r, self._mux_list_prefix, None,
+        vv = _scan_table(self.dbase.r, self._mux_desc_prefix, None,
                          value=self.get_mux)
-        mm0 = [_get_mux_host_port(v) for (k, v) in vv]
-        mm1 = sorted(list(set(mm0)))
-        return mm1
+        return vv
+
+    def list_mux_eps(self):
+        vv = _scan_table(self.dbase.r, self._mux_desc_prefix, None,
+                         value=self.get_mux)
+        ep0 = [_get_mux_host_port(desc) for (k, desc) in vv]
+        ep1 = sorted(list(set(ep0)))
+        return ep1
 
     def clear_all(self, everything):
         """Clears Redis DB.  It leaves entires for multiplexers unless
@@ -277,7 +283,7 @@ class ProcessTable(TableCommon):
         delete_all(self.dbase.r, self.process_table_lock_prefix)
         delete_all(self.dbase.r, self._minio_process_prefix)
         if everything:
-            delete_all(self.dbase.r, self._mux_list_prefix)
+            delete_all(self.dbase.r, self._mux_desc_prefix)
 
     def printall(self):
         _prntall(self.dbase.r, "process")

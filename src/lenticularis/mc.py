@@ -158,6 +158,38 @@ class Mc():
             return (None, r)
 
 
+## MinIO mc command returns json with keys that are specific to each
+## command.  Some keys shall be recognized in Lens3 and are mapped.
+
+_admin_user_json_keys = {
+    ## type userMessage (mc/cmd/admin-user-add.go)
+    "status": "status",
+    "accessKey": "access_key",
+    "secretKey": "secret_key",
+    "policyName": "policy_name",
+    "userStatus": "userStatus",
+    "memberOf": "memberOf"}
+
+_list_json_keys = {
+    ## type contentMessage (mc/cmd/ls.go)
+    "status": "status",
+    "type": "type",
+    "lastModified": "lastModified",
+    "size": "size",
+    "key": "key",
+    "etag": "etag",
+    "url": "url",
+    "versionId": "versionId",
+    "versionOrdinal": "versionOrdinal",
+    "versionIndex": "versionIndex",
+    "isDeleteMarker": "isDeleteMarker",
+    "storageClass": "storageClass"}
+
+def map_admin_user_json_keys(dict):
+    map = _admin_user_json_keys
+    return {map.get(k, k): v for (k, v) in dict.items()}
+
+
 ## UNSED -- FOR FUTURE DEVELOPER --
 ## THIS CODE IS USED TO EXECUTE MC, WITHOUT WAITING FOR FINISHING
 ## EXECUTION. MANAGER DOES NOT RECEIVE FINISH STATUS FROM MC AND

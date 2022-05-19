@@ -25,7 +25,7 @@ def merge_pool_descriptions(user_id, existing, zone):
     zone["owner_uid"] = user_id
     _update_for_key(zone, "owner_gid", existing, False)
     _update_for_key(zone, "root_secret", existing, True)
-    _update_for_key(zone, "pool_directory", existing, False)
+    _update_for_key(zone, "buckets_directory", existing, False)
     _update_for_key(zone, "buckets", existing, False)
     _update_for_key(zone, "access_keys", existing, False)
     _update_for_key(zone, "direct_hostnames", existing, False)
@@ -52,8 +52,8 @@ def compare_access_keys(existing, zone):
 def compare_buckets_directory(existing, zone):
     if existing is None:
         return []
-    e = existing.get("pool_directory")
-    z = zone.get("pool_directory")
+    e = existing.get("buckets_directory")
+    z = zone.get("buckets_directory")
     if z is None:
         return []
     if e != z:
@@ -101,14 +101,14 @@ def check_conflict(zoneID, zone, z_id, z):
         reasons.append({"Zone ID / Access Key ID": i})
 
     # check buckets directories
-    new = {zone["pool_directory"]}
-    old = {z["pool_directory"]}
+    new = {zone["buckets_directory"]}
+    old = {z["buckets_directory"]}
     #logger.debug(f"@@@ new = {new}")
     #logger.debug(f"@@@ old = {old}")
     i = new.intersection(old)
     if new == old:
         #logger.debug(f"@@@ DIR CONFLICT {new}")
-        reasons.append({"pool_directory": i})
+        reasons.append({"buckets_directory": i})
 
     # check Direct Hostnames
     new = direct_hostnames(zone)
@@ -159,7 +159,7 @@ def zone_schema(type_number):
             "owner_uid": {"type": "string"},
             "owner_gid": {"type": "string"},
             "root_secret": {"type": "string"},
-            "pool_directory": {"type": "string"},
+            "buckets_directory": {"type": "string"},
             "buckets": {"type": "array", "items": bucket},
             "access_keys": {"type": "array", "items": access_key},
             "direct_hostnames": {"type": "array", "items": {"type": "string"}},
@@ -171,7 +171,7 @@ def zone_schema(type_number):
             "owner_uid",
             "owner_gid",
             "root_secret",
-            "pool_directory",
+            "buckets_directory",
             "buckets",
             "access_keys",
             "direct_hostnames",

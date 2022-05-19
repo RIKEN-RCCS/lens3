@@ -68,7 +68,7 @@ def _check_zone_keys(zone):
     mandatory_keys = StorageTable.pool_desc_required_keys
     optional_keys = StorageTable.pool_desc_optional_keys
     allowed_keys = mandatory_keys.union(optional_keys)
-    ##mandatory_keys = {"owner_gid", "pool_directory", "buckets", "access_keys",
+    ##mandatory_keys = {"owner_gid", "buckets_directory", "buckets", "access_keys",
     ##                  "direct_hostnames", "expiration_date", "online_status"}
     ##allowed_keys = mandatory_keys.union({"user", "root_secret", "admission_status"})
     if not mandatory_keys.issubset(given_keys):
@@ -393,7 +393,7 @@ class ZoneAdm():
         logger.debug(f"zone={zoneID}, access_key={access_key_id}, force={force}")
 
         procdesc = self.tables.process_table.get_minio_proc(zoneID)
-        multiplexers = self.tables.process_table.list_muxs()
+        multiplexers = self.tables.process_table.list_mux_eps()
         logger.debug(f"@@@ MULTIPLEXERS = {multiplexers}")
         if procdesc:
             ## SEND PACKET TO MULTPLEXER OF THE MINIO, NOT MINIO ITSELF.
@@ -1217,7 +1217,7 @@ class ZoneAdm():
         return {
             "owner_uid": user_id,
             "owner_gid": groups[0],
-            "pool_directory": "",
+            "buckets_directory": "",
             "buckets": [],
             "access_keys": [
                    {"policy_name": "readwrite"},

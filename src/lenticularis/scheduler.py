@@ -16,7 +16,7 @@ class Scheduler():
 
     def schedule(self, zoneID_):
         """Chooses a least used host for running MinIO."""
-        multiplexers = self.tables.process_table.list_muxs()
+        multiplexers = self.tables.process_table.list_mux_eps()
 
         if len(multiplexers) == 0:
             ## Choose the localhost.

@@ -20,7 +20,7 @@ import tempfile
 import threading
 import time
 import contextlib
-from lenticularis.mc import Mc
+from lenticularis.mc import Mc, map_admin_user_json_keys
 from lenticularis.readconf import read_mux_conf
 from lenticularis.lockdb import LockDB
 from lenticularis.table import get_tables, zone_to_route
@@ -198,7 +198,7 @@ class Manager():
 
         user = zone["owner_uid"]
         group = zone["owner_gid"]
-        bucketsDir = zone["pool_directory"]
+        bucketsDir = zone["buckets_directory"]
         self.expDate = int(zone["expiration_date"])
         online = zone["online_status"]
         permission = zone["admission_status"]
@@ -349,7 +349,7 @@ class Manager():
                     initial_idle_duration = self.watch_interval + jitter + self.mc_info_timelimit
 
                     timeo = initial_idle_duration + self.refresh_margin
-                    self._record_minio_process(p.pid, zone, timeo)
+                    self._register_minio_process(p.pid, zone, timeo)
 
                     self._tell_controller_minio_starts()
                     self.lock.unlock()
@@ -357,8 +357,9 @@ class Manager():
                     self._check_elapsed_time()
 
                     self._watch_minio(p)
+
                 finally:
-                    self._clear_tables()
+                    self._deregister_minio_process()
                     self._stop_minio(p)
 
                 return True
@@ -470,30 +471,6 @@ class Manager():
         return
 
 
-    def _record_minio_process(self, pid, zone, timeout):
-        timeout = math.ceil(timeout)
-        self._minio_proc = {
-            ##"mux_host": self._mux_ep,
-            "mux_host": self._mux_host,
-            "mux_port": self._mux_port,
-            "minio_ep": self._minio_ep,
-            "minio_pid": f"{pid}",
-            "manager_pid": f"{os.getpid()}",
-        }
-        self.route = zone_to_route(zone)
-        logger.debug(f"@ minioAddress: {self._minio_proc}")
-        logger.debug(f"@ self.route: {self.route}")
-        logger.debug(f"@ timeout: {timeout}")
-
-        atime = f"{int(time.time())}"
-        self.tables.routing_table.set_route_expiry(self.zoneID, timeout)
-        self.tables.storage_table.set_atime(self.zoneID, atime)
-        self.saved_atime = atime
-
-        self.tables.routing_table.set_route(self.zoneID, self._minio_ep, timeout)
-        self.tables.process_table.set_minio_proc(self.zoneID, self._minio_proc, timeout)
-
-
     def _stop_minio(self, p):
         logger.debug("@@@ +++")
         logger.debug("@@@ stop_minio")
@@ -522,6 +499,52 @@ class Manager():
             logger.exception(e)
             # pass  # ignore any exceptions
         logger.debug("@@@ EXIT")
+
+
+    def _register_minio_process(self, pid, zone, timeout):
+        self._minio_proc = {
+            ##"mux_host": self._mux_ep,
+            "mux_host": self._mux_host,
+            "mux_port": self._mux_port,
+            "minio_ep": self._minio_ep,
+            "minio_pid": f"{pid}",
+            "manager_pid": f"{os.getpid()}",
+        }
+        self.route = zone_to_route(zone)
+        logger.debug(f"@ minioAddress: {self._minio_proc}")
+        logger.debug(f"@ self.route: {self.route}")
+        logger.debug(f"@ timeout: {timeout}")
+
+        timeout = math.ceil(timeout)
+        atime = f"{int(time.time())}"
+        self.tables.routing_table.set_route_expiry(self.zoneID, timeout)
+        self.tables.storage_table.set_atime(self.zoneID, atime)
+        self.saved_atime = atime
+
+        self.tables.process_table.set_minio_proc(self.zoneID, self._minio_proc, timeout)
+        self.tables.routing_table.set_route(self.zoneID, self._minio_ep, timeout)
+
+
+    def _deregister_minio_process(self):
+        try:
+            procdesc = self.tables.process_table.get_minio_proc(self.zoneID)
+            if procdesc is None:
+                logger.debug("@@@ MinIO Address Not Found")
+                return
+            if self._minio_proc["manager_pid"] != procdesc.get("manager_pid"):
+                logger.debug("@@@ NOT OWN ENTRY")
+                return
+            self.tables.process_table.delete_minio_proc(self.zoneID)
+            atime = self.tables.routing_table.get_route_expiry(self.zoneID)
+            if atime and atime != self.saved_atime:
+                logger.debug("@@@ BACKUP ATIME")
+                self.tables.storage_table.set_atime(self.zoneID, atime)
+            self.tables.routing_table.delete_route_expiry(self.zoneID)
+            self.tables.routing_table.delete_route(self.zoneID)
+        except Exception as e:
+            logger.info(f"IGNORE EXCEPTION: {e}")
+            logger.exception(e)
+            pass
 
 
     def _handle_existing_minio(self, setup_only, need_initialize):
@@ -648,36 +671,7 @@ class Manager():
             self.tables.storage_table.set_atime(self.zoneID, atime)
             self.saved_atime = atime
 
-    def _clear_tables(self):
-        try:
-            procdesc = self.tables.process_table.get_minio_proc(self.zoneID)
-            if procdesc is None:
-                logger.debug("@@@ MinIO Address Not Found")
-                return
-            if self._minio_proc["manager_pid"] != procdesc.get("manager_pid"):
-                logger.debug("@@@ NOT OWN ENTRY")
-                return
-            self.tables.process_table.delete_minio_proc(self.zoneID)
-            atime = self.tables.routing_table.get_route_expiry(self.zoneID)
-            if atime and atime != self.saved_atime:
-                logger.debug("@@@ BACKUP ATIME")
-                self.tables.storage_table.set_atime(self.zoneID, atime)
-            self.tables.routing_table.delete_route_expiry(self.zoneID)
-            self.tables.routing_table.delete_route(self.zoneID)
-        except Exception as e:
-            logger.info(f"IGNORE EXCEPTION: {e}")
-            logger.exception(e)
-            pass
 
-
-    def _map_minio_mc_keys(self, dict):
-        ## MinIO mc command returns json with keys {"status",
-        ## "accessKey", "policyName", "userStatus"}
-        map = {"status": "status",
-               "userStatus": "userStatus",
-               "accessKey": "access_key",
-               "policyName": "policy_name"}
-        return {map.get(k, k): v for (k, v) in dict.items()}
 
     def _set_access_keys(self, zone):
         children = []
@@ -686,10 +680,7 @@ class Manager():
         (p_, existing) = self.mc.admin_user_list()
         assert p_ is None
         _check_mc_status(existing, "mc.admin_user_list")
-
-        ##AHO
-        existing = [self._map_minio_mc_keys(e) for e in existing]
-        logger.debug(f"AHO: access_keys={access_keys} existing={existing}")
+        existing = [map_admin_user_json_keys(e) for e in existing]
 
         (ll, pp, rr) = list_diff3(access_keys, lambda b: b.get("access_key"),
                                   existing, lambda e: e.get("access_key"))

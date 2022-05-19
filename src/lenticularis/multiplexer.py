@@ -100,7 +100,7 @@ class Multiplexer():
 
 
     def _list_mux_ip_addresses(self):
-        muxs = self.tables.process_table.list_muxs()
+        muxs = self.tables.process_table.list_mux_eps()
         return set([addr for (h, p) in muxs for addr in get_ip_address(h)])
 
 

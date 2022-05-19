@@ -230,7 +230,7 @@ function pullup_zone() {
                                 editor_data.directHostnameDomains,
                                 editor_data.directHostnames);
         zone["owner_gid"] = editor_data.group;
-        zone["pool_directory"] = editor_data.bucketsDir;
+        zone["buckets_directory"] = editor_data.bucketsDir;
         zone["buckets"] = buckets;
         zone["access_keys"] = [{"policy_name": "readwrite"}, {"policy_name": "readonly"}, {"policy_name": "writeonly"}]; // dummy entry
         zone["direct_hostnames"] = directHostnames;
@@ -529,7 +529,7 @@ function zone_to_ul_data(zone) {
                 {text: {label: "Endpoint-URL", value: zone["endpoint_url"]}},
                 {text: {label: "Unix user", value: zone["owner_uid"]}},
                 {text: {label: "Unix group", value: zone["owner_gid"]}},
-                {text: {label: "Buckets directory", value: zone["pool_directory"]}},
+                {text: {label: "Buckets directory", value: zone["buckets_directory"]}},
                 {text: {label: "Private buckets", value: scan_buckets(buckets, "none")}},
                 {text: {label: "Public buckets", value: scan_buckets(buckets, "public")}},
                 {text: {label: "Public download buckets", value: scan_buckets(buckets, "download")}},
@@ -558,7 +558,7 @@ function set_zone_to_editor_body(zone) {
         editor_data.zoneID = zone["zoneID"];
         editor_data.user = zone["owner_uid"];
         editor_data.group = zone["owner_gid"];
-        editor_data.bucketsDir = zone["pool_directory"];
+        editor_data.bucketsDir = zone["buckets_directory"];
         var buckets = zone["buckets"];
         for (var i = 0; i < policies.length; i++) {
                 editor_data.buckets[i] = scan_buckets(buckets, policies[i]);

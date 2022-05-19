@@ -12,7 +12,7 @@ import json
 #import threading
 import sys
 import traceback
-from lenticularis.zoneadm import ZoneAdm
+from lenticularis.pooladm import ZoneAdm
 from lenticularis.readconf import read_adm_conf
 from lenticularis.utility import ERROR_READCONF, ERROR_EXCEPTION, ERROR_ARGUMENT
 from lenticularis.utility import format_rfc3339_z

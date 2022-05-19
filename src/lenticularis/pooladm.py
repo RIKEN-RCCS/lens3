@@ -16,10 +16,10 @@ from lenticularis.utility import logger
 from lenticularis.utility import pick_one, check_permission
 from lenticularis.utility import check_mux_access, host_port
 from lenticularis.utility import uniq_d
-from lenticularis.zoneutil import check_zone_schema, check_pool_dict_is_sound
-from lenticularis.zoneutil import merge_pool_descriptions, check_conflict
-from lenticularis.zoneutil import compare_access_keys, compare_buckets_directory
-from lenticularis.zoneutil import compare_buckets, check_policy
+from lenticularis.poolutil import check_zone_schema, check_pool_dict_is_sound
+from lenticularis.poolutil import merge_pool_descriptions, check_conflict
+from lenticularis.poolutil import compare_access_keys, compare_buckets_directory
+from lenticularis.poolutil import compare_buckets, check_policy
 from lenticularis.utility import tracing
 
 

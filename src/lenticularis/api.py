@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 import base64
-from lenticularis.zoneadm import ZoneAdm
-from lenticularis.zoneadm import check_pool_owner
+from lenticularis.pooladm import ZoneAdm
+from lenticularis.pooladm import check_pool_owner
 from lenticularis.table import get_tables
 from lenticularis.utility import get_ip_address
 from lenticularis.utility import logger

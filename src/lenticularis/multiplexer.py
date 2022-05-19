@@ -64,7 +64,7 @@ class Multiplexer():
         self.refresh_margin = int(controller_conf["refresh_margin"])
 
         # we do not need register mux_info here,
-        # as muxmain is going to call timer_interrupt at once.
+        # as mux-main is going to call timer_interrupt at once.
         # self._register_mux_info()
 
 
@@ -248,7 +248,7 @@ class Multiplexer():
         return respiter
 
 
-    def _zone_to_user(self, zoneID):  # CODE CLONE @ zoneadm.py
+    def _zone_to_user(self, zoneID):  # CODE CLONE @ pooladm.py
         zone = self.tables.storage_table.get_zone(zoneID)
         if zone is None:
             return None

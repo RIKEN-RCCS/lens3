@@ -70,7 +70,7 @@ def start_mux():
             args += ["--log-syslog-facility", log_syslog_facility]
     if reload == "yes":
         args.append("--reload")
-    args.append("lenticularis.muxmain:app()")
+    args.append("lenticularis.mux:app()")
 
     run("lenticularis-mux", env, cmd, args)
 
@@ -118,7 +118,7 @@ def start_api():
             args += ["--log-syslog-facility", log_syslog_facility]
     if reload == "yes":
         args.append("--reload")
-    args.append("lenticularis.restapi:app")
+    args.append("lenticularis.adm:app")
 
     run("lenticularis-api", env, cmd, args)
 

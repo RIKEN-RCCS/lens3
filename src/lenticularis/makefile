@@ -1,4 +1,4 @@
-# Copyright (c) 2022 RIKEN R-CCS.
+# Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
 PYCODESTYLE=pycodestyle --max-line-length=120
@@ -32,21 +32,24 @@ clean:
 	rm -f tags
 
 pep8::
-	-$(PYCODESTYLE) admin.py \
-		api.py \
-		restapi.py \
-		controller.py \
-		dbase.py \
-		mc.py \
-		multiplexer.py \
-		muxmain.py \
-		manager.py \
-		readconf.py \
-		lockdb.py \
-		scheduler.py \
-		table.py \
-		utility.py \
-		zoneadm.py
+	-$(PYCODESTYLE) \
+	adm.py \
+	admin.py \
+	api.py \
+	controller.py \
+	dbase.py \
+	lockdb.py \
+	manager.py \
+	mc.py \
+	multiplexer.py \
+	mux.py \
+	pooladm.py \
+	poolutil.py \
+	readconf.py \
+	scheduler.py \
+	start_service.py \
+	table.py \
+	utility.py
 
 tags::
 	ctags *.py webui/scripts/*.js

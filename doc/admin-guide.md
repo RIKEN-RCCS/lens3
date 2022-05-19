@@ -455,12 +455,15 @@
 ## Redis DB Backup
 
 Lens3 uses "Snapshotting" of the database to a file.  The interval of
-taking a snapshot and the file location can be found under the
-keywords "save", "dbfilename", and "dir" in the configuration
-"/etc/lenticularis/redis.conf".  Lens3 does nothing on backup.  So,
-daily copying of snapshots or something should be performed by cron.
-Lens3 uses by default "save 600 10000" for 15 minutes and 10,000
-updates .
+a snapshot and the file location can be found under the keywords
+"save", "dbfilename", and "dir" in the configuration
+"/etc/lenticularis/redis.conf".  Daily copying of snapshots should be
+performed by cron, since Lens3 does nothing on the backup.  Lens3 uses
+"save 907 1" by default, which is an interval about 15 minutes.
 
 See Redis documents for more information: [Redis
 persistence](https://redis.io/docs/manual/persistence/)
+
+Lens3 calls "redis-shutdown" with a fake configuration
+"lenticularis/redis" in lenticularis-redis.service.  It lets point to
+a file "/etc/lenticularis/redis.conf" in result.

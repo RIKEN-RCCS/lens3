@@ -8,7 +8,7 @@ User=lens3
 Group=lens3
 WorkingDirectory=/var/tmp
 ExecStart=/usr/bin/redis-server /etc/lenticularis/redis.conf --supervised systemd
-ExecStop=/usr/libexec/redis-shutdown
+ExecStop=/usr/libexec/redis-shutdown lenticularis/redis
 
 [Install]
 WantedBy=multi-user.target

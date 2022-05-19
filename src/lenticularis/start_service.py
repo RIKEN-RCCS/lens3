@@ -34,8 +34,8 @@ def start_mux():
         sys.stderr.write(f"Lens3 reading conf failed: {e}\n")
         return None
 
-    openlog(mux_conf["lenticularis"]["log_file"],
-            **mux_conf["lenticularis"]["log_syslog"])
+    openlog(mux_conf["log_file"],
+            **mux_conf["log_syslog"])
     logger.info("Start Lenticularis-S3 MUX service")
 
     gunicorn_conf = mux_conf["gunicorn"]
@@ -83,8 +83,8 @@ def start_api():
         sys.stderr.write(f"Lens3 reading conf failed: {e}\n")
         return None
 
-    openlog(adm_conf["lenticularis"]["log_file"],
-            **adm_conf["lenticularis"]["log_syslog"])
+    openlog(adm_conf["log_file"],
+            **adm_conf["log_syslog"])
     logger.info("Start Lenticularis-S3 API service")
 
     gunicorn_conf = adm_conf["gunicorn"]

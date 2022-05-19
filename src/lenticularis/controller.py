@@ -28,8 +28,8 @@ class Controller():
         self._mux_port = port
         self.executable = sys.executable
         self.scheduler = Scheduler(tables)
-        lenticularis_conf = mux_conf["lenticularis"]
-        controller_param = lenticularis_conf["controller"]
+        ##lenticularis_conf = mux_conf["lenticularis"]
+        controller_param = mux_conf["controller"]
         self.port_min = controller_param["port_min"]
         self.port_max = controller_param["port_max"]
 

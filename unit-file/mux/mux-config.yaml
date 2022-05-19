@@ -13,36 +13,35 @@ gunicorn:
     #log_syslog_facility: LOCAL7
     reload: yes
 
-lenticularis:
-    aws_signature: "AWS4-HMAC-SHA256"
+aws_signature: "AWS4-HMAC-SHA256"
 
-    multiplexer:
-        facade_hostname: fgkvm-010-128-008-026.fdcs.r-ccs.riken.jp
-        trusted_proxies:
-            - localhost
-        timer_interval: 30
-        request_timeout: 60
+multiplexer:
+    facade_hostname: fgkvm-010-128-008-026.fdcs.r-ccs.riken.jp
+    trusted_proxies:
+        - localhost
+    timer_interval: 30
+    request_timeout: 60
 
-    controller:
-        port_min: 9000
-        port_max: 9999
-        watch_interval: 30
-        keepalive_limit: 1800
-        allowed_down_count: 3
-        minio_startup_timeout: 60
-        max_lock_duration: 60
-        mc_info_timelimit: 20
-        mc_stop_timelimit: 20
-        kill_supervisor_wait: 60
-        minio_user_install_timelimit: 60
-        refresh_margin: 5
-        sudo: /usr/bin/sudo
+controller:
+    port_min: 9000
+    port_max: 9999
+    watch_interval: 30
+    keepalive_limit: 1800
+    heartbeat_miss_tolerance: 3
+    minio_startup_timeout: 60
+    max_lock_duration: 60
+    mc_info_timelimit: 20
+    mc_stop_timelimit: 20
+    kill_supervisor_wait: 60
+    minio_user_install_timelimit: 60
+    refresh_margin: 5
+    sudo: /usr/bin/sudo
 
-    minio:
-        minio: /home/lens3/bin/minio
-        mc: /home/lens3/bin/mc
+minio:
+    minio: /home/lens3/bin/minio
+    mc: /home/lens3/bin/mc
 
-    log_file: "/var/tmp/lenticularis/lens3-mux-log"
-    log_syslog:
-        facility: LOCAL7
-        priority: DEBUG
+log_file: "/var/tmp/lenticularis/lens3-mux-log"
+log_syslog:
+    facility: LOCAL7
+    priority: DEBUG

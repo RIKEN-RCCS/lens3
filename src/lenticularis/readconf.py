@@ -117,7 +117,6 @@ def mux_schema(type_number):
             "request_timeout": type_number,
         },
         "required": [
-            #"port",
             "facade_hostname",
             "trusted_proxies",
             "timer_interval",
@@ -133,7 +132,7 @@ def mux_schema(type_number):
             "port_max": type_number,
             "watch_interval": type_number,
             "keepalive_limit": type_number,
-            "allowed_down_count": type_number,
+            "heartbeat_miss_tolerance": type_number,
             "minio_startup_timeout": type_number,
             "max_lock_duration": type_number,
             "mc_info_timelimit": type_number,
@@ -148,7 +147,7 @@ def mux_schema(type_number):
             "port_max",
             "watch_interval",
             "keepalive_limit",
-            "allowed_down_count",
+            "heartbeat_miss_tolerance",
             "minio_startup_timeout",
             "max_lock_duration",
             "mc_info_timelimit",
@@ -175,9 +174,12 @@ def mux_schema(type_number):
         "additionalProperties": False,
     }
 
-    lenticularis = {
+    return {
         "type": "object",
         "properties": {
+            "redis": redis_schema(type_number),
+            "gunicorn": gunicorn_schema(type_number),
+            ##"lenticularis": lenticularis,
             "aws_signature": {"type": "string"},
             "multiplexer": multiplexer,
             "controller": controller,
@@ -186,25 +188,13 @@ def mux_schema(type_number):
             "log_syslog": syslog_schema(),
         },
         "required": [
+            "redis",
+            "gunicorn",
+            ##"lenticularis",
             "multiplexer",
             "controller",
             "minio",
             "log_syslog",
-        ],
-        "additionalProperties": False,
-    }
-
-    return {
-        "type": "object",
-        "properties": {
-            "redis": redis_schema(type_number),
-            "gunicorn": gunicorn_schema(type_number),
-            "lenticularis": lenticularis,
-        },
-        "required": [
-            "redis",
-            "gunicorn",
-            "lenticularis",
         ],
         "additionalProperties": False,
     }
@@ -299,14 +289,24 @@ def adm_schema(type_number):
         "properties": {
             "gunicorn": gunicorn_schema(type_number),
             "redis": redis_schema(type_number),
-            "lenticularis": lenticularis,
+            ##"lenticularis": lenticularis,
+            "aws_signature": {"type": "string"},
+            "multiplexer": multiplexer,
+            "controller": controller,
+            "system_settings": system_settings,
             "webui": webui,
+            "log_file": {"type": "string"},
+            "log_syslog": syslog_schema(),
         },
         "required": [
             "gunicorn",
             "redis",
-            "lenticularis",
+            ##"lenticularis",
+            "multiplexer",
+            "controller",
+            "system_settings",
             "webui",
+            "log_syslog",
         ],
         "additionalProperties": False,
     }
@@ -347,17 +347,17 @@ def check_type_number(conf, schema):
 
 
 def fix_adm_conf(conf):
-    multiplexer_param = conf["lenticularis"]["multiplexer"]
+    multiplexer_param = conf["multiplexer"]
     #merge_single_key_into_list_key(multiplexer_param, "facade_hostname",
     #                               "facade_hostnames")
-    system_settings_param = conf["lenticularis"]["system_settings"]
+    system_settings_param = conf["system_settings"]
     merge_single_key_into_list_key(system_settings_param, "direct_hostname_domain",
                                  "direct_hostname_domains")
     return conf
 
 
 def fix_mux_conf(conf):
-    multiplexer_param = conf["lenticularis"]["multiplexer"]
+    multiplexer_param = conf["multiplexer"]
     #merge_single_key_into_list_key(multiplexer_param, "facade_hostname",
     #                               "facade_hostnames")
     return conf

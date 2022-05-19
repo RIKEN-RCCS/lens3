@@ -25,8 +25,8 @@ def app():
         sys.stderr.write(f"Lens3 reading conf failed: {e}\n")
         return None
 
-    openlog(mux_conf["lenticularis"]["log_file"],
-            **mux_conf["lenticularis"]["log_syslog"])
+    openlog(mux_conf["log_file"],
+            **mux_conf["log_syslog"])
     logger.info("**** START MUX ****")
 
     tables = get_tables(mux_conf)

@@ -20,6 +20,8 @@ import tempfile
 import threading
 import time
 import contextlib
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 from lenticularis.mc import Mc, map_admin_user_json_keys, check_mc_status
 from lenticularis.readconf import read_mux_conf
 from lenticularis.lockdb import LockDB
@@ -111,21 +113,21 @@ class Manager():
         port_max = int(args.port_max)
         self._mux_ep = args.host
 
-        lenticularis_conf = mux_conf["lenticularis"]
+        ##lenticularis_conf = mux_conf["lenticularis"]
 
-        minio_param = lenticularis_conf["minio"]
+        minio_param = mux_conf["minio"]
         ##self.minio_http_trace = minio_param["minio_http_trace"]
         self._bin_minio = minio_param["minio"]
         self._bin_mc = minio_param["mc"]
 
-        controller_param = lenticularis_conf["controller"]
+        controller_param = mux_conf["controller"]
         self.sudo = controller_param["sudo"]
         self.watch_interval = int(controller_param["watch_interval"])
         self._lock_timeout = int(controller_param["minio_startup_timeout"])
         ## NOTE: FIX VALUE of timeout_margin.
         self.timeout_margin = 2
         self.keepalive_limit = int(controller_param["keepalive_limit"])
-        self.allowed_down_count = int(controller_param["allowed_down_count"])
+        self.heartbeat_miss_tolerance = int(controller_param["heartbeat_miss_tolerance"])
 
         self.minio_user_install_timelimit = int(controller_param["minio_user_install_timelimit"])
         self.mc_info_timelimit = int(controller_param["mc_info_timelimit"])
@@ -608,18 +610,39 @@ class Manager():
 
 
     def _check_minio_health(self):
-        try:
-            self._heartbeat_minio()
+        if self._verbose:
+            logger.debug("Check MinIO is alive pool={self.zoneID}.")
+        status = self._heartbeat_minio()
+        if (status == 200):
             self._heartbeat_misses = 0
-        except Exception as e:
+        else:
             self._heartbeat_misses += 1
-            if self._heartbeat_misses > self.allowed_down_count:
-                logger.info(f"MinIO heartbeat failed: pool={self.zoneID},"
-                            f" miss={self._heartbeat_misses}")
-                raise Termination("MinIO heartbeat failure.")
+        if self._heartbeat_misses > self.heartbeat_miss_tolerance:
+            logger.info(f"MinIO heartbeat failed: pool={self.zoneID},"
+                        f" miss={self._heartbeat_misses}")
+            raise Termination("MinIO heartbeat failure.")
 
 
     def _heartbeat_minio(self):
+        url = f"http://{self._minio_ep}/minio/health/live"
+        if self._verbose:
+            logger.debug("Heartbeat MinIO url={url}.")
+        try:
+            res = urlopen(url, timeout=self.mc_info_timelimit)
+            return res.status
+        except HTTPError as e:
+            logger.error(f"urlopen error: url={url}; exception={e}")
+            return e.code
+        except URLError as e:
+            logger.error(f"urlopen error: url={url}; exception={e}")
+            return 503
+        except Exception as e:
+            logger.error(f"urlopen error: url={url}; exception={e}")
+            logger.exception(e)
+            return 500
+
+
+    def _heartbeat_minio_via_mc_(self):
         # FIXME: XXX USE FOLLOWING METHOD IS RECOMMENDED:
         # curl -I https://minio.example.net:9000/minio/health/live
         if self._verbose:
@@ -670,8 +693,8 @@ def main():
 
     #threading.current_thread().name = args.traceid
     tracing.set(args.traceid)
-    openlog(mux_conf["lenticularis"]["log_file"],
-            **mux_conf["lenticularis"]["log_syslog"])
+    openlog(mux_conf["log_file"],
+            **mux_conf["log_syslog"])
 
     try:
         pid = os.fork()

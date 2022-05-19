@@ -168,13 +168,13 @@ class ZoneAdm():
     def __init__(self, adm_conf):
         self.adm_conf = adm_conf
 
-        controller_param = adm_conf["lenticularis"]["controller"]
+        controller_param = adm_conf["controller"]
         self.timeout = int(controller_param["max_lock_duration"])
 
-        multiplexer_param = adm_conf["lenticularis"]["multiplexer"]
+        multiplexer_param = adm_conf["multiplexer"]
         self.facade_hostname = multiplexer_param["facade_hostname"]
 
-        system_settings_param = adm_conf["lenticularis"]["system_settings"]
+        system_settings_param = adm_conf["system_settings"]
         self.system_settings_param = system_settings_param
         self.direct_hostname_domains = [h.lower() for h in system_settings_param["direct_hostname_domains"]]
         self.reserved_hostnames = [h.lower() for h in self.system_settings_param["reserved_hostnames"]]

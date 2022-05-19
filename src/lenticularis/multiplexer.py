@@ -45,9 +45,9 @@ class Multiplexer():
         self.controller = controller
         self.start = time.time()
         gunicorn_conf = mux_conf["gunicorn"]
-        lenticularis_conf = mux_conf["lenticularis"]
+        ##lenticularis_conf = mux_conf["lenticularis"]
 
-        multiplexer_conf = lenticularis_conf["multiplexer"]
+        multiplexer_conf = mux_conf["multiplexer"]
         self.facade_hostname = multiplexer_conf["facade_hostname"].lower()
         trusted_proxies = multiplexer_conf["trusted_proxies"]
         self.trusted_proxies = set([addr for h in trusted_proxies
@@ -58,7 +58,7 @@ class Multiplexer():
 
         self.active_multiplexers = self._list_mux_ip_addresses()
 
-        controller_conf = lenticularis_conf["controller"]
+        controller_conf = mux_conf["controller"]
         self.watch_interval = int(controller_conf["watch_interval"])
         self.mc_info_timelimit = int(controller_conf["mc_info_timelimit"])
         self.refresh_margin = int(controller_conf["refresh_margin"])
@@ -189,6 +189,8 @@ class Multiplexer():
         proto = "http"
         url = f"{proto}://{dest_addr}{path}"
         input = environ.get("wsgi.input")
+
+        logger.debug(f"AHO url={url}")
 
         sniff = False
 

@@ -32,8 +32,8 @@ except Exception as e:
     sys.stderr.write(f"Lens3 reading conf failed: {e}\n")
     sys.exit(ERROR_READCONF)
 
-openlog(adm_conf["lenticularis"]["log_file"],
-        **adm_conf["lenticularis"]["log_syslog"])
+openlog(adm_conf["log_file"],
+        **adm_conf["log_syslog"])
 logger.info("**** START ADM ****")
 
 pkgdir = os.path.dirname(inspect.getfile(lenticularis))

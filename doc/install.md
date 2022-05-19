@@ -671,9 +671,9 @@ Install Manual of Lenticularis
       # minimal inactive time that MinIO is stopped
               keepalive_limit: 600
       # allowed max times without responding mc's query.
-      #  failing to respond more than `allowed_down_count` times continuously,
+      #  failing to respond more than `heartbeat_miss_tolerance` times continuously,
       #  minio will be killed by manager.
-              allowed_down_count: 3
+              heartbeat_miss_tolerance: 3
       # maximum time allowed to initialize zone
               max_lock_duration: 60
       # minimum duration that manager wait for mc info command

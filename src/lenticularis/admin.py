@@ -505,8 +505,8 @@ def main():
     traceid = random_str(12)
     #threading.current_thread().name = traceid
     tracing.set(traceid)
-    openlog(adm_conf["lenticularis"]["log_file"],
-            **adm_conf["lenticularis"]["log_syslog"])
+    openlog(adm_conf["log_file"],
+            **adm_conf["log_syslog"])
     ##logger.info("**** START ADMIN ****")
     logger.debug(f"traceid = {traceid}")
 

@@ -356,21 +356,6 @@ class ZoneAdm():
         self.tables.storage_table.printall()
         self.tables.process_table.printall()
         self.tables.routing_table.printall()
-        print("---- memo\n"
-              "  (storage table)\n"
-              "  ac:pool -> access-time : string\n"
-              "  ar:key -> secret : string\n"
-              "  mo:pool -> mode : string\n"
-              "  pr:: -> list of permissions of users (json)\n"
-              "  ru:pool -> pool data (htable)\n"
-              "  uu:user -> user info (json)\n"
-              "  (process table)\n"
-              "  mx:host -> route (htable)\n"
-              "  ma:pool -> ? (htable)\n"
-              "  lk:?? -> (lock)\n"
-              "  (routing table)\n"
-              "  aa:key -> route-description\n"
-              "  at:address -> atime")
 
     def fetch_multiplexer_list(self):
         return self.tables.process_table.list_muxs()

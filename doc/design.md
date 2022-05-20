@@ -1681,7 +1681,7 @@ A bucket-pool has a state reflecting the state of a MinIO instance.
 It does not include the process status of a MinIO instance.
 
 * Bucket-pool state (`mode`)
-  * None
+  * None ?
   * __"initial"__ indicates an alias is not set in a MinIO.
   * __"ready"__ indicates a setup for servicing is done.  It means an
     alias for management are set.  It does not mean a MinIO process is
@@ -1689,6 +1689,8 @@ It does not include the process status of a MinIO instance.
   * __"suspended"__ indicates a transient state that a running MinIO
     is to be stopped.
   * __"deprecated"__ indicates a pool will be removed.
+  * __"disabled"__ indicates a pool is temporarily unusable.  It may
+    transition to "initial" by actions of administration.
   * __"inoperable"__ indicates a pool cannot be used.  It has failed
     to run a MinIO.  This pool cannot be used and should be removed.
 
@@ -1708,7 +1710,7 @@ Note that a bucket-pool has another state `status`, but it is always
 
 | Key           | Value         | Description   |
 | ----          | ----          | ----          |
-| ru:pool-id    | pool-description |(htable)|
+| po:pool-id    | pool-description |(htable)|
 | ar:access-key | pool-id       |       |
 | mo:pool-id    | pool-state    |       |
 | ac:pool-id    | timestamp     |       |
@@ -1738,8 +1740,16 @@ start-time ...  last-interrupted-time? ...
 | Key           | Value         | Description   |
 | ----          | ----          | ----          |
 | ep:pool-id    | MinIO-endpoint | |
-| bk:bucket-name | pool-id      | |
+| bk:bucket-name | pool-id + policy | |
 | ts:pool-id    | timestamp     | Timestamp on the last access |
+
+Policy indicates public R/W and keyed R/W status.
+
+#### identifier-table
+
+| Key           | Value         | Description   |
+| ----          | ----          | ----          |
+| id:random     | (pool-id)     | |
 
 ## Bucket policy
 

@@ -198,16 +198,24 @@ class Manager():
         user = zone["owner_uid"]
         group = zone["owner_gid"]
         bucketsDir = zone["buckets_directory"]
-        self._expiration_date = int(zone["expiration_date"])
-        online = zone["online_status"]
-        permission = zone["admission_status"]
-        valid = now < self._expiration_date
 
-        setup_only = not ((online, permission, mode, valid, access_by_zoneID)
-                          == ("online", "allowed", "ready", True, False))
+        self._expiration_date = int(zone["expiration_date"])
+        unexpired = now < self._expiration_date
+        permitted = zone["admission_status"] == "allowed"
+        online = zone["online_status"] == "online"
+
+        if not (unexpired and permitted and online):
+            self._set_pool_state("disabled",
+                                 f"Pool states:"
+                                 f" expired={not unexpired},"
+                                 f" permitted={permitted},"
+                                 f" online={online}.")
+            return False
+
+        setup_only = (mode != "ready" or access_by_zoneID == True)
         logger.debug(f"@@@ setup_only = {setup_only}")
 
-        need_initialize = (permission, mode) == ("allowed", "initial")
+        need_initialize = (mode == "initial")
         logger.debug(f"@@@ need_initialize = {need_initialize}")
 
         procdesc = self.tables.process_table.get_minio_proc(self.zoneID)
@@ -610,8 +618,6 @@ class Manager():
 
 
     def _check_minio_health(self):
-        if self._verbose:
-            logger.debug("Check MinIO is alive pool={self.zoneID}.")
         status = self._heartbeat_minio()
         if (status == 200):
             self._heartbeat_misses = 0
@@ -626,7 +632,7 @@ class Manager():
     def _heartbeat_minio(self):
         url = f"http://{self._minio_ep}/minio/health/live"
         if self._verbose:
-            logger.debug("Heartbeat MinIO url={url}.")
+            logger.debug(f"Heartbeat MinIO url={url}.")
         try:
             res = urlopen(url, timeout=self.mc_info_timelimit)
             return res.status

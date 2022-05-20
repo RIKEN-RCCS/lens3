@@ -300,7 +300,7 @@ class Multiplexer():
         #logger.debug(f"@@@ host: {host}")
         #logger.debug(f"authorization-header={headers.get('AUTHORIZATION')}")
 
-        ## TEMPORARILY BAN HOST ACCESSES.
+        ## AHO TEMPORARILY BAN HOST ACCESSES.
         host = None
         if host:
             access_key_id = None

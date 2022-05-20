@@ -1,7 +1,6 @@
-User's Manual of Lenticularis
-==========================================================
+# Lenticularis-S3 User's Guide
 
-# Registration
+## Registration
 
   + Overview
     - To Start Using
@@ -221,7 +220,7 @@ User's Manual of Lenticularis
     - The system does not provide CLI for users.
 
 
-# Client Settings (example)
+## Client Settings (example)
 
   + Access to Endpoint URL with Access Key (Access Key ID and Secret
     Access Key) provided by the WebUI.
@@ -236,4 +235,7 @@ User's Manual of Lenticularis
     $ aws --endpoint-url=$ENDPOINT_URL s3 ls s3://wrk-bucket1/
     ```
 
-[eof]
+## Bucket Naming Restrictions
+
+Names must be in lowercase alphanums and "-".  Lens3 bans dots.  Also,
+Lens3 bans names "aws", "amazon", "minio", "goog.*", and "g00g.*".

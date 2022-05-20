@@ -1,7 +1,8 @@
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
-from jsonschema import validate
+import re
+import jsonschema
 from lenticularis.utility import dict_diff
 from lenticularis.utility import logger
 
@@ -184,7 +185,7 @@ def zone_schema(type_number):
 
 
 def check_zone_schema(dict, user):
-    validate(instance=dict, schema=zone_schema({"type": "string"}))
+    jsonschema.validate(instance=dict, schema=zone_schema({"type": "string"}))
 
 
 def check_policy(policy):
@@ -241,3 +242,18 @@ def check_pool_dict_is_sound(dict, user, adm_conf):
     # Access Key ID: 16..128 [a-zA-Z][\w]+
     # Secret Access Key: 1..128 string
     # status: online/offline
+
+def check_bucket_naming(name):
+    """Checks restrictions.  Names are all lowercase.  IT BANS DOTS.  It
+    bans "aws", "amazon", "minio", "goog.*", and "g00g.*".
+    """
+    ## [Bucket naming rules]
+    ## https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucketnamingrules.html
+    ## [Bucket naming guidelines]
+    ## https://cloud.google.com/storage/docs/naming-buckets
+    return (re.fullmatch("[a-z0-9-]{3,63}", name)
+            and not re.fullmatch(
+                ("^[0-9.]*$|^.*-$"
+                 "|^xn--.*|^.-s3alias$|^aws$|^amazon$"
+                 "|^minio$|^goog.*$|^g00g.*$"),
+                name))

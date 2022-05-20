@@ -18,11 +18,11 @@ in the directory.
 
 ## Guides
 
-For administrators,
-see [doc/administrator-guide.md](doc/administrator-guide.md)
-
 For users,
 see [doc/user-guide.md](doc/user-guide.md)
+
+For administrators,
+see [doc/admin-guide.md](doc/admin-guide.md)
 
 ## Manifestation
 

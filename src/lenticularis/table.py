@@ -31,7 +31,7 @@ class StorageTable(TableCommon):
     _access_key_id_prefix = "ar:"
     directHostnamePrefix = "dr:"
     atimePrefix = "ac:"
-    modePrefix = "mo:"
+    _pool_state_prefix = "ps:"
     allowDenyRuleKey = "pr::"
     _unix_user_prefix = "uu:"
     storage_table_lock_prefix = "zk:"
@@ -133,20 +133,31 @@ class StorageTable(TableCommon):
         key = f"{self.atimePrefix}{zoneID}"
         return self.dbase.delete(key)
 
+
+    def set_pool_state(self, pool_id, state, reason):
+        key = f"{self._pool_state_prefix}{pool_id}"
+        ee = json.dumps((state, reason))
+        return self.dbase.set(key, ee)
+
     def set_mode(self, zoneID, mode):
         # logger.debug(f"+++ {zoneID} {mode}")
-        key = f"{self.modePrefix}{zoneID}"
-        return self.dbase.set(key, mode)
+        key = f"{self._pool_state_prefix}{zoneID}"
+        ee = json.dumps((mode, None))
+        return self.dbase.set(key, ee)
 
     def get_mode(self, zoneID):
         # logger.debug(f"+++ {zoneID}")
-        key = f"{self.modePrefix}{zoneID}"
-        return self.dbase.get(key)
+        key = f"{self._pool_state_prefix}{zoneID}"
+        ee = self.dbase.get(key)
+        (state, _) = (json.loads(ee, parse_int=None)
+                      if ee is not None else (None, None))
+        return state
 
     def del_mode(self, zoneID):
         # logger.debug(f"+++ {zoneID}")
-        key = f"{self.modePrefix}{zoneID}"
+        key = f"{self._pool_state_prefix}{zoneID}"
         return self.dbase.delete(key)
+
 
     def ins_allow_deny_rules(self, rule):
         # logger.debug(f"+++ {rule}")
@@ -189,7 +200,7 @@ class StorageTable(TableCommon):
         delete_all(self.dbase.r, self.directHostnamePrefix)
         delete_all(self.dbase.r, self._pool_desc_prefix)
         delete_all(self.dbase.r, self.atimePrefix)
-        delete_all(self.dbase.r, self.modePrefix)
+        delete_all(self.dbase.r, self._pool_state_prefix)
         delete_all(self.dbase.r, self.storage_table_lock_prefix)
         if everything:
             delete_all(self.dbase.r, self.allowDenyRuleKey)

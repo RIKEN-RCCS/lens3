@@ -19,7 +19,7 @@ setup(
         "lenticularis": ["webui/*", "webui/scripts/*"],
     },
     entry_points={
-        "console_scripts": ["lenticularis-admin=lenticularis.admin:main"]
+        "console_scripts": ["lenticularis-admin=lenticularis.admintool:main"]
     },
     install_requires=[
         'redis',

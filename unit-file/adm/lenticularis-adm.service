@@ -12,7 +12,7 @@ Environment=LENTICULARIS_ADM_CONFIG=/etc/lenticularis/adm-config.yaml
 StandardOutput=journal
 StandardError=journal
 
-ExecStart=python3 -m lenticularis.start_service api
+ExecStart=python3 -m lenticularis.start_service adm
 
 #PrivateTmp=true
 

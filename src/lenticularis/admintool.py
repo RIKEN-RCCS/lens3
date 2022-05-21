@@ -404,7 +404,7 @@ class Command():
 
     def fn_throw_decoy(self, zone_id):
         logger.debug(f"@@@ THROW DECOY zone_id = {zone_id}")
-        self.zone_adm.check_mux_access_for_zone(self.traceid, zone_id, force=True)
+        self.zone_adm.access_mux_for_pool(self.traceid, zone_id, force=True)
 
     def fn_show_routing_table(self):
         pairs = self.zone_adm.tables.routing_table.list_routes()

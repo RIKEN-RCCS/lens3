@@ -124,70 +124,6 @@ def check_conflict(zoneID, zone, z_id, z):
     return reasons
 
 
-def zone_schema(type_number):
-
-    bucket = {
-        "type": "object",
-        "properties": {
-            "key": {"type": "string"},
-            "policy": {"type": "string"},
-        },
-        "required": [
-            "key",
-            "policy",
-        ],
-        "additionalProperties": False,
-    }
-
-    access_key = {
-        "type": "object",
-        "properties": {
-            "access_key": {"type": "string"},
-            "secret_key": {"type": "string"},
-            "policy_name": {"type": "string"},
-        },
-        "required": [
-            "access_key",
-            "secret_key",
-            "policy_name",
-        ],
-        "additionalProperties": False,
-    }
-
-    return {
-        "type": "object",
-        "properties": {
-            "owner_uid": {"type": "string"},
-            "owner_gid": {"type": "string"},
-            "root_secret": {"type": "string"},
-            "buckets_directory": {"type": "string"},
-            "buckets": {"type": "array", "items": bucket},
-            "access_keys": {"type": "array", "items": access_key},
-            "direct_hostnames": {"type": "array", "items": {"type": "string"}},
-            "expiration_date": type_number,
-            "admission_status": {"type": "string"},
-            "online_status": {"type": "string"},
-        },
-        "required": [
-            "owner_uid",
-            "owner_gid",
-            "root_secret",
-            "buckets_directory",
-            "buckets",
-            "access_keys",
-            "direct_hostnames",
-            "expiration_date",
-            "admission_status",
-            "online_status",
-        ],
-        "additionalProperties": False,
-    }
-
-
-def check_zone_schema(dict, user):
-    jsonschema.validate(instance=dict, schema=zone_schema({"type": "string"}))
-
-
 def check_policy(policy):
     if policy not in {"none", "upload", "download", "public"}:
         raise Exception(f"invalid policy: {policy}")
@@ -214,8 +150,7 @@ def check_number(number):
 
 
 def check_pool_dict_is_sound(dict, user, adm_conf):
-    """
-    in situ checks are defined in `check_zone_values'
+    """Some checks on values are defined in _check_zone_values.
     """
 
     ## "buckets" may be absent.
@@ -257,3 +192,71 @@ def check_bucket_naming(name):
                  "|^xn--.*|^.-s3alias$|^aws$|^amazon$"
                  "|^minio$|^goog.*$|^g00g.*$"),
                 name))
+
+
+def _pool_desc_schema(type_number):
+    bucket = {
+        "type": "object",
+        "properties": {
+            "key": {"type": "string"},
+            "policy": {"type": "string"},
+        },
+        "required": [
+            "key",
+            "policy",
+        ],
+        "additionalProperties": False,
+    }
+
+    access_key = {
+        "type": "object",
+        "properties": {
+            "access_key": {"type": "string"},
+            "secret_key": {"type": "string"},
+            "policy_name": {"type": "string"},
+        },
+        "required": [
+            "access_key",
+            "secret_key",
+            "policy_name",
+        ],
+        "additionalProperties": False,
+    }
+
+    schema = {
+        "type": "object",
+        "properties": {
+            "owner_uid": {"type": "string"},
+            "owner_gid": {"type": "string"},
+            "root_secret": {"type": "string"},
+            "buckets_directory": {"type": "string"},
+            "buckets": {"type": "array", "items": bucket},
+            "access_keys": {"type": "array", "items": access_key},
+            "direct_hostnames": {"type": "array", "items": {"type": "string"}},
+            "expiration_date": type_number,
+            "online_status": {"type": "string"},
+            "admission_status": {"type": "string"},
+            # Below keys are internally held:
+            # "pool_id"
+            # "minio_state"
+            # "atime"
+       },
+        "required": [
+            "owner_uid",
+            "owner_gid",
+            "root_secret",
+            "buckets_directory",
+            "buckets",
+            "access_keys",
+            "direct_hostnames",
+            "expiration_date",
+            "admission_status",
+            "online_status",
+        ],
+        "additionalProperties": False,
+    }
+    return schema
+
+
+def check_pool_is_well_formed(dict, user_):
+    jsonschema.validate(instance=dict, schema=_pool_desc_schema({"type": "string"}))

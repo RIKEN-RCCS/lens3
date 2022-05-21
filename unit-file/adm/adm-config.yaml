@@ -37,6 +37,10 @@ webui:
         - localhost
     CSRF_secret_key: xyzzy
 
+minio:
+    minio: /home/lens3/bin/minio
+    mc: /home/lens3/bin/mc
+
 log_file: "/var/tmp/lenticularis/lens3-adm-log"
 log_syslog:
     facility: LOCAL7

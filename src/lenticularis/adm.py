@@ -1,4 +1,4 @@
-"""API service by Gunicorn + Uvicorn + FastAPI."""
+"""Adm service by Gunicorn + Uvicorn + FastAPI."""
 
 # Copyright (c) 2022 RIKEN R-CCS.
 # SPDX-License-Identifier: BSD-2-Clause
@@ -43,8 +43,8 @@ app = FastAPI()
 app.mount("/scripts/",
           StaticFiles(directory=os.path.join(webui_dir, "scripts")),
           name="scripts")
-with open(os.path.join(webui_dir, "create.html")) as f:
-    create_html = f.read()
+with open(os.path.join(webui_dir, "setting.html")) as f:
+    setting_html = f.read()
 
 
 async def _get_authorized_user(request: Request):
@@ -70,7 +70,7 @@ async def _get_traceid(request: Request):
 def _respond_zone(zone_list, err, csrf_protect, client_addr, user_id, request):
     ##HTTP_503_SERVICE_UNAVAILABLE
     ##Retry-After
-    if err:
+    if err is not None:
         content = {"status": "error", "reason": err}
         status_code = status.HTTP_400_BAD_REQUEST
     else:
@@ -94,7 +94,7 @@ async def _get_request_body(request):
     return json.loads(body, parse_int=None)
 
 
-async def _check_pool_id_format(id, csrf_protect, request):
+async def _check_pool_naming(id, csrf_protect, request):
     if (len(id) == 20 and id[0].isalpha() and id.isalnum()):
         return None
     else:
@@ -143,9 +143,9 @@ async def app_get_show_ui(request: Request,
     ##traceid = traceid if traceid is not None else "12345"
     ##headers = {"X-TRACEID": traceid}
     ##(headers=headers,)
-    with open(os.path.join(webui_dir, "create.html")) as f:
-        create_html_nocache = f.read()
-    response = HTMLResponse(status_code=code, content=create_html_nocache)
+    with open(os.path.join(webui_dir, "setting.html")) as f:
+        setting_html_nocache = f.read()
+    response = HTMLResponse(status_code=code, content=setting_html_nocache)
     return response
 
 
@@ -156,7 +156,7 @@ async def app_get_get_template(request: Request,
                                client_addr: str = Depends(_get_client_addr),
                                csrf_protect: CsrfProtect = Depends()):
     logger.debug(f"APP.GET /template")
-    (zone_list, err) = api.api_get_template(traceid, user_id)
+    (code, zone_list, err) = api.api_get_template(traceid, user_id)
     return _respond_zone(zone_list, err, csrf_protect, client_addr, user_id, request)
 
 
@@ -167,7 +167,7 @@ async def app_get_list_pools(request: Request,
                              client_addr: str = Depends(_get_client_addr),
                              csrf_protect: CsrfProtect = Depends()):
     logger.debug(f"APP.GET /zone")
-    (zone_list, err) = api.api_list_pools(traceid, user_id, None)
+    (code, zone_list, err) = api.api_list_pools(traceid, user_id, None)
     return _respond_zone(zone_list, err, csrf_protect, client_addr, user_id, request)
 
 
@@ -179,10 +179,10 @@ async def app_get_get_pool(zone_id: str,
                            client_addr: str = Depends(_get_client_addr),
                            csrf_protect: CsrfProtect = Depends()):
     logger.debug(f"APP.GET /zone/{zone_id}")
-    ##ng_response = _check_pool_id_format(zone_id, csrf_protect, request)
+    ##ng_response = _check_pool_naming(zone_id, csrf_protect, request)
     ##if ng_response is not None:
     ##    return ng_response
-    (zone_list, err) = api.api_list_pools(traceid, user_id, zone_id)
+    (code, zone_list, err) = api.api_list_pools(traceid, user_id, zone_id)
     return _respond_zone(zone_list, err, csrf_protect, client_addr, user_id, request)
 
 
@@ -198,7 +198,7 @@ async def app_post_create_pool(request: Request,
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
     zone = body.get("zone")
-    (zone_list, err) = api.api_create_pool(traceid, user_id, None, zone)
+    (code, zone_list, err) = api.api_create_pool(traceid, user_id, None, zone)
     return _respond_zone(zone_list, err, None, client_addr, user_id, request)
 
 
@@ -210,7 +210,7 @@ async def app_put_update_pool(zone_id: str,
                               client_addr: str = Depends(_get_client_addr),
                               csrf_protect: CsrfProtect = Depends()):
     logger.debug(f"APP.PUT /zone/{zone_id}")
-    ##ng_response = _check_pool_id_format(zone_id, csrf_protect, request)
+    ##ng_response = _check_pool_naming(zone_id, csrf_protect, request)
     ##if ng_response is not None:
     ##    return ng_response
     body = await _get_request_body(request)
@@ -218,11 +218,11 @@ async def app_put_update_pool(zone_id: str,
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
     zone = body.get("zone")
-    (zone_list, err) = api.api_update_pool(traceid, user_id, zone_id, zone)
+    (code, zone_list, err) = api.api_update_pool(traceid, user_id, zone_id, zone)
     return _respond_zone(zone_list, err, None, client_addr, user_id, request)
 
 
-@app.put("/zone/{zone_id}/buckets")
+##@app.put("/zone/{zone_id}/buckets")
 async def app_put_update_buckets(zone_id: str,
                                  request: Request,
                                  user_id: str = Depends(_get_authorized_user),
@@ -230,7 +230,7 @@ async def app_put_update_buckets(zone_id: str,
                                  client_addr: str = Depends(_get_client_addr),
                                  csrf_protect: CsrfProtect = Depends()):
     logger.debug(f"APP.PUT /zone/{zone_id}/buckets")
-    ##ng_response = _check_pool_id_format(zone_id, csrf_protect, request)
+    ##ng_response = _check_pool_naming(zone_id, csrf_protect, request)
     ##if ng_response is not None:
     ##    return ng_response
     body = await _get_request_body(request)
@@ -238,7 +238,26 @@ async def app_put_update_buckets(zone_id: str,
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
     zone = body.get("zone")
-    (zone_list, err) = api.api_update_buckets(traceid, user_id, zone_id, zone)
+    (code, zone_list, err) = api.api_update_buckets(traceid, user_id, zone_id, zone)
+    return _respond_zone(zone_list, err, None, client_addr, user_id, request)
+
+
+@app.put("/pool/{pool_id}/bucket/{bucket}")
+async def app_put_make_bucket(pool_id: str,
+                              bucket: str,
+                              request: Request,
+                              user_id: str = Depends(_get_authorized_user),
+                              traceid: str = Depends(_get_traceid),
+                              client_addr: str = Depends(_get_client_addr),
+                              csrf_protect: CsrfProtect = Depends()):
+    logger.debug(f"APP.PUT /pool/{pool_id}/bucket/{bucket}")
+    ##ng_response = _check_pool_naming(pool_id, csrf_protect, request)
+    ##if ng_response is not None:
+    ##    return ng_response
+    body = await _get_request_body(request)
+    token = body.get("CSRF-Token")
+    csrf_protect.validate_csrf(token)
+    (code, zone_list, err) = api.api_make_bucket(traceid, user_id, pool_id, bucket, body)
     return _respond_zone(zone_list, err, None, client_addr, user_id, request)
 
 
@@ -250,7 +269,7 @@ async def app_put_change_secret(zone_id: str,
                                 client_addr: str = Depends(_get_client_addr),
                                 csrf_protect: CsrfProtect = Depends()):
     logger.debug(f"APP.PUT /zone/{zone_id}/accessKeys")
-    ##ng_response = _check_pool_id_format(zone_id, csrf_protect, request)
+    ##ng_response = _check_pool_naming(zone_id, csrf_protect, request)
     ##if ng_response is not None:
     ##    return ng_response
     body = await _get_request_body(request)
@@ -258,7 +277,7 @@ async def app_put_change_secret(zone_id: str,
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
     zone = body.get("zone")
-    (zone_list, err) = api.api_change_secret(traceid, user_id, zone_id, zone)
+    (code, zone_list, err) = api.api_change_secret(traceid, user_id, zone_id, zone)
     return _respond_zone(zone_list, err, None, client_addr, user_id, request)
 
 
@@ -269,7 +288,7 @@ async def app_put_change_secret(zone_id: str,
 ##    csrf_token = body.get("CSRF-Token")
 ##    csrf_protect.validate_csrf(csrf_token)
 ##    zone = body.get("zone")
-##    (zone_list, err) = api.api_upsert(how, traceid, user_id, zone_id, zone)
+##    (code, zone_list, err) = api.api_upsert(how, traceid, user_id, zone_id, zone)
 ##    return _respond_zone(zone_list, err, None, client_addr, user_id, request)
 
 
@@ -281,13 +300,13 @@ async def app_delete_zone(zone_id: str,
                            client_addr: str = Depends(_get_client_addr),
                            csrf_protect: CsrfProtect = Depends()):
     logger.debug(f"APP.DELETE /zone/{zone_id}")
-    ##ng_response = _check_pool_id_format(zone_id, csrf_protect, request)
+    ##ng_response = _check_pool_naming(zone_id, csrf_protect, request)
     ##if ng_response is not None:
     ##    return ng_response
     body = await _get_request_body(request)
     csrf_token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(csrf_token)
-    err = api.api_delete(traceid, user_id, zone_id)
+    (_, _, err) = api.api_delete(traceid, user_id, zone_id)
     return _respond_zone(None, err, None, client_addr, user_id, request)
 
 
@@ -315,7 +334,7 @@ async def validate_session(request: Request, call_next):
         log_access(f"{status_code}", client_addr, user_id, request.method, request.url)
         return JSONResponse(status_code=status_code, content=content)
 
-    if not api.api_check_user(user_id):
+    if not api.check_user(user_id):
         logger.error(f"access denied: user: {user_id}")
         content = {"status": "error", "reason": f"{user_id}: no such user"}
         content["time"] = str(int(time.time()))

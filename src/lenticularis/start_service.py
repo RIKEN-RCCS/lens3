@@ -13,20 +13,6 @@ from lenticularis.utility import logger, openlog
 from lenticularis.utility import make_clean_env
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("target")
-    args = parser.parse_args()
-
-    if args.target == "mux":
-        start_mux()
-    elif args.target == "api":
-        start_api()
-    else:
-        assert False
-    sys.exit(1)
-
-
 def start_mux():
     try:
         (mux_conf, configfile) = read_mux_conf()
@@ -75,8 +61,7 @@ def start_mux():
     run("lenticularis-mux", env, cmd, args)
 
 
-def start_api():
-
+def start_adm():
     try:
         (adm_conf, configfile) = read_adm_conf()
     except Exception as e:
@@ -85,7 +70,7 @@ def start_api():
 
     openlog(adm_conf["log_file"],
             **adm_conf["log_syslog"])
-    logger.info("Start Lenticularis-S3 API service")
+    logger.info("Start Lenticularis-S3 Adm service")
 
     gunicorn_conf = adm_conf["gunicorn"]
     #bind = gunicorn_conf["bind"]
@@ -146,6 +131,20 @@ def run(servicename, env, cmd, args):
         sys.exit(1)
     else:
         sys.exit(status)
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("target")
+    args = parser.parse_args()
+
+    if args.target == "mux":
+        start_mux()
+    elif args.target == "adm":
+        start_adm()
+    else:
+        assert False
+    sys.exit(1)
 
 
 if __name__ == "__main__":

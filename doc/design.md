@@ -1724,12 +1724,13 @@ Note that a bucket-pool has another state `status`, but it is always
 
 | Key           | Value         | Description   |
 | ----          | ----          | ----          |
-| mm:pool-id    | proc-description |(htable)|
+| mm:pool-id    | minio-description |(htable)|
 | mx:Mux-endpoint | Mux-description |(htable)|
 | lk:??         | -> (lock?)
 
-A proc-description is a htable record of a MinIO process: {"mux_host",
-"mux_port", "minio_ep", "minio_pid", "manager_pid"}.
+A minio-description is a htable record of a MinIO process:
+{"mux_host", "mux_port", "minio_ep", "minio_pid", "manager_pid",
+"admin", "password"}.
 
 A Mux-description is a htable record: {"host", "port", "start_time",
 "last_interrupted_time"}, where a host+port is an endpoint of a Mux.
@@ -1774,12 +1775,17 @@ Redis client routines catches socket related exceptions (including
 ConnectionError and TimeoutError).  Others are not checked at all by
 Lens3.
 
+### Adm processes
+
+Adm is not designed as load-balanced.  Adm may consist of some
+processes (started by Gunicorn), but they need to run on a single node
+in order to share the configuration directory of the "mc" command.
+
 ### Mux processes
 
 There exists multiple Mux processes for a single Mux service, as it is
-started as a Gunicorn service.  Some book-keeping periodical
-operations (in background threads) are performed more frequently than
-expected.
+started by Gunicorn.  Some book-keeping periodical operations (running
+in background threads) are performed more frequently than expected.
 
 ### MinIO client
 
@@ -1792,6 +1798,10 @@ process will be terminated when a Manager exits.
 
 ### RANDOM MEMO
 
-Note: Python Popen seems to dup a PIPE fd and does not close the
+NOTE: Python Popen seems to dup a PIPE fd and does not close the
 original.  It results in that a closure of stdout/stderr in a
 subprocess cannot be detected at the parent.
+
+Note: Lens3 does not remove buckets at all.  It just makes them
+inaccessible.  It is because MinIO's "mc rb" command removes the
+contents of a bucket that is not useful usually.

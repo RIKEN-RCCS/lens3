@@ -165,7 +165,6 @@ def mux_schema(type_number):
         "properties": {
             "minio": {"type": "string"},
             "mc": {"type": "string"},
-            ##"minio_http_trace": {"type": "string"},
         },
         "required": [
             "minio",
@@ -179,7 +178,6 @@ def mux_schema(type_number):
         "properties": {
             "redis": redis_schema(type_number),
             "gunicorn": gunicorn_schema(type_number),
-            ##"lenticularis": lenticularis,
             "aws_signature": {"type": "string"},
             "multiplexer": multiplexer,
             "controller": controller,
@@ -190,7 +188,6 @@ def mux_schema(type_number):
         "required": [
             "redis",
             "gunicorn",
-            ##"lenticularis",
             "multiplexer",
             "controller",
             "minio",
@@ -252,25 +249,6 @@ def adm_schema(type_number):
         "additionalProperties": False,
     }
 
-    lenticularis = {
-        "type": "object",
-        "properties": {
-            "aws_signature": {"type": "string"},
-            "multiplexer": multiplexer,
-            "controller": controller,
-            "system_settings": system_settings,
-            "log_file": {"type": "string"},
-            "log_syslog": syslog_schema(),
-        },
-        "required": [
-            "multiplexer",
-            "controller",
-            "system_settings",
-            "log_syslog",
-        ],
-        "additionalProperties": False,
-    }
-
     webui = {
         "type": "object",
         "properties": {
@@ -284,28 +262,41 @@ def adm_schema(type_number):
         "additionalProperties": False,
     }
 
+    minio = {
+        "type": "object",
+        "properties": {
+            "minio": {"type": "string"},
+            "mc": {"type": "string"},
+        },
+        "required": [
+            "minio",
+            "mc",
+        ],
+        "additionalProperties": False,
+    }
+
     return {
         "type": "object",
         "properties": {
             "gunicorn": gunicorn_schema(type_number),
             "redis": redis_schema(type_number),
-            ##"lenticularis": lenticularis,
             "aws_signature": {"type": "string"},
             "multiplexer": multiplexer,
             "controller": controller,
             "system_settings": system_settings,
             "webui": webui,
+            "minio": minio,
             "log_file": {"type": "string"},
             "log_syslog": syslog_schema(),
         },
         "required": [
             "gunicorn",
             "redis",
-            ##"lenticularis",
             "multiplexer",
             "controller",
             "system_settings",
             "webui",
+            "minio",
             "log_syslog",
         ],
         "additionalProperties": False,

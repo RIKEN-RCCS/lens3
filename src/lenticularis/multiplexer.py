@@ -115,41 +115,42 @@ class Multiplexer():
         self.tables.process_table.set_mux(ep, mux_desc,
                                           int(sleeptime + self.refresh_margin))
 
+
     def _process_request(self, environ, start_response):
         """Processes a request from gunicorn.  It forwards a request/response
         to/from MinIO."""
+        ## "HTTP_X-Remote-User" is not set in environ.  Refer for the
+        ## environ keys (except for HTTP_) to
+        ## https://wsgi.readthedocs.io/en/latest/definitions.html
 
         traceid = environ.get("HTTP_X_TRACEID")
         tracing.set(traceid)
 
-        ##server_name = environ.get("SERVER_NAME")
+        server_name = environ.get("SERVER_NAME")
         server_port = environ.get("SERVER_PORT")
+        request_method = environ.get("REQUEST_METHOD")
         peer_addr = environ.get("REMOTE_ADDR")
-
+        path = environ.get("RAW_URI")
         ##x_forwarded_for = environ.get("HTTP_X_FORWARDED_FOR")
         ##x_forwarded_host = environ.get("HTTP_X_FORWARDED_HOST")
+
         x_real_ip = environ.get("HTTP_X_REAL_IP")
         client_addr = x_real_ip if x_real_ip else peer_addr
 
-        path = environ.get("RAW_URI")
-        request_method = environ.get("REQUEST_METHOD")
         request_proto = environ.get("HTTP_X_FORWARDED_PROTO")
         request_proto = request_proto if request_proto else "?"
-
-        ### X-Remote-User is not set!
-        ### AuthKey? << mandatory!!!
 
         host = environ.get("HTTP_HOST")
         host = host if host else "-"
 
         auth = environ.get("HTTP_AUTHORIZATION")
 
-        request_url = f"{request_proto}://{host}{path}"
+        ep = host_port(self._mux_host, self._mux_port)
+        request_url = f"{request_proto}://{ep}{path}"
 
         logger.debug(f"MUX(port={server_port}) got a request:"
                      f" {request_method} {request_url};"
-                     f" remote=({peer_addr}),"
-                     f" auth=({auth})")
+                     f" remote=({peer_addr}), auth=({auth})")
 
         access_key_id = self._get_access_key_id(auth)
 

@@ -1,4 +1,4 @@
-"""A set of three Redis DBs."""
+"""Accessors for the set of Redis DBs."""
 
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
@@ -221,7 +221,8 @@ class ProcessTable(TableCommon):
     ## See _register_mux_info for the content of a Mux description.
 
     _minio_desc_keys = {
-        "mux_host", "mux_port", "minio_ep", "minio_pid", "manager_pid"}
+        "minio_ep", "minio_pid", "mux_host", "mux_port", "manager_pid",
+        "admin", "password"}
 
     _mux_desc_keys = {
         "host", "port", "start_time", "last_interrupted_time"}
@@ -280,6 +281,7 @@ class ProcessTable(TableCommon):
         return vv
 
     def list_mux_eps(self):
+        """Retruns a list of (host, port)."""
         vv = _scan_table(self.dbase.r, self._mux_desc_prefix, None,
                          value=self.get_mux)
         ep0 = [_get_mux_host_port(desc) for (k, desc) in vv]
@@ -313,11 +315,13 @@ def zone_to_route(zone):
 class RoutingTable(TableCommon):
     _minio_ep_prefix = "ep:"
     _timestamp_prefix = "ts:"
-    _bucket_prefix = "bu:"
+    _bucket_prefix = "bk:"
     _host_style_prefix = "da:"
     _atime_prefix = "at:"
     hashes_ = {}
     structured = {}
+
+    _bucket_desc_keys = {"pool", "policy"}
 
     def set_route(self, pool_id, ep, timeout):
         assert isinstance(ep, str)
@@ -375,6 +379,31 @@ class RoutingTable(TableCommon):
         else:
             self.dbase.r.expire(key, default_ttl)
         return retval
+
+
+    def set_bucket(self, bucket, desc):
+        assert set(desc.keys()) == self._bucket_desc_keys
+        key = f"{self._bucket_prefix}{bucket}"
+        v = json.dumps(desc)
+        ok = self.dbase.r.setnx(key, v) != 0
+        if ok:
+            return (ok, None)
+        o = self.get_bucket(bucket)
+        if o is None:
+            ## (Possible race, ignored).
+            return (ok, None)
+        else:
+            return (ok, o.get("pool"))
+
+    def get_bucket(self, bucket):
+        key = f"{self._bucket_prefix}{bucket}"
+        v = self.dbase.get(key)
+        return json.loads(v, parse_int=None) if v is not None else None
+
+    def delete_bucket(self, bucket):
+        key = f"{self._bucket_prefix}{bucket}"
+        self.dbase.delete(key)
+        return None
 
 
     def clear_routing(self, everything):

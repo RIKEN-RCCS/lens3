@@ -208,18 +208,19 @@ def parse_s3_auth(authorization):
     return None
 
 
-def check_mux_access(traceid, host, access_key_id, facade_hostname, timeout):
+def access_mux(traceid, ep, access_key, facade_hostname, timeout):
+    ## It dose not set "X-REAL-IP"; Mux uses a peer-address if
+    ## X-REAL-IP is missing.
     proto = "http"
-    url = f"{proto}://{host}/"
+    url = f"{proto}://{ep}/"
     headers = {}
     headers["HOST"] = facade_hostname
-    authorization = forge_s3_auth(access_key_id)
+    authorization = forge_s3_auth(access_key)
     headers["AUTHORIZATION"] = authorization
-    # headers["X-REAL-IP"] = (unset)
     headers["X-FORWARDED-PROTO"] = proto
     if traceid is not None:
         headers["X-TRACEID"] = traceid
-    ## A multiplexer uses a peer-address if X-REAL-IP is missing.
+    ## headers["X-REAL-IP"] = (unset)
     req = Request(url, headers=headers)
     logger.debug(f"urlopen with url={url}, timeout={timeout},"
                  f" headers={headers}")
@@ -227,23 +228,25 @@ def check_mux_access(traceid, host, access_key_id, facade_hostname, timeout):
         with urlopen(req, timeout=timeout) as response:
             pass
         #response = urlopen(req, timeout=timeout)
-        status = f"{response.status}"
-        logger.debug(f"urlopen status={status}")
+        status = response.status
+        assert isinstance(status, int)
     except urllib.error.HTTPError as e:
         b = e.read()
         logger.debug(f"Exception from urlopen to mux url=({url}):"
                      f" exception=({e}) body=({b})")
-        status = f"{e.code}"
+        status = e.code
+        assert isinstance(status, int)
     except urllib.error.URLError as e:
         logger.debug(f"Exception from urlopen to mux url=({url}):"
                      f" exception=({e})")
-        status = "400"
+        status = 400
     except Exception as e:
         logger.debug(f"Exception from urlopen to mux url=({url}):"
                      f" exception=({e})")
         logger.debug(traceback.format_exc())
-        status = "400"
-    logger.debug(f"status={status}")
+        status = 400
+        pass
+    logger.debug(f"urlopen for access_mux: status={status}")
     return status
 
 

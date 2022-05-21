@@ -22,7 +22,7 @@ import time
 import contextlib
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
-from lenticularis.mc import Mc, map_admin_user_json_keys, check_mc_status
+from lenticularis.mc import Mc, map_admin_user_json_keys, assert_mc_success
 from lenticularis.readconf import read_mux_conf
 from lenticularis.lockdb import LockDB
 from lenticularis.table import get_tables, zone_to_route
@@ -116,7 +116,6 @@ class Manager():
         ##lenticularis_conf = mux_conf["lenticularis"]
 
         minio_param = mux_conf["minio"]
-        ##self.minio_http_trace = minio_param["minio_http_trace"]
         self._bin_minio = minio_param["minio"]
         self._bin_mc = minio_param["mc"]
 
@@ -155,9 +154,9 @@ class Manager():
 
         self._env_minio["MINIO_ROOT_USER"] = self.MINIO_ROOT_USER
         self._env_minio["MINIO_ROOT_PASSWORD"] = self.MINIO_ROOT_PASSWORD
+        self._env_minio["MINIO_BROWSER"] = "off"
         ##if self.minio_http_trace != "":
         ##    self._env_minio["MINIO_HTTP_TRACE"] = self.minio_http_trace
-        self._env_minio["MINIO_BROWSER"] = "off"
 
         ## self._env_minio["MINIO_CACHE_DRIVES"] = f"/tmp/{self.zoneID}"
         ## self._env_minio["MINIO_CACHE_EXCLUDE"] = ""
@@ -334,13 +333,10 @@ class Manager():
                                bucketsDir, zone, setup_only, need_initialize):
         assert self._minio_ep is not None
 
-        self.mc = Mc(self._bin_mc, self._env_mc)
-        with tempfile.TemporaryDirectory() as configdir:
-            with self.mc.alias_set(f"http://{self._minio_ep}",
-                                   self.zoneID,
-                                   self.MINIO_ROOT_USER,
-                                   self.MINIO_ROOT_PASSWORD,
-                                   configdir):
+        self.mc = Mc(self._bin_mc, self._env_mc, self.zoneID, self._minio_ep)
+        ##with tempfile.TemporaryDirectory() as configdir:
+        with self.mc.alias_set(self.MINIO_ROOT_USER,
+                               self.MINIO_ROOT_PASSWORD):
                 try:
                     if need_initialize:
                         self._setup_minio(p, zone)
@@ -447,11 +443,12 @@ class Manager():
 
     def _register_minio_process(self, pid, zone, timeout):
         self._minio_proc = {
-            ##"mux_host": self._mux_ep,
-            "mux_host": self._mux_host,
-            "mux_port": self._mux_port,
             "minio_ep": self._minio_ep,
             "minio_pid": f"{pid}",
+            "admin": self.MINIO_ROOT_USER,
+            "password": self.MINIO_ROOT_PASSWORD,
+            "mux_host": self._mux_host,
+            "mux_port": self._mux_port,
             "manager_pid": f"{os.getpid()}",
         }
         self.route = zone_to_route(zone)
@@ -499,7 +496,7 @@ class Manager():
             self._alarm_section = "stop_minio"
             (p_, r) = self.mc.admin_service_stop()
             assert p_ is None
-            check_mc_status(r, "mc.admin_service_stop")
+            assert_mc_success(r, "mc.admin_service_stop")
             alarm(0)
             self._alarm_section = None
         except AlarmException as e:
@@ -660,7 +657,7 @@ class Manager():
             (p_, r) = self.mc.admin_info()
             assert p_ is None
             ##logger.debug(f"@@@ r = {r}")
-            check_mc_status(r, "mc.admin_info")
+            assert_mc_success(r, "mc.admin_info")
             alarm(0)
             self._alarm_section = None
         except AlarmException:

@@ -5,6 +5,7 @@
 
 import os
 import sys
+import tempfile
 import json
 from subprocess import Popen, DEVNULL, PIPE
 from signal import signal, alarm, SIGTERM, SIGCHLD, SIGALRM, SIG_IGN
@@ -46,43 +47,55 @@ def map_admin_user_json_keys(dict):
     return {map.get(k, k): v for (k, v) in dict.items()}
 
 
-def check_mc_status(r, e):
+def assert_mc_success(r, e):
     if r and r[0].get("status") != "success":
         raise Exception(f"error: {e}: {r}")
     # raise Exception(f"error: {e}: mc output is empty")
 
 
 class Mc():
-    def __init__(self, mc, env):
+    def __init__(self, bin_mc, env_mc, pool_id, minio_ep):
         self._verbose = False
-        self.mc = mc
-        self.env = env
+        self.mc = bin_mc
+        self.env = env_mc
+        self._pool_id = pool_id
+        self._minio_ep = minio_ep
+        self._config_dir = None
+
 
     def __enter__(self):
         pass
 
+
     def __exit__(self, exc_type, exc_value, traceback):
-        self.alias_remove()
+        if self._alias is not None:
+            self.alias_remove()
+        if self._config_dir is not None:
+            self._config_dir.cleanup()
+        self._config_dir = None
 
 
-    def alias_set(self, url, zoneID, minioRootUser, minioRootSecret, confdir):
+    def alias_set(self, root_user, root_secret):
         ##logger.debug("@@@ ALIAS SET")
-        #tmpdir = "/tmp"
-        if len(zoneID) > 0:
-            sortkey = f"{ord(zoneID[0]):02x}"
-        else:
-            sortkey = "00"
+        ##tmpdir = "/tmp"
+        ##if len(zoneID) > 0:
+        ##    sortkey = f"{ord(zoneID[0]):02x}"
+        ##else:
+        ##    sortkey = "00"
+        ##self._config_dir = f"{tmpdir}/.mc/{sortkey}/{self._alias}"
+        url = f"http://{self._minio_ep}"
+        zoneID = self._pool_id
+        self._config_dir = tempfile.TemporaryDirectory()
         self._alias = f"{zoneID}{random_str(12).lower()}"
-        #self._config_dir = f"{tmpdir}/.mc/{sortkey}/{self._alias}"
-        self._config_dir = confdir
         (p, r) = self._execute_cmd(False, "alias", "set", self._alias, url,
-                                   minioRootUser, minioRootSecret, "--api", "S3v4")
+                                   root_user, root_secret,
+                                   "--api", "S3v4")
         assert p is None
         if r[0]["status"] != "success":
             self._alias = None
-            self._config_dir = None
             raise Exception(r[0]["error"]["message"])
         return self
+
 
     def alias_remove(self):
         ##logger.debug("@@@ ALIAS REMOVE")
@@ -92,9 +105,11 @@ class Mc():
         if r[0]["status"] != "success":
             raise Exception(r[0]["error"]["message"])
 
+
     def admin_info(self):
         ##logger.debug("@@@ ADMIN INFO")
         return self._execute_cmd(False, "admin", "info", self._alias)
+
 
     def admin_policy_set(self, access_key_id, policy):
         ##logger.debug("@@@ SET USER POLICY")
@@ -110,10 +125,12 @@ class Mc():
         return self._execute_cmd(False, "admin", "user", "add", self._alias,
                                 access_key_id, secret_access_key)
 
+
     def admin_user_disable(self, access_key_id, no_wait=False):
         ##logger.debug("@@@ ADMIN USER DISABLE")
         return self._execute_cmd(no_wait, "admin", "user", "disable", self._alias,
                                 access_key_id)
+
 
     def admin_user_enable(self, access_key_id):
         ##logger.debug("@@@ ADMIN USER ENABLE")
@@ -129,13 +146,22 @@ class Mc():
         return self._execute_cmd(False, "admin", "user", "remove", self._alias,
                                 access_key_id)
 
+
     def list_buckets(self):
         ##logger.debug("@@@ LIST BUCKETS")
         return self._execute_cmd(False, "ls", f"{self._alias}")
 
+
     def make_bucket(self, bucket):
         ##logger.debug("@@@ MAKE BUCKET")
         return self._execute_cmd(False, "mb", f"{self._alias}/{bucket}")
+
+
+    def remove_bucket(self, bucket):
+        ## DO NOT USE; The command rb removes the bucket contents.
+        assert False
+        return self._execute_cmd(False, "rb", f"{self._alias}/{bucket}")
+
 
     def policy_set(self, bucket, policy, no_wait=False):
         ##logger.debug("@@@ POLICY SET")
@@ -145,6 +171,7 @@ class Mc():
 
     def _make_mc_error(self, message):
         return {"status": "error", "error": {"message": message}}
+
 
     def _simplify_mc_messages(self, ee):
         """Simplifies messages from mc, by choosing one if some errors
@@ -159,6 +186,7 @@ class Mc():
                     return [self._make_mc_error("Unknown error")]
                 return ([s], False)
         return (ee, True)
+
 
     def _execute_cmd(self, no_wait, *args):
         assert self._alias is not None and self._config_dir is not None
@@ -211,7 +239,7 @@ class Mc():
 
         for (p, c) in (a_children + b_children):
             status = p.wait()
-            #_check_mc_status(r, c)
+            #_assert_mc_success(r, c)
 
 
     def _set_access_keys(self, zone):
@@ -220,7 +248,7 @@ class Mc():
         access_keys = zone["access_keys"]
         (p_, existing) = self.admin_user_list()
         assert p_ is None
-        check_mc_status(existing, "mc.admin_user_list")
+        assert_mc_success(existing, "mc.admin_user_list")
         existing = [map_admin_user_json_keys(e) for e in existing]
 
         (ll, pp, rr) = list_diff3(access_keys, lambda b: b.get("access_key"),
@@ -237,17 +265,19 @@ class Mc():
             children.extend(self._set_access_keys_update(x))
         return children
 
+
     def _set_access_keys_add(self, b):
         access_key_id = b["access_key"]
         secret_access_key = b["secret_key"]
         policy = b["policy_name"]
         (p_, r) = self.admin_user_add(access_key_id, decrypt_secret(secret_access_key))
         assert p_ is None
-        check_mc_status(r, "mc.admin_user_add")
+        assert_mc_success(r, "mc.admin_user_add")
         (p_, r) = self.admin_policy_set(access_key_id, policy)
         assert p_ is None
-        check_mc_status(r, "mc.admin_policy_set")
+        assert_mc_success(r, "mc.admin_policy_set")
         return []
+
 
     def _set_access_keys_delete(self, e):
         access_key_id = e["access_key"]
@@ -259,8 +289,9 @@ class Mc():
         else:
             (p_, r) = self.admin_user_remove(access_key_id)
             assert p_ is None
-            check_mc_status(r, "mc.admin_user_remove")
+            assert_mc_success(r, "mc.admin_user_remove")
             return []
+
 
     def _set_access_keys_update(self, x):
         (b, e) = x
@@ -270,20 +301,20 @@ class Mc():
 
         (p_, r) = self.admin_user_remove(access_key_id)
         assert p_ is None
-        check_mc_status(r, "mc.admin_user_remove")
+        assert_mc_success(r, "mc.admin_user_remove")
 
         secret = decrypt_secret(secret_access_key)
         (p_, r) = self.admin_user_add(access_key_id, secret)
         assert p_ is None
-        check_mc_status(r, "mc.admin_user_add")
+        assert_mc_success(r, "mc.admin_user_add")
 
         (p_, r) = self.admin_policy_set(access_key_id, policy)
         assert p_ is None
-        check_mc_status(r, "mc.admin_policy_set")
+        assert_mc_success(r, "mc.admin_policy_set")
 
         (p_, r) = self.admin_user_enable(access_key_id)
         assert p_ is None
-        check_mc_status(r, "mc.admin_user_enable")
+        assert_mc_success(r, "mc.admin_user_enable")
         return []
 
 
@@ -295,7 +326,7 @@ class Mc():
         buckets = zone["buckets"]
         (p_, existing) = self.list_buckets()
         assert p_ is None
-        check_mc_status(existing, "mc.list_buckets")
+        assert_mc_success(existing, "mc.list_buckets")
 
         logger.debug(f"@@@ buckets = {buckets}")
         logger.debug(f"@@@ existing = {existing}")
@@ -313,16 +344,18 @@ class Mc():
             children.extend(self._set_bucket_policy_update(x))
         return children
 
+
     def _set_bucket_policy_add(self, b):
         name = b["key"]
         (p_, r) = self.make_bucket(name)
         assert p_ is None
-        check_mc_status(r, "mc.make_bucket")
+        assert_mc_success(r, "mc.make_bucket")
         policy = b["policy"]
         (p_, r) = self.policy_set(name, policy)
         assert p_ is None
-        check_mc_status(r, "mc.policy_set")
+        assert_mc_success(r, "mc.policy_set")
         return []
+
 
     def _set_bucket_policy_delete(self, e):
         name = remove_trailing_shash(e["key"])
@@ -331,14 +364,31 @@ class Mc():
         assert r_ is None
         return [(p, "mc.policy_set")]
 
+
     def _set_bucket_policy_update(self, x):
         (b, e) = x
         name = b["key"]
         policy = b["policy"]
         (p_, r) = self.policy_set(name, policy)
         assert p_ is None
-        check_mc_status(r, "mc.policy_set")
+        assert_mc_success(r, "mc.policy_set")
         return []
+
+
+    def make_bucket_with_policy(self, name, policy):
+        ## Making a bucket may cause an error.  It is because Lens3
+        ## never removes buckets at all.  It just makes inaccessible.
+        assert self._alias is not None
+        try:
+            (p_, r) = self.make_bucket(name)
+            assert p_ is None
+            assert_mc_success(r, "mc.make_bucket")
+        except Exception:
+            pass
+        (p_, r) = self.policy_set(name, policy)
+        assert p_ is None
+        assert_mc_success(r, "mc.policy_set")
+        return
 
 
 ## UNSED -- FOR FUTURE DEVELOPER --

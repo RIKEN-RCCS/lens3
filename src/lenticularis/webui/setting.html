@@ -17,7 +17,8 @@
     <div id="show_pool_list_button">
       <button v-on:click="show_pool_list">Show bucket pools</button>
     </div>
-    <div id="new_pool" v-if="pool_name_visible">
+
+    <div id="create_pool" v-if="pool_name_visible">
       <hr />
       <div>
         <span class="label">POOL</span>
@@ -35,10 +36,35 @@
         <button v-on:click="submitZoneToCreate" :disabled="submit_button_disabled">{{submit_button_name}}</button>
       </div>
     </div>
+
+
+    <div id="edit_buckets" v-if="edit_pool_visible">
       <hr />
-    <div id="edit_pool" v-if="edit_pool_visible">
       <div>
         <span class="label">BUCKETS</span>
+      </div>
+
+      <div>
+        <span class="label">Create bucket</span>
+        <div>
+          <span class="label">Bucket name:</span>
+          <input v-model="key" size="64" placeholder="bucket name" />
+          <span class="label">Bucket policy:</span>
+          <!--
+          <input v-model="policy" size="64" placeholder="bucket policy (none, p
+ublic, upload, download)" />
+          -->
+          <select v-model="policy">
+            <option disabled value="">Please select one</option>
+            <option>none</option>
+            <option>public</option>
+            <option>upload</option>
+            <option>download</option>
+          </select>
+        </div>
+        <div>
+          <button v-on:click="submit_create_bucket">Create</button>
+        </div>
       </div>
       <div>
         <span class="label">Private (space-delimited list):</span>
@@ -55,34 +81,46 @@
       <div v-if="submit_button_visible">
         <button v-on:click="submitZoneToCreate" :disabled="submit_button_disabled">{{submit_button_name}}</button>
       </div>
+    </div>
+
+
+    <div id="edit_keys" v-if="edit_pool_visible">
       <hr />
       <div>
-        <span class="label">Create Bucket</span>
-        <input v-model="key" size="64" placeholder="bucket name" />
-        <input v-model="policy" size="64" placeholder="bucket policy (none, upload, download)" />
-        <button v-on:click="submitCreateBucket">Create</button>
+        <span class="label">ACCESS KEYS</span>
       </div>
-      <hr />
       <div>
-        <span class="label">Access Key (readwrite)</span>
+        <div>
+          <span class="label">Access key (readwrite)</span>
+          <button v-on:click="submit_make_access_key_rw">Generate</button>
+        </div>
         <input v-model="accessKeyIDrw" size="64" disabled />
         <input v-model="secretAccessKeyrw" size="64" disabled />
         <button v-on:click="submitChangeAccessKeyRW">Change</button>
       </div>
       <div>
-        <span class="label">Access Key (readonly)</span>
+        <div>
+          <span class="label">Access key (readonly)</span>
+          <button v-on:click="submit_make_access_key_ro">Generate</button>
+        </div>
         <input v-model="accessKeyIDro" size="64" disabled />
         <input v-model="secretAccessKeyro" size="64" disabled />
         <button v-on:click="submitChangeAccessKeyRO">Change</button>
       </div>
       <div>
-        <span class="label">Access Key (writeonly)</span>
+        <div>
+          <span class="label">Access key (writeonly)</span>
+          <button v-on:click="submit_make_access_key_wo">Generate</button>
+        </div>
         <input v-model="accessKeyIDwo" size="64" disabled />
         <input v-model="secretAccessKeywo" size="64" disabled />
         <button v-on:click="submitChangeAccessKeyWO">Change</button>
       </div>
-      <hr />
+    </div>
+
+
 <!--
+    <div>
       <div>
         <span class="label">Direct Hostname (label or FQDN):</span>
         <input v-model="directHostnames" size="64" /></div>
@@ -99,7 +137,7 @@
         <span class="label">Mode:</span>
         <input v-model="minio_state" size="64" disabled /></div>
       <hr />
--->
+      <hr />
       <div>
         <span class="label">atime:</span>
         <input v-model="atime" size="64" disabled /></div>
@@ -116,19 +154,24 @@
       <div v-if="submit_button_visible">
         <button v-on:click="submitZoneToCreate" :disabled="submit_button_disabled">{{submit_button_name}}</button>
       </div>
-      <hr /></div>
+      <hr />
+    </div>
+-->
+
+
+    <hr />
     <div>
       <button v-on:click="debug">Debug</button>
     </div>
     <div id="show_status">
-      <p>{{message}}</p>
-      <p>{{status}}</p>
-      <p>{{reason}}</p>
-      <p>{{time}}</p>
+      <div>{{message}}</div>
+      <div>{{status}}</div>
+      <div>{{reason}}</div>
+      <div>{{time}}</div>
     </div>
     <hr />
     <div id="pool_list"></div>
     <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
-    <script src="scripts/api.js"></script>
+    <script src="scripts/lens3ui.js"></script>
   </body>
 </html>

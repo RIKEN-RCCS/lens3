@@ -220,22 +220,22 @@
     - The system does not provide CLI for users.
 
 
-## Client Settings (example)
+## Client Settings
 
-  + Access to Endpoint URL with Access Key (Access Key ID and Secret
-    Access Key) provided by the WebUI.
+The followng example shows an access to an endpoint using the AWS CLI.
+An access-key pair is provided by Lens3 Web-UI.
 
-    ```
-    $ cat .aws/credentials
-    [user1]
-    aws_access_key_id = WoRKvRhrdaMNSlkZcJCB
-    aws_secret_access_key = DzZv57R8wBIuVZdtAkE1uK1HoebLPMzKM6obA4IDqOhaLIBf
+```
+$ cat .aws/credentials
+[default]
+aws_access_key_id = WoRKvRhrdaMNSlkZcJCB
+aws_secret_access_key = DzZv57R8wBIuVZdtAkE1uK1HoebLPMzKM6obA4IDqOhaLIBf
 
-    $ ENDPOINT_URL=http://lens3.example.com/
-    $ aws --endpoint-url=$ENDPOINT_URL s3 ls s3://wrk-bucket1/
-    ```
+$ aws --endpoint-url=http://lens3.example.com/ s3 ls s3://somebucket1/
+```
 
 ## Bucket Naming Restrictions
 
-Names must be in lowercase alphanums and "-".  Lens3 bans dots.  Also,
-Lens3 bans names "aws", "amazon", "minio", "goog.*", and "g00g.*".
+Bucket names must be in lowercase alphanums and "-".  Lens3 bans dots.
+Also, Lens3 bans names "aws", "amazon", "minio", and the names that
+begins with "goog", and "g00g".

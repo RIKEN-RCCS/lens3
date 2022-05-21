@@ -3,23 +3,23 @@
 ## Outline
 
 ```
-reverse-proxy <-->︎ Mux (multiplexer) <--> MinIO
+reverse-proxy <-->︎ Mux (Multiplexer) <--> MinIO
                                      <--> MinIO
                                      <--> ...
                                      <--> MinIO
-              <--> Adm (administration web-ui)
+              <--> Adm (Administration Web-UI)
                    Redis
 ```
 
 The steps are:
 * Prepare prerequisite software and install Lens3
-* Setup reverse-proxy
+* Setup a reverse-proxy
 * Start Redis
-* Start Web-UI service
-* Start multiplexer service
+* Start a Web-UI service
+* Start a Multiplexer service
 * Register users
 
-## Assuption
+## Assumptions
 
 Some number of services are needed for Lenticularis-S3 as shown in the
 configuration figure.  In this setup, we assume Nginx as a

@@ -162,7 +162,7 @@ class Multiplexer():
             start_response(status, [])
             return []
 
-        q_headers = {h[5:].replace('_', '-'): environ.get(h)
+        q_headers = {h[5:].replace("_", "-"): environ.get(h)
                      for h in environ if h.startswith("HTTP_")}
         content_type = environ.get("CONTENT_TYPE")
         if content_type:

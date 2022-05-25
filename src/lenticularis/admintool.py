@@ -35,12 +35,12 @@ def get_nparams_of_fn(fn):
         varargsp = False
     return (nparams - 1, varargsp)
 
-def fix_date_format(dict, keys):
+def fix_date_format(d, keys):
     for key in keys:
-        dict[key] = format_rfc3339_z(float(dict[key]))
+        d[key] = format_rfc3339_z(float(d[key]))
 
-def print_json_csv(table_name, c, format):
-    if format in {"json"}:
+def print_json_csv(table_name, c, formatting):
+    if formatting in {"json"}:
         dump = json.dumps(c)
         print(f"{dump}")
     else:
@@ -52,8 +52,8 @@ def print_json_csv(table_name, c, format):
             v = out.getvalue()
         print(f"{v}")
 
-def print_json_plain(table_name, outs, format, order=None):
-    if format in {"json"}:
+def print_json_plain(table_name, outs, formatting, order=None):
+    if formatting in {"json"}:
         dump = json.dumps(outs)
         print(f"{dump}")
     else:
@@ -63,13 +63,13 @@ def print_json_plain(table_name, outs, format, order=None):
             print(f"{dump}")
 
 def read_allow_deny_rules(path):
-    with open(path, newline='') as f:
-        r = csv.reader(f, delimiter=',', quotechar='"')
+    with open(path, newline="") as f:
+        r = csv.reader(f, delimiter=",", quotechar='"')
         return [[row[0].lower(), row[1]] for row in r]
 
 def read_user_info(path):
-    with open(path, newline='') as f:
-        r = csv.reader(f, delimiter=',', quotechar='"')
+    with open(path, newline="") as f:
+        r = csv.reader(f, delimiter=",", quotechar='"')
         return [{"id": row[0], "groups": row[1:]} for row in r]
 
 def user_info_to_csv_row(ui, id):
@@ -77,9 +77,9 @@ def user_info_to_csv_row(ui, id):
         return [ui["id"]] + ui["groups"]
     return [id]
 
-def format_mux(m, format):
+def format_mux(m, formatting):
     (ep, desc) = m
-    if format not in {"json"}:
+    if formatting not in {"json"}:
         fix_date_format(desc, ["last_interrupted_time", "start_time"])
     return {ep: desc}
 

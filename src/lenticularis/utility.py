@@ -21,7 +21,7 @@ import contextvars
 
 
 logger = logging.getLogger(__name__)
-tracing = contextvars.ContextVar('tracing')
+tracing = contextvars.ContextVar("tracing")
 
 ERROR_EXCEPTION = 120
 ERROR_START_MINIO = 123
@@ -36,6 +36,7 @@ SECRET_ACCESS_KEY_LEN = 48
 class HostnameFilter(logging.Filter):
     def __init__(self):
         self.hostname = platform.node()
+        super().__init__()
 
     def filter(self, record):
         ##record.hostname = self.hostname
@@ -113,6 +114,7 @@ class Read1Reader():
         self.start = time.time()
         self.sniff = sniff
         self.sniff_marker = sniff_marker
+        #AHO
         logger.debug("READ1READER START")
 
     def __iter__(self):
@@ -125,12 +127,14 @@ class Read1Reader():
             else:
                 b = self.stream.read1(self.amt)
         except Exception as e:
+            #AHO
             logger.debug("READ1READER EXCEPTION")
             logger.exception(e)
-            b = b''
+            b = b""
         if len(b) == 0:
             self.end = time.time()
             duration = self.end - self.start
+            #AHO
             logger.debug(f"READ1READER END total: {self.total} count: {self.count} duration: {duration:.3f}")
             raise StopIteration
         self.total += len(b)
@@ -196,12 +200,12 @@ def forge_s3_auth(access_key_id):
 
 
 def parse_s3_auth(authorization):
-    components = authorization.split(' ')
+    components = authorization.split(" ")
     if "AWS4-HMAC-SHA256" not in components:
         return None
     for e in components:
         if e.startswith("Credential="):
-            end = e.find('/')
+            end = e.find("/")
             if end == -1:
                 return None
             return e[len("Credential="):end]
@@ -259,7 +263,7 @@ def check_permission(user, allow_deny_rules):
         subject = rule[1]
         logger.debug(f"@@@ action = {action}")
         logger.debug(f"@@@ subject = {subject}")
-        if subject == '*' or subject == user:
+        if subject == "*" or subject == user:
             logger.debug(f"@@@ HIT! {action}")
             return "allowed" if action == "allow" else "denied"
     logger.debug("@@@ EOR! allow")
@@ -373,7 +377,7 @@ def list_diff3(left, lkeyfn, right, rkeyfn):
 
 
 def remove_trailing_shash(s):
-    if not s.endswith('/'):
+    if not s.endswith("/"):
         return s
     return s[:-1]
 
@@ -447,7 +451,7 @@ def dump_object(obj, lv="", array_element=False, order=None):
             elif not array_element and isinstance(v, list):
                 r += [f"{lv}{ai}{k}:\n"] + dump_object(v, lv=lv, order=order)
             else:
-                r += [f"{lv}{ai}{k}:\n"] + dump_object(v, lv=lv+' '*4, order=order)
+                r += [f"{lv}{ai}{k}:\n"] + dump_object(v, lv=lv+" "*4, order=order)
             ai = "  " if array_element else ""
     elif isinstance(obj, list):
         if array_element:
@@ -464,7 +468,7 @@ def dump_object(obj, lv="", array_element=False, order=None):
 
 def host_port(host, port):
     """Quotes an ipv6 address."""
-    if ':' in host:
+    if ":" in host:
         return f"[{host}]:{port}"
     else:
         return f"{host}:{port}"
@@ -492,7 +496,7 @@ def log_access(status_, client_, user_, method_, url_, *,
     user_ = user_ if user_ else "-"
     upstream = upstream if upstream else "-"
     downstream = downstream if downstream else "-"
-    logger.debug(f"{access_time} {status_} {client_} {user_} {method_} {url_} {upstream} {downstream}")
+    logger.info(f"{access_time} {status_} {client_} {user_} {method_} {url_} {upstream} {downstream}")
     return
 
 

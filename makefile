@@ -7,14 +7,13 @@ install::
 	pip3 install --user -r requirements.txt
 
 pycodestyle::
-	-(cd src/lenticularis ; pycodestyle --max-line-length=120 *.py) > pycodestyle-output.txt
+	cd src/lenticularis ; make pycodestyle
 
 pylint::
-	-(cd src/lenticularis ; pylint --rcfile=pylintrc *.py) > pylint-output.txt
+	cd src/lenticularis ; make pylint
 
 pyright::
-	-(cd src ; pyright lenticularis/*.py) > pyright-output.txt
-	@grep -E ".* errors?, .* warnings?, .* informations?" pyright-output.txt
+	cd src/lenticularis ; make pyright
 
 typestubs::
 	(cd src ; pyright --createstub lenticularis.table)

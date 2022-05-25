@@ -1673,7 +1673,7 @@ Figure 3 Credential
 
 <!-- NEW -->
 
-## Design notes
+## Design Notes
 
 ### Bucket-pools
 
@@ -1763,7 +1763,7 @@ mc policy set download alias/bucket
 mc policy set public alias/bucket
 ```
 
-### Redis database operations
+### Redis Database Operations
 
 * inserting a pool
   * lock db -> insert pool -> unlock
@@ -1775,7 +1775,7 @@ Redis client routines catches socket related exceptions (including
 ConnectionError and TimeoutError).  Others are not checked at all by
 Lens3.
 
-### Adm processes
+### Adm Processes
 
 Adm is not designed as load-balanced.  Adm may consist of some
 processes (started by Gunicorn), but they need to run on a single node
@@ -1787,11 +1787,11 @@ There exists multiple Mux processes for a single Mux service, as it is
 started by Gunicorn.  Some book-keeping periodical operations (running
 in background threads) are performed more frequently than expected.
 
-### MinIO client
+### MinIO Clients
 
 Note that alias commands are local (not connect to a MinIO).
 
-### A Manager process
+### Manager Processes
 
 A Manager becomes a session leader (by calling setsid), and a MinIO
 process will be terminated when a Manager exits.

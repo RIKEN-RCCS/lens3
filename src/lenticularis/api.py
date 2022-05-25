@@ -30,11 +30,13 @@ def _rephrase_exception_message(e):
 
 
 class ApiError(Exception):
-    def __init__(self):
+    def __init__(self, *args):
         self._code = 200
+        super().__init__(*args)
 
 
 class Api():
+
     def __init__(self, adm_conf):
 
         self.zone_adm = ZoneAdm(adm_conf)

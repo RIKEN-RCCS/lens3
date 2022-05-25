@@ -452,6 +452,14 @@
         - (a), (b) and, (c) implies manager switches authorized users only.
         - Exception: Administrator can bypass this mechanism.
 
+<!-- NEW -->
+
+## Design Assumptions
+
+* Lens3 assumes an http front-end terminates SSL connections and
+performs authentications.  It expects to receive a user identity in an
+http header.
+
 ## Redis DB Backup
 
 Lens3 uses "Snapshotting" of the database to a file.  The interval of

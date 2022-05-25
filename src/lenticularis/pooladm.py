@@ -133,7 +133,7 @@ def _check_bucket_name(zone, bucket):
 def _check_direct_hostname_flat(host_label):
     logger.error(f"@@@ check_direct_hostname_flat")
     # logger.error(f"@@@ check_direct_hostname_flat XXX FIXME")
-    if '.' in host_label:
+    if "." in host_label:
         raise Exception(f"invalid direct hostname: {host_label}: only one level label is allowed")
     _check_rfc1035_label(host_label)
     _check_rfc1122_hostname(host_label)
@@ -148,7 +148,7 @@ def _check_rfc1035_label(label):
 
 def _check_rfc1122_hostname(label):
     alnum = string.ascii_lowercase + string.digits
-    if not all(c in alnum + '-' for c in label):
+    if not all(c in alnum + "-" for c in label):
         raise Exception(f"{label}: contains invalid char(s)")
     if not label[0] in alnum:
         raise Exception(f"{label}: must start with a letter or a digit")
@@ -729,7 +729,7 @@ class ZoneAdm():
         logger.debug(f"@@@ criteria = {criteria}")
 
         if any(host_fqdn == d for d in self.reserved_hostnames):
-            raise Exception(f"{host_fqdn}: the name is reserved'")
+            raise Exception(f"{host_fqdn}: the name is reserved")
 
         try:
             domain = next(d for d in self.direct_hostname_domains if _is_subdomain(host_fqdn, d))

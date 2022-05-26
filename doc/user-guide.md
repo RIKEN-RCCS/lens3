@@ -244,3 +244,10 @@ begins with "goog", and "g00g".
 
 Running MinIO leaves files in a directory ".minio.sys" in the pool
 directory.
+
+## Other Limitations
+
+* Lens3 does not support listing of buckets by `aws s3 ls`.  Simply,
+Lens3 prohibits accesses to the "/" of the bucket namespace, because
+the bucket namespace is shared by multiple users (and MinIO
+processes).

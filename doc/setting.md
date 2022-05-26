@@ -320,7 +320,7 @@ lens3-admin$ lenticularis-admin -c adm-config.yaml load-permit-list {csv-file}
 lens3-admin$ lenticularis-admin -c adm-config.yaml show-permit-list --format=json
 ```
 
-## Check the status
+## Check the Status
 
 * Nginx status
 
@@ -347,51 +347,24 @@ $ systemctl status lenticularis-mux
 lens3-admin$ lenticularis-admin -c adm-config.yaml show-muxs
 ```
 
-## Access test
+## Access Test
 
-* Access website by a browser, and create a zone.
+* Access the website by a browser
   * URL: `http://webui.lens3.example.com/`
 
-* Access to the create zone by S3 client.
-    * Use Access Key created above.
+* Access buckets from S3 client
+    * Copy the access keys created above
+    * List files in the bucket
+    * Cat contents of a file
 
 ```
-user$ cat <<EOF > $HOME/.aws/credentials
-[user1]
+$ vi $HOME/.aws/credentials
+[default]
 aws_access_key_id = zHb9uscWUDgcJ9ZdYzr6
 aws_secret_access_key = uDUHMYKSmbqyqB1MGYN57CWMC8eXNHwUL4pcNwROu3xWgpsO
-EOF
-user$ AWS_PROFILE=user1 ENDPOINT_URL=https://lens3.example.com \
-aws s3 ls s3://
+
+$ aws --endpoint-url https://lens3.example.com s3 ls s3://bkt0
+$ aws --endpoint-url https://lens3.example.com s3 cp s3://bkt1/somefile1 -
 ```
 
-    - Access following website by Web Browser, again.
-      - URL: `http://webui.lens3.example.com/`
-      - Create public bucket
-
-```
-Public (download only for Access Key-less user): bucket2
-```
-
-      - Register direct hostname
-
-```
-Direct Hostname (label or FQDN): release.lens3.example.com
-```
-
-    - Back to client host.
-      - Put an object into public bucket create above.
-
-```
-user$ tmpfile=$(mktemp)
-user$ date > $tmpfile
-user$ AWS_PROFILE=user1 ENDPOINT_URL=https://lens3.example.com \
-user$ aws s3 cp $tmpfile s3://bucket2/foo
-```
-
-    - Try to access the public object via directHostname.
-
-```
-stranger$ ENDPOINT_URL=https://release.lens3.example.com
-stranger$ curl -k $ENDPOINT_URL/bucket2/foo
-```
+Note that Lens3 does not support listing of buckets by `aws s3 ls`.

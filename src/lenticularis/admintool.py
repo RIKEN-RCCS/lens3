@@ -145,8 +145,8 @@ def pool_key_order(e):
         "buckets",
         "direct_hostnames",
         "expiration_date",
+        "permit_status",
         "online_status",
-        "admission_status",
         "minio_state",
         "atime",
         ##AHO

@@ -201,7 +201,7 @@ class Manager():
 
         self._expiration_date = int(pooldesc["expiration_date"])
         unexpired = now < self._expiration_date
-        permitted = pooldesc["admission_status"] == "allowed"
+        permitted = pooldesc["permit_status"] == "allowed"
         online = pooldesc["online_status"] == "online"
 
         if not (unexpired and permitted and online):
@@ -222,7 +222,7 @@ class Manager():
         procdesc = self.tables.process_table.get_minio_proc(self._pool_id)
         logger.debug(f"@@@ procdesc = {procdesc}")
         if procdesc:
-            # Someone has started MinIO in race.
+            # Someone else has started MinIO in race.
             self._handle_existing_minio(setup_only, need_initialize)
             return
 
@@ -333,28 +333,26 @@ class Manager():
     def _setup_and_watch_minio(self, p, pooldesc,
                                setup_only, need_initialize):
         assert self._minio_ep is not None
-
-        if need_initialize:
-            try:
-                self._setup_minio(p, pooldesc)
-            except Exception as e:
-                self._stop_minio(p)
-                self._tell_controller_minio_starts()
-                self.lock.unlock()
-                raise
-            pass
-
+        self._mc = Mc(self._bin_mc, self._env_mc, self._minio_ep,
+                      self._pool_id)
         try:
+            if need_initialize:
+                self._setup_minio(p, pooldesc)
+        except Exception as e:
+            self._stop_minio(p)
+            raise
+        else:
             jitter = 0
             duration0 = self._watch_interval + self._mc_info_timelimit
             timeo = duration0 + self.refresh_margin + jitter
-
             self._register_minio_process(p.pid, pooldesc, timeo)
+        finally:
             self._tell_controller_minio_starts()
             self.lock.unlock()
+            pass
 
+        try:
             self._check_elapsed_time()
-
             self._watch_minio(p)
         finally:
             self._deregister_minio_process()
@@ -363,8 +361,6 @@ class Manager():
         pass
 
     def _setup_minio(self, p, pooldesc):
-        self._mc = Mc(self._bin_mc, self._env_mc, self._minio_ep,
-                      self._pool_id)
         with self._mc.alias_set(self._MINIO_ROOT_USER,
                                 self._MINIO_ROOT_PASSWORD):
             try:
@@ -493,34 +489,27 @@ class Manager():
         return
 
     def _stop_minio(self, p):
-        logger.debug("@@@ +++")
-        logger.debug("@@@ stop_minio")
-        try:
-            alarm(self._mc_stop_timelimit)
-            self._alarm_section = "stop_minio"
-            (p_, r) = self._mc.admin_service_stop()
-            assert p_ is None
-            assert_mc_success(r, "mc.admin_service_stop")
-            alarm(0)
-            self._alarm_section = None
-        except AlarmException as e:
-            logger.info(f"IGNORE EXCEPTION (service stop): {e}")
-        except Exception as e:
-            alarm(0)
-            self._alarm_section = None
-            logger.error(f"IGNORE EXCEPTION (service stop): {e}")
-            logger.exception(e)
-            # pass  # ignore any exceptions
-
-        try:
-            p_status = p.wait()
-            logger.debug(f"@@@ STATUS = {p_status}")
-        except Exception as e:
-            logger.error(f"IGNORE EXCEPTION (wait): {e}")
-            logger.exception(e)
-            # pass  # ignore any exceptions
-        logger.debug("@@@ EXIT")
-        return
+        with self._mc.alias_set(self._MINIO_ROOT_USER,
+                                self._MINIO_ROOT_PASSWORD):
+            try:
+                alarm(self._mc_stop_timelimit)
+                self._alarm_section = "stop_minio"
+                (p_, r) = self._mc.admin_service_stop()
+                assert p_ is None
+                assert_mc_success(r, "mc.admin_service_stop")
+                p_status = p.wait()
+            except AlarmException as e:
+                logger.error(f"Stopping MinIO timed out:"
+                             f" exception ignored: exception=({e})")
+            except Exception as e:
+                logger.error(f"Stopping MinIO failed:"
+                             f" exception ignored: exception=({e})")
+                logger.exception(e)
+            finally:
+                alarm(0)
+                self._alarm_section = None
+                pass
+            pass
 
     def _handle_existing_minio(self, setup_only, need_initialize):
         logger.debug("@@@ +++")
@@ -584,7 +573,7 @@ class Manager():
         pooldesc = self.tables.storage_table.get_pool(self._pool_id)
         if pooldesc is None:
             raise Termination("Pool removed.")
-        if pooldesc["admission_status"] != "allowed":
+        if pooldesc["permit_status"] != "allowed":
             raise Termination("Pool disabled.")
         if pooldesc["online_status"] != "online":
             raise Termination("Pool not online.")

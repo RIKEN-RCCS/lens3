@@ -25,8 +25,9 @@ var edit_pool_data = {
   key: "",
   policy: "",
   direct_hostnames: "",
-  expDate: "",
-  status: "",
+  expiration_date: "",
+  permit_status: "",
+  online_status: "",
   mode: "",
   atime: "",
   groups: "",
@@ -280,8 +281,9 @@ function build_pool_desc() {
   // A dummy entry.
   pooldesc["access_keys"] = [{"policy_name": "readwrite"}, {"policy_name": "readonly"}, {"policy_name": "writeonly"}];
   pooldesc["direct_hostnames"] = direct_hostnames;
-  pooldesc["expiration_date"] = parse_rfc3339(edit_pool_data.expDate);
-  pooldesc["online_status"] = edit_pool_data.status;
+  pooldesc["expiration_date"] = parse_rfc3339(edit_pool_data.expiration_date);
+  pooldesc["permit_status"] = edit_pool_data.permit_status;
+  pooldesc["online_status"] = edit_pool_data.online_status;
   // Do not include "minio_state" nor "atime".
   return pooldesc;
 }
@@ -604,10 +606,10 @@ function pool_to_ul_text(pooldesc) {
     {text: {label: "Endpoint-URL", value: pooldesc["endpoint_url"]}},
     {text: {label: "Pool-ID", value: pooldesc["pool_name"]}},
     {text: {label: "Direct hostname", value: pooldesc["direct_hostnames"].join(' ')}},
-    {text: {label: "Expiration date", value: format_rfc3339_if_not_zero(pooldesc["expiration_date"])}},
     {text: {label: "MinIO state", value: pooldesc["minio_state"]}},
+    {text: {label: "Expiration date", value: format_rfc3339_if_not_zero(pooldesc["expiration_date"])}},
+    {text: {label: "Permitted", value: pooldesc["permit_status"]}},
     {text: {label: "Enabled", value: pooldesc["online_status"]}},
-    {text: {label: "Permitted", value: pooldesc["admission_status"]}},
     {text: {label: "Last access time", value: format_rfc3339_if_not_zero(pooldesc["atime"])}},
   ];
 }
@@ -639,8 +641,9 @@ function copy_pool_desc_for_edit(pooldesc) {
   edit_pool_data.policy = "";        // ditto.
 
   edit_pool_data.direct_hostnames = pooldesc["direct_hostnames"].join(' ');
-  edit_pool_data.expDate = format_rfc3339_if_not_zero(pooldesc["expiration_date"]);
-  edit_pool_data.status = pooldesc["online_status"];
+  edit_pool_data.expiration_date = format_rfc3339_if_not_zero(pooldesc["expiration_date"]);
+  edit_pool_data.permit_status = pooldesc["permit_status"];
+  edit_pool_data.online_status = pooldesc["online_status"];
   edit_pool_data.mode = pooldesc["minio_state"];
   edit_pool_data.atime = format_rfc3339_if_not_zero(pooldesc["atime"]);
   edit_pool_data.groups = pooldesc["groups"];

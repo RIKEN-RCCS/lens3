@@ -42,6 +42,7 @@ _list_json_keys = {
     "isDeleteMarker": "isDeleteMarker",
     "storageClass": "storageClass"}
 
+
 def map_admin_user_json_keys(dict):
     map = _admin_user_json_keys
     return {map.get(k, k): v for (k, v) in dict.items()}
@@ -51,11 +52,12 @@ def assert_mc_success(r, e):
     if r and r[0].get("status") != "success":
         raise Exception(f"error: {e}: {r}")
     # raise Exception(f"error: {e}: mc output is empty")
+    return
 
 
 class Mc():
     """MC command envirionment.  It works as a context, but a context is
-    created at alias_set.
+    created at alias_set().
     """
 
     def __init__(self, bin_mc, env_mc, minio_ep, pool_id):
@@ -73,9 +75,12 @@ class Mc():
     def __exit__(self, exc_type, exc_value, traceback):
         if self._alias is not None:
             self.alias_remove()
+            pass
         if self._config_dir is not None:
             self._config_dir.cleanup()
+            pass
         self._config_dir = None
+        return
 
     def alias_set(self, root_user, root_secret):
         ##logger.debug("@@@ ALIAS SET")
@@ -86,9 +91,9 @@ class Mc():
         ##    sortkey = "00"
         ##self._config_dir = f"{tmpdir}/.mc/{sortkey}/{self._alias}"
         url = f"http://{self._minio_ep}"
-        zoneID = self._pool_id
         self._config_dir = tempfile.TemporaryDirectory()
-        self._alias = f"{zoneID}{random_str(12).lower()}"
+        self._alias = f"{self._pool_id}{random_str(12).lower()}"
+        logger.debug(f"AHO tempfile.TemporaryDirectory()={self._config_dir}")
         (p, r) = self._execute_cmd("alias_set", False,
                                    "alias", "set", self._alias, url,
                                    root_user, root_secret,
@@ -107,7 +112,7 @@ class Mc():
         self._alias = None
         if r[0]["status"] != "success":
             raise Exception(r[0]["error"]["message"])
-        pass
+        return
 
     def admin_info(self):
         ##logger.debug("@@@ ADMIN INFO")
@@ -235,13 +240,13 @@ class Mc():
             r = [self._make_mc_error(f"{e}")]
             return (None, r)
 
-    def setup_minio(self, p, zone):
+    def setup_minio(self, p, pooldesc):
         try:
-            a_children = self._set_access_keys(zone)
+            a_children = self._set_access_keys(pooldesc)
         except Exception as e:
             raise Exception(f"manager:install_minio_access_keys: {e}")
         try:
-            b_children = self._set_bucket_policy(zone)
+            b_children = self._set_bucket_policy(pooldesc)
         except Exception as e:
             raise Exception(f"manager:set_bucket_policy: {e}")
 
@@ -251,10 +256,10 @@ class Mc():
             pass
         return
 
-    def _set_access_keys(self, zone):
+    def _set_access_keys(self, pooldesc):
         children = []
 
-        access_keys = zone["access_keys"]
+        access_keys = pooldesc["access_keys"]
         (p_, existing) = self.admin_user_list()
         assert p_ is None
         assert_mc_success(existing, "mc.admin_user_list")
@@ -301,6 +306,7 @@ class Mc():
             assert p_ is None
             assert_mc_success(r, "mc.admin_user_remove")
             return []
+        pass
 
     def _set_access_keys_update(self, x):
         (b, e) = x
@@ -326,12 +332,12 @@ class Mc():
         assert_mc_success(r, "mc.admin_user_enable")
         return []
 
-    def _set_bucket_policy(self, zone):
+    def _set_bucket_policy(self, pooldesc):
         logger.debug("@@@ +++")
         logger.debug("@@@ set_bucket_policy")
         children = []
 
-        buckets = zone["buckets"]
+        buckets = pooldesc["buckets"]
         (p_, existing) = self.list_buckets()
         assert p_ is None
         assert_mc_success(existing, "mc.list_buckets")
@@ -339,7 +345,7 @@ class Mc():
         logger.debug(f"@@@ buckets = {buckets}")
         logger.debug(f"@@@ existing = {existing}")
         (ll, pp, rr) = list_diff3(buckets, lambda b: b.get("key"),
-        existing, lambda e: remove_trailing_shash(e.get("key")))
+                                  existing, lambda e: remove_trailing_shash(e.get("key")))
 
         logger.debug(f"Setup MinIO on bucket-policy:"
                      f" add={ll}, delete={rr}, update={pp}")

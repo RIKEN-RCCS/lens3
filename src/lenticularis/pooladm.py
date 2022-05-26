@@ -77,7 +77,7 @@ def _check_zone_keys(zone):
     allowed_keys = mandatory_keys.union(optional_keys)
     ##mandatory_keys = {"owner_gid", "buckets_directory", "buckets", "access_keys",
     ##                  "direct_hostnames", "expiration_date", "online_status"}
-    ##allowed_keys = mandatory_keys.union({"user", "root_secret", "admission_status"})
+    ##allowed_keys = mandatory_keys.union({"user", "root_secret", "permit_status"})
     if not mandatory_keys.issubset(given_keys):
         raise Exception(f"upsert_zone: invalid key set: missing {mandatory_keys - given_keys}")
     if not given_keys.issubset(allowed_keys):
@@ -284,7 +284,7 @@ class ZoneAdm():
                 and check_permission(user_id, allow_deny_rules) == "allowed"
             ) else "denied"
 
-            if zone["admission_status"] != "denied" and not permission:
+            if zone["permit_status"] != "denied" and not permission:
                 self.disable_zone(traceid, user_id, z_id)
                 fixed.append(z_id)
                 logger.debug(f"permission dropped: {z_id} {user_id} {zone['admission_status']} => {permission}")
@@ -429,7 +429,7 @@ class ZoneAdm():
 
     def delete_zone(self, traceid, user_id, zoneID):
         logger.debug(f"+++ {user_id} {zoneID}")
-        zone = {"admission_status": "denied"}
+        zone = {"permit_status": "denied"}
         how = "delete_zone"
         return self._do_delete_zone(how, traceid, user_id, zoneID, zone)
 
@@ -1125,10 +1125,10 @@ class ZoneAdm():
         if permission is None:
             ## how not in {"enable_zone", "disable_zone"}
             allow_deny_rules = self.tables.storage_table.get_allow_deny_rules()
-            zone["admission_status"] = check_permission(user_id, allow_deny_rules)
+            zone["permit_status"] = check_permission(user_id, allow_deny_rules)
         else:
             ## how in {"enable_zone", "disable_zone"}
-            zone["admission_status"] = permission
+            zone["permit_status"] = permission
 
         #logger.debug(f"@@@ zone = {zone}")
 
@@ -1286,7 +1286,7 @@ class ZoneAdm():
         zone = self.tables.storage_table.get_pool(zoneID)
         return zone["owner_uid"] if zone else None
 
-    def exp_date(self):
+    def determine_expiration_date(self):
         now = int(time.time())
         maxExpDate = int(self.system_settings_param["allowed_maximum_zone_exp_date"])
         logger.debug(f"@@@ maxExpDate = {maxExpDate}")
@@ -1315,7 +1315,8 @@ class ZoneAdm():
                    {"policy_name": "readonly"},
                    {"policy_name": "writeonly"}],
             "direct_hostnames": [],
-            "expiration_date": self.exp_date(),
+            "expiration_date": self.determine_expiration_date(),
+            "permit_status": "allowed",
             "online_status": "online",
             "groups": groups,
             "atime": "0",

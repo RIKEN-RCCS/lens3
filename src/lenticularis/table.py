@@ -110,11 +110,11 @@ class StorageTable(TableCommon):
 
     pool_desc_required_keys = {
         "owner_gid", "buckets_directory", "buckets", "access_keys",
-        "direct_hostnames", "expiration_date", "online_status"}
+        "direct_hostnames",
+        "expiration_date", "permit_status", "online_status"}
     pool_desc_optional_keys = {
         "owner_uid", "root_secret",
-        "probe_access",
-        "admission_status"}
+        "probe_access"}
 
     _pool_desc_keys = pool_desc_required_keys.union(pool_desc_optional_keys)
 
@@ -190,7 +190,7 @@ class StorageTable(TableCommon):
     def set_permission(self, zoneID, permission):
         # logger.debug(f"+++ {zoneID} {permission}")
         key = f"{self._pool_desc_prefix}{zoneID}"
-        return self.dbase.hset(key, "admission_status", permission, self.structured)
+        return self.dbase.hset(key, "permit_status", permission, self.structured)
 
     def set_atime(self, zoneID, atime):
         # logger.debug(f"+++ {zoneID} {atime}")

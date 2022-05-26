@@ -159,22 +159,20 @@ def check_number(number):
     return
 
 
-def check_pool_dict_is_sound(dict, user, adm_conf):
-    """Some checks on values are defined in _check_zone_values.
+def check_pool_dict_is_sound(pooldesc, user, adm_conf):
+    """Checks somewhat on values are defined in _check_zone_values.
     """
 
-    ## "buckets" may be absent.
-
-    for bucket in dict.get("buckets", []):
+    for bucket in pooldesc.get("buckets", []):
         check_policy(bucket["policy"])
-    check_status(dict["online_status"])
-    check_permission(dict["admission_status"])
-    for accessKey in dict.get("access_keys", []):
+    check_status(pooldesc["online_status"])
+    check_permission(pooldesc["permit_status"])
+    for accessKey in pooldesc.get("access_keys", []):
         check_policy_name(accessKey["policy_name"])
         pass
 
-    check_number(dict["expiration_date"])
-    check_number(dict.get("atime", "0"))  # may be absent
+    check_number(pooldesc["expiration_date"])
+    check_number(pooldesc.get("atime", "0"))  # may be absent
 
     # XXX fixme check_policy()
     # XXX FIXME
@@ -249,7 +247,7 @@ def _pool_desc_schema(type_number):
             "access_keys": {"type": "array", "items": access_key},
             "direct_hostnames": {"type": "array", "items": {"type": "string"}},
             "expiration_date": type_number,
-            "admission_status": {"type": "string"},
+            "permit_status": {"type": "string"},
             "online_status": {"type": "string"},
             "minio_state": {"type": "string"},
             # Below keys are internally held:
@@ -265,7 +263,7 @@ def _pool_desc_schema(type_number):
             "access_keys",
             "direct_hostnames",
             "expiration_date",
-            "admission_status",
+            "permit_status",
             "online_status",
         ],
         "additionalProperties": False,

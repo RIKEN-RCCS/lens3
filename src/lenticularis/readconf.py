@@ -233,7 +233,7 @@ def adm_schema(type_number):
             "direct_hostname_validator": {"type": "string"},  # choice = ["flat"]
             "direct_hostname_domains": {"type": "array", "items": {"type": "string"}},
             "reserved_hostnames": {"type": "array", "items": {"type": "string"}},
-            "decoy_connection_timeout": type_number,
+            "probe_access_timeout": type_number,
         },
         "required": [
             "max_zone_per_user",
@@ -244,7 +244,7 @@ def adm_schema(type_number):
             "direct_hostname_validator",
             "direct_hostname_domains",
             "reserved_hostnames",
-            "decoy_connection_timeout",
+            "probe_access_timeout",
         ],
         "additionalProperties": False,
     }

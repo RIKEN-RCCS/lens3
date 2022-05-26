@@ -239,3 +239,8 @@ $ aws --endpoint-url=http://lens3.example.com/ s3 ls s3://somebucket1/
 Bucket names must be in lowercase alphanums and "-".  Lens3 bans dots.
 Also, Lens3 bans names "aws", "amazon", "minio", and the names that
 begins with "goog", and "g00g".
+
+## Residue Files
+
+Running MinIO leaves files in a directory ".minio.sys" in the pool
+directory.

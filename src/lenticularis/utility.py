@@ -195,26 +195,34 @@ def gen_secret_access_key():
     return random_str(SECRET_ACCESS_KEY_LEN)
 
 
-def forge_s3_auth(access_key_id):
-    return f"AWS4-HMAC-SHA256 Credential={access_key_id}////"
+def forge_s3_auth(access_key):
+    """Makes an S3 authorization for an access-key."""
+    return f"AWS4-HMAC-SHA256 Credential={access_key}////"
 
 
 def parse_s3_auth(authorization):
+    """Extracts an access-key in an S3 authorization."""
+    if authorization is None:
+        return None
     components = authorization.split(" ")
     if "AWS4-HMAC-SHA256" not in components:
         return None
-    for e in components:
-        if e.startswith("Credential="):
-            end = e.find("/")
-            if end == -1:
+    for c in components:
+        if c.startswith("Credential="):
+            e = c.find("/")
+            if e != -1:
+                return c[len("Credential="):e]
+            else:
                 return None
-            return e[len("Credential="):end]
+        else:
+            pass
+        pass
     return None
 
 
 def access_mux(traceid, ep, access_key, facade_hostname, timeout):
-    ## It dose not set "X-REAL-IP"; Mux uses a peer-address if
-    ## X-REAL-IP is missing.
+    # It dose not set "X-REAL-IP"; Mux uses a peer-address if
+    # X-REAL-IP is missing.
     proto = "http"
     url = f"{proto}://{ep}/"
     headers = {}
@@ -224,28 +232,29 @@ def access_mux(traceid, ep, access_key, facade_hostname, timeout):
     headers["X-FORWARDED-PROTO"] = proto
     if traceid is not None:
         headers["X-TRACEID"] = traceid
-    ## headers["X-REAL-IP"] = (unset)
+    else:
+        pass
+    # headers["X-REAL-IP"] = (unset)
     req = Request(url, headers=headers)
     logger.debug(f"urlopen with url={url}, timeout={timeout},"
                  f" headers={headers}")
     try:
         with urlopen(req, timeout=timeout) as response:
             pass
-        #response = urlopen(req, timeout=timeout)
         status = response.status
         assert isinstance(status, int)
     except urllib.error.HTTPError as e:
         b = e.read()
-        logger.debug(f"Exception from urlopen to mux url=({url}):"
+        logger.debug(f"Exception from urlopen to Mux url=({url}):"
                      f" exception=({e}) body=({b})")
         status = e.code
         assert isinstance(status, int)
     except urllib.error.URLError as e:
-        logger.debug(f"Exception from urlopen to mux url=({url}):"
+        logger.debug(f"Exception from urlopen to Mux url=({url}):"
                      f" exception=({e})")
         status = 400
     except Exception as e:
-        logger.debug(f"Exception from urlopen to mux url=({url}):"
+        logger.debug(f"Exception from urlopen to Mux url=({url}):"
                      f" exception=({e})")
         logger.debug(traceback.format_exc())
         status = 400
@@ -431,7 +440,7 @@ def uniform_distribution_jitter():
 
 
 def get_ip_address(host):
-    return [normalize_address(addr[0])
+    return [make_typical_ip_address(addr[0])
             for (_, _, _, _, addr) in socket.getaddrinfo(host, None)]
 
 
@@ -500,10 +509,11 @@ def log_access(status_, client_, user_, method_, url_, *,
     return
 
 
-def normalize_address(ip):
+def make_typical_ip_address(ip):
     if ip.startswith("::ffff:"):
-        ip = ip[7:]
-    return ip
+        return ip[7:]
+    else:
+        return ip
 
 
 def wait_one_line_on_stdout(p, timeout):

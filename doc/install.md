@@ -491,7 +491,7 @@ Install Manual of Lenticularis
               reserved_hostnames:
                   - webui.lens3.example.com
       # time limit of connecting to multiplexer (for sending decoy)
-              decoy_connection_timeout: 60
+              probe_access_timeout: 60
 
           syslog:
       # logging facility (case sensitive)

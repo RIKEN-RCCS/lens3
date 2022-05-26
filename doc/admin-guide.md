@@ -63,7 +63,7 @@
         - Recommended to use "pip3 install --user" to install modules.
         - Install modules into system area ("sudo pip3 install") does well,
           but not recommended.
-        - Using pyenv (or another virtual environments for python) also does 
+        - Using pyenv (or another virtual environments for python) also does
           well.  (not documented here)
       - MinIO, Mc
       - sudo
@@ -89,14 +89,14 @@
     - Information that must backed up to restore from serious hazards:
       - Storage Zone Table
         - This table is created by end users.
-      - Permission Table -- stores allow/deny rules, written by the 
+      - Permission Table -- stores allow/deny rules, written by the
         administrator.
-      - Users Table -- stores all end users information, written by the 
+      - Users Table -- stores all end users information, written by the
         administrator.
       - `lenticularis-admin dump` will dump all above tables.
       - `lenticularis-admin restore dumpfile` registers all dumped tables.
 
-    - As the following table (or entry) is dynamic, there are no need to 
+    - As the following table (or entry) is dynamic, there are no need to
       back up.
       - Mode flag of Storage Zone Table
       - Routing Table
@@ -122,7 +122,7 @@
   + Databases
     - Administrator uses cli-command to manipulates databases.
       - There are no need to issue database commands.
-    - End users only use WebUI and WebUI will manipulate databases for 
+    - End users only use WebUI and WebUI will manipulate databases for
       the end user.
 
       ```
@@ -141,7 +141,7 @@
     - Allow/Deny Table:
       - All allow-deny rules is stored as an string (json).
         1 record
-      - The system doesn't check existence of user that allowed or denied in 
+      - The system doesn't check existence of user that allowed or denied in
         this table.
     - Users Table:
       - Lists all end users and their groups.
@@ -154,7 +154,7 @@
     - MinIO Address Table:
       - Lists all active MinIO processes.  dynamic.
     - Routing Table:
-      - Multiplexer uses this table to determine destination node for S3 
+      - Multiplexer uses this table to determine destination node for S3
         session to redirect.
       - Dynamic.
 
@@ -163,7 +163,7 @@
   + Commands for Administrator
     - All commands can be run by administrator's account (`admin`)
       or daemon owner's account (`_lens3`).
-      - Administrator's account must be able to read setting file 
+      - Administrator's account must be able to read setting file
        (`/etc/lenticularis/adm-config.yaml`) to use commands.
 
     - Operations on Allow/Deny Table
@@ -173,7 +173,7 @@
       ```
       - Give allow-deny rules in `file` in above example.
         - For notation, refer to `install.md`
-      - Drop command that delete entire allow-deny-rules is not provided. 
+      - Drop command that delete entire allow-deny-rules is not provided.
         To restore to default value, insert "[]"
       - `deny`-ed end user's zone is disabled.  (not deleted)
 
@@ -196,7 +196,7 @@
       - Options: --skip-initialize
       - This command does not initialize MinIO.
         - (MinIO is initialized on the first access of end user)
-      - Zones can be created, which owned by end users who does not appear 
+      - Zones can be created, which owned by end users who does not appear
         in the Users Table or owned by denied user.
 
     - Backup and Restore
@@ -263,7 +263,7 @@
 
     - Write one rule for a line
     - The first column is keyword: `allow` or `deny`
-      - Case insensitive (the system converts keyword to lowercase 
+      - Case insensitive (the system converts keyword to lowercase
         before saving them)
     - The second line is a username or an asterisk (`*`)
       - This field is compared against testing username, case sensitive
@@ -272,11 +272,11 @@
 
     - Interpretation
       - The rules are applied to subject line by line, in order.
-      - If the second column is `*` or the second column matches subject's 
+      - If the second column is `*` or the second column matches subject's
         username, search stops.
       - The first column of matched line becomes the result.
 
-      - Assume implicit `ALLOW,*` at the end of rules. 
+      - Assume implicit `ALLOW,*` at the end of rules.
         - Any users allowed that does not match are allowed.
         - Empty rule set means all users are allowed.  (system default)
 
@@ -362,9 +362,9 @@
       - Shutdown end user's access to the system during updating OS or
         other software's.
       - To shutdown end users' access, stop multiplexers and API.
-        - In this mode, end user will receive "503 service unavailable" 
+        - In this mode, end user will receive "503 service unavailable"
           messages.  (because reverse proxy believes multiplexers are refusing
-          connection) 
+          connection)
       - Shutdown the system procedure:
         ```
         # systemctl stop lenticularis-mux    # execute on multiplexer's node
@@ -380,7 +380,7 @@
 
     - Deep Shutdown
       - To update redis and reverse-proxy, shutdown the system deeply.
-      - Note: in this mode, all sub-commands of `lenticularis-admin` are 
+      - Note: in this mode, all sub-commands of `lenticularis-admin` are
         also unusable.
 
     - Deep Shutdown Procedure
@@ -392,7 +392,7 @@
       ```
 
     - Emergency Shutdown
-      - To stop service in hurry, stop all services. 
+      - To stop service in hurry, stop all services.
       - Same as deep shutdown procedure, in any order.
         - Once NGINX is stopped, all new connection is shutdown.
         - Once redis is stopped, all new S3 connection is shutdown.
@@ -405,7 +405,7 @@
       # systemctl stop lenticularis-api    # API's node
       ```
 
-    - Check status of the system 
+    - Check status of the system
       (Assume that `admin` belongs to `systemd-journal` group)
       ```
       admin$ systemctl status redis.service
@@ -444,7 +444,7 @@
 
     - Privilege
       - Manager can run MinIO as another user.
-        - (a) Multiplexer that is a parent process of manager, 
+        - (a) Multiplexer that is a parent process of manager,
           accepts connection from reverse-proxy and other multiplexers.
         - (b) Manager does not switch to any user, but specified by HTTP
           header X-REMOTE-USER.
@@ -477,3 +477,11 @@ persistence](https://redis.io/docs/manual/persistence/)
 Lens3 calls "redis-shutdown" with a fake configuration
 "lenticularis/redis" in lenticularis-redis.service.  It lets point to
 a file "/etc/lenticularis/redis.conf" in result.
+
+## Load-Balanced Setting
+
+Muxes can be run on multiple hosts, and a reverse-proxy will
+distribute accesses to Muxes.  In contrast, Adm service is single.  In
+multiple Muxes setting, firewall settings shall be fixed.  The port
+range of communication for both Muxes and MinIO's on a host must be
+open to Adm, since Adm accesses both Muxes and MinIO's.

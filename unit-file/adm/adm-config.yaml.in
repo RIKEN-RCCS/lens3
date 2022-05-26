@@ -26,7 +26,7 @@ system_settings:
     direct_hostname_domain: @DIRECT_HOSTNAME_DOMAIN@
     reserved_hostnames:
         - @RESERVED_HOSTNAME@
-    decoy_connection_timeout: 60
+    probe_access_timeout: 60
 
 webui:
     trusted_proxies:

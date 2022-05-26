@@ -17,6 +17,8 @@ def _update_for_key(dict0, key, dict1, overwrite):
             dict0[key] = val
     else:
         pass
+    return
+
 
 def merge_pool_descriptions(user_id, existing, zone):
     ## Note it disallows updating "root_secret" by preferring an
@@ -32,6 +34,7 @@ def merge_pool_descriptions(user_id, existing, zone):
     _update_for_key(zone, "direct_hostnames", existing, False)
     _update_for_key(zone, "expiration_date", existing, False)
     _update_for_key(zone, "online_status", existing, False)
+    return
 
 
 def compare_access_keys(existing, zone):
@@ -75,32 +78,34 @@ def compare_buckets(existing, zone):
     return dict_diff(e_dic, z_dic)
 
 
+def _zone_keys(zoneID, zone):
+    return set([zoneID] + [e.get("access_key")
+                           for e in zone.get("access_keys")])
+
+
+def _direct_hostnames(zone):
+    return set(zone.get("direct_hostnames"))
+
+
 def check_conflict(zoneID, zone, z_id, z):
     #logger.debug(f"@@@ zoneID = {zoneID}, zone = {zone}, z_id = {z_id}, z = {z}")
 
     reasons = []
-
-    def zone_keys(zoneID, zone):
-        return set([zoneID] + [e.get("access_key")
-                   for e in zone.get("access_keys")])
-
-    def direct_hostnames(zone):
-        return set(zone.get("direct_hostnames"))
 
     #logger.debug(f"@@@ z_id = {z_id}")
     #logger.debug(f"@@@ zone = {zone}")
     #logger.debug(f"@@@ z = {z}")
 
     # check Access Key ID
-    new = zone_keys(zoneID, zone)
-    old = zone_keys(z_id, z)
+    new = _zone_keys(zoneID, zone)
+    old = _zone_keys(z_id, z)
     #logger.debug(f"@@@ new = {new}")
     #logger.debug(f"@@@ old = {old}")
     i = new.intersection(old)
     if i:
         #logger.debug(f"@@@ KEY CONFLICT {i}")
         reasons.append({"Zone ID / Access Key ID": i})
-
+        pass
     # check buckets directories
     new = {zone["buckets_directory"]}
     old = {z["buckets_directory"]}
@@ -110,43 +115,48 @@ def check_conflict(zoneID, zone, z_id, z):
     if new == old:
         #logger.debug(f"@@@ DIR CONFLICT {new}")
         reasons.append({"buckets_directory": i})
-
+        pass
     # check Direct Hostnames
-    new = direct_hostnames(zone)
-    old = direct_hostnames(z)
+    new = _direct_hostnames(zone)
+    old = _direct_hostnames(z)
     #logger.debug(f"@@@ new = {new}")
     #logger.debug(f"@@@ old = {old}")
     i = new.intersection(old)
     if i:
         #logger.debug(f"@@@ HOST CONFLICT {i}")
         reasons.append({"directHostname": i})
-
+        pass
     return reasons
 
 
 def check_policy(policy):
     if policy not in {"none", "upload", "download", "public"}:
         raise Exception(f"invalid policy: {policy}")
+    return
 
 
 def check_policy_name(policy_name):
     if policy_name not in {"readwrite", "readonly", "writeonly"}:
         raise Exception(f"invalid policy_name: {policy_name}")
+    return
 
 
 def check_status(status):
     if status not in {"online", "offline"}:
         raise Exception(f"invalid status: {status}")
+    return
 
 
 def check_permission(permission):
     if permission not in {"allowed", "denied"}:
         raise Exception(f"invalid permission: {permission}")
+    return
 
 
 def check_number(number):
     if not number.isdigit():
         raise Exception(f"number expected: {number}")
+    return
 
 
 def check_pool_dict_is_sound(dict, user, adm_conf):
@@ -161,6 +171,7 @@ def check_pool_dict_is_sound(dict, user, adm_conf):
     check_permission(dict["admission_status"])
     for accessKey in dict.get("access_keys", []):
         check_policy_name(accessKey["policy_name"])
+        pass
 
     check_number(dict["expiration_date"])
     check_number(dict.get("atime", "0"))  # may be absent
@@ -177,6 +188,7 @@ def check_pool_dict_is_sound(dict, user, adm_conf):
     # Access Key ID: 16..128 [a-zA-Z][\w]+
     # Secret Access Key: 1..128 string
     # status: online/offline
+    return
 
 def check_bucket_naming(name):
     """Checks restrictions.  Names are all lowercase.  IT BANS DOTS.  It
@@ -186,12 +198,13 @@ def check_bucket_naming(name):
     ## https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucketnamingrules.html
     ## [Bucket naming guidelines]
     ## https://cloud.google.com/storage/docs/naming-buckets
-    return (re.fullmatch("[a-z0-9-]{3,63}", name)
-            and not re.fullmatch(
+    return (re.fullmatch("[a-z0-9-]{3,63}", name) is not None
+            and 
+            re.fullmatch(
                 ("^[0-9.]*$|^.*-$"
-                 "|^xn--.*|^.-s3alias$|^aws$|^amazon$"
+                 "|^xn--.*$|^.*-s3alias$|^aws$|^amazon$"
                  "|^minio$|^goog.*$|^g00g.*$"),
-                name))
+                name) is None)
 
 
 def _pool_desc_schema(type_number):
@@ -231,6 +244,7 @@ def _pool_desc_schema(type_number):
             "root_secret": {"type": "string"},
             "buckets_directory": {"type": "string"},
             "buckets": {"type": "array", "items": bucket},
+            "probe_access": {"type": "string"},
             "access_keys": {"type": "array", "items": access_key},
             "direct_hostnames": {"type": "array", "items": {"type": "string"}},
             "expiration_date": type_number,
@@ -260,3 +274,4 @@ def _pool_desc_schema(type_number):
 
 def check_pool_is_well_formed(dict, user_):
     jsonschema.validate(instance=dict, schema=_pool_desc_schema({"type": "string"}))
+    return

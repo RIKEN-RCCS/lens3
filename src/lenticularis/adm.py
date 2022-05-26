@@ -1,6 +1,6 @@
 """Adm service by Gunicorn + Uvicorn + FastAPI."""
 
-# Copyright (c) 2022 RIKEN R-CCS.
+# Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
 import inspect
@@ -20,7 +20,7 @@ import lenticularis
 from lenticularis.api import Api
 from lenticularis.readconf import read_adm_conf
 from lenticularis.utility import ERROR_READCONF
-from lenticularis.utility import normalize_address
+from lenticularis.utility import make_typical_ip_address
 from lenticularis.utility import log_access
 from lenticularis.utility import logger, openlog
 from lenticularis.utility import tracing
@@ -313,7 +313,7 @@ async def app_delete_zone(zone_id: str,
 @app.middleware("http")
 async def validate_session(request: Request, call_next):
     peer_addr = str(request.client.host)
-    peer_addr = normalize_address(peer_addr)
+    peer_addr = make_typical_ip_address(peer_addr)
     #logger.debug(f"@@@: {request}")
     #logger.debug(f"@@@: {request.headers}")
     #logger.debug(f"@@@: {request.method}")

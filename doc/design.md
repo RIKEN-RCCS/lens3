@@ -1712,7 +1712,7 @@ Note that a bucket-pool has another state `status`, but it is always
 | ----          | ----          | ----          |
 | po:pool-id    | pool-description |(htable)|
 | ar:access-key | pool-id       |       |
-| mo:pool-id    | pool-state    |       |
+| ps:pool-id    | pool-state    |(json)|
 | ac:pool-id    | timestamp     |       |
 | pr::          | list-of-admissions-of-users |(json)|
 | uu:user       | user-info     |(json)|
@@ -1742,9 +1742,10 @@ start-time ...  last-interrupted-time? ...
 | ----          | ----          | ----          |
 | ep:pool-id    | MinIO-endpoint | |
 | bk:bucket-name | pool-id + policy | |
+| wu:access-key | pool-id       | probe-access from Adm |
 | ts:pool-id    | timestamp     | Timestamp on the last access |
 
-Policy indicates public R/W and keyed R/W status.
+Policy indicates public R/W status.
 
 #### identifier-table
 

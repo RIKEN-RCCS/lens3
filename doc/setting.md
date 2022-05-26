@@ -2,6 +2,8 @@
 
 ## Outline
 
+This document describes minimal setting for Lenticularis-S3 (Lens3).
+
 ```
 reverse-proxy <-->︎ Mux (Multiplexer) <--> MinIO
                                      <--> MinIO
@@ -15,27 +17,26 @@ The steps are:
 * Prepare prerequisite software and install Lens3
 * Setup a reverse-proxy
 * Start Redis
-* Start a Web-UI service
-* Start a Multiplexer service
+* Start Adm (a Web-UI service)
+* Start Mux (a Multiplexer service)
 * Register users
 
 ## Assumptions
 
-Some number of services are needed for Lenticularis-S3 as shown in the
-configuration figure.  In this setup, we assume Nginx as a
-reverse-proxy.  Mux and Adm are Gunicorn services, and we assume Mux
-runs at port=8004 and Adm at port=8003.  A reverse-proxy should be
-setup for Mux and Adm ports.  Also Redis is needed, and Redis runs at
-port=6378.  A pseudo user "lens3" is used for the owner of the
-daemons/services.  We also assume RedHat8.5 and Python3.9 at this
-writing (in March 2022).
+Some services are needed to use Lens3 as shown in the configuration
+figure above.  In this setup, we assume Nginx as a reverse-proxy.  Mux
+and Adm are Gunicorn services, and we assume Mux runs at port=8004 and
+Adm at port=8003.  A reverse-proxy should be setup for Mux and Adm
+ports.  In addition, Redis is needed and Redis runs at port=6378.  A
+pseudo user "lens3" is used for the owner of the daemons/services.  We
+also assume RedHat8.5 and Python3.9 at this writing (in March 2022).
 
 * Python
   * 3.9 and later
 
 * Services used
-  * Lenticularis Multiplexers
-  * Lenticularis Web-UI
+  * Lenticularis Mux
+  * Lenticularis Adm
   * Redis (port=6378)
   * Reverse-proxy
 
@@ -56,7 +57,7 @@ writing (in March 2022).
   * /etc/nginx/private/htpasswd
   * /run/lenticularis-redis (temporary)
 
-## Setup pseudo users for services
+## Setup Pseudo-users for Services
 
 ```
 # groupadd -K GID_MIN=100 -K GID_MAX=499 lens3
@@ -65,7 +66,7 @@ writing (in March 2022).
 # usermod -a -G lens3 lens3-admin
 ```
 
-## Install prerequisite software
+## Install Prerequisite Software
 
 Install packages Development-Tools, Redis, Python, and Nginx onto the
 hosts.  httpd-tools is only required if you use basic authentication.
@@ -103,7 +104,7 @@ $ curl https://dl.min.io/client/mc/release/linux-amd64/mc -o /tmp/mc
 # install -m 755 -c /tmp/mc ~/bin/mc
 ```
 
-## Prepare a log-file directory.
+## Prepare a Log-file Directory
 
 * Create a directory for logging (as root)
 
@@ -116,7 +117,7 @@ $ curl https://dl.min.io/client/mc/release/linux-amd64/mc -o /tmp/mc
 
 It is expected ls will show ... "system_u:object_r:tmp_t:s0".
 
-## Enable local http connections
+## Enable Local http Connections
 
 * Let SELinux accept connections inside a local host
 
@@ -128,7 +129,7 @@ It is expected ls will show ... "system_u:object_r:tmp_t:s0".
 # setsebool -P httpd_can_network_connect 1
 ```
 
-## Start a reverse-proxy
+## Start a Reverse-proxy
 
 It is highly site dependent.
 
@@ -200,9 +201,9 @@ Note: Starting Redis will fail when the file owner of
 # systemctl start lenticularis-redis
 ```
 
-## Setup Web-UI
+## Setup Adm (Web-UI)
 
-* Copy the Web-UI configuration file
+* Copy the Adm configuration file
   * Configuration file: `/etc/lenticularis/adm-config.yaml`
 
 ```
@@ -221,7 +222,7 @@ Note: Starting Redis will fail when the file owner of
   * Replace placeholders: @REVERSE_PROXY_ADDRESS@, @CSRF_SECRET_KEY@
   * (Use a random for CSRF_secret_key)
 
-* Copy the systemd unit file for Web-UI
+* Copy the systemd unit file for Adm
 
 ```
 # cp $TOP/unit-file/adm/lenticularis-adm.service /usr/lib/systemd/system/
@@ -231,7 +232,7 @@ Note: Starting Redis will fail when the file owner of
   * See the template `$TOP/unit-file/mux/lenticularis-adm.service.in`
   * Replace placeholders: @API_USER@, @ADM_CONFIG@
 
-## Setup sudoers for Multiplexer
+## Setup sudoers for Mux
 
 * Copy a sudoers entry in /etc/sudoers.d
   * Modify it if necessary
@@ -242,7 +243,7 @@ Note: Starting Redis will fail when the file owner of
 # chmod o-rwx /etc/sudoers.d/lenticularis-sudoers
 ```
 
-## Setup Multiplexer
+## Setup Mux (Multiplexer)
 
 * Copy the Multiplexer configuration file
   * Configuration file: `/etc/lenticularis/mux-config.yaml`
@@ -272,7 +273,7 @@ Note: Starting Redis will fail when the file owner of
   * See the template `$TOP/unit-file/mux/lenticularis-mux.service.in`
   * Replace placeholders: @MUX_USER@, @MUX_CONFIG@
 
-## Start services (Web-UI and Muxiplexer)
+## Start Services (Adm and Mux)
 
 ```
 # systemctl daemon-reload
@@ -282,9 +283,13 @@ Note: Starting Redis will fail when the file owner of
 # systemctl start lenticularis-mux
 ```
 
-## Register users
+## Register Users
 
-See [administrators-guide.md](administrators-guide.md#).
+Lens3 has its own a list of users (with uid + gid) and a list of
+enablement status of the users.  It does not look at the databases of
+the underlying OS whereas it uses uid + gid of the system.
+
+See [Administration Guide](admin-guide.md#).
 
 * Prepare a list of users in a CSV file
   * An entry is a user name and a list of groups
@@ -317,25 +322,25 @@ lens3-admin$ lenticularis-admin -c adm-config.yaml show-permit-list --format=jso
 
 ## Check the status
 
-*  Redis status
-
-```
-$ systemctl status lenticularis-redis
-```
-
 * Nginx status
 
 ```
 $ systemctl status nginx
 ```
 
-* Web-UI status
+*  Redis status
+
+```
+$ systemctl status lenticularis-redis
+```
+
+* Adm (Web-UI) status
 
 ```
 $ systemctl status lenticularis-adm
 ```
 
-* Multiplexer status
+* Mux (Multiplexer) status
 
 ```
 $ systemctl status lenticularis-mux

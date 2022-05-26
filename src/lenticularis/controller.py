@@ -18,10 +18,8 @@ class Controller():
 
     manager = "lenticularis.manager"
 
-
     def __init__(self, mux_conf, tables, configfile, host, port):
         gunicorn_conf = mux_conf["gunicorn"]
-
         self.tables = tables
         self.configfile = configfile
         self._mux_host = host
@@ -32,43 +30,44 @@ class Controller():
         controller_param = mux_conf["controller"]
         self.port_min = controller_param["port_min"]
         self.port_max = controller_param["port_max"]
+        pass
 
+    def start_minio_service(self, traceid, pool_id, access_key):
+        ##if host:
+        ##    pool_id = self.tables.storage_table.get_zoneID_by_directHostname(host)
+        ##elif access_key:
+        ##    pool_id = self.tables.storage_table.get_pool_by_access_key(access_key)
+        ##else:
+        ##    pool_id = None
+        ##    pass
 
-    def start_minio_service(self, traceid, host, access_key_id):
-        if host:
-            zone_id = self.tables.storage_table.get_zoneID_by_directHostname(host)
-        elif access_key_id:
-            zone_id = self.tables.storage_table.get_pool_by_access_key(access_key_id)
-        else:
-            zone_id = None
+        ##if pool_id is None:
+        ##    if host:
+        ##        logger.debug(f"@@@ FAIL 404: unknown host: {host}")
+        ##    elif access_key:
+        ##        logger.debug(f"@@@ FAIL 404: unknown key: {access_key}")
+        ##    else:
+        ##        logger.debug("@@@ FAIL 404: No Host nor Access Key ID given")
+        ##        pass
+        ##    return (None, 404, None)
 
-        if zone_id is None:
-            if host:
-                logger.debug(f"@@@ FAIL 404: unknown host: {host}")
-            elif access_key_id:
-                logger.debug(f"@@@ FAIL 404: unknown key: {access_key_id}")
-            else:
-                logger.debug("@@@ FAIL 404: No Host nor Access Key ID given")
-            return (None, 404, None)
-
-        minio_server = self._choose_server_host(zone_id)
+        minio_server = self._choose_server_host(pool_id)
 
         if minio_server:
             ## Run MinIO on another host.
             logger.debug(f"@@@ start_minio on {minio_server}")
-            return (minio_server, 200, zone_id)
+            return (minio_server, 200, pool_id)
 
         ## Run a MinIO on the localhost.
 
-        ok = self._start_manager(traceid, zone_id, access_key_id)
+        ok = self._start_manager(traceid, pool_id, access_key)
         if not ok:
-            return (None, 503, zone_id)
-        r = self.tables.routing_table.get_route(zone_id)
+            return (None, 503, pool_id)
+        r = self.tables.routing_table.get_route(pool_id)
         if r:
-            return (r, 200, zone_id)
+            return (r, 200, pool_id)
         else:
-            return (None, 503, zone_id)
-
+            return (None, 503, pool_id)
 
     def _choose_server_host(self, zone_id):
         """Chooses a host to run a MinIO.  It returns None to mean the
@@ -89,7 +88,6 @@ class Controller():
         else:
             return host_port(host, port)
 
-
     def _start_manager(self, traceid, zone_id, access_key_id):
         """Starts a MinIO under a manager process.  It waits for a manager to
         write a message host:port on stdout.
@@ -101,9 +99,10 @@ class Controller():
         env["LENTICULARIS_POOL_ID"] = zone_id
         if access_key_id == zone_id:
             args.append("--accessByZoneID=True")
+            pass
         if traceid is not None:
             args.append(f"--traceid={traceid}")
-
+            pass
         ok = False
         (outs, errs) = (b"", b"")
         try:
@@ -120,8 +119,11 @@ class Controller():
         except Exception as e:
             logger.error(f"Starting a Manager failed: exception={e}")
             logger.exception(e)
+            pass
         if outs != b"":
             logger.debug(f"Output on stdout from a Manager: {outs}")
+            pass
         if errs != b"":
             logger.info(f"Output on stderr from a Manager: {errs}")
+            pass
         return ok

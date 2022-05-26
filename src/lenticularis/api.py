@@ -27,23 +27,27 @@ def _rephrase_exception_message(e):
         tr = traceback.extract_tb(tb)
         (_, _, _, text) = tr[-1]
         return f"AssertionError: {text}"
+    pass
 
 
 class ApiError(Exception):
-    def __init__(self, *args):
-        self._code = 200
+    def __init__(self, code, *args):
+        self._code = code
         super().__init__(*args)
+        return
+
+    pass
 
 
 class Api():
 
     def __init__(self, adm_conf):
-
         self.zone_adm = ZoneAdm(adm_conf)
         trusted_proxies = adm_conf["webui"]["trusted_proxies"]
         self.trusted_proxies = set([addr for h in trusted_proxies
                                        for addr in get_ip_address(h)])
         logger.debug(f"@@@ self.trusted_proxies = {self.trusted_proxies}")
+        return
 
     def api_get_template(self, traceid, user_id):
         try:
@@ -51,6 +55,7 @@ class Api():
         except Exception as e:
             logger.exception(e)
             return (500, [], f"{e}")
+        pass
 
     def api_list_pools(self, traceid, user_id, pool_id):
         try:
@@ -61,6 +66,7 @@ class Api():
         except Exception as e:
             logger.exception(e)
             return (500, [], f"{e}")
+        pass
 
     def api_create_pool(self, traceid, user_id, pool_id, zone):
         try:
@@ -71,6 +77,7 @@ class Api():
         except Exception as e:
             logger.exception(e)
             return (500, None, f"{e}")
+        pass
 
     def api_update_pool(self, traceid, user_id, pool_id, zone):
         try:
@@ -81,6 +88,7 @@ class Api():
         except Exception as e:
             logger.exception(e)
             return (500, None, f"{e}")
+        pass
 
     def api_update_buckets(self, traceid, user_id, pool_id, zone):
         try:
@@ -91,6 +99,7 @@ class Api():
         except Exception as e:
             logger.exception(e)
             return (500, None, f"{e}")
+        pass
 
     def api_make_bucket(self, traceid, user_id, pool_id, name, body):
         try:
@@ -113,6 +122,7 @@ class Api():
                          f" name={bucket}, policy={policy}; exception=({m})",
                          exc_info=True)
             return (500, None, f"{m}")
+        pass
 
     def api_change_secret(self, traceid, user_id, pool_id, zone):
         try:
@@ -123,6 +133,7 @@ class Api():
         except Exception as e:
             logger.exception(e)
             return (500, None, f"{e}")
+        pass
 
     ##def _api_upsert_(self, how, traceid, user_id, pool_id, zone):
     ##    if not user_id:
@@ -150,6 +161,9 @@ class Api():
             logger.debug(f"@@@ FAILED: {e}")
             logger.exception(e)
             return (500, [], f"{e}")
+        pass
 
     def check_user(self, user_id):
         return self.zone_adm.check_user(user_id)
+
+    pass

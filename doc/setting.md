@@ -234,6 +234,10 @@ Note: Starting Redis will fail when the file owner of
 
 ## Setup sudoers for Mux
 
+Lens3 runs MinIO as a usual user process, and thus, it uses sudo to
+start MinIO.  The setting in the provided file is that only the user
+"lens3" is able to run "/home/lens3/bin/minio".
+
 * Copy a sudoers entry in /etc/sudoers.d
   * Modify it if necessary
 

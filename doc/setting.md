@@ -351,7 +351,7 @@ $ systemctl status lenticularis-mux
 lens3-admin$ lenticularis-admin -c adm-config.yaml show-muxs
 ```
 
-## Access Test
+## Test Accesses
 
 * Access the website by a browser
   * `http://webui.lens3.example.com/`

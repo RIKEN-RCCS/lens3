@@ -68,12 +68,12 @@ class Api():
             return (500, [], f"{e}")
         pass
 
-    def api_create_pool(self, traceid, user_id, pool_id, zone):
+    def api_create_pool(self, traceid, user_id, pooldesc0):
         try:
             assert user_id is not None
-            check_pool_owner(user_id, pool_id, zone)
-            zone = self.zone_adm.create_pool(traceid, user_id, pool_id, zone, decrypt=True)
-            return (200, [zone], None)
+            check_pool_owner(user_id, None, pooldesc0)
+            pooldesc1 = self.zone_adm.create_pool(traceid, user_id, pooldesc0)
+            return (200, [pooldesc1], None)
         except Exception as e:
             logger.exception(e)
             return (500, None, f"{e}")
@@ -101,13 +101,13 @@ class Api():
             return (500, None, f"{e}")
         pass
 
-    def api_make_bucket(self, traceid, user_id, pool_id, name, body):
+    def api_make_bucket(self, traceid, user_id, pool_id, body):
         try:
             assert user_id is not None
             d = body.get("bucket")
             bucket = d.get("key")
             policy = d.get("policy")
-            assert name == bucket
+            # assert name == bucket
         except Exception as e:
             m = _rephrase_exception_message(e)
             return (400, None, m)

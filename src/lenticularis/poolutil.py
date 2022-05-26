@@ -239,6 +239,7 @@ def _pool_desc_schema(type_number):
     schema = {
         "type": "object",
         "properties": {
+            "pool_name": {"type": "string"},
             "owner_uid": {"type": "string"},
             "owner_gid": {"type": "string"},
             "root_secret": {"type": "string"},
@@ -248,14 +249,14 @@ def _pool_desc_schema(type_number):
             "access_keys": {"type": "array", "items": access_key},
             "direct_hostnames": {"type": "array", "items": {"type": "string"}},
             "expiration_date": type_number,
-            "online_status": {"type": "string"},
             "admission_status": {"type": "string"},
+            "online_status": {"type": "string"},
+            "minio_state": {"type": "string"},
             # Below keys are internally held:
-            # "pool_id"
-            # "minio_state"
             # "atime"
        },
         "required": [
+            # "pool_name",
             "owner_uid",
             "owner_gid",
             "root_secret",
@@ -272,6 +273,8 @@ def _pool_desc_schema(type_number):
     return schema
 
 
-def check_pool_is_well_formed(dict, user_):
-    jsonschema.validate(instance=dict, schema=_pool_desc_schema({"type": "string"}))
+def check_pool_is_well_formed(desc, user_):
+    """Checks a pool description is well-formed for passing to Web-UI."""
+    schema = _pool_desc_schema({"type": "string"})
+    jsonschema.validate(instance=desc, schema=schema)
     return

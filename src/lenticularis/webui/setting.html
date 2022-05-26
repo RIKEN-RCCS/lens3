@@ -8,14 +8,14 @@
     display: inline-block;
   }
   </style>
-    <title>manage zone</title>
+    <title>Manage Pools</title>
   </head>
   <body>
     <div id="add_new_pool_button">
-      <button v-on:click="add_zone">New bucket pool</button>
+      <button v-on:click="kick_add_new_pool">New bucket pool</button>
     </div>
     <div id="show_pool_list_button">
-      <button v-on:click="show_pool_list">Show bucket pools</button>
+      <button v-on:click="kick_show_pool_list">Show bucket pools</button>
     </div>
 
     <div id="create_pool" v-if="pool_name_visible">
@@ -31,9 +31,9 @@
         <input v-model="group" size="64" /></div>
       <div>
         <span class="label">Buckets directory (absolute path):</span>
-        <input v-model="bucketsDir" size="64" :disabled="buckets_directory_disabled" /></div>
+        <input v-model="buckets_directory" size="64" :disabled="buckets_directory_disabled" /></div>
       <div v-if="submit_button_visible">
-        <button v-on:click="submitZoneToCreate" :disabled="submit_button_disabled">{{submit_button_name}}</button>
+        <button v-on:click="kick_create_pool" :disabled="submit_button_disabled">{{submit_button_name}}</button>
       </div>
     </div>
 
@@ -63,7 +63,7 @@ ublic, upload, download)" />
           </select>
         </div>
         <div>
-          <button v-on:click="submit_create_bucket">Create</button>
+          <button v-on:click="kick_create_bucket">Create</button>
         </div>
       </div>
       <div>
@@ -79,7 +79,7 @@ ublic, upload, download)" />
         <span class="label">Public download only for key-less access (space-delimited list):</span>
         <input v-model="buckets[3]" size="64" /></div>
       <div v-if="submit_button_visible">
-        <button v-on:click="submitZoneToCreate" :disabled="submit_button_disabled">{{submit_button_name}}</button>
+        <button v-on:click="kick_create_pool" :disabled="submit_button_disabled">{{submit_button_name}}</button>
       </div>
     </div>
 
@@ -92,7 +92,7 @@ ublic, upload, download)" />
       <div>
         <div>
           <span class="label">Access key (readwrite)</span>
-          <button v-on:click="submit_make_access_key_rw">Generate</button>
+          <button v-on:click="kick_make_access_key_rw">Generate</button>
         </div>
         <input v-model="accessKeyIDrw" size="64" disabled />
         <input v-model="secretAccessKeyrw" size="64" disabled />
@@ -101,7 +101,7 @@ ublic, upload, download)" />
       <div>
         <div>
           <span class="label">Access key (readonly)</span>
-          <button v-on:click="submit_make_access_key_ro">Generate</button>
+          <button v-on:click="kick_make_access_key_ro">Generate</button>
         </div>
         <input v-model="accessKeyIDro" size="64" disabled />
         <input v-model="secretAccessKeyro" size="64" disabled />
@@ -110,7 +110,7 @@ ublic, upload, download)" />
       <div>
         <div>
           <span class="label">Access key (writeonly)</span>
-          <button v-on:click="submit_make_access_key_wo">Generate</button>
+          <button v-on:click="kick_make_access_key_wo">Generate</button>
         </div>
         <input v-model="accessKeyIDwo" size="64" disabled />
         <input v-model="secretAccessKeywo" size="64" disabled />
@@ -152,7 +152,7 @@ ublic, upload, download)" />
         <input v-model="endpointURLs" size="64" disabled /></div>
       <hr />
       <div v-if="submit_button_visible">
-        <button v-on:click="submitZoneToCreate" :disabled="submit_button_disabled">{{submit_button_name}}</button>
+        <button v-on:click="kick_create_pool" :disabled="submit_button_disabled">{{submit_button_name}}</button>
       </div>
       <hr />
     </div>
@@ -161,7 +161,7 @@ ublic, upload, download)" />
 
     <hr />
     <div>
-      <button v-on:click="debug">Debug</button>
+      <button v-on:click="kick_debug">Debug</button>
     </div>
     <div id="show_status">
       <div>{{message}}</div>

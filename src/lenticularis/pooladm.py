@@ -311,19 +311,19 @@ class ZoneAdm():
     def delete_unix_user_info(self, user_id):
         self.tables.storage_table.del_unix_user_info(user_id)
 
-    def create_pool(self, traceid, user_id, zone_id, zone, *,
-                    include_atime=False,
-                    decrypt=False, initialize=True):
+    def create_pool(self, traceid, user_id, pooldesc0):
+        decrypt=True
+        include_atime=False
+        initialize=True
         assert user_id is not None
-        assert zone_id is None
         assert initialize == True
-        atime_from_arg = zone.pop("atime", None) if include_atime else None
-        _check_zone_keys(zone)
+        atime_from_arg = pooldesc0.pop("atime", None) if include_atime else None
+        _check_zone_keys(pooldesc0)
         how = "create_zone"
-        return self._do_create_pool(how, traceid, user_id, zone_id, zone,
-                                    atime_from_arg=atime_from_arg,
-                                    initialize=initialize,
-                                    decrypt=decrypt)
+        pooldesc1 = self._do_create_pool(how, traceid, user_id, pooldesc0,
+                                         atime_from_arg)
+        check_pool_is_well_formed(pooldesc1, None)
+        return pooldesc1
 
     def update_pool(self, traceid, user_id, zone_id, zone, *,
                     include_atime=False,
@@ -557,19 +557,19 @@ class ZoneAdm():
     ##    finally:
     ##        self._unlock_pool_entry(lock, zoneID)
 
-    def _do_create_pool(self, how, traceid, user_id, zoneID, zone, *,
-                        permission=None,
-                        atime_from_arg=None,
-                        initialize=True,
-                        decrypt=False):
+    def _do_create_pool(self, how, traceid, user_id, pooldesc,
+                        atime_from_arg):
+        permission=None
+        initialize=True
+        decrypt=True
         lock = LockDB(self.tables.storage_table, "Adm")
         try:
-            self._lock_pool_entry(lock, zoneID)
+            self._lock_pool_entry(lock, None)
             return self._create_pool_with_lock(
-                how, traceid, user_id, zoneID, zone,
-                permission, atime_from_arg, initialize, decrypt)
+                how, traceid, user_id, pooldesc,
+                atime_from_arg)
         finally:
-            self._unlock_pool_entry(lock, zoneID)
+            self._unlock_pool_entry(lock, None)
 
     def _do_update_pool(self, how, traceid, user_id, zoneID, zone, *,
                         permission=None,
@@ -621,9 +621,10 @@ class ZoneAdm():
         lock = LockDB(self.tables.storage_table, "Adm")
         try:
             self._lock_pool_entry(lock, zoneID)
+            ##AHO
             return self._create_pool_with_lock(
-                how, traceid, user_id, zoneID, zone,
-                permission, atime_from_arg, initialize, decrypt)
+                how, traceid, user_id, zone,
+                atime_from_arg)
         finally:
             self._unlock_pool_entry(lock, zoneID)
 
@@ -832,9 +833,12 @@ class ZoneAdm():
     ##
     ### END update_zone_with_lock
 
-    def _create_pool_with_lock(self, how, traceid, user_id, zone_id, zone,
-                               permission, atime_from_arg,
-                               initialize, decrypt):
+    def _create_pool_with_lock(self, how, traceid, user_id, zone,
+                               atime_from_arg):
+        permission=None
+        initialize=True
+        decrypt=True
+        zone_id = None
         assert how in {"create_zone", "restore_zone"}
         if how == "create_zone":
             assert zone_id is None
@@ -900,7 +904,7 @@ class ZoneAdm():
         else:
             pass
 
-        zone["zoneID"] = zone_id
+        zone["pool_name"] = zone_id
         if decrypt:
             self.decrypt_access_keys(zone)
         return zone
@@ -968,7 +972,7 @@ class ZoneAdm():
         else:
             pass
 
-        zone["zoneID"] = zone_id
+        zone["pool_name"] = zone_id
         if decrypt:
             self.decrypt_access_keys(zone)
         return zone
@@ -992,7 +996,7 @@ class ZoneAdm():
         self._delete_existing_zone(zone_id, existing)
         mode = self.fetch_current_mode(zone_id)
         assert mode is None
-        zone["zoneID"] = zone_id
+        zone["pool_name"] = zone_id
         return zone
 
     def _prepare_zone(self, user_id, zone_id, existing, zone, permission, how):
@@ -1376,7 +1380,7 @@ class ZoneAdm():
             if user_id and zone["owner_uid"] != user_id:
                 continue
 
-            zone["zoneID"] = zoneID
+            zone["pool_name"] = zoneID
 
             if decrypt:
                 self.decrypt_access_keys(zone)

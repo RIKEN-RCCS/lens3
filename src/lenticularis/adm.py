@@ -6,7 +6,6 @@
 import inspect
 import os
 import sys
-#import threading
 import time
 import json
 from pydantic import BaseModel
@@ -31,6 +30,7 @@ try:
 except Exception as e:
     sys.stderr.write(f"Lens3 reading conf failed: {e}\n")
     sys.exit(ERROR_READCONF)
+    pass
 
 openlog(adm_conf["log_file"],
         **adm_conf["log_syslog"])
@@ -45,6 +45,7 @@ app.mount("/scripts/",
           name="scripts")
 with open(os.path.join(webui_dir, "setting.html")) as f:
     setting_html = f.read()
+    pass
 
 
 async def _get_authorized_user(request: Request):
@@ -67,7 +68,7 @@ async def _get_traceid(request: Request):
     return traceid
 
 
-def _respond_zone(zone_list, err, csrf_protect, client_addr, user_id, request):
+def _respond_with_pool(pool_list, err, csrf_protect, client_addr, user_id, request):
     ##HTTP_503_SERVICE_UNAVAILABLE
     ##Retry-After
     if err is not None:
@@ -76,10 +77,13 @@ def _respond_zone(zone_list, err, csrf_protect, client_addr, user_id, request):
     else:
         content = {"status": "success"}
         status_code = status.HTTP_200_OK
-    if zone_list is not None:
-        content["zonelist"] = zone_list
+        pass
+    if pool_list is not None:
+        content["pool_list"] = pool_list
+        pass
     if csrf_protect:
         content["CSRF-Token"] = csrf_protect.generate_csrf()
+        pass
     content["time"] = str(int(time.time()))
     log_access(f"{status_code}", client_addr, user_id, request.method, request.url)
     response = JSONResponse(status_code=status_code, content=content)
@@ -91,6 +95,7 @@ async def _get_request_body(request):
     body = b""
     async for chunk in request.stream():
         body += chunk
+        pass
     return json.loads(body, parse_int=None)
 
 
@@ -101,15 +106,16 @@ async def _check_pool_naming(id, csrf_protect, request):
         user_id = await _get_authorized_user(request)
         client = await _get_client_addr(request)
         content = {"status": "error", "reason": "Bad pool-id",
-                   "time": str(int(time.time())),}
+                   "time": str(int(time.time()))}
         code = status.HTTP_400_BAD_REQUEST
         response = JSONResponse(status_code=code, content=content)
         log_access(f"{code}", client, user_id, request.method, request.url)
         return response
-
+    pass
 
 class CsrfSettings(BaseModel):
     secret_key: str = adm_conf["webui"]["CSRF_secret_key"]
+    pass
 
 
 @CsrfProtect.load_config
@@ -120,8 +126,8 @@ def get_csrf_config():
 @app.exception_handler(CsrfProtectError)
 def csrf_protect_exception_handler(request: Request,
                                    exc: CsrfProtectError):
-                                   #user_id: str = Depends(_get_authorized_user),
-                                   #client_addr: str = Depends(_get_client_addr)):
+    #user_id: str = Depends(_get_authorized_user)
+    #client_addr: str = Depends(_get_client_addr)
     #logger.debug(f"@@@ {exc.message}")
     logger.error(f"{exc.message}")
     content = {"detail": exc.message}
@@ -133,9 +139,9 @@ def csrf_protect_exception_handler(request: Request,
 
 @app.get("/")
 async def app_get_show_ui(request: Request,
-                      user_id: str = Depends(_get_authorized_user),
-                      traceid: str = Depends(_get_traceid),
-                      client_addr: str = Depends(_get_client_addr)):
+                          user_id: str = Depends(_get_authorized_user),
+                          traceid: str = Depends(_get_traceid),
+                          client_addr: str = Depends(_get_client_addr)):
     logger.debug(f"APP.GET /")
     logger.debug(f"traceid={traceid}")
     code = status.HTTP_200_OK
@@ -156,129 +162,128 @@ async def app_get_get_template(request: Request,
                                client_addr: str = Depends(_get_client_addr),
                                csrf_protect: CsrfProtect = Depends()):
     logger.debug(f"APP.GET /template")
-    (code, zone_list, err) = api.api_get_template(traceid, user_id)
-    return _respond_zone(zone_list, err, csrf_protect, client_addr, user_id, request)
+    (code, pool_list, err) = api.api_get_template(traceid, user_id)
+    return _respond_with_pool(pool_list, err, csrf_protect, client_addr, user_id, request)
 
 
-@app.get("/zone")
+@app.get("/pool")
 async def app_get_list_pools(request: Request,
                              user_id: str = Depends(_get_authorized_user),
                              traceid: str = Depends(_get_traceid),
                              client_addr: str = Depends(_get_client_addr),
                              csrf_protect: CsrfProtect = Depends()):
-    logger.debug(f"APP.GET /zone")
-    (code, zone_list, err) = api.api_list_pools(traceid, user_id, None)
-    return _respond_zone(zone_list, err, csrf_protect, client_addr, user_id, request)
+    logger.debug(f"APP.GET /pool")
+    (code, pool_list, err) = api.api_list_pools(traceid, user_id, None)
+    return _respond_with_pool(pool_list, err, csrf_protect, client_addr, user_id, request)
 
 
-@app.get("/zone/{zone_id}")
-async def app_get_get_pool(zone_id: str,
+@app.get("/pool/{pool_id}")
+async def app_get_get_pool(pool_id: str,
                            request: Request,
                            user_id: str = Depends(_get_authorized_user),
                            traceid: str = Depends(_get_traceid),
                            client_addr: str = Depends(_get_client_addr),
                            csrf_protect: CsrfProtect = Depends()):
-    logger.debug(f"APP.GET /zone/{zone_id}")
-    ##ng_response = _check_pool_naming(zone_id, csrf_protect, request)
+    logger.debug(f"APP.GET /pool/{pool_id}")
+    ##ng_response = _check_pool_naming(pool_id, csrf_protect, request)
     ##if ng_response is not None:
     ##    return ng_response
-    (code, zone_list, err) = api.api_list_pools(traceid, user_id, zone_id)
-    return _respond_zone(zone_list, err, csrf_protect, client_addr, user_id, request)
+    (code, pool_list, err) = api.api_list_pools(traceid, user_id, pool_id)
+    return _respond_with_pool(pool_list, err, csrf_protect, client_addr, user_id, request)
 
 
-@app.post("/zone")
+@app.post("/pool")
 async def app_post_create_pool(request: Request,
                                user_id: str = Depends(_get_authorized_user),
                                traceid: str = Depends(_get_traceid),
                                client_addr: str = Depends(_get_client_addr),
                                csrf_protect: CsrfProtect = Depends()):
-    logger.debug(f"APP.POST /zone")
+    logger.debug(f"APP.POST /pool")
     body = await _get_request_body(request)
-    ##return zone_update(traceid, None, body, client_addr, user_id, request, csrf_protect, "create_zone")
+    ##return pool_update(traceid, None, body, client_addr, user_id, request, csrf_protect, "create_pool")
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
-    zone = body.get("zone")
-    (code, zone_list, err) = api.api_create_pool(traceid, user_id, None, zone)
-    return _respond_zone(zone_list, err, None, client_addr, user_id, request)
+    pooldesc = body.get("pool")
+    (code, pool_list, err) = api.api_create_pool(traceid, user_id, pooldesc)
+    return _respond_with_pool(pool_list, err, None, client_addr, user_id, request)
 
 
-@app.put("/zone/{zone_id}")
-async def app_put_update_pool(zone_id: str,
+@app.put("/pool/{pool_id}")
+async def app_put_update_pool(pool_id: str,
                               request: Request,
                               user_id: str = Depends(_get_authorized_user),
                               traceid: str = Depends(_get_traceid),
                               client_addr: str = Depends(_get_client_addr),
                               csrf_protect: CsrfProtect = Depends()):
-    logger.debug(f"APP.PUT /zone/{zone_id}")
-    ##ng_response = _check_pool_naming(zone_id, csrf_protect, request)
+    logger.debug(f"APP.PUT /pool/{pool_id}")
+    ##ng_response = _check_pool_naming(pool_id, csrf_protect, request)
     ##if ng_response is not None:
     ##    return ng_response
     body = await _get_request_body(request)
-    ##return zone_update(traceid, zone_id, body, client_addr, user_id, request, csrf_protect, "update_zone")
+    ##return pool_update(traceid, pool_id, body, client_addr, user_id, request, csrf_protect, "update_pool")
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
-    zone = body.get("zone")
-    (code, zone_list, err) = api.api_update_pool(traceid, user_id, zone_id, zone)
-    return _respond_zone(zone_list, err, None, client_addr, user_id, request)
+    pooldesc = body.get("pool")
+    (code, pool_list, err) = api.api_update_pool(traceid, user_id, pool_id, pooldesc)
+    return _respond_with_pool(pool_list, err, None, client_addr, user_id, request)
 
 
-##@app.put("/zone/{zone_id}/buckets")
-async def app_put_update_buckets(zone_id: str,
+##@app.put("/pool/{pool_id}/buckets")
+async def app_put_update_buckets(pool_id: str,
                                  request: Request,
                                  user_id: str = Depends(_get_authorized_user),
                                  traceid: str = Depends(_get_traceid),
                                  client_addr: str = Depends(_get_client_addr),
                                  csrf_protect: CsrfProtect = Depends()):
-    logger.debug(f"APP.PUT /zone/{zone_id}/buckets")
-    ##ng_response = _check_pool_naming(zone_id, csrf_protect, request)
+    logger.debug(f"APP.PUT /pool/{pool_id}/buckets")
+    ##ng_response = _check_pool_naming(pool_id, csrf_protect, request)
     ##if ng_response is not None:
     ##    return ng_response
     body = await _get_request_body(request)
-    ##return zone_update(traceid, zone_id, body, client_addr, user_id, request, csrf_protect, "update_buckets")
+    ##return pool_update(traceid, pool_id, body, client_addr, user_id, request, csrf_protect, "update_buckets")
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
-    zone = body.get("zone")
-    (code, zone_list, err) = api.api_update_buckets(traceid, user_id, zone_id, zone)
-    return _respond_zone(zone_list, err, None, client_addr, user_id, request)
+    pooldesc = body.get("pool")
+    (code, pool_list, err) = api.api_update_buckets(traceid, user_id, pool_id, pooldesc)
+    return _respond_with_pool(pool_list, err, None, client_addr, user_id, request)
 
 
-@app.put("/pool/{pool_id}/bucket/{bucket}")
+@app.put("/pool/{pool_id}/bucket")
 async def app_put_make_bucket(pool_id: str,
-                              bucket: str,
                               request: Request,
                               user_id: str = Depends(_get_authorized_user),
                               traceid: str = Depends(_get_traceid),
                               client_addr: str = Depends(_get_client_addr),
                               csrf_protect: CsrfProtect = Depends()):
-    logger.debug(f"APP.PUT /pool/{pool_id}/bucket/{bucket}")
+    logger.debug(f"APP.PUT /pool/{pool_id}/bucket")
     ##ng_response = _check_pool_naming(pool_id, csrf_protect, request)
     ##if ng_response is not None:
     ##    return ng_response
     body = await _get_request_body(request)
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
-    (code, zone_list, err) = api.api_make_bucket(traceid, user_id, pool_id, bucket, body)
-    return _respond_zone(zone_list, err, None, client_addr, user_id, request)
+    (code, pool_list, err) = api.api_make_bucket(traceid, user_id, pool_id, body)
+    return _respond_with_pool(pool_list, err, None, client_addr, user_id, request)
 
 
-@app.put("/zone/{zone_id}/accessKeys")
-async def app_put_change_secret(zone_id: str,
+@app.put("/pool/{pool_id}/accessKeys")
+async def app_put_change_secret(pool_id: str,
                                 request: Request,
                                 user_id: str = Depends(_get_authorized_user),
                                 traceid: str = Depends(_get_traceid),
                                 client_addr: str = Depends(_get_client_addr),
                                 csrf_protect: CsrfProtect = Depends()):
-    logger.debug(f"APP.PUT /zone/{zone_id}/accessKeys")
-    ##ng_response = _check_pool_naming(zone_id, csrf_protect, request)
+    logger.debug(f"APP.PUT /pool/{pool_id}/accessKeys")
+    ##ng_response = _check_pool_naming(pool_id, csrf_protect, request)
     ##if ng_response is not None:
     ##    return ng_response
     body = await _get_request_body(request)
-    ##return zone_update(traceid, zone_id, body, client_addr, user_id, request, csrf_protect, "change_secret_key")
+    ##return pool_update(traceid, pool_id, body, client_addr, user_id, request, csrf_protect, "change_secret_key")
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
-    zone = body.get("zone")
-    (code, zone_list, err) = api.api_change_secret(traceid, user_id, zone_id, zone)
-    return _respond_zone(zone_list, err, None, client_addr, user_id, request)
+    pooldesc = body.get("pool")
+    (code, pool_list, err) = api.api_change_secret(traceid, user_id, pool_id, pooldesc)
+    return _respond_with_pool(pool_list, err, None, client_addr, user_id, request)
 
 
 ## 'how' is one of {"create_zone", "update_zone", "update_buckets",
@@ -289,25 +294,25 @@ async def app_put_change_secret(zone_id: str,
 ##    csrf_protect.validate_csrf(csrf_token)
 ##    zone = body.get("zone")
 ##    (code, zone_list, err) = api.api_upsert(how, traceid, user_id, zone_id, zone)
-##    return _respond_zone(zone_list, err, None, client_addr, user_id, request)
+##    return _respond_with_pool(zone_list, err, None, client_addr, user_id, request)
 
 
-@app.delete("/zone/{zone_id}")
-async def app_delete_zone(zone_id: str,
-                           request: Request,
-                           user_id: str = Depends(_get_authorized_user),
-                           traceid: str = Depends(_get_traceid),
-                           client_addr: str = Depends(_get_client_addr),
-                           csrf_protect: CsrfProtect = Depends()):
-    logger.debug(f"APP.DELETE /zone/{zone_id}")
-    ##ng_response = _check_pool_naming(zone_id, csrf_protect, request)
+@app.delete("/pool/{pool_id}")
+async def app_delete_pool(pool_id: str,
+                          request: Request,
+                          user_id: str = Depends(_get_authorized_user),
+                          traceid: str = Depends(_get_traceid),
+                          client_addr: str = Depends(_get_client_addr),
+                          csrf_protect: CsrfProtect = Depends()):
+    logger.debug(f"APP.DELETE /pool/{pool_id}")
+    ##ng_response = _check_pool_naming(pool_id, csrf_protect, request)
     ##if ng_response is not None:
     ##    return ng_response
     body = await _get_request_body(request)
     csrf_token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(csrf_token)
-    (_, _, err) = api.api_delete(traceid, user_id, zone_id)
-    return _respond_zone(None, err, None, client_addr, user_id, request)
+    (_, _, err) = api.api_delete(traceid, user_id, pool_id)
+    return _respond_with_pool(None, err, None, client_addr, user_id, request)
 
 
 @app.middleware("http")

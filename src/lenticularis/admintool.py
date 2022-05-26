@@ -115,16 +115,16 @@ def _store_user_info(zone_adm, user_info):
 def _restore_zone_delete(zone_adm, traceid, e):
     # Deleted Entry (no left hand side)
     user_id = e.get("owner_uid")
-    zone_id = e.get("zoneID")
+    zone_id = e.get("pool_name")
     logger.debug(f"@@@ >> Delete {user_id} {zone_id}")
     zone_adm.delete_zone(traceid, user_id, zone_id)
 
 def _restore_zone_add(zone_adm, traceid, b):
     # New Entry (no right hand side)
     user_id = b.get("owner_uid")
-    zone_id = b.get("zoneID")
+    zone_id = b.get("pool_name")
     logger.debug(f"@@@ >> Insert / Update {user_id} {zone_id}")
-    b.pop("zoneID")
+    b.pop("pool_name")
     b.pop("minio_state")
     zone_adm.restore_pool(traceid, user_id, zone_id, b,
                           include_atime=True, initialize=False)
@@ -331,12 +331,12 @@ class Command():
         (zone_list, broken_zone) = self.zone_adm.fetch_zone_list(None, extra_info=True, include_atime=True, decrypt=decrypt)
         outs = []
         for zone in zone_list:
-            zone_id = zone["zoneID"]
+            zone_id = zone["pool_name"]
             if zoneIDs != set() and zone_id not in zoneIDs:
                 continue
             if self.args.format not in {"json"}:
                 fix_date_format(zone, ["atime", "expiration_date"])
-            zone.pop("zoneID")
+            zone.pop("pool_name")
             outs.append({zone_id: zone})
         print_json_plain("zones", outs, self.args.format, order=pool_key_order)
         logger.debug(f"broken zones: {broken_zone}")
@@ -360,8 +360,8 @@ class Command():
         self.zone_adm.store_allow_deny_rules(rules)
         _store_user_info(self.zone_adm, user_info)
         (existing, _) = self.zone_adm.fetch_zone_list(None)
-        (ll, pp, rr) = list_diff3(zone_list, lambda b: b.get("zoneID"),
-                                  existing, lambda e: e.get("zoneID"))
+        (ll, pp, rr) = list_diff3(zone_list, lambda b: b.get("pool_name"),
+                                  existing, lambda e: e.get("pool_name"))
         for x in rr:
             _restore_zone_delete(self.zone_adm, self.traceid, x)
         for x in ll:

@@ -165,9 +165,8 @@ class StorageTable(TableCommon):
             pass
         return None
 
-    def get_zone(self, zoneID):
-        # logger.debug(f"+++ {zoneID}")
-        key = f"{self._pool_desc_prefix}{zoneID}"
+    def get_pool(self, pool_id):
+        key = f"{self._pool_desc_prefix}{pool_id}"
         if not self.dbase.hexists(key, "owner_uid"):
             return None
         return self.dbase.hget_map(key, self.structured)
@@ -183,7 +182,7 @@ class StorageTable(TableCommon):
         key = f"{self._access_key_id_prefix}{access_key_id}"
         return self.dbase.get(key)
 
-    def get_zoneID_by_directHostname(self, directHostname):
+    def get_pool_id_by_direct_hostname(self, directHostname):
         # logger.debug(f"+++ {directHostname}")
         key = f"{self.directHostnamePrefix}{directHostname}"
         return self.dbase.get(key)
@@ -381,7 +380,7 @@ class ProcessTable(TableCommon):
     pass
 
 
-def zone_to_route(zone):
+def zone_to_route_(zone):
     ##logger.debug(f"zone = {zone}")
     access_keys = [i["access_key"] for i in zone.get("access_keys", [])]
     directHostnames = zone["direct_hostnames"]

@@ -58,13 +58,14 @@ class Mc():
     created at alias_set.
     """
 
-    def __init__(self, bin_mc, env_mc, pool_id, minio_ep):
+    def __init__(self, bin_mc, env_mc, minio_ep, pool_id):
         self._verbose = False
         self.mc = bin_mc
         self.env = env_mc
-        self._pool_id = pool_id
         self._minio_ep = minio_ep
+        self._pool_id = pool_id
         self._config_dir = None
+        return
 
     def __enter__(self):
         pass

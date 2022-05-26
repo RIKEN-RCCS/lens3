@@ -367,7 +367,7 @@ class Multiplexer():
         if host:
             access_key = None
             r = self.tables.routing_table.get_route_by_direct_hostname_(host)
-            zone_id = self.tables.storage_table.get_zoneID_by_directHostname(host)
+            zone_id = self.tables.storage_table.get_pool_id_by_direct_hostname(host)
             r = self.tables.routing_table.get_route(zone_id)
         else:
             authorization = headers.get("AUTHORIZATION")
@@ -385,8 +385,8 @@ class Multiplexer():
             (r, code, zone_id) = self.controller.start_minio_service(traceid, zone_id, access_key)
             return (r, code, zone_id)
 
-    def _zone_to_user(self, zoneID):  # CODE CLONE @ pooladm.py
-        zone = self.tables.storage_table.get_zone(zoneID)
+    def _zone_to_user(self, zoneID):
+        zone = self.tables.storage_table.get_pool(zoneID)
         if zone is None:
             return None
         else:

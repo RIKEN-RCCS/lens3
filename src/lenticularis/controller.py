@@ -34,7 +34,7 @@ class Controller():
 
     def start_minio_service(self, traceid, pool_id, access_key):
         ##if host:
-        ##    pool_id = self.tables.storage_table.get_zoneID_by_directHostname(host)
+        ##    pool_id = self.tables.storage_table.get_pool_id_by_direct_hostname(host)
         ##elif access_key:
         ##    pool_id = self.tables.storage_table.get_pool_by_access_key(access_key)
         ##else:

@@ -227,7 +227,7 @@ class ZoneAdm():
         """Finds an owner of a pool.  Or it returns unknown-user."""
         if pool_id is None:
             return "unknown-user"
-        pooldesc = self.tables.storage_table.get_zone(pool_id)
+        pooldesc = self.tables.storage_table.get_pool(pool_id)
         if pooldesc is None:
             return "unknown-user"
         return pooldesc.get("owner_uid")
@@ -254,7 +254,7 @@ class ZoneAdm():
         ep = minioproc["minio_ep"]
         admin = minioproc["admin"]
         password = minioproc["password"]
-        mc = Mc(self._bin_mc, self._env_mc, pool_id, ep)
+        mc = Mc(self._bin_mc, self._env_mc, ep, pool_id)
         try:
             mc.alias_set(admin, password)
             return mc
@@ -267,7 +267,7 @@ class ZoneAdm():
         fixed = []
         for z_id in self.tables.storage_table.list_pool_ids(None):
             logger.debug(f"@@@ z_id = {z_id}")
-            zone = self.tables.storage_table.get_zone(z_id)
+            zone = self.tables.storage_table.get_pool(z_id)
             assert zone is not None
             user_id = zone["owner_uid"]
 
@@ -364,7 +364,7 @@ class ZoneAdm():
             self._lock_pool_entry(lock, pool_id)
             try:
                 mc.make_bucket_with_policy(bucket, policy)
-                pooldesc = self.tables.storage_table.get_zone(pool_id)
+                pooldesc = self.tables.storage_table.get_pool(pool_id)
                 _add_bucket_to_pool(pooldesc, bucket, policy)
                 check_pool_is_well_formed(pooldesc, None)
                 self.tables.storage_table.set_pool(pool_id, pooldesc)
@@ -493,7 +493,7 @@ class ZoneAdm():
             return ""
         assert ep is not None
         if access_key is None:
-            pooldesc = self.tables.storage_table.get_zone(zoneID)
+            pooldesc = self.tables.storage_table.get_pool(zoneID)
             if pooldesc is None:
                 # Done if neither access-key nor pool exists.
                 logger.debug(f"No check, as neither access-key nor zone.")
@@ -507,7 +507,7 @@ class ZoneAdm():
             pass
 
         ##AHO
-        pooldesc = self.tables.storage_table.get_zone(zoneID)
+        pooldesc = self.tables.storage_table.get_pool(zoneID)
         access_key = pooldesc["probe_access"]
         logger.debug(f"AHOAHO probe_access={access_key}")
 
@@ -725,7 +725,7 @@ class ZoneAdm():
     ##def _update_zone_with_lock_(self, how, traceid, user_id, zone_id, zone,
     ##                            permission, atime_from_arg,
     ##                            initialize, decrypt):
-    ##    existing = self.tables.storage_table.get_zone(zone_id) if zone_id else None
+    ##    existing = self.tables.storage_table.get_pool(zone_id) if zone_id else None
     ##
     ##    must_exist = how not in {"restore_zone", "create_zone"}
     ##    if must_exist and not existing:
@@ -841,7 +841,7 @@ class ZoneAdm():
         elif how == "restore_zone":
             assert zone_id is not None
 
-        existing = self.tables.storage_table.get_zone(zone_id) if zone_id else None
+        existing = self.tables.storage_table.get_pool(zone_id) if zone_id else None
         if existing:
             check_pool_owner(user_id, zone_id, existing)
 
@@ -912,7 +912,7 @@ class ZoneAdm():
                        "disable_zone", "enable_zone"}
         assert how not in {"restore_zone", "create_zone", "delete_zone"}
         assert zone_id is not None
-        existing = self.tables.storage_table.get_zone(zone_id)
+        existing = self.tables.storage_table.get_pool(zone_id)
         if not existing:
             raise Exception(f"Non-existing pool is specified: pool={zone_id}")
         check_pool_owner(user_id, zone_id, existing)
@@ -978,7 +978,7 @@ class ZoneAdm():
                                initialize, decrypt):
         assert not initialize
         assert not decrypt
-        existing = self.tables.storage_table.get_zone(zone_id) if zone_id else None
+        existing = self.tables.storage_table.get_pool(zone_id) if zone_id else None
         if not existing:
             raise Exception(f"Deleting a non-existing pool: pool={zone_id}")
         check_pool_owner(user_id, zone_id, existing)
@@ -1212,7 +1212,7 @@ class ZoneAdm():
         pools = set(self.tables.storage_table.list_pool_ids(None))
         keys = []
         for id in pools:
-            desc = self.tables.storage_table.get_zone(id)
+            desc = self.tables.storage_table.get_pool(id)
             if desc is None:
                 continue
             ids = _list_access_keys(desc)
@@ -1239,7 +1239,7 @@ class ZoneAdm():
         for z_id in self.tables.storage_table.list_pool_ids(None):
             if z_id == zone_id:
                 continue
-            z = self.tables.storage_table.get_zone(z_id)
+            z = self.tables.storage_table.get_pool(z_id)
             if z is None:
                 continue
             reasons += check_conflict(zone_id, zone, z_id, z)
@@ -1279,7 +1279,7 @@ class ZoneAdm():
 
     def zone_to_user(self, zoneID):
         ## ADMIN, multiplexer   CODE CLONE @ multiplexer.py
-        zone = self.tables.storage_table.get_zone(zoneID)
+        zone = self.tables.storage_table.get_pool(zoneID)
         return zone["owner_uid"] if zone else None
 
     def exp_date(self):
@@ -1366,7 +1366,7 @@ class ZoneAdm():
 
         for zoneID in self.tables.storage_table.list_pool_ids(zone_id):
             #logger.debug(f"@@@ zoneID = {zoneID}")
-            zone = self.tables.storage_table.get_zone(zoneID)
+            zone = self.tables.storage_table.get_pool(zoneID)
 
             if zone is None:
                 logger.error(f"INCOMPLETE ZONE: {zoneID}")

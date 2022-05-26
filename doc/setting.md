@@ -350,7 +350,7 @@ lens3-admin$ lenticularis-admin -c adm-config.yaml show-muxs
 ## Access Test
 
 * Access the website by a browser
-  * URL: `http://webui.lens3.example.com/`
+  * `http://webui.lens3.example.com/`
 
 * Access buckets from S3 client
     * Copy the access keys created above
@@ -363,7 +363,7 @@ $ vi $HOME/.aws/credentials
 aws_access_key_id = zHb9uscWUDgcJ9ZdYzr6
 aws_secret_access_key = uDUHMYKSmbqyqB1MGYN57CWMC8eXNHwUL4pcNwROu3xWgpsO
 
-$ aws --endpoint-url https://lens3.example.com s3 ls s3://bkt0
+$ aws --endpoint-url https://lens3.example.com s3 ls s3://bkt1
 $ aws --endpoint-url https://lens3.example.com s3 cp s3://bkt1/somefile1 -
 ```
 

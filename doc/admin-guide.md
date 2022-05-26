@@ -465,23 +465,24 @@ http header.
 Lens3 uses "Snapshotting" of the database to a file.  The interval of
 a snapshot and the file location can be found under the keywords
 "save", "dbfilename", and "dir" in the configuration
-"/etc/lenticularis/redis.conf".  Daily copying of snapshots should be
-performed by cron, since Lens3 does nothing on the backup.  Lens3 uses
-"save 907 1" by default, which is an interval about 15 minutes.
+"/etc/lenticularis/redis.conf".  Lens3 uses "save 907 1" by default,
+which is an interval about 15 minutes.  Since Lens3 does nothing on
+the backup file, daily copying of snapshots should be performed by
+cron.
 
 See Redis documents for more information: [Redis
 persistence](https://redis.io/docs/manual/persistence/)
 
 ## Redis Service
 
-Lens3 calls "redis-shutdown" with a fake configuration
+Lens3 calls "redis-shutdown" with a fake configuration parameter
 "lenticularis/redis" in lenticularis-redis.service.  It lets point to
-a file "/etc/lenticularis/redis.conf" in result.
+a proper file "/etc/lenticularis/redis.conf" in result.
 
 ## Load-Balanced Setting
 
 Muxes can be run on multiple hosts, and a reverse-proxy will
 distribute accesses to Muxes.  In contrast, Adm service is single.  In
 multiple Muxes setting, firewall settings shall be fixed.  The port
-range of communication for both Muxes and MinIO's on a host must be
+range of communication for both Muxes and MinIO's on hosts must be
 open to Adm, since Adm accesses both Muxes and MinIO's.

@@ -1,10 +1,24 @@
+"""Small utility."""
+
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
 import re
+import enum
 import jsonschema
 from lenticularis.utility import dict_diff
 from lenticularis.utility import logger
+
+
+class Pool_State(enum.Enum):
+    Initial = "initial"
+    Ready = "ready"
+    Inoperable = "inoperable"
+
+    def __str__(self):
+        return self.value
+
+    pass
 
 
 def _update_for_key(dict0, key, dict1, overwrite):

@@ -18,7 +18,7 @@ from fastapi_csrf_protect.exceptions import CsrfProtectError
 import lenticularis
 from lenticularis.api import Api
 from lenticularis.readconf import read_adm_conf
-from lenticularis.utility import ERROR_READCONF
+from lenticularis.utility import ERROR_EXIT_READCONF
 from lenticularis.utility import make_typical_ip_address
 from lenticularis.utility import log_access
 from lenticularis.utility import logger, openlog
@@ -28,8 +28,8 @@ from lenticularis.utility import tracing
 try:
     (adm_conf, configfile) = read_adm_conf()
 except Exception as e:
-    sys.stderr.write(f"Lens3 reading conf failed: {e}\n")
-    sys.exit(ERROR_READCONF)
+    sys.stderr.write(f"Lens3 reading config file failed: {e}\n")
+    sys.exit(ERROR_EXIT_READCONF)
     pass
 
 openlog(adm_conf["log_file"],

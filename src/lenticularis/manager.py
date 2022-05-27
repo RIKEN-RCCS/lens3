@@ -12,7 +12,6 @@ from subprocess import Popen, DEVNULL, PIPE
 import random
 import select
 import sys
-import tempfile
 import threading
 import time
 import contextlib
@@ -22,7 +21,7 @@ from lenticularis.mc import Mc, map_admin_user_json_keys, assert_mc_success
 from lenticularis.readconf import read_mux_conf
 from lenticularis.lockdb import LockDB
 from lenticularis.table import get_tables
-from lenticularis.utility import ERROR_READCONF, ERROR_FORK, ERROR_START_MINIO
+from lenticularis.utility import ERROR_EXIT_READCONF, ERROR_EXIT_FORK, ERROR_EXIT_START_MINIO
 from lenticularis.utility import decrypt_secret, list_diff3
 from lenticularis.utility import gen_access_key_id, gen_secret_access_key
 from lenticularis.utility import make_clean_env, host_port
@@ -351,6 +350,8 @@ class Manager():
             self.lock.unlock()
             pass
 
+        self._set_current_mode(self._pool_id, "ready", None)
+
         try:
             self._check_elapsed_time()
             self._watch_minio(p)
@@ -365,9 +366,8 @@ class Manager():
                                 self._MINIO_ROOT_PASSWORD):
             try:
                 alarm(self.minio_user_install_timelimit)
-                self._alarm_section = "initialize_minio"
+                self._alarm_section = "setup_minio"
                 self._mc.setup_minio(p, pooldesc)
-                self._set_current_mode(self._pool_id, "ready", None)
                 alarm(0)
                 self._alarm_section = None
             except AlarmException as e:
@@ -696,7 +696,7 @@ def main():
         (mux_conf, configfile) = read_mux_conf(args.configfile)
     except Exception as e:
         sys.stderr.write(f"manager:main: {e}\n")
-        sys.exit(ERROR_READCONF)
+        sys.exit(ERROR_EXIT_READCONF)
         pass
 
     tracing.set(args.traceid)
@@ -710,7 +710,7 @@ def main():
             sys.exit(0)
     except OSError as e:
         logger.error(f"fork failed: {os.strerror(e.errno)}")
-        sys.exit(ERROR_FORK)
+        sys.exit(ERROR_EXIT_FORK)
         pass
 
     # (A Manager be a session leader).

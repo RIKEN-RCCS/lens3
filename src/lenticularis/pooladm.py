@@ -26,6 +26,15 @@ from lenticularis.poolutil import compare_buckets, check_policy
 from lenticularis.utility import tracing
 
 
+class ApiError(Exception):
+    def __init__(self, code, *args):
+        self._code = code
+        super().__init__(*args)
+        return
+
+    pass
+
+
 ## Main pool operations are one of the followings and is specified as
 ## the HOW argument:
 ## - how = "create_zone"
@@ -222,6 +231,7 @@ class ZoneAdm():
         self._bin_mc = minio_param["mc"]
         env = make_clean_env(os.environ)
         self._env_mc = env
+        return
 
     def _get_pool_owner(self, pool_id):
         """Finds an owner of a pool.  Or it returns unknown-user."""
@@ -246,9 +256,8 @@ class ZoneAdm():
             pass
         minioproc = self.tables.process_table.get_minio_proc(pool_id)
         if minioproc is None:
-            ##raise ApiError()
-            raise Exception(f"Cannot start MinIO for pool={pool_id}:"
-                            f" status={status}")
+            raise ApiError(500, (f"Cannot start MinIO for pool={pool_id}:"
+                                 f" status={status}"))
         else:
             pass
         ep = minioproc["minio_ep"]
@@ -261,6 +270,7 @@ class ZoneAdm():
         except Exception:
             mc.__exit__(None, None, None)
             raise
+        pass
 
     def fix_affected_zone(self, traceid):
         allow_deny_rules = self.tables.storage_table.get_allow_deny_rules()
@@ -292,6 +302,7 @@ class ZoneAdm():
 
     def store_allow_deny_rules(self, allow_deny_rules):
         self.tables.storage_table.ins_allow_deny_rules(allow_deny_rules)
+        return
 
     def fetch_allow_deny_rules(self):
         return self.tables.storage_table.get_allow_deny_rules()
@@ -301,6 +312,7 @@ class ZoneAdm():
 
     def store_unix_user_info(self, user_id, uinfo):
         self.tables.storage_table.ins_unix_user_info(user_id, uinfo)
+        return
 
     def fetch_unix_user_info(self, user_id):
         return self.tables.storage_table.get_unix_user_info(user_id)
@@ -310,6 +322,7 @@ class ZoneAdm():
 
     def delete_unix_user_info(self, user_id):
         self.tables.storage_table.del_unix_user_info(user_id)
+        return
 
     def create_pool(self, traceid, user_id, pooldesc0):
         decrypt=True
@@ -375,6 +388,7 @@ class ZoneAdm():
         except Exception as e:
             self.tables.routing_table.delete_bucket(bucket)
             raise
+        return
 
     def change_secret(self, traceid, user_id, zone_id, zone, *,
                       include_atime=False,
@@ -449,16 +463,19 @@ class ZoneAdm():
 
     def flush_storage_table(self, everything=False):
         self.tables.storage_table.clear_all(everything=everything)
+        return
 
     def reset_database(self, everything=False):
         self.tables.storage_table.clear_all(everything=everything)
         self.tables.process_table.clear_all(everything=everything)
         self.tables.routing_table.clear_routing(everything=everything)
+        return
 
     def print_database(self):
         self.tables.storage_table.print_all()
         self.tables.process_table.print_all()
         self.tables.routing_table.print_all()
+        return
 
     def fetch_multiplexer_list(self):
         return self.tables.process_table.list_muxs()
@@ -471,6 +488,7 @@ class ZoneAdm():
 
     def flush_process_table(self, everything=False):
         self.tables.process_table.clear_all(everything=everything)
+        return
 
     def access_mux_for_pool(self, traceid, zoneID, *, force, access_key=None):
         """Tries to access a Mux of the pool.  Always use with force=True, to
@@ -503,6 +521,7 @@ class ZoneAdm():
                 ##access_key = _choose_any_access_key(pooldesc)
                 access_key = pooldesc["probe_access"]
                 logger.debug(f"AHO probe_access={access_key}")
+                pass
         else:
             pass
 
@@ -522,6 +541,7 @@ class ZoneAdm():
 
     def flush_routing_table(self, everything=False):
         self.tables.routing_table.clear_routing(everything=everything)
+        return
 
     def _lock_pool_entry(self, lock, pool_id):
         lockprefix = self.tables.storage_table.storage_table_lock_prefix
@@ -570,6 +590,8 @@ class ZoneAdm():
                 atime_from_arg)
         finally:
             self._unlock_pool_entry(lock, None)
+            pass
+        return
 
     def _do_update_pool(self, how, traceid, user_id, zoneID, zone, *,
                         permission=None,
@@ -584,6 +606,8 @@ class ZoneAdm():
                 permission, atime_from_arg, initialize, decrypt)
         finally:
             self._unlock_pool_entry(lock, zoneID)
+            pass
+        return
 
     def _do_update_buckets(self, how, traceid, user_id, zoneID, zone, *,
                            permission=None,
@@ -598,6 +622,8 @@ class ZoneAdm():
                 permission, atime_from_arg, initialize, decrypt)
         finally:
             self._unlock_pool_entry(lock, zoneID)
+            pass
+        return
 
     def _do_change_secret(self, how, traceid, user_id, zoneID, zone, *,
                           permission=None,
@@ -612,6 +638,8 @@ class ZoneAdm():
                 permission, atime_from_arg, initialize, decrypt)
         finally:
             self._unlock_pool_entry(lock, zoneID)
+            pass
+        return
 
     def _do_restore_pool(self, how, traceid, user_id, zoneID, zone, *,
                          permission=None,
@@ -627,6 +655,8 @@ class ZoneAdm():
                 atime_from_arg)
         finally:
             self._unlock_pool_entry(lock, zoneID)
+            pass
+        return
 
     def _do_delete_zone(self, how, traceid, user_id, zoneID, zone, *,
                         permission=None,
@@ -641,6 +671,8 @@ class ZoneAdm():
                 permission, atime_from_arg, initialize, decrypt)
         finally:
             self._unlock_pool_entry(lock, zoneID)
+            pass
+        return
 
     def _do_disable_zone(self, how, traceid, user_id, zoneID, zone, *,
                          permission=None,
@@ -655,6 +687,8 @@ class ZoneAdm():
                 permission, atime_from_arg, initialize, decrypt)
         finally:
             self._unlock_pool_entry(lock, zoneID)
+            pass
+        return
 
     def _do_enable_zone(self, how, traceid, user_id, zoneID, zone, *,
                         permission=None,
@@ -669,6 +703,8 @@ class ZoneAdm():
                 permission, atime_from_arg, initialize, decrypt)
         finally:
             self._unlock_pool_entry(lock, zoneID)
+            pass
+        return
 
     def _delete_existing_zone(self, zone_id, existing):
         logger.debug(f"+++")
@@ -681,6 +717,7 @@ class ZoneAdm():
         logger.debug("@@@ del_zone")
         self.tables.storage_table.del_zone(zone_id)
         logger.debug("@@@ DONE")
+        return
 
     def _check_user_group(self, user_id, zone):
         ui = self.fetch_unix_user_info(user_id)
@@ -688,6 +725,7 @@ class ZoneAdm():
         group = zone.get("owner_gid") if zone else None
         if group not in groups:
             raise Exception(f"invalid group: {group}")
+        return
 
     def _check_direct_hostname(self, host_fqdn):
         host_fqdn = host_fqdn.lower()
@@ -710,6 +748,7 @@ class ZoneAdm():
         if fn is None:
             raise Exception(f"system configulation error: direct_hostname_validator '{criteria}' is not defined")
         fn(_strip_domain(host_fqdn, domain))
+        return
 
     def _halt_minio(self, traceid, pool_id, existing):
         """Stops a MinIO.  It throws an exception to break further processing.
@@ -722,6 +761,7 @@ class ZoneAdm():
         if procdesc is not None:
             logger.error(f"COULD NOT STOP MINIO: {procdesc}")
         assert procdesc is None
+        return
 
     ##def _update_zone_with_lock_(self, how, traceid, user_id, zone_id, zone,
     ##                            permission, atime_from_arg,
@@ -844,10 +884,12 @@ class ZoneAdm():
             assert zone_id is None
         elif how == "restore_zone":
             assert zone_id is not None
+            pass
 
         existing = self.tables.storage_table.get_pool(zone_id) if zone_id else None
         if existing:
             check_pool_owner(user_id, zone_id, existing)
+            pass
 
         (need_initialize, need_uniquify) = self._prepare_zone(
             user_id, zone_id, existing, zone, permission, how)
@@ -857,12 +899,15 @@ class ZoneAdm():
         omode = None
         if not need_initialize:
             omode = self.fetch_current_mode(zone_id)
+            pass
         if zone_id:
             self.set_current_mode(zone_id, "suspended")
+            pass
 
         if existing and initialize:
             ## how = "restore_zone"
             self._halt_minio(traceid, zone_id, existing)
+            pass
 
         ## NO FURTHER PROCESSING IF _halt_minio FAILS.
 
@@ -888,6 +933,7 @@ class ZoneAdm():
 
         if atime_from_arg:
             self.tables.storage_table.set_atime(zone_id, atime_from_arg)
+            pass
         self.tables.storage_table.ins_ptr(zone_id, zone)
 
         if omode:
@@ -897,6 +943,7 @@ class ZoneAdm():
             mode = None
         else:
             mode = self.fetch_current_mode(zone_id)
+            pass
 
         if initialize and mode not in {"ready"}:
             logger.error(f"initialize: error: mode is not ready: {mode}")
@@ -907,6 +954,7 @@ class ZoneAdm():
         zone["pool_name"] = zone_id
         if decrypt:
             self.decrypt_access_keys(zone)
+            pass
         return zone
 
     def _update_pool_with_lock(self, how, traceid, user_id, zone_id, zone,
@@ -929,12 +977,15 @@ class ZoneAdm():
         omode = None
         if not need_initialize:
             omode = self.fetch_current_mode(zone_id)
+            pass
 
         if zone_id:
             self.set_current_mode(zone_id, "suspended")
+            pass
 
         if initialize:
             self._halt_minio(traceid, zone_id, existing)
+            pass
 
         ## NO FURTHER PROCESSING IF _halt_minio FAILS.
 
@@ -954,6 +1005,7 @@ class ZoneAdm():
 
         if atime_from_arg:
             self.tables.storage_table.set_atime(zone_id, atime_from_arg)
+            pass
         self.tables.storage_table.ins_ptr(zone_id, zone)
 
         if omode:
@@ -963,6 +1015,7 @@ class ZoneAdm():
             mode = None
         else:
             mode = self.fetch_current_mode(zone_id)
+            pass
 
         if not initialize:
             pass
@@ -975,6 +1028,7 @@ class ZoneAdm():
         zone["pool_name"] = zone_id
         if decrypt:
             self.decrypt_access_keys(zone)
+            pass
         return zone
 
     def _delete_pool_with_lock(self, how, traceid, user_id, zone_id, zone,
@@ -1008,6 +1062,7 @@ class ZoneAdm():
             return self._prepare_for_change_secret(how, user_id, zone_id, existing, zone, permission)
         else:
             return self._prepare_for_update_pool(how, user_id, zone_id, existing, zone, permission)
+        return
 
     def _prepare_for_update_pool(self, how, user_id, zone_id,
                                  existing, zone, permission):
@@ -1035,6 +1090,7 @@ class ZoneAdm():
             mode = self.fetch_current_mode(zone_id)
         else:
             mode = None
+            pass
         create_bucket = False
         change_secret = False
         need_initialize = (zone_id is None or
@@ -1101,6 +1157,7 @@ class ZoneAdm():
                 ## Let `regularize_zone` generate a new secret access key.
                 k["secret_key"] = ""
                 break
+            pass
         ## assert(permission is None)
         need_uniquify = self._regularize_pool_dict(user_id, existing, zone, permission)
 
@@ -1108,6 +1165,7 @@ class ZoneAdm():
             mode = self.fetch_current_mode(zone_id)
         else:
             mode = None
+            pass
         create_bucket = False
         change_secret = True
         bucket_settings_modified = True
@@ -1129,6 +1187,7 @@ class ZoneAdm():
         else:
             ## how in {"enable_zone", "disable_zone"}
             zone["permit_status"] = permission
+            pass
 
         #logger.debug(f"@@@ zone = {zone}")
 
@@ -1156,6 +1215,7 @@ class ZoneAdm():
             if not accessKey.get("policy_name"):  # (unset) or ""
                 accessKey["policy_name"] = "readwrite"
             # policy_name will be checked in `check_pool_dict_is_sound`
+            pass
 
         logger.debug(f"@@@ CHECK_SCHEMA")
         check_pool_is_well_formed(zone, user_id)
@@ -1184,10 +1244,12 @@ class ZoneAdm():
 
         for h in zone.get("direct_hostnames", []):
             self._check_direct_hostname(h)
+            pass
 
         self._check_user_group(user_id, zone)
 
         _check_bucket_names(zone)
+        return
 
     def _clear_route(self, zone_id, zone):
         # we need to flush the routing table entry of zone_id before,
@@ -1209,6 +1271,7 @@ class ZoneAdm():
         finally:
             ##lock.unlock()
             self._unlock_pool_table(lock)
+            pass
         return zone_id
 
     def _get_all_keys(self, zone_id):
@@ -1221,6 +1284,7 @@ class ZoneAdm():
                 continue
             ids = _list_access_keys(desc)
             keys.extend(ids)
+            pass
         return pools.union(set(keys))
 
     def _uniquify_zone(self, user_id, zone_id, zone):
@@ -1239,6 +1303,8 @@ class ZoneAdm():
         for access_key in access_keys:
             if not access_key.get("access_key"):
                 access_key["access_key"] = _gen_unique_key(gen_access_key_id, allkeys)
+                pass
+            pass
 
         for z_id in self.tables.storage_table.list_pool_ids(None):
             if z_id == zone_id:
@@ -1249,6 +1315,7 @@ class ZoneAdm():
             reasons += check_conflict(zone_id, zone, z_id, z)
             if z.get("owner_uid") == user_id:
                 num_zones_of_user += 1
+                pass
 
         if reasons != []:
             raise Exception(f"update_zone: conflict with another zone: {reasons}")
@@ -1272,6 +1339,8 @@ class ZoneAdm():
             pass
         finally:
             self.tables.storage_table.del_ptr(zone_id, zoneID_accessible_zone)
+            pass
+        return
 
     def fetch_current_mode(self, zoneID):
         return self.tables.storage_table.get_mode(zoneID)
@@ -1280,6 +1349,7 @@ class ZoneAdm():
         o = self.fetch_current_mode(zoneID)
         logger.debug(f"pool-state change pool=({zoneID}): {o} to {state}")
         self.tables.storage_table.set_mode(zoneID, state)
+        return
 
     def zone_to_user(self, zoneID):
         ## ADMIN, multiplexer   CODE CLONE @ multiplexer.py
@@ -1331,9 +1401,12 @@ class ZoneAdm():
         access_keys = zone.get("access_keys", [])
         for accessKey in access_keys:
             accessKey["secret_key"] = decrypt_secret(accessKey["secret_key"])
+            pass
+        return
 
     def _pullup_mode(self, zoneID, zone):
         zone["minio_state"] = self.fetch_current_mode(zoneID)
+        return
 
     def _pullup_atime(self, zoneID, zone):
         # we do not copy atime form routing table here.
@@ -1347,12 +1420,14 @@ class ZoneAdm():
         ##AHO
         zone["accessKeysPtr"] = [{"key": e, "ptr": v} for (e, v) in access_key_ptr if v == zoneID]
         zone["directHostnamePtr"] = [{"key": e, "ptr": v} for (e, v) in direct_host_ptr if v == zoneID]
+        return
 
     def _add_info_for_webui(self, zoneID, zone, groups):
         zone["groups"] = groups
         zone["directHostnameDomains"] = self.direct_hostname_domains
         zone["facadeHostname"] = self.facade_hostname
         zone["endpoint_url"] = self.endpoint_urls(zone)
+        return
 
     def fetch_zone_list(self, user_id, extra_info=False, include_atime=False,
                         decrypt=False, include_userinfo=False, zone_id=None):

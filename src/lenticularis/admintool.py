@@ -14,7 +14,7 @@ import sys
 import traceback
 from lenticularis.pooladm import ZoneAdm
 from lenticularis.readconf import read_adm_conf
-from lenticularis.utility import ERROR_READCONF, ERROR_EXCEPTION, ERROR_ARGUMENT
+from lenticularis.utility import ERROR_EXIT_READCONF, ERROR_EXIT_EXCEPTION, ERROR_EXIT_ARGUMENT
 from lenticularis.utility import format_rfc3339_z
 from lenticularis.utility import objdump
 from lenticularis.utility import list_diff3
@@ -256,7 +256,7 @@ class Command():
             # fn_flush_routing_table
             f"{progname} clear-routing\n"
         )
-        sys.exit(ERROR_ARGUMENT)
+        sys.exit(ERROR_EXIT_ARGUMENT)
 
     def fn_insert_allow_deny_rules(self, csvfile):
         logger.debug(f"@@@ INSERT ALLOW DENY RULES")
@@ -500,7 +500,7 @@ def main():
         (adm_conf, configfile) = read_adm_conf(args.configfile)
     except Exception as e:
         sys.stderr.write(f"Reading conf failed: {e}\n")
-        sys.exit(ERROR_READCONF)
+        sys.exit(ERROR_EXIT_READCONF)
 
     traceid = random_str(12)
     #threading.current_thread().name = traceid
@@ -519,7 +519,7 @@ def main():
         sys.stderr.write(f"Executing admin command failed: {e}\n")
         print(traceback.format_exc())
         ##adm.fn_usage()
-        sys.exit(ERROR_EXCEPTION)
+        sys.exit(ERROR_EXIT_EXCEPTION)
 
 
 if __name__ == "__main__":

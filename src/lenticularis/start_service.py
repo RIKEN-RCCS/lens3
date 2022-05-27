@@ -1,11 +1,11 @@
-"""Start routines of gunicorn.  It starts a Gunicorn as a process."""
+"""Start routines of Gunicorn.  It starts a Gunicorn as a subprocess."""
 
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
 import argparse
 import os
-from subprocess import Popen, PIPE
+from subprocess import Popen, PIPE, DEVNULL
 import sys
 from lenticularis.readconf import read_mux_conf
 from lenticularis.readconf import read_adm_conf
@@ -17,8 +17,8 @@ def start_mux():
     try:
         (mux_conf, configfile) = read_mux_conf()
     except Exception as e:
-        sys.stderr.write(f"Lens3 reading conf failed: {e}\n")
-        return None
+        sys.stderr.write(f"Lens3 reading config file failed: {e}\n")
+        return
 
     openlog(mux_conf["log_file"],
             **mux_conf["log_syslog"])
@@ -42,31 +42,39 @@ def start_mux():
     args = ["--bind", bind]
     if workers:
         args += ["--workers", workers]
+        pass
     if threads:
         args += ["--threads", threads]
+        pass
     if timeout:
         args += ["--timeout", timeout]
+        pass
     if log_file:
         args += ["--log-file", log_file]
         if log_level:
             args += ["--log-level", log_level]
+            pass
+        pass
     else:
         args.append(f"--log-syslog")
         if log_syslog_facility:
             args += ["--log-syslog-facility", log_syslog_facility]
+            pass
+        pass
     if reload == "yes":
         args.append("--reload")
+        pass
     args.append("lenticularis.mux:app()")
-
     run("lenticularis-mux", env, cmd, args)
+    return
 
 
 def start_adm():
     try:
         (adm_conf, configfile) = read_adm_conf()
     except Exception as e:
-        sys.stderr.write(f"Lens3 reading conf failed: {e}\n")
-        return None
+        sys.stderr.write(f"Lens3 reading config file failed: {e}\n")
+        return
 
     openlog(adm_conf["log_file"],
             **adm_conf["log_syslog"])
@@ -90,47 +98,63 @@ def start_adm():
     args = ["--worker-class", "uvicorn.workers.UvicornWorker", "--bind", bind]
     if workers:
         args += ["--workers", workers]
-
+        pass
     if timeout:
         args += ["--timeout", timeout]
+        pass
     if log_file:
         args += ["--log-file", log_file]
         if log_level:
             args += ["--log-level", log_level]
+            pass
+        pass
     else:
         args.append(f"--log-syslog")
         if log_syslog_facility:
             args += ["--log-syslog-facility", log_syslog_facility]
+            pass
+        pass
     if reload == "yes":
         args.append("--reload")
+        pass
     args.append("lenticularis.adm:app")
-
-    run("lenticularis-api", env, cmd, args)
-
+    run("lenticularis-adm", env, cmd, args)
+    return
 
 def run(servicename, env, cmd, args):
     """Starts Gunicorn as a systemd service.  It will not return unless it
-    errs or finishes.  Note the messages from a Gunicorn process will
-    go to stdout/stderr (until a logger is set).
+    a subprocess exits.  Note the stdout/stderr messages from Gunicorn
+    is usually not helpful.  Examine the log file.
     """
 
-    logger.debug(f"{servicename}: starting gunicorn ..."
-                 f" cmd=({cmd})"
-                 f" args=({args})"
+    logger.debug(f"{servicename}: Starting Gunicorn ..."
+                 f" cmd=({cmd}),"
+                 f" args=({args}),"
                  f" env=({env})")
 
+    (outs, errs) = (b"", b"")
     try:
-        with Popen(cmd + args, stdout=None, stderr=None, env=env) as p:
-            #(out, err) = p.communicate()
-            status = p.wait()
+        with Popen(cmd + args, stdin=DEVNULL, stdout=PIPE, stderr=PIPE, env=env) as p:
+            (outs, errs) = p.communicate()
+            p_status = p.wait()
     except Exception as e:
         logger.exception(f"{servicename} failed to start")
         sys.exit(1)
-    logger.debug(f"{servicename} exited: status={status}")
-    if status is None or status < 0:
-        sys.exit(1)
+        pass
+    if p_status == 0:
+        logger.debug(f"{servicename} exited: status={p_status}")
+        sys.exit(p_status)
     else:
-        sys.exit(status)
+        logger.error(f"{servicename} exited: status={p_status};"
+                     f" EXAMINE THE GUNICORN LOG;"
+                     f" stdout=({outs}), stderr=({errs})")
+        if p_status is None or p_status < 0:
+            sys.exit(1)
+        else:
+            sys.exit(p_status)
+            pass
+        pass
+    return
 
 
 def main():
@@ -140,11 +164,15 @@ def main():
 
     if args.target == "mux":
         start_mux()
+        pass
     elif args.target == "adm":
         start_adm()
+        pass
     else:
         assert False
+        pass
     sys.exit(1)
+    return
 
 
 if __name__ == "__main__":

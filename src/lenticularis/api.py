@@ -6,6 +6,7 @@
 import base64
 import sys
 import traceback
+from lenticularis.pooladm import ApiError
 from lenticularis.pooladm import ZoneAdm
 from lenticularis.pooladm import check_pool_owner
 from lenticularis.table import get_tables
@@ -27,15 +28,6 @@ def _rephrase_exception_message(e):
         tr = traceback.extract_tb(tb)
         (_, _, _, text) = tr[-1]
         return f"AssertionError: {text}"
-    pass
-
-
-class ApiError(Exception):
-    def __init__(self, code, *args):
-        self._code = code
-        super().__init__(*args)
-        return
-
     pass
 
 

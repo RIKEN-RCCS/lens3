@@ -1,4 +1,4 @@
-"""A Mux-main started as a gunicorn service."""
+"""A Mux-main started as a Gunicorn service."""
 
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
@@ -22,7 +22,7 @@ def app():
     try:
         (mux_conf, configfile) = read_mux_conf()
     except Exception as e:
-        sys.stderr.write(f"Lens3 reading conf failed: {e}\n")
+        sys.stderr.write(f"Lens3 reading config file failed: {e}\n")
         return None
 
     openlog(mux_conf["log_file"],

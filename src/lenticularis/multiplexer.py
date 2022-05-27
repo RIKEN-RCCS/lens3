@@ -15,7 +15,7 @@ import http.client
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 import urllib.parse
-from lenticularis.api import ApiError
+from lenticularis.pooladm import ApiError
 from lenticularis.poolutil import check_bucket_naming
 from lenticularis.utility import Read1Reader, parse_s3_auth
 from lenticularis.utility import get_ip_address
@@ -178,7 +178,7 @@ class Multiplexer():
         return pool_id
 
     def _process_request(self, environ, start_response):
-        """Processes a request from gunicorn.  It forwards a request/response
+        """Processes a request from Gunicorn.  It forwards a request/response
         from/to MinIO."""
 
         # "HTTP_X-Remote-User" is not set in environ.  Refer for the

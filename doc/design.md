@@ -1741,8 +1741,9 @@ start-time ...  last-interrupted-time? ...
 | Key           | Value         | Description   |
 | ----          | ----          | ----          |
 | ep:pool-id    | MinIO-endpoint | |
-| bk:bucket-name | pool-id + policy | |
-| wu:access-key | pool-id       | probe-access from Adm |
+| bk:bucket-name | pool-id + policy | A mapping by a bucket-name |
+| bd:directory  | pool-id       | A bucket-directory occupancy |
+| wu:access-key | pool-id       | A key used for probe-access from Adm |
 | ts:pool-id    | timestamp     | Timestamp on the last access |
 
 Policy indicates public R/W status.
@@ -1751,7 +1752,7 @@ Policy indicates public R/W status.
 
 | Key           | Value         | Description   |
 | ----          | ----          | ----          |
-| id:random     | (pool-id)     | |
+| id:random     | (pool-id)     | An entry to keep uniqueness |
 
 ## Bucket policy
 

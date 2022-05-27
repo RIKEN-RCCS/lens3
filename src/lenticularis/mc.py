@@ -9,7 +9,7 @@ import tempfile
 import json
 from subprocess import Popen, DEVNULL, PIPE
 from signal import signal, alarm, SIGTERM, SIGCHLD, SIGALRM, SIG_IGN
-from lenticularis.utility import remove_trailing_shash
+from lenticularis.utility import remove_trailing_slash
 from lenticularis.utility import decrypt_secret, list_diff3
 from lenticularis.utility import logger
 from lenticularis.utility import random_str
@@ -18,7 +18,7 @@ from lenticularis.utility import random_str
 # MinIO MC command returns a json with keys that are specific to each
 # command.  Some keys shall be recognized in Lens3 and are mapped.
 
-_admin_user_json_keys = {
+_mc_user_info_json_keys = {
     # See the type userMessage in (mc/cmd/admin-user-add.go).
     "status": "status",
     "accessKey": "access_key",
@@ -27,13 +27,15 @@ _admin_user_json_keys = {
     "userStatus": "userStatus",
     "memberOf": "memberOf"}
 
-_list_json_keys = {
-    # See the type contentMessage in (mc/cmd/ls.go).
+
+_mc_list_entry_json_keys = {
+    # See the type contentMessage in (mc/cmd/ls.go).  "key" is a
+    # bucket/file name.  It has a tailing slash for a bucket.
     "status": "status",
     "type": "type",
     "lastModified": "lastModified",
     "size": "size",
-    "key": "key",
+    "key": "name",
     "etag": "etag",
     "url": "url",
     "versionId": "versionId",
@@ -43,9 +45,18 @@ _list_json_keys = {
     "storageClass": "storageClass"}
 
 
-def map_admin_user_json_keys(dict):
-    map = _admin_user_json_keys
-    return {map.get(k, k): v for (k, v) in dict.items()}
+def _intern_user_info(json):
+    """Maps key strings returned from MC to ones in Lens3."""
+    map = _mc_user_info_json_keys
+    return {map.get(k, k): v for (k, v) in json.items()}
+
+
+def _intern_list_entry(json):
+    """Maps key strings returned from MC to ones in Lens3.  It also drops
+    a trailing slash in a bucket name."""
+    map = _mc_list_entry_json_keys
+    return {map.get(k, k): (remove_trailing_slash(v) if k == "key" else v)
+            for (k, v) in json.items()}
 
 
 def assert_mc_success(r, e):
@@ -263,7 +274,7 @@ class Mc():
         (p_, existing) = self.admin_user_list()
         assert p_ is None
         assert_mc_success(existing, "mc.admin_user_list")
-        existing = [map_admin_user_json_keys(e) for e in existing]
+        existing = [_intern_user_info(e) for e in existing]
 
         (ll, pp, rr) = list_diff3(access_keys, lambda b: b.get("access_key"),
                                   existing, lambda e: e.get("access_key"))
@@ -341,11 +352,12 @@ class Mc():
         (p_, existing) = self.list_buckets()
         assert p_ is None
         assert_mc_success(existing, "mc.list_buckets")
+        existing = [_intern_list_entry(e) for e in existing]
 
         logger.debug(f"@@@ buckets = {buckets}")
         logger.debug(f"@@@ existing = {existing}")
-        (ll, pp, rr) = list_diff3(buckets, lambda b: b.get("key"),
-                                  existing, lambda e: remove_trailing_shash(e.get("key")))
+        (ll, pp, rr) = list_diff3(buckets, lambda b: b.get("name"),
+                                  existing, lambda e: e.get("name"))
 
         logger.debug(f"Setup MinIO on bucket-policy:"
                      f" add={ll}, delete={rr}, update={pp}")
@@ -362,7 +374,7 @@ class Mc():
         return children
 
     def _set_bucket_policy_add(self, b):
-        name = b["key"]
+        name = b["name"]
         (p_, r) = self.make_bucket(name)
         assert p_ is None
         assert_mc_success(r, "mc.make_bucket")
@@ -373,7 +385,7 @@ class Mc():
         return []
 
     def _set_bucket_policy_delete(self, e):
-        name = remove_trailing_shash(e["key"])
+        name = remove_trailing_slash(e["name"])
         policy = "none"
         (p, r_) = self.policy_set(name, policy, no_wait=True)
         assert r_ is None
@@ -381,7 +393,7 @@ class Mc():
 
     def _set_bucket_policy_update(self, x):
         (b, e) = x
-        name = b["key"]
+        name = b["name"]
         policy = b["policy"]
         (p_, r) = self.policy_set(name, policy)
         assert p_ is None

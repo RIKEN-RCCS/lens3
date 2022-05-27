@@ -48,13 +48,13 @@
         <span class="label">Create bucket</span>
         <div>
           <span class="label">Bucket name:</span>
-          <input v-model="key" size="64" placeholder="bucket name" />
+          <input v-model="bucket_name" size="64" placeholder="bucket name" />
           <span class="label">Bucket policy for public access:</span>
           <!--
-          <input v-model="policy" size="64" placeholder="bucket policy (none, p
+          <input v-model="bucket_policy" size="64" placeholder="bucket policy (none, p
 ublic, upload, download)" />
           -->
-          <select v-model="policy">
+          <select v-model="bucket_policy">
             <option disabled value="">Please select one</option>
             <option>none</option>
             <option>public</option>

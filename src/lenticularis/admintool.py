@@ -155,8 +155,8 @@ def pool_key_order(e):
         "access_key",
         "secret_key",
         "policy_name",
-        "key",
         "ptr",
+        "name",
         "policy"]
     return order.index(e) if e in order else len(order)
 

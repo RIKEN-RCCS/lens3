@@ -385,10 +385,12 @@ def list_diff3(left, lkeyfn, right, rkeyfn):
     return (lx, px, rx)
 
 
-def remove_trailing_shash(s):
-    if not s.endswith("/"):
+def remove_trailing_slash(s):
+    if s.endswith("/"):
+        return s[:-1]
+    else:
         return s
-    return s[:-1]
+    pass
 
 
 #def format_8601_us(t=None):

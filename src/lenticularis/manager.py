@@ -17,7 +17,7 @@ import time
 import contextlib
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
-from lenticularis.mc import Mc, map_admin_user_json_keys, assert_mc_success
+from lenticularis.mc import Mc, assert_mc_success
 from lenticularis.readconf import read_mux_conf
 from lenticularis.lockdb import LockDB
 from lenticularis.table import get_tables
@@ -25,7 +25,7 @@ from lenticularis.utility import ERROR_EXIT_READCONF, ERROR_EXIT_FORK, ERROR_EXI
 from lenticularis.utility import decrypt_secret, list_diff3
 from lenticularis.utility import gen_access_key_id, gen_secret_access_key
 from lenticularis.utility import make_clean_env, host_port
-from lenticularis.utility import remove_trailing_shash, uniform_distribution_jitter
+from lenticularis.utility import uniform_distribution_jitter
 from lenticularis.utility import wait_one_line_on_stdout
 from lenticularis.utility import logger, openlog
 from lenticularis.utility import tracing

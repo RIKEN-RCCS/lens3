@@ -7,6 +7,7 @@ import os
 import string
 import sys
 import time
+import traceback
 from lenticularis.mc import Mc
 from lenticularis.lockdb import LockDB
 from lenticularis.table import get_tables
@@ -35,6 +36,21 @@ class ApiError(Exception):
     pass
 
 
+def rephrase_exception_message(e):
+    """Returns an error message of an AssertionError.  It is needed
+    because simply printing an AssertionError returns an empty string.
+    """
+
+    if not isinstance(e, AssertionError):
+        return f"{e}"
+    else:
+        (_, _, tb) = sys.exc_info()
+        tr = traceback.extract_tb(tb)
+        (_, _, _, text) = tr[-1]
+        return f"AssertionError: {text}"
+    pass
+
+
 ## Main pool operations are one of the followings and is specified as
 ## the HOW argument:
 ## - how = "create_zone"
@@ -48,7 +64,7 @@ class ApiError(Exception):
 
 def _check_bucket_fmt(bucket):
     bucket_keys = set(bucket.keys())
-    return bucket_keys == {"key", "policy"}
+    return bucket_keys == {"name", "policy"}
 
 
 def _check_access_key_fmt(access_key):
@@ -58,7 +74,7 @@ def _check_access_key_fmt(access_key):
 
 
 def _check_create_bucket_keys(zone):
-    """ zone ::= {"buckets": [{"key": bucket_name,
+    """ _ ::= {"buckets": [{"key": bucket_name,
                                "policy": policy}]}
     """
     if zone.keys() != {"buckets"}:
@@ -68,7 +84,7 @@ def _check_create_bucket_keys(zone):
 
 
 def _check_change_secret_keys(zone):
-    """ zone ::= {"access_keys": [accessKey]}
+    """ _ ::= {"access_keys": [accessKey]}
         accessKey ::= {"access_key": access_key_id,
                        "secret_key": secret (optional),
                        "policy_name": policy (optional) }
@@ -122,7 +138,7 @@ def _check_bucket_names(zone):
 
 
 def _check_bucket_name(zone, bucket):
-    name = bucket["key"]
+    name = bucket["name"]
     if len(name) < 3:
         raise Exception(f"too short bucket name: {name}")
     if len(name) > 63:
@@ -192,15 +208,15 @@ def _list_access_keys(pooldesc):
 
 
 def _add_bucket_to_pool(pooldesc, name, policy):
-    v = {"key": name, "policy": policy}
+    v = {"name": name, "policy": policy}
     buckets = pooldesc.get("buckets")
-    one = next((b for b in buckets if b.get("key") == name), None)
+    one = next((b for b in buckets if b.get("name") == name), None)
     if one is not None:
         logger.debug(f"warning: Bucket name already exists (ignored):"
                      f" name={name}")
     else:
         pass
-    buckets = [b for b in buckets if b.get("key") != name]
+    buckets = [b for b in buckets if b.get("name") != name]
     buckets.append(v)
     pooldesc["buckets"] = buckets
     return
@@ -1112,9 +1128,9 @@ class ZoneAdm():
         if len(new_buckets) != 1:
             raise Exception(f"Updating a bucket for too few/many buckets: {new_buckets}")
         bucket = new_buckets[0]
-        name = bucket["key"]
+        name = bucket["name"]
 
-        if any(b["key"] == name for b in existing.get("buckets", [])):
+        if any(b["name"] == name for b in existing.get("buckets", [])):
             raise Exception(f"Updating a bucket that exists: name={name}")
         merge_pool_descriptions(user_id, existing, zone)
         zone["buckets"].append(bucket)
@@ -1191,7 +1207,7 @@ class ZoneAdm():
 
         #logger.debug(f"@@@ zone = {zone}")
 
-        bucket_names = [bucket.get("key") for bucket in zone.get("buckets", [])]
+        bucket_names = [bucket.get("name") for bucket in zone.get("buckets", [])]
         logger.debug(f"@@@ bucket_names = {bucket_names}")
         bucket_names = uniq_d(bucket_names)
         if bucket_names:
@@ -1418,8 +1434,8 @@ class ZoneAdm():
 
     def _pullup_ptr(self, zoneID, zone, access_key_ptr, direct_host_ptr):
         ##AHO
-        zone["accessKeysPtr"] = [{"key": e, "ptr": v} for (e, v) in access_key_ptr if v == zoneID]
-        zone["directHostnamePtr"] = [{"key": e, "ptr": v} for (e, v) in direct_host_ptr if v == zoneID]
+        zone["accessKeysPtr"] = [{"name": e, "ptr": v} for (e, v) in access_key_ptr if v == zoneID]
+        zone["directHostnamePtr"] = [{"name": e, "ptr": v} for (e, v) in direct_host_ptr if v == zoneID]
         return
 
     def _add_info_for_webui(self, zoneID, zone, groups):
@@ -1432,7 +1448,7 @@ class ZoneAdm():
     def fetch_zone_list(self, user_id, extra_info=False, include_atime=False,
                         decrypt=False, include_userinfo=False, zone_id=None):
 
-        # logger.debug(f"@@@ zone_id = {zone_id}")
+        logger.debug(f"@@@ zone_id = {zone_id}")
         groups = None
         if include_userinfo:
             ui = self.fetch_unix_user_info(user_id)
@@ -1445,7 +1461,7 @@ class ZoneAdm():
             (access_key_ptr, direct_host_ptr) = (None, None)
 
         for zoneID in self.tables.storage_table.list_pool_ids(zone_id):
-            #logger.debug(f"@@@ zoneID = {zoneID}")
+            logger.debug(f"@@@ zoneID = {zoneID}")
             zone = self.tables.storage_table.get_pool(zoneID)
 
             if zone is None:

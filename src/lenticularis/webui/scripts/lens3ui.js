@@ -22,8 +22,8 @@ var edit_pool_data = {
   secretAccessKeyrw: "",
   secretAccessKeyro: "",
   secretAccessKeywo: "",
-  key: "",
-  policy: "",
+  bucket_name: "",
+  bucket_policy: "",
   direct_hostnames: "",
   expiration_date: "",
   permit_status: "",
@@ -139,14 +139,14 @@ function run_create_pool() {
 }
 
 function run_create_bucket() {
-  console.log("create_bucket: name=" + edit_pool_data.key
-              + ", policy=" + edit_pool_data.policy);
+  console.log("create_bucket: name=" + edit_pool_data.bucket_name
+              + ", policy=" + edit_pool_data.bucket_policy);
   return submit_operation(2, () => {
-    var key = edit_pool_data.key;
-    var policy = edit_pool_data.policy;
+    var name = edit_pool_data.bucket_name;
+    var policy = edit_pool_data.bucket_policy;
     method = "PUT";
     url_path = ("/pool/" + edit_pool_data.pool_name + "/bucket");
-    var c = {"bucket": {"key": key, "policy": policy}};
+    var c = {"bucket": {"name": name, "policy": policy}};
     //body = stringify_dict(c, csrf_token);
     c["CSRF-Token"] = csrf_token;
     body = JSON.stringify(c);
@@ -192,11 +192,11 @@ function submit_operation(op, triple) {
   }
   else if (op == 2) {
     // Create bucket.
-    //var key = edit_pool_data.key;
-    //var policy = edit_pool_data.policy;
+    //var name = edit_pool_data.bucket_name;
+    //var policy = edit_pool_data.bucket_policy;
     //method = "PUT";
     //url_path = "/pool/" + edit_pool_data.pool_name + "/buckets";
-    //body = compose_create_bucket_dict(csrf_token, key, policy);
+    //body = compose_create_bucket_dict(csrf_token, name, policy);
     const tt = triple();
     method = tt.method;
     url_path = tt.url_path;
@@ -307,11 +307,11 @@ function compose_update_dict(csrf_token) {
   return body;
 }
 
-function compose_create_bucket_dict(csrf_token, key, policy) {
+function compose_create_bucket_dict(csrf_token, name, policy) {
   if (policy != "none" && policy != "upload" && policy != "download") {
     throw new Error("error: invalid policy: " + policy);
   }
-  var pooldesc = {"buckets": [{"key": key, "policy": policy}]};
+  var pooldesc = {"buckets": [{"name": name, "policy": policy}]};
   var dict = {"pool": pooldesc};
   //return stringify_dict(dict, csrf_token);
   dict["CSRF-Token"] = csrf_token;
@@ -341,7 +341,7 @@ function push_buckets(buckets, bucketList, policy) {
   for (var i = 0; i < xs.length; i++) {
     var bucket = xs[i];
     if (bucket != "") {
-      var v = {"key": bucket, "policy": policy};
+      var v = {"name": bucket, "policy": policy};
       buckets.push(v);
     }
   }
@@ -637,8 +637,8 @@ function copy_pool_desc_for_edit(pooldesc) {
   edit_pool_data.secretAccessKeyro = rokey["secret_key"];
   edit_pool_data.secretAccessKeywo = wokey["secret_key"];
 
-  edit_pool_data.key = "";           // for bucket creation
-  edit_pool_data.policy = "";        // ditto.
+  edit_pool_data.bucket_name = "";
+  edit_pool_data.bucket_policy = "";
 
   edit_pool_data.direct_hostnames = pooldesc["direct_hostnames"].join(' ');
   edit_pool_data.expiration_date = format_rfc3339_if_not_zero(pooldesc["expiration_date"]);
@@ -714,7 +714,7 @@ function scan_buckets(buckets, policy) {
   for (var i = 0; i < buckets.length; i++) {
     var bucket = buckets[i];
     if (bucket["policy"] == policy) {
-      res.push(bucket["key"]);
+      res.push(bucket["name"]);
     }
   }
   return res.join(' ');

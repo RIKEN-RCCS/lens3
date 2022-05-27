@@ -86,8 +86,8 @@ def compare_buckets(existing, zone):
     z = zone.get("buckets")
     if z is None:
         return []
-    e_dic = {i.get("key"): i for i in e}
-    z_dic = {i.get("key"): i for i in z}
+    e_dic = {i.get("name"): i for i in e}
+    z_dic = {i.get("name"): i for i in z}
     #logger.debug(f"@@@ {e_dic} {z_dic}")
     return dict_diff(e_dic, z_dic)
 
@@ -202,6 +202,18 @@ def check_pool_dict_is_sound(pooldesc, user, adm_conf):
     # status: online/offline
     return
 
+def check_user_naming(user_id):
+    return re.fullmatch("^[a-z_][-a-z0-9_]{0,31}$", user_id) is not None
+
+
+def check_pool_naming(pool_id):
+    if pool_id is None:
+        return True
+    else:
+        return re.fullmatch("[a-zA-Z0-9]{20}", pool_id) is not None
+    pass
+
+
 def check_bucket_naming(name):
     """Checks restrictions.  Names are all lowercase.  IT BANS DOTS.  It
     bans "aws", "amazon", "minio", "goog.*", and "g00g.*".
@@ -211,7 +223,7 @@ def check_bucket_naming(name):
     ## [Bucket naming guidelines]
     ## https://cloud.google.com/storage/docs/naming-buckets
     return (re.fullmatch("[a-z0-9-]{3,63}", name) is not None
-            and 
+            and
             re.fullmatch(
                 ("^[0-9.]*$|^.*-$"
                  "|^xn--.*$|^.*-s3alias$|^aws$|^amazon$"
@@ -223,11 +235,11 @@ def _pool_desc_schema(type_number):
     bucket = {
         "type": "object",
         "properties": {
-            "key": {"type": "string"},
+            "name": {"type": "string"},
             "policy": {"type": "string"},
         },
         "required": [
-            "key",
+            "name",
             "policy",
         ],
         "additionalProperties": False,

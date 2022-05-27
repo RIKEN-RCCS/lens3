@@ -107,7 +107,7 @@ class Controller():
         (outs, errs) = (b"", b"")
         try:
             ## It waits for a Manager to write a line on stdout.
-            logger.debug(f"Starting a Manager: cmd={cmd+args}")
+            logger.info(f"Starting a Manager: cmd={cmd+args}")
             with Popen(cmd + args, stdin=DEVNULL, stdout=PIPE, stderr=PIPE,
                        env=env) as p:
                 ##(outs, errs) = p.communicate()
@@ -116,14 +116,16 @@ class Controller():
                 assert p_status == 0
                 ok = True
                 logger.debug(f"A Manager started.")
+                if outs != b"" or errs != b"":
+                    logger.info(f"Output from a Manager:"
+                                f" stdout=({outs}), stderr=({errs})")
+                    pass
         except Exception as e:
             logger.error(f"Starting a Manager failed: exception={e}")
             logger.exception(e)
-            pass
-        if outs != b"":
-            logger.debug(f"Output on stdout from a Manager: {outs}")
-            pass
-        if errs != b"":
-            logger.info(f"Output on stderr from a Manager: {errs}")
+            if outs != b"" or errs != b"":
+                logger.error(f"Output from a Manager:"
+                             f" stdout=({outs}), stderr=({errs})")
+                pass
             pass
         return ok

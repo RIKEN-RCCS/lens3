@@ -1714,11 +1714,15 @@ Note that a bucket-pool has another state `status`, but it is always
 | ar:access-key | pool-id       |       |
 | ps:pool-id    | pool-state    |(json)|
 | ac:pool-id    | timestamp     |       |
-| pr::          | list-of-admissions-of-users |(json)|
+| pr::          | permit-list   |(json)|
 | uu:user       | user-info     |(json)|
 | dr:host       | pool-id       |       |
+| bd:directory  | pool-id       | A bucket-directory occupancy |
 | lk:           | -             |(for locking the whole table)|
 | lk:pool-id    | -             |(for locking a ru:pool-id)|
+
+The "permit-list" is a list of permits of users.  An entry is a tuple
+of (action, user-id), where an action is "allow" or "deny".
 
 #### process-table
 
@@ -1742,17 +1746,25 @@ start-time ...  last-interrupted-time? ...
 | ----          | ----          | ----          |
 | ep:pool-id    | MinIO-endpoint | |
 | bk:bucket-name | pool-id + policy | A mapping by a bucket-name |
-| bd:directory  | pool-id       | A bucket-directory occupancy |
 | wu:access-key | pool-id       | A key used for probe-access from Adm |
 | ts:pool-id    | timestamp     | Timestamp on the last access |
 
-Policy indicates public R/W status.
+"pool-id+policy" is a record with keys "pool" and "policy".  Policy
+indicates public R/W status: {"none", "upload", "download", "public"},
+which are borrowed from MinIO.
 
-#### identifier-table
+#### pickone-table
 
 | Key           | Value         | Description   |
 | ----          | ----          | ----          |
-| id:random     | (pool-id)     | An entry to keep uniqueness |
+| id:random     | key-description | An entry to keep uniqueness |
+
+It stores generated keys for pool-id's and access-keys.  A
+key-description is a record {"use": usage, "owner": owner,
+"secret_key": secret, "policy_name": policy}, where a usage/owner pair
+is either "pool"/user-id or "access_key"/pool-id.  A secret-key and a
+policy-name fields are omitted for a pool-id.  A policy-name is one of
+{"readwrite", "readonly", "writeonly"}.
 
 ## Bucket policy
 

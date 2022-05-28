@@ -8,9 +8,11 @@ import os
 import sys
 import time
 import json
+from typing import Union
 from pydantic import BaseModel
 from fastapi.staticfiles import StaticFiles
 from fastapi import Body, Depends, FastAPI, Request, status
+from fastapi import Header
 from fastapi.responses import HTMLResponse
 from fastapi.responses import JSONResponse
 from fastapi_csrf_protect import CsrfProtect
@@ -68,8 +70,7 @@ async def _get_traceid(request: Request):
 
 def _make_json_response(status_code, reason, values, csrf_protect,
                         client_addr, user_id, request):
-    # > HTTP_503_SERVICE_UNAVAILABLE
-    # > Retry-After
+    # (Maybe, consider adding a "Retry-After" header for 503 error).
     if reason is not None:
         content = {"status": "error", "reason": reason}
         ##status_code = status.HTTP_400_BAD_REQUEST
@@ -116,7 +117,36 @@ def csrf_protect_exception_handler(request: Request, exc: CsrfProtectError):
     user_id = request.headers.get("X-REMOTE-USER")
     client_addr = request.headers.get("X-REAL-IP")
     log_access(f"{exc.status_code}", client_addr, user_id, request.method, request.url)
-    return JSONResponse(status_code=exc.status_code, content=content)
+    response = JSONResponse(status_code=exc.status_code, content=content)
+    return response
+
+
+@app.middleware("http")
+async def validate_session(request: Request, call_next):
+    peer_addr = str(request.client.host)
+    peer_addr = make_typical_ip_address(peer_addr)
+    user_id = await _get_authorized_user(request)
+    client_addr = await _get_client_addr(request)
+
+    if peer_addr not in api.trusted_proxies:
+        logger.error(f"Proxy {peer_addr} is not trusted.")
+        content = {"status": "error",
+                   "reason": f"Configuration error (check trusted_proxies)."}
+        status_code = status.HTTP_403_FORBIDDEN
+        # Access log contains client_addr but peer_addr.
+        log_access(f"{status_code}", client_addr, user_id, request.method, request.url)
+        return JSONResponse(status_code=status_code, content=content)
+
+    if (not api.zone_adm.check_user_is_authorized(user_id)):
+        logger.info(f"Accessing Adm by a bad user: ({user_id})")
+        content = {"status": "error", "reason": f"Bad user: ({user_id})"}
+        content["time"] = str(int(time.time()))
+        status_code = status.HTTP_401_UNAUTHORIZED
+        log_access(f"{status_code}", client_addr, user_id, request.method, request.url)
+        return JSONResponse(status_code=status_code, content=content)
+
+    response = await call_next(request)
+    return response
 
 
 @app.get("/")
@@ -129,6 +159,7 @@ async def app_get_show_ui(request: Request,
     log_access(f"{code}", client_addr, user_id, request.method, request.url)
     with open(os.path.join(_webui_dir, "setting.html")) as f:
         _setting_html_nocache = f.read()
+        pass
     response = HTMLResponse(status_code=code, content=_setting_html_nocache)
     return response
 
@@ -141,8 +172,9 @@ async def app_get_get_template(request: Request,
                                csrf_protect: CsrfProtect = Depends()):
     logger.debug(f"APP.GET /template")
     (code, reason, values) = api.api_get_template(traceid, user_id)
-    return _make_json_response(code, reason, values, csrf_protect,
-                               client_addr, user_id, request)
+    response = _make_json_response(code, reason, values, csrf_protect,
+                                   client_addr, user_id, request)
+    return response
 
 
 @app.get("/pool")
@@ -153,8 +185,9 @@ async def app_get_list_pools(request: Request,
                              csrf_protect: CsrfProtect = Depends()):
     logger.debug(f"APP.GET /pool")
     (code, reason, values) = api.api_list_pools(traceid, user_id, None)
-    return _make_json_response(code, reason, values, csrf_protect,
-                               client_addr, user_id, request)
+    response = _make_json_response(code, reason, values, csrf_protect,
+                                   client_addr, user_id, request)
+    return response
 
 
 @app.get("/pool/{pool_id}")
@@ -166,12 +199,34 @@ async def app_get_get_pool(pool_id: str,
                            csrf_protect: CsrfProtect = Depends()):
     logger.debug(f"APP.GET /pool/{pool_id}")
     (code, reason, values) = api.api_list_pools(traceid, user_id, pool_id)
-    return _make_json_response(code, reason, values, csrf_protect,
-                               client_addr, user_id, request)
+    response = _make_json_response(code, reason, values, csrf_protect,
+                                   client_addr, user_id, request)
+    return response
 
 
 @app.post("/pool")
-async def app_post_create_pool(request: Request,
+async def app_post_create_pool(
+        request: Request,
+        x_remote_user: Union[str, None] = Header(default=None),
+        x_real_ip: Union[str, None] = Header(default=None),
+        x_traceid: Union[str, None] = Header(default=None),
+        csrf_protect: CsrfProtect = Depends()):
+    logger.debug(f"APP.POST /pool")
+    user_id = x_remote_user
+    client_addr = x_real_ip
+    traceid = x_traceid
+    body = await _get_request_body(request)
+    token = body.get("CSRF-Token")
+    csrf_protect.validate_csrf(token)
+    pooldesc = body.get("pool")
+    (code, reason, values) = api.api_make_pool(traceid, user_id, pooldesc)
+    response = _make_json_response(code, reason, values, csrf_protect,
+                                   client_addr, user_id, request)
+    return response
+
+
+## @app.post("/pool")
+async def app_post_create_pool_(request: Request,
                                user_id: str = Depends(_get_authorized_user),
                                traceid: str = Depends(_get_traceid),
                                client_addr: str = Depends(_get_client_addr),
@@ -183,8 +238,9 @@ async def app_post_create_pool(request: Request,
     csrf_protect.validate_csrf(token)
     pooldesc = body.get("pool")
     (code, reason, values) = api.api_create_pool(traceid, user_id, pooldesc)
-    return _make_json_response(code, reason, values, csrf_protect,
-                               client_addr, user_id, request)
+    response = _make_json_response(code, reason, values, csrf_protect,
+                                   client_addr, user_id, request)
+    return response
 
 
 @app.put("/pool/{pool_id}")
@@ -201,8 +257,9 @@ async def app_put_update_pool(pool_id: str,
     csrf_protect.validate_csrf(token)
     pooldesc = body.get("pool")
     (code, reason, values) = api.api_update_pool(traceid, user_id, pool_id, pooldesc)
-    return _make_json_response(code, reason, values, csrf_protect,
-                               client_addr, user_id, request)
+    response = _make_json_response(code, reason, values, csrf_protect,
+                                   client_addr, user_id, request)
+    return response
 
 
 ##@app.put("/pool/{pool_id}/buckets")
@@ -219,8 +276,9 @@ async def app_put_update_buckets(pool_id: str,
     csrf_protect.validate_csrf(token)
     pooldesc = body.get("pool")
     (code, reason, values) = api.api_update_buckets(traceid, user_id, pool_id, pooldesc)
-    return _make_json_response(code, reason, values, csrf_protect,
-                               client_addr, user_id, request)
+    response = _make_json_response(code, reason, values, csrf_protect,
+                                   client_addr, user_id, request)
+    return response
 
 
 @app.put("/pool/{pool_id}/bucket")
@@ -235,8 +293,9 @@ async def app_put_make_bucket(pool_id: str,
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
     (code, reason, values) = api.api_make_bucket(traceid, user_id, pool_id, body)
-    return _make_json_response(code, reason, values, csrf_protect,
-                               client_addr, user_id, request)
+    response = _make_json_response(code, reason, values, csrf_protect,
+                                   client_addr, user_id, request)
+    return response
 
 
 @app.put("/pool/{pool_id}/accessKeys")
@@ -253,8 +312,9 @@ async def app_put_change_secret(pool_id: str,
     csrf_protect.validate_csrf(token)
     pooldesc = body.get("pool")
     (code, reason, values) = api.api_change_secret(traceid, user_id, pool_id, pooldesc)
-    return _make_json_response(code, reason, values, csrf_protect,
-                               client_addr, user_id, request)
+    response = _make_json_response(code, reason, values, csrf_protect,
+                                   client_addr, user_id, request)
+    return response
 
 
 ## 'how' is one of {"create_zone", "update_zone", "update_buckets",
@@ -280,44 +340,6 @@ async def app_delete_pool(pool_id: str,
     csrf_token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(csrf_token)
     (code, reason, values) = api.api_delete(traceid, user_id, pool_id)
-    return _make_json_response(code, reason, values, csrf_protect,
-                               client_addr, user_id, request)
-
-
-@app.middleware("http")
-async def validate_session(request: Request, call_next):
-    peer_addr = str(request.client.host)
-    peer_addr = make_typical_ip_address(peer_addr)
-    #logger.debug(f"@@@: {request}")
-    #logger.debug(f"@@@: {request.headers}")
-    #logger.debug(f"@@@: {request.method}")
-    #logger.debug(f"@@@: {request.url}")
-    #logger.debug(f"@@@: {request.base_url}")
-    #logger.debug(f"@@@: {request.query_params}")
-    #logger.debug(f"@@@: {request.path_params}")
-
-    user_id = await _get_authorized_user(request)
-    client_addr = await _get_client_addr(request)
-    #logger.debug(f"@@@ api_check_user: {user_id} {client_addr}")
-
-    if peer_addr not in api.trusted_proxies:
-        logger.error(f"Proxy {peer_addr} is not trusted.")
-        content = {"status": "error", "reason": f"Configuration error (trusted_proxies)."}
-        status_code = status.HTTP_403_FORBIDDEN
-        # Access log contains client_addr, but peer_addr.
-        log_access(f"{status_code}", client_addr, user_id, request.method, request.url)
-        return JSONResponse(status_code=status_code, content=content)
-
-    if not api.check_user(user_id):
-        logger.error(f"access denied: user: {user_id}")
-        content = {"status": "error", "reason": f"{user_id}: no such user"}
-        content["time"] = str(int(time.time()))
-        status_code = status.HTTP_401_UNAUTHORIZED
-        log_access(f"{status_code}", client_addr, user_id, request.method, request.url)
-        return JSONResponse(status_code=status_code, content=content)
-
-    #logger.debug(f"request={request} method={request.method} url={request.url}")
-
-    response = await call_next(request)
-
+    response = _make_json_response(code, reason, values, csrf_protect,
+                                   client_addr, user_id, request)
     return response

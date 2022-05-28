@@ -7,11 +7,13 @@ import os
 import string
 import sys
 import time
+import posixpath
 import traceback
 from lenticularis.mc import Mc
 from lenticularis.lockdb import LockDB
 from lenticularis.table import get_tables
-from lenticularis.table import StorageTable
+from lenticularis.table import Storage_Table
+from lenticularis.poolutil import check_user_naming
 from lenticularis.poolutil import check_bucket_naming
 from lenticularis.utility import make_clean_env
 from lenticularis.utility import decrypt_secret, encrypt_secret
@@ -97,8 +99,8 @@ def _check_change_secret_keys(zone):
 
 def _check_zone_keys(zone):
     given_keys = set(zone.keys())
-    mandatory_keys = StorageTable.pool_desc_required_keys
-    optional_keys = StorageTable.pool_desc_optional_keys
+    mandatory_keys = Storage_Table.pool_desc_required_keys
+    optional_keys = Storage_Table.pool_desc_optional_keys
     allowed_keys = mandatory_keys.union(optional_keys)
     ##mandatory_keys = {"owner_gid", "buckets_directory", "buckets", "access_keys",
     ##                  "direct_hostnames", "expiration_date", "online_status"}
@@ -110,7 +112,7 @@ def _check_zone_keys(zone):
 
 
 def check_pool_owner(user_id, pool_id, pool):
-    ## It uses a user-id as an owner if it is undefined."""
+    ## It uses a user-id as an owner if it is undefined.
     ##AHO
     owner = pool.get("owner_uid", user_id)
     if owner != user_id:
@@ -333,12 +335,20 @@ class ZoneAdm():
     def fetch_unix_user_info(self, user_id):
         return self.tables.storage_table.get_unix_user_info(user_id)
 
-    def check_user(self, user_id):  # API
-        return self.fetch_unix_user_info(user_id) is not None
-
     def delete_unix_user_info(self, user_id):
         self.tables.storage_table.del_unix_user_info(user_id)
         return
+
+    def check_user_is_authorized(self, user_id):
+        if user_id is None:
+            return False
+        elif not check_user_naming(user_id):
+            return False
+        elif self.fetch_unix_user_info(user_id) is None:
+            return False
+        else:
+            return True
+        pass
 
     def create_pool(self, traceid, user_id, pooldesc0):
         decrypt=True
@@ -377,6 +387,131 @@ class ZoneAdm():
         return self._do_update_buckets(how, traceid, user_id, zone_id, zone,
                                        decrypt=decrypt)
 
+    def make_pool(self, traceid, user_id, pooldesc0):
+
+        #assert "owner_uid" in pooldesc0
+        assert "owner_gid" in pooldesc0
+        #assert "root_secret" in pooldesc0
+        assert "buckets_directory" in pooldesc0
+        #assert "buckets", existing in pooldesc0
+        #assert "access_keys" in pooldesc0
+        #assert "direct_hostnames" in pooldesc0
+        #assert "expiration_date" in pooldesc0
+        #assert "online_status" in pooldesc0
+
+        permit_list = self.tables.storage_table.get_allow_deny_rules()
+
+        ui = self.fetch_unix_user_info(user_id)
+        assert ui is not None
+        groups = ui.get("groups")
+
+        ##AHO
+        dummy_access_keys = [
+            {"access_key": gen_access_key_id(),
+             "secret_key": gen_secret_access_key(),
+             "policy_name": p} for p
+            in ["readwrite", "readonly", "writeonly"]]
+
+        pooldesc0["pool_name"] = "(* given later *)"
+        pooldesc0["root_secret"] = "(* FAKE VALUE *)"
+        pooldesc0["owner_uid"] = user_id
+        pooldesc0["buckets"] = []
+        pooldesc0["access_keys"] = dummy_access_keys
+        pooldesc0["direct_hostnames"] = []
+        pooldesc0["expiration_date"] = self.determine_expiration_date()
+        pooldesc0["permit_status"] = check_permission(user_id, permit_list)
+        pooldesc0["online_status"] = "online"
+        #pooldesc0["groups"] = groups
+        #pooldesc0["atime"] = "0"
+        #pooldesc0["directHostnameDomains"] = self.direct_hostname_domains
+        #pooldesc0["facadeHostname"] = self.facade_hostname
+        #pooldesc0["endpoint_url"] = self.endpoint_urls({"direct_hostnames": []})
+
+        _check_zone_keys(pooldesc0)
+
+        bd = pooldesc0.get("buckets_directory")
+        path = posixpath.normpath(bd)
+        if not posixpath.isabs(path):
+            raise ApiError(400, (f"Buckets-directory is not absolute:"
+                                 f" path=({path})"))
+
+        #_encrypt_or_generate(zone, "root_secret")
+        #check_pool_is_well_formed(zone, user_id)
+        #check_pool_dict_is_sound(zone, user_id, self.adm_conf)
+        #_check_zone_values(user_id, zone)
+
+        pool_id = None
+        probe_access = None
+        try:
+            pool_id = self.tables.make_unique_id("pool", user_id)
+            pooldesc0["pool_name"] = pool_id
+            probe_access = self.tables.make_unique_id("access_key", pool_id)
+            pooldesc0["probe_access"] = probe_access
+            self.tables.set_probe_access(probe_access, pool_id)
+
+            (ok, holder) = self.tables.set_buckets_directory(path, pool_id)
+            if not ok:
+                owner = self._get_pool_owner(holder)
+                raise ApiError(400, (f"Buckets-directory is already used:"
+                                     f" path=({path}), holder={owner}"))
+            try:
+                self._store_pool_in_lock(traceid, user_id, pooldesc0)
+            except Exception as e:
+                self.tables.delete_buckets_directory(path)
+                raise
+            pass
+        except Exception as e:
+            if pool_id is not None:
+                self.tables.delete_id_unconditionally(pool_id)
+                pass
+            if probe_access is not None:
+                self.tables.delete_id_unconditionally(probe_access)
+                self.tables.delete_probe_access(probe_access)
+                pass
+            raise
+        pooldesc1 = self._gather_pool_desc(traceid, pool_id)
+        assert pooldesc1 is not None
+        check_pool_is_well_formed(pooldesc1, None)
+        return pooldesc1
+
+    def _store_pool_in_lock(self, traceid, user_id, pooldesc0):
+        permission=None
+        initialize=True
+        decrypt=True
+
+        pool_id = pooldesc0["pool_name"]
+        assert pool_id is not None
+
+        lock = LockDB(self.tables.storage_table, "Adm")
+        lock_status = False
+        try:
+            lock_status = self._lock_pool_table(lock)
+            self.tables.storage_table.set_pool(pool_id, pooldesc0)
+            self.tables.storage_table.set_atime(pool_id, "0")
+        finally:
+            self._unlock_pool_table(lock)
+            pass
+
+        try:
+            self.set_current_mode(pool_id, "initial")
+            self._send_decoy_with_zoneid_ptr(traceid, pool_id)
+        except Exception as e:
+            logger.debug(f"@@@ ignore exception {e}")
+            pass
+
+        ##self.tables.storage_table.set_atime(pool_id, atime_from_arg)
+        ##self.tables.storage_table.ins_ptr(pool_id, pooldesc0)
+
+        mode = self.fetch_current_mode(pool_id)
+
+        if mode not in {"ready"}:
+            logger.error(f"initialize: error: mode is not ready: {mode}")
+            raise Exception(f"initialize: error: mode is not ready: {mode}")
+        else:
+            pass
+
+        return pooldesc0
+
     def make_bucket(self, traceid, user_id, pool_id, bucket, policy):
         assert user_id is not None and pool_id is not None
         assert check_bucket_naming(bucket)
@@ -405,6 +540,78 @@ class ZoneAdm():
             self.tables.routing_table.delete_bucket(bucket)
             raise
         return
+
+    def list_pools(self, traceid, user_id, pool_id):
+        """It lists all pools of the user when pool-id is None."""
+        assert user_id is not None
+        groups = None
+        decrypt = True
+        include_atime = True
+        include_userinfo = True
+        if include_userinfo:
+            ui = self.fetch_unix_user_info(user_id)
+            groups = ui.get("groups") if ui is not None else None
+        extra_info = False
+        if extra_info:
+            (access_key_ptr, direct_host_ptr) = self.tables.storage_table.get_ptr_list()
+        else:
+            (access_key_ptr, direct_host_ptr) = (None, None)
+            pass
+
+        pool_list = []
+        for id in self.tables.storage_table.list_pool_ids(pool_id):
+            pooldesc = self._gather_pool_desc(traceid, id)
+            if pooldesc is None:
+                logger.debug(f"Pool deleted in race; list-pools runs"
+                             f" without a lock (ignored): {id}")
+                continue
+            if pooldesc["owner_uid"] != user_id:
+                continue
+
+            pooldesc["pool_name"] = id
+            if decrypt:
+                self.decrypt_access_keys(pooldesc)
+                pass
+
+            pooldesc["minio_state"] = self.fetch_current_mode(id)
+            if include_atime:
+                atime = self.tables.storage_table.get_atime(id)
+                pooldesc["atime"] = atime
+                pass
+
+            if extra_info:
+                self._pullup_ptr(id, pooldesc, access_key_ptr, direct_host_ptr)
+                pass
+
+            if include_userinfo:
+                self._add_info_for_webui(id, pooldesc, groups)
+                pass
+
+            pool_list.append(pooldesc)
+            pass
+        return (pool_list, [])
+
+    def _gather_pool_desc(self, traceid, pool_id):
+        pooldesc = self.tables.storage_table.get_pool(pool_id)
+        if pooldesc is None:
+            return None
+        bd = self.tables.storage_table.get_buckets_directory_of_pool(pool_id)
+        assert bd is not None
+        pooldesc["buckets_directory"] = bd
+        bb = self.tables.routing_table.list_buckets(pool_id)
+        pooldesc["buckets"] = bb
+        ##pooldesc["probe_access"]
+
+        ##AHO LATER
+        ##kk = self.tables.pickone_table.list_access_keys(pool_id)
+        ##pooldesc["access_keys"] = kk
+
+        ##pooldesc["direct_hostnames"]
+        ##pooldesc["expiration_date"]
+        ##pooldesc["permit_status"]
+        ##pooldesc["online_status"]
+        ##pooldesc["minio_state"]
+        return pooldesc
 
     def change_secret(self, traceid, user_id, zone_id, zone, *,
                       include_atime=False,
@@ -485,12 +692,14 @@ class ZoneAdm():
         self.tables.storage_table.clear_all(everything=everything)
         self.tables.process_table.clear_all(everything=everything)
         self.tables.routing_table.clear_routing(everything=everything)
+        self.tables.pickone_table.clear_all(everything=everything)
         return
 
     def print_database(self):
         self.tables.storage_table.print_all()
         self.tables.process_table.print_all()
         self.tables.routing_table.print_all()
+        self.tables.pickone_table.print_all()
         return
 
     def fetch_multiplexer_list(self):
@@ -1385,12 +1594,10 @@ class ZoneAdm():
         return str(expDate)
 
     def generate_template(self, user_id):
+        # It excludes "root_secret".
         ui = self.fetch_unix_user_info(user_id)
         assert ui is not None
         groups = ui.get("groups")
-
-        ## Excluding: "root_secret".
-
         return {
             "owner_uid": user_id,
             "owner_gid": groups[0],
@@ -1478,7 +1685,6 @@ class ZoneAdm():
                 self.decrypt_access_keys(zone)
 
             self._pullup_mode(zoneID, zone)
-
             if include_atime:
                 self._pullup_atime(zoneID, zone)
 

@@ -9,7 +9,6 @@ from lenticularis.pooladm import ApiError
 from lenticularis.pooladm import ZoneAdm
 from lenticularis.pooladm import check_pool_owner
 from lenticularis.pooladm import rephrase_exception_message
-from lenticularis.poolutil import check_user_naming
 from lenticularis.poolutil import check_pool_naming
 from lenticularis.table import get_tables
 from lenticularis.utility import get_ip_address
@@ -28,14 +27,9 @@ class Api():
         logger.debug(f"@@@ self.trusted_proxies = {self.trusted_proxies}")
         return
 
-    def check_user(self, user_id):
-        return self.zone_adm.check_user(user_id)
-
     def api_get_template(self, traceid, user_id):
         try:
             assert user_id is not None
-            if not check_user_naming(user_id):
-                return (403, f"Bad user-id={user_id}", [])
             return (200, None, {"pool_list": [self.zone_adm.generate_template(user_id)]})
         except Exception as e:
             logger.exception(e)
@@ -45,24 +39,21 @@ class Api():
     def api_list_pools(self, traceid, user_id, pool_id):
         try:
             assert user_id is not None
-            if not check_user_naming(user_id):
-                return (403, f"Bad user-id={user_id}", [])
             if not check_pool_naming(pool_id):
                 return (403, f"Bad pool-id={pool_id}", [])
-            (zone_list, _) = self.zone_adm.fetch_zone_list(user_id,
-                             decrypt=True, include_atime=True, include_userinfo=True,
-                             zone_id=pool_id)
-            return (200, None, {"pool_list": zone_list})
+            ##(zone_list, _) = self.zone_adm.fetch_zone_list(
+            ##user_id, decrypt=True, include_atime=True, include_userinfo=True,
+            ##zone_id=pool_id)
+            (pools, _) = self.zone_adm.list_pools(traceid, user_id, pool_id)
+            return (200, None, {"pool_list": pools})
         except Exception as e:
             logger.exception(e)
             return (500, f"{e}", [])
         pass
 
-    def api_create_pool(self, traceid, user_id, pooldesc0):
+    def api_create_pool__(self, traceid, user_id, pooldesc0):
         try:
             assert user_id is not None
-            if not check_user_naming(user_id):
-                return (403, f"Bad user-id={user_id}", [])
             check_pool_owner(user_id, None, pooldesc0)
             pooldesc1 = self.zone_adm.create_pool(traceid, user_id, pooldesc0)
             return (200, None, {"pool_list": [pooldesc1]})
@@ -74,8 +65,6 @@ class Api():
     def api_update_pool(self, traceid, user_id, pool_id, zone):
         try:
             assert user_id is not None
-            if not check_user_naming(user_id):
-                return (403, f"Bad user-id={user_id}", [])
             if not check_pool_naming(pool_id):
                 return (403, f"Bad pool-id={pool_id}", [])
             check_pool_owner(user_id, pool_id, zone)
@@ -89,8 +78,6 @@ class Api():
     def api_update_buckets(self, traceid, user_id, pool_id, zone):
         try:
             assert user_id is not None
-            if not check_user_naming(user_id):
-                return (403, f"Bad user-id={user_id}", [])
             if not check_pool_naming(pool_id):
                 return (403, f"Bad pool-id={pool_id}", [])
             check_pool_owner(user_id, pool_id, zone)
@@ -101,11 +88,20 @@ class Api():
             return (500, f"{e}", None)
         pass
 
+    def api_make_pool(self, traceid, user_id, pooldesc0):
+        try:
+            assert user_id is not None
+            check_pool_owner(user_id, None, pooldesc0)
+            pooldesc1 = self.zone_adm.make_pool(traceid, user_id, pooldesc0)
+            return (200, None, {"pool_list": [pooldesc1]})
+        except Exception as e:
+            logger.exception(e)
+            return (500, f"{e}", None)
+        pass
+
     def api_make_bucket(self, traceid, user_id, pool_id, body):
         try:
             assert user_id is not None
-            if not check_user_naming(user_id):
-                return (403, f"Bad user-id={user_id}", [])
             if not check_pool_naming(pool_id):
                 return (403, f"Bad pool-id={pool_id}", [])
             d = body.get("bucket")
@@ -131,8 +127,6 @@ class Api():
     def api_change_secret(self, traceid, user_id, pool_id, zone):
         try:
             assert user_id is not None
-            if not check_user_naming(user_id):
-                return (403, f"Bad user-id={user_id}", [])
             if not check_pool_naming(pool_id):
                 return (403, f"Bad pool-id={pool_id}", [])
             check_pool_owner(user_id, pool_id, zone)
@@ -163,8 +157,6 @@ class Api():
     def api_delete(self, traceid, user_id, pool_id):
         try:
             assert user_id is not None and pool_id is not None
-            if not check_user_naming(user_id):
-                return (403, f"Bad user-id={user_id}", [])
             if not check_pool_naming(pool_id):
                 return (403, f"Bad pool-id={pool_id}", [])
             self.zone_adm.delete_zone(traceid, user_id, pool_id)

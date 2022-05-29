@@ -182,7 +182,14 @@ function run_make_access_key(rw) {
 
 function run_delete_access_key(key) {
   console.log("delete_access_key: " + key);
-  return submit_operation(6, null)
+  return submit_operation(2, () => {
+    const method = "DELETE";
+    const url_path = ("/pool/" + edit_pool_data.pool_name + "/secret/" + key);
+    const c = {};
+    c["CSRF-Token"] = csrf_token;
+    body = JSON.stringify(c);
+    return {method, url_path, body};
+  });
 }
 
 function submit_operation(op, triple) {
@@ -661,12 +668,12 @@ function copy_pool_desc_for_edit(pooldesc) {
   }
 
   edit_pool_data.accessKeys = accessKeys;
-  edit_pool_data.accessKeyIDrw = rwkey["access_key"];
-  edit_pool_data.accessKeyIDro = rokey["access_key"];
-  edit_pool_data.accessKeyIDwo = wokey["access_key"];
-  edit_pool_data.secretAccessKeyrw = rwkey["secret_key"];
-  edit_pool_data.secretAccessKeyro = rokey["secret_key"];
-  edit_pool_data.secretAccessKeywo = wokey["secret_key"];
+  //edit_pool_data.accessKeyIDrw = rwkey["access_key"];
+  //edit_pool_data.accessKeyIDro = rokey["access_key"];
+  //edit_pool_data.accessKeyIDwo = wokey["access_key"];
+  //edit_pool_data.secretAccessKeyrw = rwkey["secret_key"];
+  //edit_pool_data.secretAccessKeyro = rokey["secret_key"];
+  //edit_pool_data.secretAccessKeywo = wokey["secret_key"];
 
   var keys = pooldesc["access_keys"];
   const rwkeys = keys.filter(d => d["policy_name"] == "readwrite")

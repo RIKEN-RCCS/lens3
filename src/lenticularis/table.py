@@ -114,8 +114,8 @@ class Tables():
 
     ## Pickone-table:
 
-    def make_unique_id(self, usage, owner):
-        return self.pickone_table.make_unique_id(usage, owner)
+    def make_unique_id(self, usage, owner, info={}):
+        return self.pickone_table.make_unique_id(usage, owner, info)
 
     def delete_id_unconditionally(self, id):
         self.pickone_table.delete_id_unconditionally(id)
@@ -602,8 +602,10 @@ class Pickone_Table(Table_Common):
 
     _id_desc_keys = {"use", "key"}
 
-    def make_unique_id(self, usage, owner):
-        desc = json.dumps({"use": usage, "owner": owner})
+    def make_unique_id(self, usage, owner, info={}):
+        now = int(time.time())
+        d = {"use": usage, "owner": owner, **info, "creation_date": now}
+        desc = json.dumps(d)
         id_generation_loops = 0
         while True:
             id = gen_access_key_id()
@@ -628,14 +630,16 @@ class Pickone_Table(Table_Common):
         pass
 
     def list_access_keys(self, pool_id):
-        kk0 = _scan_table(self.dbase.r, self._id_prefix,
-                          None, value=self.get_id)
-        kk1 = [{"access_key": id,
-                "secret_key": d["secret_key"],
-                "policy_name": d["policy_name"]}
-               for (id, d)
-               in kk0 if d is not None and d.get("pool") == pool_id]
-        return kk1
+        ki = _scan_table(self.dbase.r, self._id_prefix, None,
+                         value=self.get_id)
+        keys = [{"access_key": id,
+                 "secret_key": d.get("secret_key"),
+                 "policy_name": d.get("policy_name")}
+                for (id, d) in ki
+                if (d is not None
+                    and d.get("use") == "access_key"
+                    and d.get("owner") == pool_id)]
+        return keys
 
     def clear_all(self, everything):
         delete_all(self.dbase.r, self._id_prefix)

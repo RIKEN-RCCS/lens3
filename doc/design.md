@@ -1761,10 +1761,11 @@ which are borrowed from MinIO.
 
 It stores generated keys for pool-id's and access-keys.  A
 key-description is a record {"use": usage, "owner": owner,
-"secret_key": secret, "policy_name": policy}, where a usage/owner pair
-is either "pool"/user-id or "access_key"/pool-id.  A secret-key and a
-policy-name fields are omitted for a pool-id.  A policy-name is one of
-{"readwrite", "readonly", "writeonly"}.
+"secret_key": secret, "policy_name": policy, "creation_data": date},
+where a usage/owner pair is either "pool"/user-id or
+"access_key"/pool-id.  A secret-key and a policy-name fields are
+missing for a pool-id.  A policy-name is one of {"readwrite",
+"readonly", "writeonly"}.
 
 ## Bucket policy
 

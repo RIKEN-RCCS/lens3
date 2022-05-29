@@ -45,13 +45,13 @@ _mc_list_entry_json_keys = {
     "storageClass": "storageClass"}
 
 
-def _intern_user_info(json):
+def intern_mc_user_info(json):
     """Maps key strings returned from MC to ones in Lens3."""
     map = _mc_user_info_json_keys
     return {map.get(k, k): v for (k, v) in json.items()}
 
 
-def _intern_list_entry(json):
+def intern_mc_list_entry(json):
     """Maps key strings returned from MC to ones in Lens3.  It also drops
     a trailing slash in a bucket name."""
     map = _mc_list_entry_json_keys
@@ -274,7 +274,7 @@ class Mc():
         (p_, existing) = self.admin_user_list()
         assert p_ is None
         assert_mc_success(existing, "mc.admin_user_list")
-        existing = [_intern_user_info(e) for e in existing]
+        existing = [intern_mc_user_info(e) for e in existing]
 
         (ll, pp, rr) = list_diff3(access_keys, lambda b: b.get("access_key"),
                                   existing, lambda e: e.get("access_key"))
@@ -352,7 +352,7 @@ class Mc():
         (p_, existing) = self.list_buckets()
         assert p_ is None
         assert_mc_success(existing, "mc.list_buckets")
-        existing = [_intern_list_entry(e) for e in existing]
+        existing = [intern_mc_list_entry(e) for e in existing]
 
         logger.debug(f"@@@ buckets = {buckets}")
         logger.debug(f"@@@ existing = {existing}")

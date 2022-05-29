@@ -103,12 +103,12 @@ class Tables():
 
     ## Routing-table:
 
-    def set_probe_access(self, access_key, pool_id):
-        self.routing_table.set_probe_access(access_key, pool_id)
+    def set_probe_key(self, access_key, pool_id):
+        self.routing_table.set_probe_key(access_key, pool_id)
         pass
 
-    def delete_probe_access(self, access_key):
-        self.routing_table.delete_probe_access(access_key)
+    def delete_probe_key(self, access_key):
+        self.routing_table.delete_probe_key(access_key)
         pass
 
 
@@ -554,16 +554,16 @@ class Routing_Table(Table_Common):
         self.dbase.delete(key)
         pass
 
-    def set_probe_access(self, access_key, pool_id):
+    def set_probe_key(self, access_key, pool_id):
         key = f"{self._probe_access_prefix}{access_key}"
         self.dbase.set(key, pool_id)
         pass
 
-    def get_probe_access(self, access_key):
+    def get_probe_key(self, access_key):
         key = f"{self._probe_access_prefix}{access_key}"
         return self.dbase.get(key)
 
-    def delete_probe_access(self, access_key):
+    def delete_probe_key(self, access_key):
         key = f"{self._probe_access_prefix}{access_key}"
         self.dbase.delete(key)
         pass
@@ -603,6 +603,8 @@ class Pickone_Table(Table_Common):
     _id_desc_keys = {"use", "key"}
 
     def make_unique_id(self, usage, owner, info={}):
+        assert usage in {"pool", "access_key"}
+        assert usage != "access_key" or info != {}
         now = int(time.time())
         d = {"use": usage, "owner": owner, **info, "creation_date": now}
         desc = json.dumps(d)
@@ -630,6 +632,10 @@ class Pickone_Table(Table_Common):
         pass
 
     def list_access_keys(self, pool_id):
+        """It drops an access-key for probing.  A probe access-key has no
+        corresponding secret-key and it is used only to wake up MinIO
+        from Adm.
+        """
         ki = _scan_table(self.dbase.r, self._id_prefix, None,
                          value=self.get_id)
         keys = [{"access_key": id,
@@ -638,7 +644,8 @@ class Pickone_Table(Table_Common):
                 for (id, d) in ki
                 if (d is not None
                     and d.get("use") == "access_key"
-                    and d.get("owner") == pool_id)]
+                    and d.get("owner") == pool_id
+                    and d.get("secret_key") != "")]
         return keys
 
     def clear_all(self, everything):

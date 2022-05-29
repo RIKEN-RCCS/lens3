@@ -2,7 +2,6 @@
 from/to MinIO.
 """
 
-
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
@@ -220,15 +219,14 @@ class Multiplexer():
                      f" {request_method} {request_url};"
                      f" remote=({client_addr}), auth=({authorization})")
 
-        if not self._check_forwarding_host(peer_addr):
-            status = "403"
-            log_access(status, *access_info)
+        if not self._check_forwarding_host_trusted(peer_addr):
+            log_access("403", *access_info)
             raise ApiError(403, f"Bad access from remote={client_addr}")
 
         if path == "/":
             # It is not allowed except for probing access from Adm.
-            pool_id = self.tables.routing_table.get_probe_access(access_key)
-            logger.debug(f"MUX by access_key={access_key} for pool_id={pool_id}")
+            pool_id = self.tables.routing_table.get_probe_key(access_key)
+            logger.debug(f"MUX by access-key={access_key} for pool={pool_id}")
         else:
             pool_id = self._find_pool_for_bucket(path, access_info)
             logger.debug(f"MUX by bucket={path} for pool_id={pool_id}")
@@ -399,7 +397,7 @@ class Multiplexer():
             file_wrapper = environ["wsgi.file_wrapper"]
             return file_wrapper(res)
 
-    def _check_forwarding_host(self, peer_addr):
+    def _check_forwarding_host_trusted(self, peer_addr):
         if peer_addr is None:
             return False
         ip = make_typical_ip_address(peer_addr)

@@ -276,6 +276,27 @@ async def app_put_make_bucket(
     return response
 
 
+@app.delete("/pool/{pool_id}/bucket/{bucket}")
+async def app_delete_delete_bucket(
+        request: Request,
+        pool_id: str,
+        bucket: str,
+        x_remote_user: Union[str, None] = Header(default=None),
+        x_real_ip: Union[str, None] = Header(default=None),
+        x_traceid: Union[str, None] = Header(default=None),
+        csrf_protect: CsrfProtect = Depends()):
+    logger.debug(f"APP.DELETE /pool/{pool_id}/bucket/{bucket}")
+    (user_id, client_addr, traceid) = (x_remote_user, x_real_ip, x_traceid)
+    tracing.set(traceid)
+    body = await _get_request_body(request)
+    token = body.get("CSRF-Token")
+    csrf_protect.validate_csrf(token)
+    (code, reason, values) = api.api_delete_bucket(traceid, user_id, pool_id, bucket)
+    response = _make_json_response(code, reason, values, csrf_protect,
+                                   client_addr, user_id, request)
+    return response
+
+
 @app.put("/pool/{pool_id}/secret")
 async def app_put_make_secret(
         request: Request,

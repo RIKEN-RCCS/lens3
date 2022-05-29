@@ -1769,14 +1769,19 @@ missing for a pool-id.  A policy-name is one of {"readwrite",
 
 ## Bucket policy
 
-Public r/w policy is given to a bucket by Lens3-UI.  Lens3-UI invokes
-the mc command, one of the following.
+Public r/w policy is given to a bucket by Lens3.  Lens3 invokes the mc
+command, one of the following.
 
 ```
+mc policy set public alias/bucket
 mc policy set upload alias/bucket
 mc policy set download alias/bucket
-mc policy set public alias/bucket
+mc policy set none alias/bucket
 ```
+
+Accesses to deleted buckets in Lens3 are refused at Mux, but they
+remain accessbile in MinIO, which have access policy "none" and are
+accessible using access-keys.
 
 ### Redis Database Operations
 

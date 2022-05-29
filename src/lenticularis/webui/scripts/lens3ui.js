@@ -11,6 +11,7 @@ var edit_pool_data = {
   pool_name: "",
   pool_name_visible: false,
   edit_pool_visible: false,
+  pool_list_visible: true,
   user: "",
   group: "",
   buckets_directory: "",
@@ -22,6 +23,11 @@ var edit_pool_data = {
   secretAccessKeyrw: "",
   secretAccessKeyro: "",
   secretAccessKeywo: "",
+
+  access_keys_rw: [],
+  access_keys_ro: [],
+  access_keys_wo: [],
+
   bucket_name: "",
   bucket_policy: "",
   direct_hostnames: "",
@@ -49,9 +55,6 @@ var edit_pool_app = new Vue({
     submitChangeAccessKeyRW: run_change_access_key_rw,
     submitChangeAccessKeyRO: run_change_access_key_ro,
     submitChangeAccessKeyWO: run_change_access_key_wo,
-    kick_make_access_key_rw: run_change_access_key_rw,
-    kick_make_access_key_ro: run_change_access_key_ro,
-    kick_make_access_key_wo: run_change_access_key_wo,
   },
 });
 
@@ -64,9 +67,6 @@ var edit_buckets_app = new Vue({
     submitChangeAccessKeyRW: run_change_access_key_rw,
     submitChangeAccessKeyRO: run_change_access_key_ro,
     submitChangeAccessKeyWO: run_change_access_key_wo,
-    kick_make_access_key_rw: run_change_access_key_rw,
-    kick_make_access_key_ro: run_change_access_key_ro,
-    kick_make_access_key_wo: run_change_access_key_wo,
   },
 });
 
@@ -78,9 +78,8 @@ var edit_keys_app = new Vue({
     submitChangeAccessKeyRW: run_change_access_key_rw,
     submitChangeAccessKeyRO: run_change_access_key_ro,
     submitChangeAccessKeyWO: run_change_access_key_wo,
-    kick_make_access_key_rw: run_change_access_key_rw,
-    kick_make_access_key_ro: run_change_access_key_ro,
-    kick_make_access_key_wo: run_change_access_key_wo,
+    kick_make_key: run_make_access_key,
+    kick_delete_key: run_delete_access_key,
   },
 });
 
@@ -147,7 +146,6 @@ function run_create_bucket() {
     method = "PUT";
     url_path = ("/pool/" + edit_pool_data.pool_name + "/bucket");
     var c = {"bucket": {"name": name, "policy": policy}};
-    //body = stringify_dict(c, csrf_token);
     c["CSRF-Token"] = csrf_token;
     body = JSON.stringify(c);
     return {method, url_path, body};
@@ -167,6 +165,24 @@ function run_change_access_key_ro() {
 function run_change_access_key_wo() {
   console.log("change_access_key WO");
   return submit_operation(5, null)
+}
+
+
+function run_make_access_key(rw) {
+  console.log("make_access_key: " + rw);
+  return submit_operation(2, () => {
+    const method = "PUT";
+    const url_path = ("/pool/" + edit_pool_data.pool_name + "/secret");
+    const c = {"policy_name": rw};
+    c["CSRF-Token"] = csrf_token;
+    body = JSON.stringify(c);
+    return {method, url_path, body};
+  });
+}
+
+function run_delete_access_key(key) {
+  console.log("delete_access_key: " + key);
+  return submit_operation(6, null)
 }
 
 function submit_operation(op, triple) {
@@ -523,24 +539,27 @@ function perform_delete_pool(pooldesc) {
 function parse_pool_desc_list(pool_desc_list) {
   var div = "";
   var res = new Array();
-  var items_list = new Array();
+  var pool_li_items = new Array();
   edit_pool_data.pool_name_visible = false;
   edit_pool_data.edit_pool_visible = false;
   for (var k = 0; k < pool_desc_list.length; k++) {
     var pooldesc = pool_desc_list[k];
-    var i = "<input v-on:click='kick_edit_pool(" + k + ")' type='button' class='button' value='Edit' />" +
-        "<input v-on:click='kick_delete_pool(" + k + ")' type='button' class='button' value='Delete' :disabled='edit_pool_data.deleteButtonDisabled' />" +
-        "<ul style='list-style: none;'>" +
-        "<li v-for='item in items_list[" + k + "]'>" +
-        "<span class='label'> {{ item.text.label }}: </span>" +
-        " {{ item.text.value }} " +
-        "</li>" +
-        "</ul>" +
-        "<hr>";
+    var i = "<input v-on:click='kick_edit_pool(" + k
+        + ")' type='button' class='button' value='Edit' />"
+        + "<input v-on:click='kick_delete_pool(" + k
+        + ")' type='button' class='button' value='Delete'"
+        + " :disabled='edit_pool_data.deleteButtonDisabled' />"
+        + "<ul style='list-style: none;'>"
+        + "<li v-for='item in pool_desc_list[" + k + "]'>"
+        + "<span class='label'> {{ item.text.label }}: </span>"
+        + " {{ item.text.value }} "
+        + "</li>"
+        + "</ul>"
+        + "<hr>";
     res.push(i);
-    items_list.push(pool_to_ul_text(pooldesc));
+    pool_li_items.push(render_pool_as_ul_entry(pooldesc));
   }
-  var div = "<div id='pool_list_viewer' v-if='pool_data_visible'>" +
+  var div = "<div id='pool_list_view' v-if='pool_data_visible'>" +
       res.join("") +
       "</div>";
   var el = document.getElementById("pool_list")
@@ -549,7 +568,7 @@ function parse_pool_desc_list(pool_desc_list) {
 
   list_pools_data = {
     pool_data_visible: false,
-    items_list: items_list,
+    pool_desc_list: pool_li_items,
     list_of_pools: pool_desc_list,
   };
 
@@ -569,7 +588,7 @@ function parse_pool_desc_list(pool_desc_list) {
   }
 
   list_pools_app = new Vue({
-    el: "#pool_list_viewer",
+    el: "#pool_list_view",
     data: list_pools_data,
     methods: {
       kick_edit_pool: run_edit_pool,
@@ -582,12 +601,29 @@ function parse_pool_desc_list(pool_desc_list) {
   list_pools_data.pool_data_visible = true;
 }
 
-function pool_to_ul_text(pooldesc) {
+function render_pool_as_ul_entry(pooldesc) {
   var buckets = pooldesc["buckets"];
-  var accessKeys = pooldesc["access_keys"];
-  var rwkey = chooseAccessKey(accessKeys, "readwrite");
-  var rokey = chooseAccessKey(accessKeys, "readonly");
-  var wokey = chooseAccessKey(accessKeys, "writeonly");
+  var keys = pooldesc["access_keys"];
+  //var rwkey = chooseAccessKey_(keys, "readwrite");
+  //var rokey = chooseAccessKey_(keys, "readonly");
+  //var wokey = chooseAccessKey_(keys, "writeonly");
+  const rwkeys = keys.filter(d => d["policy_name"] == "readwrite")
+  const rokeys = keys.filter(d => d["policy_name"] == "readonly")
+  const wokeys = keys.filter(d => d["policy_name"] == "writeonly")
+  const key_entries = [
+    ... rwkeys.reduce((part, d) => part.concat([
+      {text: {label: "Access key (rw)", value: d["access_key"]}},
+      {text: {label: "Secret key", value: d["secret_key"]}},
+    ]), []),
+    ... rokeys.reduce((part, d) => part.concat([
+      {text: {label: "Access key (ro)", value: d["access_key"]}},
+      {text: {label: "Secret key", value: d["secret_key"]}},
+    ]), []),
+    ... wokeys.reduce((part, d) => part.concat([
+      {text: {label: "Access key (wo)", value: d["access_key"]}},
+      {text: {label: "Secret key", value: d["secret_key"]}},
+    ]), []),
+  ];
 
   return [
     {text: {label: "Buckets directory", value: pooldesc["buckets_directory"]}},
@@ -597,12 +633,7 @@ function pool_to_ul_text(pooldesc) {
     {text: {label: "Public buckets", value: scan_buckets(buckets, "public")}},
     {text: {label: "Public download buckets", value: scan_buckets(buckets, "download")}},
     {text: {label: "Public upload buckets", value: scan_buckets(buckets, "upload")}},
-    {text: {label: "Access key ID (RW)", value: rwkey["access_key"]}},
-    {text: {label: "Secret access key", value: rwkey["secret_key"]}},
-    {text: {label: "Access key ID (RO)", value: rokey["access_key"]}},
-    {text: {label: "Secret access key", value: rokey["secret_key"]}},
-    {text: {label: "Access key ID (WO)", value: wokey["access_key"]}},
-    {text: {label: "Secret access key", value: wokey["secret_key"]}},
+    ... key_entries,
     {text: {label: "Endpoint-URL", value: pooldesc["endpoint_url"]}},
     {text: {label: "Pool-ID", value: pooldesc["pool_name"]}},
     {text: {label: "Direct hostname", value: pooldesc["direct_hostnames"].join(' ')}},
@@ -616,9 +647,9 @@ function pool_to_ul_text(pooldesc) {
 
 function copy_pool_desc_for_edit(pooldesc) {
   var accessKeys = pooldesc["access_keys"];
-  var rwkey = chooseAccessKey(accessKeys, "readwrite");
-  var rokey = chooseAccessKey(accessKeys, "readonly");
-  var wokey = chooseAccessKey(accessKeys, "writeonly");
+  var rwkey = chooseAccessKey_(accessKeys, "readwrite");
+  var rokey = chooseAccessKey_(accessKeys, "readonly");
+  var wokey = chooseAccessKey_(accessKeys, "writeonly");
 
   edit_pool_data.pool_name = pooldesc["pool_name"];
   edit_pool_data.user = pooldesc["owner_uid"];
@@ -636,6 +667,15 @@ function copy_pool_desc_for_edit(pooldesc) {
   edit_pool_data.secretAccessKeyrw = rwkey["secret_key"];
   edit_pool_data.secretAccessKeyro = rokey["secret_key"];
   edit_pool_data.secretAccessKeywo = wokey["secret_key"];
+
+  var keys = pooldesc["access_keys"];
+  const rwkeys = keys.filter(d => d["policy_name"] == "readwrite")
+  const rokeys = keys.filter(d => d["policy_name"] == "readonly")
+  const wokeys = keys.filter(d => d["policy_name"] == "writeonly")
+
+  edit_pool_data.access_keys_rw = rwkeys
+  edit_pool_data.access_keys_ro = rokeys
+  edit_pool_data.access_keys_wo = wokeys
 
   edit_pool_data.bucket_name = "";
   edit_pool_data.bucket_policy = "";
@@ -699,7 +739,7 @@ function format_rfc3339_if_not_zero(d) {
   return format_rfc3339(d);
 }
 
-function chooseAccessKey(accessKeys, policyName) {
+function chooseAccessKey_(accessKeys, policyName) {
   for (var i = 0; i < accessKeys.length; i++) {
     var accessKey = accessKeys[i];
     if (accessKey["policy_name"] == policyName) {

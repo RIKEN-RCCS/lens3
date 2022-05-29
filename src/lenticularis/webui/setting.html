@@ -43,7 +43,6 @@
       <div>
         <span class="label">BUCKETS</span>
       </div>
-
       <div>
         <span class="label">Create bucket</span>
         <div>
@@ -67,57 +66,51 @@ ublic, upload, download)" />
         </div>
       </div>
       <div>
-        <span class="label">Private (space-delimited list):</span>
+        <span class="label">Private (with access-keys):</span>
         <input v-model="buckets[0]" size="64" /></div>
       <div>
-        <span class="label">Public read&amp;write for key-less access (space-delimited list):</span>
+        <span class="label">Public download&amp;upload:</span>
         <input v-model="buckets[1]" size="64" /></div>
       <div>
-        <span class="label">Public upload only for key-less access (space-delimited list):</span>
+        <span class="label">Public upload only:</span>
         <input v-model="buckets[2]" size="64" /></div>
       <div>
-        <span class="label">Public download only for key-less access (space-delimited list):</span>
+        <span class="label">Public download only:</span>
         <input v-model="buckets[3]" size="64" /></div>
+      <!--
       <div v-if="submit_button_visible">
         <button v-on:click="kick_create_pool" :disabled="submit_button_disabled">{{submit_button_name}}</button>
       </div>
+      -->
     </div>
-
 
     <div id="edit_keys" v-if="edit_pool_visible">
       <hr />
       <div>
         <span class="label">ACCESS KEYS</span>
       </div>
-      <div>
-        <div>
-          <span class="label">Access key (readwrite)</span>
-          <button v-on:click="kick_make_access_key_rw">Generate</button>
-        </div>
-        <input v-model="accessKeyIDrw" size="64" disabled />
-        <input v-model="secretAccessKeyrw" size="64" disabled />
-        <button v-on:click="submitChangeAccessKeyRW">Change</button>
+      <span class="label">Access keys (rw)</span>
+      <button v-on:click="kick_make_key('rw')">New</button>
+      <div v-for="k in access_keys_rw">
+        <input v-model="k.access_key" size="64" disabled />
+        <input v-model="k.secret_key" size="64" disabled />
+        <button v-on:click="kick_delete_key(k.access_key)">Delete</button>
       </div>
-      <div>
-        <div>
-          <span class="label">Access key (readonly)</span>
-          <button v-on:click="kick_make_access_key_ro">Generate</button>
-        </div>
-        <input v-model="accessKeyIDro" size="64" disabled />
-        <input v-model="secretAccessKeyro" size="64" disabled />
-        <button v-on:click="submitChangeAccessKeyRO">Change</button>
+      <span class="label">Access keys (ro)</span>
+      <button v-on:click="kick_make_key('ro')">New</button>
+      <div v-for="k in access_keys_ro">
+        <input v-model="k.access_key" size="64" disabled />
+        <input v-model="k.secret_key" size="64" disabled />
+        <button v-on:click="kick_delete_key">Delete</button>
       </div>
-      <div>
-        <div>
-          <span class="label">Access key (writeonly)</span>
-          <button v-on:click="kick_make_access_key_wo">Generate</button>
-        </div>
-        <input v-model="accessKeyIDwo" size="64" disabled />
-        <input v-model="secretAccessKeywo" size="64" disabled />
-        <button v-on:click="submitChangeAccessKeyWO">Change</button>
+      <span class="label">Access keys (wo)</span>
+      <button v-on:click="kick_make_key('wo')">New</button>
+      <div v-for="k in access_keys_wo">
+        <input v-model="k.access_key" size="64" disabled />
+        <input v-model="k.secret_key" size="64" disabled />
+        <button v-on:click="kick_delete_key">Delete</button>
       </div>
     </div>
-
 
 <!--
     <div>
@@ -137,7 +130,6 @@ ublic, upload, download)" />
         <span class="label">Mode:</span>
         <input v-model="minio_state" size="64" disabled /></div>
       <hr />
-      <hr />
       <div>
         <span class="label">atime:</span>
         <input v-model="atime" size="64" disabled /></div>
@@ -154,23 +146,28 @@ ublic, upload, download)" />
       <div v-if="submit_button_visible">
         <button v-on:click="kick_create_pool" :disabled="submit_button_disabled">{{submit_button_name}}</button>
       </div>
-      <hr />
     </div>
 -->
 
+    <div id="pool_list_label" v-if="pool_list_visible">
+      <hr />
+      <div id="pool_list" v-if="pool_list_visible">
+      </div>
+    </div>
 
-    <hr />
     <div>
+      <hr />
+      <div>
+        <span class="label">STATUS</span>
+      </div>
+      <div id="show_status">
+        <div>{{message}}</div>
+        <div>{{status}}</div>
+        <div>{{reason}}</div>
+        <div>{{time}}</div>
+      </div>
       <button v-on:click="kick_debug">Debug</button>
     </div>
-    <div id="show_status">
-      <div>{{message}}</div>
-      <div>{{status}}</div>
-      <div>{{reason}}</div>
-      <div>{{time}}</div>
-    </div>
-    <hr />
-    <div id="pool_list"></div>
     <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
     <script src="scripts/lens3ui.js"></script>
   </body>

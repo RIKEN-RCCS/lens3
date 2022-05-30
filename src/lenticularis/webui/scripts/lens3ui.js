@@ -8,10 +8,11 @@
 var csrf_token;
 
 var edit_pool_data = {
-  pool_name: "",
   pool_name_visible: false,
   edit_pool_visible: false,
   pool_list_visible: true,
+  make_pool_mode: true,
+  pool_name: "",
   user: "",
   group: "",
   buckets_directory: "",
@@ -47,30 +48,33 @@ var edit_pool_data = {
   buckets_directory_disabled: false,
 };
 
-var add_pool_app = new Vue({
-  el: "#add_new_pool_button",
+var make_new_pool_button_app = new Vue({
+  el: "#make_new_pool_button",
   methods: {
-    kick_add_new_pool: get_template,
+    kick_add_new_pool: () => {
+      edit_pool_data.make_pool_mode = true;
+      fun_get_template();
+    },
   },
 });
 
-var show_pool_list_app = new Vue({
+var show_pool_list_button_app = new Vue({
   el: "#show_pool_list_button",
   data: show_status_data,
   methods: {
-    kick_show_pool_list: get_pool_list,
+    kick_show_pool_list: () => {
+      edit_pool_data.make_pool_mode = false;
+      run_get_pool_list();
+    },
     kick_debug: run_debug,
   },
 });
 
-var edit_pool_app = new Vue({
-  el: '#create_pool',
+var show_or_edit_pool_app = new Vue({
+  el: '#show_or_edit_pool',
   data: edit_pool_data,
   methods: {
     kick_make_pool: run_make_pool,
-    submitChangeAccessKeyRW: run_change_access_key_rw,
-    submitChangeAccessKeyRO: run_change_access_key_ro,
-    submitChangeAccessKeyWO: run_change_access_key_wo,
   },
 });
 
@@ -98,12 +102,33 @@ var edit_keys_app = new Vue({
   },
 });
 
-//// Pool List (dynamically allocated?) ////
+//// Pool List ////
 
-var list_pools_data = {pool_data_visible: false};
-var list_pools_app;
+var pool_list_view_data = {
+  pool_data_visible: true,
+  pool_desc_list: [],
+  pool_li_list: [],
+};
 
-//// Show Status ////
+var pool_list_view_app = new Vue({
+  el: '#pool_list_view',
+  data: pool_list_view_data,
+  methods: {
+    kick_edit_pool: run_edit_pool,
+    kick_delete_pool: run_delete_pool,
+  }
+});
+
+var pool_list_view_app = new Vue({
+  el: '#pool_list_view22',
+  data: pool_list_view_data,
+  methods: {
+    kick_edit_pool: run_edit_pool,
+    kick_delete_pool: run_delete_pool,
+  }
+});
+
+//// Server Response ////
 
 var show_status_data = {
   message: "---",
@@ -116,7 +141,7 @@ var show_status_app = new Vue({
   el: "#show_status",
   data: show_status_data,
   methods: {
-    kick_show_pool_list: get_pool_list,
+    kick_show_pool_list: run_get_pool_list,
     kick_debug: run_debug,
   },
 });
@@ -124,14 +149,35 @@ var show_status_app = new Vue({
 //// FUNCTIONS ////
 
 function run_make_pool() {
-  var create = edit_pool_data["submit_button_name"] == "Create";
-  console.log("CREATE = " + create);
-  if (create) {
-    return submit_operation(0, null)
-  }
-  else {
-    return submit_operation(1, null)
-  }
+  const directory = edit_pool_data.buckets_directory;
+  const owner_gid = edit_pool_data.group;
+  console.log("make_pool: directory=" + directory);
+  return submit_operation(2, () => {
+    method = "POST";
+    url_path = ("/pool");
+    const c = {"pool": {"buckets_directory": directory,
+                        "owner_gid": owner_gid}};
+    c["CSRF-Token"] = csrf_token;
+    body = JSON.stringify(c);
+    return {method, url_path, body};
+  })
+}
+
+function run_edit_pool(i) {
+  copy_pool_desc_for_edit(pool_list_view_data.pool_desc_list[i]);
+  edit_pool_data.pool_name_visible = true;
+  edit_pool_data.buckets_directory_disabled = true;
+  edit_pool_data.edit_pool_visible = true;
+  pool_list_view_data.pool_data_visible = false;
+  edit_pool_data.submit_button_name = "Update";
+  edit_pool_data.submit_button_disabled = false;
+  edit_pool_data.submit_button_visible = true;
+}
+
+function run_delete_pool(i) {
+  const pooldesc = pool_list_view_data.pool_desc_list[i]
+  const pool_name = pooldesc["pool_name"];
+  perform_delete_pool(pool_name);
 }
 
 function run_make_bucket() {
@@ -279,8 +325,7 @@ function submit_operation(op, triple) {
           render_jsondata(data)
           edit_pool_data.mode = data["pool_list"][0]["minio_state"]
           // update succeeded. do not re-enable button now.
-        })
-      }
+        })}
     })
     .catch(function(err) {
       console.log("Fetch Error: ", err);
@@ -422,7 +467,7 @@ function run_debug() {
   console.log("unparse: " + t + " => " + u);
 }
 
-function get_pool_list() {
+function run_get_pool_list() {
   show_message("get pool list ...");
   clear_status_field();
   const method = "GET";
@@ -440,19 +485,19 @@ function get_pool_list() {
             render_jsondata(data)
             throw new Error(JSON.stringify(data));
           })
-      }
-      response.json().then(function(data) {
-        csrf_token = data["CSRF-Token"];
-        parse_pool_desc_list(data["pool_list"]);
-        show_message("get pool list ... done");
-      })
+      } else {
+        response.json().then(function(data) {
+          csrf_token = data["CSRF-Token"];
+          parse_pool_desc_list(data["pool_list"]);
+          show_message("get pool list ... done");
+        })}
     })
     .catch(function(err) {
       console.log("Fetch Error: ", err);
     });
 }
 
-function get_template() {
+function fun_get_template() {
   edit_pool_data.submit_button_disabled = true;
   show_message("get new pool ...");
   clear_status_field();
@@ -472,21 +517,21 @@ function get_template() {
             // fatal error. do not re-enable the button. enable_update_button();
             throw new Error(JSON.stringify(data));
           })
-      }
-      response.json().then(function(data) {
-        csrf_token = data["CSRF-Token"];
-        get_template_body(data["pool_list"]);
-        show_message("get new pool ... done");
-        edit_pool_data.submit_button_disabled = false;
-        edit_pool_data.submit_button_visible = true;
-      })
+      } else {
+        response.json().then(function(data) {
+          csrf_token = data["CSRF-Token"];
+          fun_get_template_body(data["pool_list"]);
+          show_message("get new pool ... done");
+          edit_pool_data.submit_button_disabled = false;
+          edit_pool_data.submit_button_visible = true;
+        })}
     })
     .catch(function(err) {
       console.log("Fetch Error: ", err);
     });
 }
 
-function get_template_body(pool_desc_list) {
+function fun_get_template_body(pool_desc_list) {
   pooldesc = pool_desc_list[0];
   copy_pool_desc_for_edit(pooldesc);
   edit_pool_data.submit_button_name = "Create";
@@ -495,7 +540,7 @@ function get_template_body(pool_desc_list) {
   edit_pool_data.pool_name_visible = true;
   edit_pool_data.buckets_directory_disabled = false;
   edit_pool_data.edit_pool_visible = false;
-  list_pools_data.pool_data_visible = false;
+  pool_list_view_data.pool_data_visible = false;
 }
 
 function disable_create_button() {
@@ -518,11 +563,10 @@ function enable_delete_button() {
   edit_pool_data.deleteButtonDisabled = false;
 }
 
-function perform_delete_pool(pooldesc) {
+function perform_delete_pool(pool_name) {
   disable_delete_button();
   show_message("delete pool ...");
   clear_status_field();
-  var pool_name = pooldesc["pool_name"];
   console.log(`pool_name = ${pool_name}`);
   const request_options = {
     method: "DELETE",
@@ -539,12 +583,12 @@ function perform_delete_pool(pooldesc) {
             enable_delete_button();
             throw new Error(JSON.stringify(data));
           })
-      }
-      response.json().then(function(data) {
-        show_message("delete pool ... done");
-        enable_delete_button();
-        get_pool_list();
-      })
+      } else {
+        response.json().then(function(data) {
+          show_message("delete pool ... done");
+          enable_delete_button();
+          run_get_pool_list();
+        })}
     })
     .catch(function(err) {
       console.log("Fetch Error: ", err);
@@ -552,68 +596,55 @@ function perform_delete_pool(pooldesc) {
 }
 
 function parse_pool_desc_list(pool_desc_list) {
-  var div = "";
-  var res = new Array();
-  var pool_li_items = new Array();
+  //var div = "";
+  //var res = new Array();
   edit_pool_data.pool_name_visible = false;
   edit_pool_data.edit_pool_visible = false;
+
+  //for (var k = 0; k < pool_desc_list.length; k++) {
+  //  var pooldesc = pool_desc_list[k];
+  //  var i0 = "<input v-on:click='kick_edit_pool(" + k
+  //      + ")' type='button' class='button' value='Edit' />"
+  //      + "<input v-on:click='kick_delete_pool(" + k
+  //      + ")' type='button' class='button' value='Delete'"
+  //      + " :disabled='edit_pool_data.deleteButtonDisabled' />"
+  //      + "<ul style='list-style: none;'>"
+  //      + "<li v-for='item in pool_li_list[" + k + "]'>"
+  //      + "<span class='label'> {{ item.text.label }}: </span>"
+  //      + " {{ item.text.value }} "
+  //      + "</li>"
+  //      + "</ul>";
+  //  const i1 = "<hr />" + i0;
+  //  res.push(i1);
+  //}
+
+  var pool_li_items = new Array();
   for (var k = 0; k < pool_desc_list.length; k++) {
     var pooldesc = pool_desc_list[k];
-    var i0 = "<input v-on:click='kick_edit_pool(" + k
-        + ")' type='button' class='button' value='Edit' />"
-        + "<input v-on:click='kick_delete_pool(" + k
-        + ")' type='button' class='button' value='Delete'"
-        + " :disabled='edit_pool_data.deleteButtonDisabled' />"
-        + "<ul style='list-style: none;'>"
-        + "<li v-for='item in pool_desc_list[" + k + "]'>"
-        + "<span class='label'> {{ item.text.label }}: </span>"
-        + " {{ item.text.value }} "
-        + "</li>"
-        + "</ul>";
-    const i1 = "<hr />" + i0;
-    res.push(i1);
     pool_li_items.push(render_pool_as_ul_entry(pooldesc));
   }
-  var div = "<div id='pool_list_view' v-if='pool_data_visible'>" +
-      res.join("") +
-      "</div>";
-  var el = document.getElementById("pool_list")
-  el.innerHTML = "";
-  el.insertAdjacentHTML("beforeend", div);
 
-  list_pools_data = {
-    pool_data_visible: false,
-    pool_desc_list: pool_li_items,
-    list_of_pools: pool_desc_list,
-  };
+  //var div = "<div id='pool_list_view' v-if='pool_data_visible'>" +
+  //    res.join("") +
+  //    "</div>";
+  //var el = document.getElementById("pool_list")
+  //el.innerHTML = "";
+  //el.insertAdjacentHTML("beforeend", div);
 
-  function run_edit_pool(i) {
-    copy_pool_desc_for_edit(list_pools_data.list_of_pools[i]);
-    edit_pool_data.pool_name_visible = true;
-    edit_pool_data.buckets_directory_disabled = true;
-    edit_pool_data.edit_pool_visible = true;
-    list_pools_data.pool_data_visible = false;
-    edit_pool_data.submit_button_name = "Update";
-    edit_pool_data.submit_button_disabled = false;
-    edit_pool_data.submit_button_visible = true;
-  }
+  pool_list_view_data.pool_li_list = pool_li_items;
+  pool_list_view_data.pool_desc_list = pool_desc_list;
+  pool_list_view_data.pool_data_visible = true;
 
-  function run_delete_pool(i) {
-    perform_delete_pool(list_pools_data.list_of_pools[i])
-  }
+  //pool_list_view_app = new Vue({
+  //  el: "#pool_list_view",
+  //  data: pool_list_view_data,
+  //  methods: {
+  //    kick_edit_pool: run_edit_pool,
+  //    kick_delete_pool: run_delete_pool,
+  //  }
+  //});
 
-  list_pools_app = new Vue({
-    el: "#pool_list_view",
-    data: list_pools_data,
-    methods: {
-      kick_edit_pool: run_edit_pool,
-      kick_delete_pool: run_delete_pool,
-    }
-  });
-
-  list_pools_app.$mount();
-  list_pools_data.list_of_pools = pool_desc_list;
-  list_pools_data.pool_data_visible = true;
+  //pool_list_view_app.$mount();
 }
 
 function render_pool_as_ul_entry(pooldesc) {

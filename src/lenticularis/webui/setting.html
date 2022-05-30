@@ -11,14 +11,14 @@
     <title>Manage Pools</title>
   </head>
   <body>
-    <div id="add_new_pool_button">
+    <div id="make_new_pool_button">
       <button v-on:click="kick_add_new_pool">New bucket pool</button>
     </div>
     <div id="show_pool_list_button">
       <button v-on:click="kick_show_pool_list">Show bucket pools</button>
     </div>
 
-    <div id="create_pool" v-if="pool_name_visible">
+    <div id="show_or_edit_pool" v-if="pool_name_visible">
       <hr />
       <div>
         <span class="label">POOL</span>
@@ -28,12 +28,12 @@
         <input v-model="user" size="64" disabled /></div>
       <div>
         <span class="label">Group:</span>
-        <input v-model="group" size="64" /></div>
+        <input v-model="group" size="64" :disabled="!make_pool_mode" /></div>
       <div>
         <span class="label">Buckets directory (absolute path):</span>
-        <input v-model="buckets_directory" size="64" :disabled="buckets_directory_disabled" /></div>
-      <div v-if="submit_button_visible">
-        <button v-on:click="kick_make_pool" :disabled="submit_button_disabled">{{submit_button_name}}</button>
+        <input v-model="buckets_directory" size="64" :disabled="!make_pool_mode" /></div>
+      <div v-if="make_pool_mode">
+        <button v-on:click="kick_make_pool">Create</button>
       </div>
     </div>
 
@@ -61,10 +61,13 @@
         </div>
       </div>
 
-      <div v-for="b in list_of_buckets">
-        <input v-model="b.name" size="64" disabled />
-        <input v-model="b.policy" size="64" disabled />
-        <button v-on:click="kick_delete_bucket(b.name)">Delete</button>
+      <div>
+        <span class="label">Buckets and policies</span>
+        <div v-for="b in list_of_buckets">
+          <input v-model="b.name" size="64" disabled />
+          <input v-model="b.policy" size="64" disabled />
+          <button v-on:click="kick_delete_bucket(b.name)">Delete</button>
+        </div>
       </div>
     </div>
 
@@ -139,10 +142,26 @@
     </div>
 -->
 
+    <div id="pool_list_view22" v-if="pool_data_visible">
+      <div v-for="(_, p) in pool_li_list.length">
+        <hr />
+        <input v-on:click="kick_edit_pool(p)" type="button" class="button" value="Edit" />
+        <input v-on:click="kick_delete_pool(p)" type="button" class="button" value="Delete" />
+        <ul style="list-style: none;">
+          <li v-for="item in pool_li_list[p]">
+            <span class="label"> {{ item.text.label }}: </span>
+            {{ item.text.value }}
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <!--
     <div id="pool_list_label" v-if="pool_list_visible">
       <div id="pool_list" v-if="pool_list_visible">
       </div>
     </div>
+    -->
 
     <div>
       <hr />

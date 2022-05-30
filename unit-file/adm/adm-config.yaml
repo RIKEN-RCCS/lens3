@@ -7,6 +7,7 @@ gunicorn:
     port: 8003
     workers: 2
     timeout: 120
+    access_logfile: "/var/tmp/lenticularis/lens3-gunicorn-adm-access-log"
     log_file: "/var/tmp/lenticularis/lens3-gunicorn-adm-log"
     log_level: debug
     #log_syslog_facility: LOCAL8

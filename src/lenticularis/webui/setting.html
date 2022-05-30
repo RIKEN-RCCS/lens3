@@ -33,10 +33,9 @@
         <span class="label">Buckets directory (absolute path):</span>
         <input v-model="buckets_directory" size="64" :disabled="buckets_directory_disabled" /></div>
       <div v-if="submit_button_visible">
-        <button v-on:click="kick_create_pool" :disabled="submit_button_disabled">{{submit_button_name}}</button>
+        <button v-on:click="kick_make_pool" :disabled="submit_button_disabled">{{submit_button_name}}</button>
       </div>
     </div>
-
 
     <div id="edit_buckets" v-if="edit_pool_visible">
       <hr />
@@ -49,10 +48,6 @@
           <span class="label">Bucket name:</span>
           <input v-model="bucket_name" size="64" placeholder="bucket name" />
           <span class="label">Bucket policy for public access:</span>
-          <!--
-          <input v-model="bucket_policy" size="64" placeholder="bucket policy (none, p
-ublic, upload, download)" />
-          -->
           <select v-model="bucket_policy">
             <option disabled value="">Please select one</option>
             <option>none</option>
@@ -62,26 +57,15 @@ ublic, upload, download)" />
           </select>
         </div>
         <div>
-          <button v-on:click="kick_create_bucket">Create</button>
+          <button v-on:click="kick_make_bucket">Create</button>
         </div>
       </div>
-      <div>
-        <span class="label">Private (with access-keys):</span>
-        <input v-model="buckets[0]" size="64" /></div>
-      <div>
-        <span class="label">Public download&amp;upload:</span>
-        <input v-model="buckets[1]" size="64" /></div>
-      <div>
-        <span class="label">Public upload only:</span>
-        <input v-model="buckets[2]" size="64" /></div>
-      <div>
-        <span class="label">Public download only:</span>
-        <input v-model="buckets[3]" size="64" /></div>
-      <!--
-      <div v-if="submit_button_visible">
-        <button v-on:click="kick_create_pool" :disabled="submit_button_disabled">{{submit_button_name}}</button>
+
+      <div v-for="b in list_of_buckets">
+        <input v-model="b.name" size="64" disabled />
+        <input v-model="b.policy" size="64" disabled />
+        <button v-on:click="kick_delete_bucket(b.name)">Delete</button>
       </div>
-      -->
     </div>
 
     <div id="edit_keys" v-if="edit_pool_visible">
@@ -150,13 +134,12 @@ ublic, upload, download)" />
         <input v-model="endpointURLs" size="64" disabled /></div>
       <hr />
       <div v-if="submit_button_visible">
-        <button v-on:click="kick_create_pool" :disabled="submit_button_disabled">{{submit_button_name}}</button>
+        <button v-on:click="kick_make_pool" :disabled="submit_button_disabled">{{submit_button_name}}</button>
       </div>
     </div>
 -->
 
     <div id="pool_list_label" v-if="pool_list_visible">
-      <hr />
       <div id="pool_list" v-if="pool_list_visible">
       </div>
     </div>

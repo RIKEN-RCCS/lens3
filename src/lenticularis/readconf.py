@@ -45,14 +45,15 @@ def readconf(configfile, fixfn, valfn, envname):
     return (conf, configfile)
 
 
-def gunicorn_schema(type_number):
+def gunicorn_schema(number_type):
     return {
         "type": "object",
         "properties": {
             "port": {"type": "string"},
-            "workers": type_number,
-            "threads": type_number,
-            "timeout": type_number,
+            "workers": number_type,
+            "threads": number_type,
+            "timeout": number_type,
+            "access_logfile": {"type": "string"},
             "log_file": {"type": "string"},
             "log_level": {"type": "string"},
             "log_syslog_facility": {"type": "string"},
@@ -60,24 +61,17 @@ def gunicorn_schema(type_number):
         },
         "required": [
             "port",
-            # OPTIONAL "workers",
-            # OPTIONAL "threads",
-            # OPTIONAL "timeout",
-            # OPTIONAL "log_file",
-            # OPTIONAL "log_level",
-            # OPTIONAL "log_syslog_facility",
-            # OPTIONAL "reload",
         ],
         "additionalProperties": False,
     }
 
 
-def redis_schema(type_number):
+def redis_schema(number_type):
     return {
         "type": "object",
         "properties": {
             "host": {"type": "string"},
-            "port": type_number,
+            "port": number_type,
             "password": {"type": "string"},
         },
         "required": [
@@ -104,17 +98,17 @@ def syslog_schema():
     }
 
 
-def mux_schema(type_number):
+def mux_schema(number_type):
 
     multiplexer = {
         "type": "object",
         "properties": {
-            #"port": type_number,
+            #"port": number_type,
             #"facade_hostnames": {"type": "array", "items": {"type": "string"}},
             "facade_hostname": {"type": "string"},
             "trusted_proxies": {"type": "array", "items": {"type": "string"}},
-            "timer_interval": type_number,
-            "request_timeout": type_number,
+            "timer_interval": number_type,
+            "request_timeout": number_type,
         },
         "required": [
             "facade_hostname",
@@ -128,18 +122,18 @@ def mux_schema(type_number):
     controller = {
         "type": "object",
         "properties": {
-            "port_min": type_number,
-            "port_max": type_number,
-            "watch_interval": type_number,
-            "keepalive_limit": type_number,
-            "heartbeat_miss_tolerance": type_number,
-            "minio_startup_timeout": type_number,
-            "max_lock_duration": type_number,
-            "mc_info_timelimit": type_number,
-            "mc_stop_timelimit": type_number,
-            "kill_supervisor_wait": type_number,
-            "minio_user_install_timelimit": type_number,
-            "refresh_margin": type_number,
+            "port_min": number_type,
+            "port_max": number_type,
+            "watch_interval": number_type,
+            "keepalive_limit": number_type,
+            "heartbeat_miss_tolerance": number_type,
+            "minio_startup_timeout": number_type,
+            "max_lock_duration": number_type,
+            "mc_info_timelimit": number_type,
+            "mc_stop_timelimit": number_type,
+            "kill_supervisor_wait": number_type,
+            "minio_user_install_timelimit": number_type,
+            "refresh_margin": number_type,
             "sudo": {"type": "string"},
         },
         "required": [
@@ -176,8 +170,8 @@ def mux_schema(type_number):
     return {
         "type": "object",
         "properties": {
-            "redis": redis_schema(type_number),
-            "gunicorn": gunicorn_schema(type_number),
+            "redis": redis_schema(number_type),
+            "gunicorn": gunicorn_schema(number_type),
             "aws_signature": {"type": "string"},
             "multiplexer": multiplexer,
             "controller": controller,
@@ -197,7 +191,7 @@ def mux_schema(type_number):
     }
 
 
-def adm_schema(type_number):
+def adm_schema(number_type):
 
     multiplexer = {
         "type": "object",
@@ -214,7 +208,7 @@ def adm_schema(type_number):
     controller = {
         "type": "object",
         "properties": {
-            "max_lock_duration": type_number,
+            "max_lock_duration": number_type,
         },
         "required": [
             "max_lock_duration",
@@ -225,15 +219,15 @@ def adm_schema(type_number):
     system_settings = {
         "type": "object",
         "properties": {
-            "max_zone_per_user": type_number,
-            "max_direct_hostnames_per_user": type_number,
-            "default_zone_lifetime": type_number,
-            "allowed_maximum_zone_exp_date": type_number,
+            "max_zone_per_user": number_type,
+            "max_direct_hostnames_per_user": number_type,
+            "default_zone_lifetime": number_type,
+            "allowed_maximum_zone_exp_date": number_type,
             "endpoint_url": {"type": "string"},
             "direct_hostname_validator": {"type": "string"},  # choice = ["flat"]
             "direct_hostname_domains": {"type": "array", "items": {"type": "string"}},
             "reserved_hostnames": {"type": "array", "items": {"type": "string"}},
-            "probe_access_timeout": type_number,
+            "probe_access_timeout": number_type,
         },
         "required": [
             "max_zone_per_user",
@@ -278,8 +272,8 @@ def adm_schema(type_number):
     return {
         "type": "object",
         "properties": {
-            "gunicorn": gunicorn_schema(type_number),
-            "redis": redis_schema(type_number),
+            "gunicorn": gunicorn_schema(number_type),
+            "redis": redis_schema(number_type),
             "aws_signature": {"type": "string"},
             "multiplexer": multiplexer,
             "controller": controller,

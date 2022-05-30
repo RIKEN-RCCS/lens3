@@ -10,6 +10,15 @@ from lenticularis.utility import dict_diff
 from lenticularis.utility import logger
 
 
+class Api_Error(Exception):
+    def __init__(self, code, *args):
+        self._code = code
+        super().__init__(*args)
+        return
+
+    pass
+
+
 class Pool_State(enum.Enum):
     Initial = "initial"
     Ready = "ready"
@@ -149,9 +158,9 @@ def check_policy(policy):
     return
 
 
-def check_policy_name(policy_name):
-    if policy_name not in {"readwrite", "readonly", "writeonly"}:
-        raise Exception(f"invalid policy_name: {policy_name}")
+def check_key_policy(key_policy):
+    if key_policy not in {"readwrite", "readonly", "writeonly"}:
+        raise Exception(f"invalid key_policy: {key_policy}")
     return
 
 
@@ -182,7 +191,7 @@ def check_pool_dict_is_sound(pooldesc, user, adm_conf):
     check_status(pooldesc["online_status"])
     check_permission(pooldesc["permit_status"])
     for accessKey in pooldesc.get("access_keys", []):
-        check_policy_name(accessKey["policy_name"])
+        check_key_policy(accessKey["key_policy"])
         pass
 
     check_number(pooldesc["expiration_date"])
@@ -250,12 +259,12 @@ def _pool_desc_schema(type_number):
         "properties": {
             "access_key": {"type": "string"},
             "secret_key": {"type": "string"},
-            "policy_name": {"type": "string"},
+            "key_policy": {"type": "string"},
         },
         "required": [
             "access_key",
             "secret_key",
-            "policy_name",
+            "key_policy",
         ],
         "additionalProperties": False,
     }

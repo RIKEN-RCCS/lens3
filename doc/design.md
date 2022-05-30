@@ -1711,12 +1711,12 @@ Note that a bucket-pool has another state `status`, but it is always
 | Key           | Value         | Description   |
 | ----          | ----          | ----          |
 | po:pool-id    | pool-description |(htable)|
-| ar:access-key | pool-id       |       |
+| (ar:access-key) | pool-id       |       |
 | ps:pool-id    | pool-state    |(json)|
 | ac:pool-id    | timestamp     |       |
 | pr::          | permit-list   |(json)|
 | uu:user       | user-info     |(json)|
-| dr:host       | pool-id       |       |
+| (dr:host)     | pool-id       |       |
 | bd:directory  | pool-id       | A bucket-directory occupancy |
 | lk:           | -             |(for locking the whole table)|
 | lk:pool-id    | -             |(for locking a ru:pool-id)|
@@ -1745,13 +1745,13 @@ start-time ...  last-interrupted-time? ...
 | Key           | Value         | Description   |
 | ----          | ----          | ----          |
 | ep:pool-id    | MinIO-endpoint | |
-| bk:bucket-name | pool-id + policy | A mapping by a bucket-name |
-| wu:access-key | pool-id       | A key used for probe-access from Adm |
+| bk:bucket-name | pool-id + b-policy | A mapping by a bucket-name |
+| (wu:access-key) | pool-id       | A key used for probe-access from Adm |
 | ts:pool-id    | timestamp     | Timestamp on the last access |
 
-"pool-id+policy" is a record with keys "pool" and "policy".  Policy
-indicates public R/W status: {"none", "upload", "download", "public"},
-which are borrowed from MinIO.
+"pool-id + b-policy" is a record with keys "pool" and "policy".  A
+bucket-policy indicates public R/W status: {"none", "upload",
+"download", "public"}, which are borrowed from MinIO.
 
 #### pickone-table
 
@@ -1761,11 +1761,11 @@ which are borrowed from MinIO.
 
 It stores generated keys for pool-id's and access-keys.  A
 key-description is a record {"use": usage, "owner": owner,
-"secret_key": secret, "policy_name": policy, "creation_data": date},
-where a usage/owner pair is either "pool"/user-id or
-"access_key"/pool-id.  A secret-key and a policy-name fields are
-missing for a pool-id.  A policy-name is one of {"readwrite",
-"readonly", "writeonly"}.
+"secret_key": secret, "key_policy": policy, "creation_data": date}.
+A usage/owner pair is either "pool"/user-id or
+"access_key"/pool-id.  A secret-key and a key-policy fields are
+missing for a pool-id.  A policy is one of {"readwrite", "readonly",
+"writeonly"}, which are borrowed from MinIO.
 
 ## Bucket policy
 
@@ -1815,6 +1815,12 @@ Note that alias commands are local (not connect to a MinIO).
 
 A Manager becomes a session leader (by calling setsid), and a MinIO
 process will be terminated when a Manager exits.
+
+### Glossary
+
+* __Probe-key__: An access-key used by Adm to tell Mux about wake up
+  of MinIO.  This is key has no corresponding secret.  It is
+  distiguished by an empty secret.
 
 ### RANDOM MEMO
 

@@ -5,10 +5,9 @@
 
 import base64
 import sys
-from lenticularis.pooladm import ApiError
 from lenticularis.pooladm import ZoneAdm
-from lenticularis.pooladm import check_pool_owner
 from lenticularis.pooladm import rephrase_exception_message
+from lenticularis.poolutil import Api_Error
 from lenticularis.poolutil import check_pool_naming
 from lenticularis.poolutil import check_bucket_naming
 from lenticularis.table import get_tables
@@ -33,7 +32,7 @@ class Api():
             assert user_id is not None
             t = self.zone_adm.generate_template(user_id)
             return (200, None, {"pool_list": [t]})
-        except ApiError as e:
+        except Api_Error as e:
             return (e.code, f"{e}", [])
         except Exception as e:
             m = rephrase_exception_message(e)
@@ -48,10 +47,9 @@ class Api():
     def api_make_pool(self, traceid, user_id, pooldesc0):
         try:
             assert user_id is not None
-            check_pool_owner(user_id, None, pooldesc0)
             pooldesc1 = self.zone_adm.make_pool(traceid, user_id, pooldesc0)
             return (200, None, {"pool_list": [pooldesc1]})
-        except ApiError as e:
+        except Api_Error as e:
             return (e.code, f"{e}", [])
         except Exception as e:
             m = rephrase_exception_message(e)
@@ -68,7 +66,7 @@ class Api():
                 return (403, f"Bad pool={pool_id}", [])
             self.zone_adm.delete_pool(traceid, user_id, pool_id)
             return (200, None, [])
-        except ApiError as e:
+        except Api_Error as e:
             return (e.code, f"{e}", [])
         except Exception as e:
             m = rephrase_exception_message(e)
@@ -88,7 +86,7 @@ class Api():
             ##zone_id=pool_id)
             (pools, _) = self.zone_adm.list_pools(traceid, user_id, pool_id)
             return (200, None, {"pool_list": pools})
-        except ApiError as e:
+        except Api_Error as e:
             return (e.code, f"{e}", [])
         except Exception as e:
             m = rephrase_exception_message(e)
@@ -118,7 +116,7 @@ class Api():
             triple = self.zone_adm.make_bucket(traceid, user_id, pool_id,
                                                bucket, policy)
             return triple
-        except ApiError as e:
+        except Api_Error as e:
             return (e.code, f"{e}", [])
         except Exception as e:
             m = rephrase_exception_message(e)
@@ -143,7 +141,7 @@ class Api():
             logger.debug(f"Deleting a bucket: {bucket}")
             triple = self.zone_adm.delete_bucket(traceid, user_id, pool_id, bucket)
             return triple
-        except ApiError as e:
+        except Api_Error as e:
             return (e.code, f"{e}", [])
         except Exception as e:
             m = rephrase_exception_message(e)
@@ -161,7 +159,7 @@ class Api():
             assert user_id is not None
             if not check_pool_naming(pool_id):
                 return (403, f"Bad pool-id={pool_id}", [])
-            rw = body.get("policy_name")
+            rw = body.get("key_policy")
             assert rw in ["readwrite", "readonly", "writeonly"]
         except Exception as e:
             m = rephrase_exception_message(e)
@@ -170,7 +168,7 @@ class Api():
             logger.debug(f"Adding a new secret: {rw}")
             triple = self.zone_adm.make_secret(traceid, user_id, pool_id, rw)
             return triple
-        except ApiError as e:
+        except Api_Error as e:
             return (e.code, f"{e}", [])
         except Exception as e:
             m = rephrase_exception_message(e)
@@ -194,7 +192,7 @@ class Api():
             logger.debug(f"Deleting a secret: {access_key}")
             triple = self.zone_adm.delete_secret(traceid, user_id, pool_id, access_key)
             return triple
-        except ApiError as e:
+        except Api_Error as e:
             return (e.code, f"{e}", [])
         except Exception as e:
             m = rephrase_exception_message(e)

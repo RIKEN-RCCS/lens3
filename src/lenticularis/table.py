@@ -103,14 +103,13 @@ class Tables():
 
     ## Routing-table:
 
-    def set_probe_key(self, access_key, pool_id):
-        self.routing_table.set_probe_key(access_key, pool_id)
+    def set_probe_key__(self, access_key, pool_id):
+        self.routing_table.set_probe_key__(access_key, pool_id)
         pass
 
-    def delete_probe_key(self, access_key):
-        self.routing_table.delete_probe_key(access_key)
+    def delete_probe_key__(self, access_key):
+        self.routing_table.delete_probe_key__(access_key)
         pass
-
 
     ## Pickone-table:
 
@@ -157,12 +156,15 @@ class Storage_Table(Table_Common):
     _pool_desc_keys = pool_desc_required_keys.union(pool_desc_optional_keys)
 
     _access_keys_keys = {
-        "policy_name", "access_key", "secret_key"}
+        "key_policy", "access_key", "secret_key"}
 
-    def set_pool(self, zoneID, pooldesc):
+    def set_pool(self, pool_id, pooldesc):
         assert set(pooldesc.keys()).issubset(self._pool_desc_keys)
-        key = f"{self._pool_desc_prefix}{zoneID}"
+        key = f"{self._pool_desc_prefix}{pool_id}"
         return self.dbase.hset_map(key, pooldesc, self.structured)
+
+    def delete_pool(self, pool_id):
+        return self.dbase.delete(f"{self._pool_desc_prefix}{pool_id}")
 
     def ins_ptr(self, zoneID, dict):
         # logger.debug(f"+++ {zoneID} {dict}")
@@ -249,6 +251,17 @@ class Storage_Table(Table_Common):
         key = f"{self._pool_state_prefix}{pool_id}"
         ee = json.dumps((state, reason))
         return self.dbase.set(key, ee)
+
+    def get_pool_state(self, pool_id):
+        key = f"{self._pool_state_prefix}{pool_id}"
+        ee = self.dbase.get(key)
+        (state, reason) = (json.loads(ee, parse_int=None)
+                           if ee is not None else (None, None))
+        return (state, reason)
+
+    def delete_pool_state(self, pool_id):
+        key = f"{self._pool_state_prefix}{pool_id}"
+        return self.dbase.delete(key)
 
     def set_mode(self, zoneID, mode):
         # logger.debug(f"+++ {zoneID} {mode}")
@@ -463,7 +476,7 @@ def zone_to_route_(zone):
 class Routing_Table(Table_Common):
     _minio_ep_prefix = "ep:"
     _bucket_prefix = "bu:"
-    _probe_access_prefix = "wu:"
+    _probe_access_prefix__ = "wu:"
     _timestamp_prefix = "ts:"
     _host_style_prefix = "da:"
     _atime_prefix = "at:"
@@ -554,17 +567,17 @@ class Routing_Table(Table_Common):
         self.dbase.delete(key)
         pass
 
-    def set_probe_key(self, access_key, pool_id):
-        key = f"{self._probe_access_prefix}{access_key}"
+    def set_probe_key__(self, access_key, pool_id):
+        key = f"{self._probe_access_prefix__}{access_key}"
         self.dbase.set(key, pool_id)
         pass
 
-    def get_probe_key(self, access_key):
-        key = f"{self._probe_access_prefix}{access_key}"
+    def get_probe_key__(self, access_key):
+        key = f"{self._probe_access_prefix__}{access_key}"
         return self.dbase.get(key)
 
-    def delete_probe_key(self, access_key):
-        key = f"{self._probe_access_prefix}{access_key}"
+    def delete_probe_key__(self, access_key):
+        key = f"{self._probe_access_prefix__}{access_key}"
         self.dbase.delete(key)
         pass
 
@@ -578,7 +591,7 @@ class Routing_Table(Table_Common):
     def clear_routing(self, everything):
         delete_all(self.dbase.r, self._minio_ep_prefix)
         delete_all(self.dbase.r, self._bucket_prefix)
-        delete_all(self.dbase.r, self._probe_access_prefix)
+        delete_all(self.dbase.r, self._probe_access_prefix__)
         delete_all(self.dbase.r, self._timestamp_prefix)
         delete_all(self.dbase.r, self._atime_prefix)
         pass
@@ -632,20 +645,19 @@ class Pickone_Table(Table_Common):
         pass
 
     def list_access_keys(self, pool_id):
-        """It drops an access-key for probing.  A probe access-key has no
+        """It includes an access-key for probing.  A probe access-key has no
         corresponding secret-key and it is used only to wake up MinIO
         from Adm.
         """
-        ki = _scan_table(self.dbase.r, self._id_prefix, None,
+        keyi = _scan_table(self.dbase.r, self._id_prefix, None,
                          value=self.get_id)
-        keys = [{"access_key": id,
-                 "secret_key": d.get("secret_key"),
-                 "policy_name": d.get("policy_name")}
-                for (id, d) in ki
+        ##"secret_key": d.get("secret_key"),
+        ##"key_policy": d.get("key_policy")
+        keys = [{"access_key": id, **d}
+                for (id, d) in keyi
                 if (d is not None
                     and d.get("use") == "access_key"
-                    and d.get("owner") == pool_id
-                    and d.get("secret_key") != "")]
+                    and d.get("owner") == pool_id)]
         return keys
 
     def clear_all(self, everything):

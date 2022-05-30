@@ -154,7 +154,7 @@ def pool_key_order(e):
         "directHostnamePtr",
         "access_key",
         "secret_key",
-        "policy_name",
+        "key_policy",
         "ptr",
         "name",
         "policy"]

@@ -227,7 +227,7 @@ function run_make_access_key(rw) {
   return submit_operation(2, () => {
     const method = "PUT";
     const url_path = ("/pool/" + edit_pool_data.pool_name + "/secret");
-    const c = {"policy_name": rw};
+    const c = {"key_policy": rw};
     c["CSRF-Token"] = csrf_token;
     body = JSON.stringify(c);
     return {method, url_path, body};
@@ -355,7 +355,7 @@ function build_pool_desc() {
   pooldesc["buckets_directory"] = edit_pool_data.buckets_directory;
   pooldesc["buckets"] = buckets;
   // A dummy entry.
-  pooldesc["access_keys"] = [{"policy_name": "readwrite"}, {"policy_name": "readonly"}, {"policy_name": "writeonly"}];
+  pooldesc["access_keys"] = [{"key_policy": "readwrite"}, {"key_policy": "readonly"}, {"key_policy": "writeonly"}];
   pooldesc["direct_hostnames"] = direct_hostnames;
   pooldesc["expiration_date"] = parse_rfc3339(edit_pool_data.expiration_date);
   pooldesc["permit_status"] = edit_pool_data.permit_status;
@@ -653,9 +653,9 @@ function render_pool_as_ul_entry(pooldesc) {
   //var rwkey = chooseAccessKey_(keys, "readwrite");
   //var rokey = chooseAccessKey_(keys, "readonly");
   //var wokey = chooseAccessKey_(keys, "writeonly");
-  const rwkeys = keys.filter(d => d["policy_name"] == "readwrite")
-  const rokeys = keys.filter(d => d["policy_name"] == "readonly")
-  const wokeys = keys.filter(d => d["policy_name"] == "writeonly")
+  const rwkeys = keys.filter(d => d["key_policy"] == "readwrite")
+  const rokeys = keys.filter(d => d["key_policy"] == "readonly")
+  const wokeys = keys.filter(d => d["key_policy"] == "writeonly")
   const key_entries = [
     ... rwkeys.reduce((part, d) => part.concat([
       {text: {label: "Access key (rw)", value: d["access_key"]}},
@@ -711,9 +711,9 @@ function copy_pool_desc_for_edit(pooldesc) {
   //edit_pool_data.secretAccessKeywo = wokey["secret_key"];
 
   var keys = pooldesc["access_keys"];
-  const rwkeys = keys.filter(d => d["policy_name"] == "readwrite")
-  const rokeys = keys.filter(d => d["policy_name"] == "readonly")
-  const wokeys = keys.filter(d => d["policy_name"] == "writeonly")
+  const rwkeys = keys.filter(d => d["key_policy"] == "readwrite")
+  const rokeys = keys.filter(d => d["key_policy"] == "readonly")
+  const wokeys = keys.filter(d => d["key_policy"] == "writeonly")
 
   edit_pool_data.access_keys_rw = rwkeys
   edit_pool_data.access_keys_ro = rokeys
@@ -784,7 +784,7 @@ function format_rfc3339_if_not_zero(d) {
 function chooseAccessKey_(accessKeys, policyName) {
   for (var i = 0; i < accessKeys.length; i++) {
     var accessKey = accessKeys[i];
-    if (accessKey["policy_name"] == policyName) {
+    if (accessKey["key_policy"] == policyName) {
       return accessKey;
     }
   }

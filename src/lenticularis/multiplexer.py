@@ -14,7 +14,7 @@ import http.client
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 import urllib.parse
-from lenticularis.pooladm import ApiError
+from lenticularis.poolutil import Api_Error
 from lenticularis.poolutil import check_bucket_naming
 from lenticularis.utility import Read1Reader, parse_s3_auth
 from lenticularis.utility import get_ip_address
@@ -61,6 +61,17 @@ def _check_url_error_is_connection_errors(x):
         logger.debug(f"Cannot find errno in URLError={x}")
         return 0
 
+def _get_pool_of_probe_key(probe_key):
+    """Checks a key is a probe-key, and returns a pool-id for which it is
+    created."""
+    if (probe_key is not None
+        and probe_key.get("use") == "access_key"
+        and probe_key.get("secret_key") == ""):
+        return probe_key.get("owner")
+    else:
+        return None
+    pass
+
 
 class Multiplexer():
 
@@ -100,7 +111,7 @@ class Multiplexer():
     def __call__(self, environ, start_response):
         try:
             return self._process_request(environ, start_response)
-        except ApiError as e:
+        except Api_Error as e:
             port = environ.get("SERVER_PORT")
             logger.error(f"Unhandled exception in MUX(port={port}) processing:"
                          f" exception={e}",
@@ -161,17 +172,17 @@ class Multiplexer():
         if bucket == "":
             status = "404"
             log_access(status, *access_info)
-            raise ApiError(404, f"Bad URL, no bucket name: url={request_url}")
+            raise Api_Error(404, f"Bad URL, no bucket name: url={request_url}")
         if not check_bucket_naming(bucket):
             ok = check_bucket_naming(bucket)
             status = "400"
             log_access(status, *access_info)
-            raise ApiError(400, f"Bad URL, bad bucket name: url={bucket} ok={ok}")
+            raise Api_Error(400, f"Bad URL, bad bucket name: url={bucket} ok={ok}")
         desc = self.tables.routing_table.get_bucket(bucket)
         if desc is None:
             status = "404"
             log_access(status, *access_info)
-            raise ApiError(404, f"Bad URL, no bucket: url={request_url}")
+            raise Api_Error(404, f"Bad URL, no bucket: url={request_url}")
         # Ignore the desc["policy"] part.
         pool_id = desc["pool"]
         return pool_id
@@ -221,12 +232,13 @@ class Multiplexer():
 
         if not self._check_forwarding_host_trusted(peer_addr):
             log_access("403", *access_info)
-            raise ApiError(403, f"Bad access from remote={client_addr}")
+            raise Api_Error(403, f"Bad access from remote={client_addr}")
 
         if path == "/":
             # It is not allowed except for probing access from Adm.
-            pool_id = self.tables.routing_table.get_probe_key(access_key)
-            logger.debug(f"MUX by access-key={access_key} for pool={pool_id}")
+            probe_key = self.tables.pickone_table.get_id(access_key)
+            pool_id = _get_pool_of_probe_key(probe_key)
+            logger.debug(f"MUX probe access for pool={pool_id}")
         else:
             pool_id = self._find_pool_for_bucket(path, access_info)
             logger.debug(f"MUX by bucket={path} for pool_id={pool_id}")
@@ -251,7 +263,7 @@ class Multiplexer():
         if minio_ep is None:
             status = "404"
             log_access(status, *access_info)
-            raise ApiError(404, f"Bucket inaccessible: url={request_url}")
+            raise Api_Error(404, f"Bucket inaccessible: url={request_url}")
 
         # Copy request headers.
 

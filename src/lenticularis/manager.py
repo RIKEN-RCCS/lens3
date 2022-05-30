@@ -480,6 +480,7 @@ class Manager():
             if atime and atime != self.saved_atime:
                 logger.debug("@@@ BACKUP ATIME")
                 self.tables.storage_table.set_atime(self._pool_id, atime)
+                pass
             self.tables.routing_table.delete_route_expiry(self._pool_id)
             self.tables.routing_table.delete_route(self._pool_id)
         except Exception as e:

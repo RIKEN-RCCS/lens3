@@ -15,6 +15,7 @@ from lenticularis.mc import intern_mc_list_entry
 from lenticularis.lockdb import LockDB
 from lenticularis.table import get_tables
 from lenticularis.table import Storage_Table
+from lenticularis.poolutil import Api_Error
 from lenticularis.poolutil import check_user_naming
 from lenticularis.poolutil import check_bucket_naming
 from lenticularis.utility import make_clean_env
@@ -29,15 +30,6 @@ from lenticularis.poolutil import merge_pool_descriptions, check_conflict
 from lenticularis.poolutil import compare_access_keys, compare_buckets_directory
 from lenticularis.poolutil import compare_buckets, check_policy
 from lenticularis.utility import tracing
-
-
-class ApiError(Exception):
-    def __init__(self, code, *args):
-        self._code = code
-        super().__init__(*args)
-        return
-
-    pass
 
 
 def rephrase_exception_message(e):
@@ -74,7 +66,7 @@ def _check_bucket_fmt(bucket):
 def _check_access_key_fmt(access_key):
     access_key_keys = set(access_key.keys())
     return ({"access_key"}.issubset(access_key_keys) and
-            access_key_keys.issubset({"access_key", "secret_key", "policy_name"}))
+            access_key_keys.issubset({"access_key", "secret_key", "key_policy"}))
 
 
 def _check_create_bucket_keys(zone):
@@ -91,7 +83,7 @@ def _check_change_secret_keys(zone):
     """ _ ::= {"access_keys": [accessKey]}
         accessKey ::= {"access_key": access_key_id,
                        "secret_key": secret (optional),
-                       "policy_name": policy (optional) }
+                       "key_policy": policy (optional) }
     """
     if zone.keys() != {"access_keys"}:
         raise Exception(f"update_secret_keys: invalid key set: {set(zone.keys())}")
@@ -268,26 +260,26 @@ class ZoneAdm():
         # owner = self._get_pool_owner_for_messages(pool_id)
         pooldesc = self.tables.storage_table.get_pool(pool_id)
         if pooldesc is None:
-            raise ApiError(403, (f"Non-existing pool: {pool_id}"))
+            raise Api_Error(403, (f"Non-existing pool: {pool_id}"))
         if pooldesc.get("owner_uid") != user_id:
-            raise ApiError(403, (f"Not an owner of the pool"))
+            raise Api_Error(403, (f"Not an owner of the pool: {pool_id}"))
         pass
 
     def _check_bucket_owner(self, bucket, pool_id):
         desc = self.tables.routing_table.get_bucket(bucket)
         if desc is None:
-            raise ApiError(403, f"Non-exisiting bucket: {bucket}")
+            raise Api_Error(403, f"Non-exisiting bucket: {bucket}")
         if desc.get("pool") != pool_id:
-            raise ApiError(403, (f"A bucket for a wrong pool: {bucket}"))
+            raise Api_Error(403, (f"A bucket for a wrong pool: {bucket}"))
         pass
 
     def _check_secret_owner(self, access_key, pool_id):
         desc = self.tables.pickone_table.get_id(access_key)
         if desc is None:
-            raise ApiError(403, f"Non-existing access-key: {access_key}")
+            raise Api_Error(403, f"Non-existing access-key: {access_key}")
         if not (desc.get("use") == "access_key"
                 and desc.get("owner") == pool_id):
-            raise ApiError(403, f"A wrong access-key: {access_key}")
+            raise Api_Error(403, f"A wrong access-key: {access_key}")
         pass
 
     def _make_mc_for_pool(self, traceid, pool_id):
@@ -304,8 +296,8 @@ class ZoneAdm():
             pass
         minioproc = self.tables.process_table.get_minio_proc(pool_id)
         if minioproc is None:
-            raise ApiError(500, (f"Cannot start MinIO for pool={pool_id}:"
-                                 f" status={status}"))
+            raise Api_Error(500, (f"Cannot start MinIO for pool={pool_id}:"
+                                  f" status={status}"))
         else:
             pass
         ep = minioproc["minio_ep"]
@@ -419,8 +411,8 @@ class ZoneAdm():
         bd = pooldesc0.get("buckets_directory")
         path = posixpath.normpath(bd)
         if not posixpath.isabs(path):
-            raise ApiError(400, (f"Buckets-directory is not absolute:"
-                                 f" path=({path})"))
+            raise Api_Error(400, (f"Buckets-directory is not absolute:"
+                                  f" path=({path})"))
 
         #_encrypt_or_generate(zone, "root_secret")
         #check_pool_is_well_formed(zone, user_id)
@@ -432,16 +424,16 @@ class ZoneAdm():
         try:
             pool_id = self.tables.make_unique_id("pool", user_id)
             pooldesc0["pool_name"] = pool_id
-            info = {"secret_key": "", "policy_name": "readwrite"}
+            info = {"secret_key": "", "key_policy": "readwrite"}
             probe_key = self.tables.make_unique_id("access_key", pool_id, info)
             pooldesc0["probe_access"] = probe_key
-            self.tables.set_probe_key(probe_key, pool_id)
+            ##self.tables.set_probe_key(probe_key, pool_id)
 
             (ok, holder) = self.tables.set_buckets_directory(path, pool_id)
             if not ok:
                 owner = self._get_pool_owner_for_messages(holder)
-                raise ApiError(400, (f"Buckets-directory is already used:"
-                                     f" path=({path}), holder={owner}"))
+                raise Api_Error(400, (f"Buckets-directory is already used:"
+                                      f" path=({path}), holder={owner}"))
             try:
                 self._store_pool_in_lock(traceid, user_id, pooldesc0)
             except Exception as e:
@@ -454,7 +446,7 @@ class ZoneAdm():
                 pass
             if probe_key is not None:
                 self.tables.delete_id_unconditionally(probe_key)
-                self.tables.delete_probe_key(probe_key)
+                ##self.tables.delete_probe_key(probe_key)
                 pass
             raise
         pooldesc1 = self._gather_pool_desc(traceid, pool_id)
@@ -500,6 +492,100 @@ class ZoneAdm():
             pass
 
         return pooldesc0
+
+    def delete_pool(self, traceid, user_id, pool_id):
+        """Deletes a pool.  It clears buckets and access-keys set in MinIO.
+        """
+        assert user_id is not None and pool_id is not None
+        self._check_pool_owner(pool_id, user_id)
+        self.clean_minio(traceid, user_id, pool_id)
+        self.clean_database(traceid, user_id, pool_id)
+        pass
+
+    def clean_minio(self, traceid, user_id, pool_id):
+        # Clean MinIO and stop.
+        try:
+            mc = self._make_mc_for_pool(traceid, pool_id)
+            assert mc is not None
+            with mc:
+                mc.clean_minio_setting(user_id, pool_id)
+                # (p_, r) = mc.admin_service_stop()
+                # assert p_ is None
+                # assert_mc_success(r, "mc.admin_service_stop")
+        except Exception as e:
+            logger.error(f"Exception in delete_pool: exception={e}",
+                         exc_info=True)
+            pass
+        # Delete a route.
+        try:
+            self.tables.routing_table.delete_route(pool_id)
+        except Exception as e:
+            logger.info(f"Exception in delete_route: exception={e}")
+            pass
+        try:
+            self.tables.routing_table.delete_route_expiry(pool_id)
+        except Exception as e:
+            logger.info(f"Exception in delete_route_expiry: exception={e}")
+            pass
+        pass
+
+    def clean_database(self, traceid, user_id, pool_id):
+        # Clean database.
+        pooldesc = self.tables.storage_table.get_pool(pool_id)
+        if pooldesc is not None:
+            probe_key = pooldesc.get("probe_access") if pooldesc else None
+        else:
+            probe_key = None
+            pass
+        path = self.tables.storage_table.get_buckets_directory_of_pool(pool_id)
+        bkts = self.tables.routing_table.list_buckets(pool_id)
+        keys = self.tables.pickone_table.list_access_keys(pool_id)
+        logger.debug(f"Deleting buckets-directory: {path}")
+        try:
+            self.tables.delete_buckets_directory(path)
+        except Exception as e:
+            logger.info(f"Exception in delete_buckets_directory: {e}")
+            pass
+        bktnames = [b["name"] for b in bkts]
+        logger.debug(f"Deleting buckets: {bktnames}")
+        for b in bktnames:
+            try:
+                self.tables.routing_table.delete_bucket(b)
+            except Exception as e:
+                logger.info(f"Exception in delete_bucket: {e}")
+                pass
+            pass
+        keynames = [k["access_key"] for k in keys]
+        logger.debug(f"Deleting access-keys: {keynames}")
+        for k in keynames:
+            try:
+                self.tables.delete_id_unconditionally(k)
+            except Exception as e:
+                logger.info(f"Exception in delete_id_unconditionally: {e}")
+                pass
+            pass
+        logger.debug(f"Deleting pool states")
+        try:
+            self.tables.storage_table.delete_pool(pool_id)
+        except Exception as e:
+            logger.info(f"Exception in delete_pool: {e}")
+            pass
+        try:
+            self.tables.storage_table.delete_pool_state(pool_id)
+        except Exception as e:
+            logger.info(f"Exception in delete_pool_state: {e}")
+            pass
+        try:
+            self.tables.storage_table.del_atime(pool_id)
+        except Exception as e:
+            logger.info(f"Exception in del_atime: {e}")
+            pass
+        try:
+            self.tables.delete_id_unconditionally(pool_id)
+        except Exception as e:
+            logger.info(f"Exception in delete_id_unconditionally: {e}")
+            pass
+        return (200, None, {})
 
     def list_pools(self, traceid, user_id, pool_id):
         """It lists all pools of the user when pool-id is None."""
@@ -552,18 +638,20 @@ class ZoneAdm():
         return (pool_list, [])
 
     def _gather_pool_desc(self, traceid, pool_id):
+        """Returns a pool description displayed by Web-UI."""
         pooldesc = self.tables.storage_table.get_pool(pool_id)
         if pooldesc is None:
             return None
         bd = self.tables.storage_table.get_buckets_directory_of_pool(pool_id)
-        assert bd is not None
         pooldesc["buckets_directory"] = bd
-        bb = self.tables.routing_table.list_buckets(pool_id)
-        pooldesc["buckets"] = bb
-        ##pooldesc["probe_access"]
-
-        kk = self.tables.pickone_table.list_access_keys(pool_id)
-        pooldesc["access_keys"] = kk
+        bkts = self.tables.routing_table.list_buckets(pool_id)
+        pooldesc["buckets"] = bkts
+        keys0 = self.tables.pickone_table.list_access_keys(pool_id)
+        # Drop a probing access-key.  It is not visible to users.
+        keys = [k for k in keys0
+                if (k is not None and k.get("secret_key") != "")]
+        pooldesc["access_keys"] = keys
+        pooldesc.pop("probe_access")
 
         ##pooldesc["direct_hostnames"]
         ##pooldesc["expiration_date"]
@@ -583,7 +671,7 @@ class ZoneAdm():
         (ok, holder) = self.tables.routing_table.set_bucket(bucket, desc)
         if not ok:
             owner = self._get_pool_owner_for_messages(holder)
-            raise ApiError(403, f"Bucket name taken: owner={owner}")
+            raise Api_Error(403, f"Bucket name taken: owner={owner}")
         try:
             mc = self._make_mc_for_pool(traceid, pool_id)
             assert mc is not None
@@ -647,7 +735,7 @@ class ZoneAdm():
         assert user_id is not None and pool_id is not None
         self._check_pool_owner(pool_id, user_id)
         secret = gen_secret_access_key()
-        info = {"secret_key": secret, "policy_name": policy}
+        info = {"secret_key": secret, "key_policy": policy}
         key = self.tables.make_unique_id("access_key", pool_id, info)
         try:
             mc = self._make_mc_for_pool(traceid, pool_id)
@@ -1260,7 +1348,7 @@ class ZoneAdm():
         zone_id = self._lock_and_store_zone(user_id, zone_id, zone, need_conflict_check, need_uniquify)
 
         ##AHO
-        self.tables.routing_table.set_probe_key(probe_access, zone_id)
+        self.tables.routing_table.set_probe_key__(probe_access, zone_id)
 
         try:
             if need_initialize:
@@ -1335,7 +1423,7 @@ class ZoneAdm():
 
         try:
             if need_initialize:
-                ## Trigger initialization of minio.
+                # Trigger initialization of MinIO.
                 self.set_current_mode(zone_id, "initial")
                 self._send_decoy_with_zoneid_ptr(traceid, zone_id)
             else:
@@ -1553,9 +1641,9 @@ class ZoneAdm():
 
             _encrypt_or_generate(accessKey, "secret_key")
 
-            if not accessKey.get("policy_name"):  # (unset) or ""
-                accessKey["policy_name"] = "readwrite"
-            # policy_name will be checked in `check_pool_dict_is_sound`
+            if not accessKey.get("key_policy"):  # (unset) or ""
+                accessKey["key_policy"] = "readwrite"
+            # key_policy will be checked in `check_pool_dict_is_sound`
             pass
 
         logger.debug(f"@@@ CHECK_SCHEMA")
@@ -1720,9 +1808,9 @@ class ZoneAdm():
             "buckets_directory": "",
             "buckets": [],
             "access_keys": [
-                   {"policy_name": "readwrite"},
-                   {"policy_name": "readonly"},
-                   {"policy_name": "writeonly"}],
+                   {"key_policy": "readwrite"},
+                   {"key_policy": "readonly"},
+                   {"key_policy": "writeonly"}],
             "direct_hostnames": [],
             "expiration_date": self.determine_expiration_date(),
             "permit_status": "allowed",

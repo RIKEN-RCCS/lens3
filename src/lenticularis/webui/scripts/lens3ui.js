@@ -41,6 +41,9 @@ var edit_pool_data = {
   directHostnameDomains: "",
   facadeHostname: "",
   endpointURLs: "",
+
+  group_choices: [],
+
   submit_button_name: "",
   submit_button_disabled: false,
   submit_button_visible: false,
@@ -71,7 +74,7 @@ var show_pool_list_button_app = new Vue({
 });
 
 var show_or_edit_pool_app = new Vue({
-  el: '#show_or_edit_pool',
+  el: "#show_or_edit_pool",
   data: edit_pool_data,
   methods: {
     kick_make_pool: run_make_pool,
@@ -79,7 +82,7 @@ var show_or_edit_pool_app = new Vue({
 });
 
 var edit_buckets_app = new Vue({
-  el: '#edit_buckets',
+  el: "#edit_buckets",
   data: edit_pool_data,
   methods: {
     kick_make_bucket: run_make_bucket,
@@ -91,7 +94,7 @@ var edit_buckets_app = new Vue({
 });
 
 var edit_keys_app = new Vue({
-  el: '#edit_keys',
+  el: "#edit_keys",
   data: edit_pool_data,
   methods: {
     kick_make_key: run_make_access_key,
@@ -111,16 +114,7 @@ var pool_list_view_data = {
 };
 
 var pool_list_view_app = new Vue({
-  el: '#pool_list_view',
-  data: pool_list_view_data,
-  methods: {
-    kick_edit_pool: run_edit_pool,
-    kick_delete_pool: run_delete_pool,
-  }
-});
-
-var pool_list_view_app = new Vue({
-  el: '#pool_list_view22',
+  el: "#pool_list_view",
   data: pool_list_view_data,
   methods: {
     kick_edit_pool: run_edit_pool,
@@ -413,7 +407,7 @@ function compose_delete_dict(csrf_token) {
 }
 
 function push_buckets(buckets, bucketList, policy) {
-  var xs = bucketList.split(' ');
+  var xs = bucketList.split(" ");
   for (var i = 0; i < xs.length; i++) {
     var bucket = xs[i];
     if (bucket != "") {
@@ -425,7 +419,7 @@ function push_buckets(buckets, bucketList, policy) {
 }
 
 function push_direct_hostnames(direct_hostnames, directHostnameDomains, hosts) {
-  var xs = hosts.split(' ');
+  var xs = hosts.split(" ");
   for (var i = 0; i < xs.length; i++) {
     var directHostname = xs[i];
     if (directHostname != "") {
@@ -682,7 +676,7 @@ function render_pool_as_ul_entry(pooldesc) {
     ... key_entries,
     {text: {label: "Endpoint-URL", value: pooldesc["endpoint_url"]}},
     {text: {label: "Pool-ID", value: pooldesc["pool_name"]}},
-    {text: {label: "Direct hostname", value: pooldesc["direct_hostnames"].join(' ')}},
+    {text: {label: "Direct hostname", value: pooldesc["direct_hostnames"].join(" ")}},
     {text: {label: "MinIO state", value: pooldesc["minio_state"]}},
     {text: {label: "Expiration date", value: format_rfc3339_if_not_zero(pooldesc["expiration_date"])}},
     {text: {label: "Permitted", value: pooldesc["permit_status"]}},
@@ -722,7 +716,9 @@ function copy_pool_desc_for_edit(pooldesc) {
   edit_pool_data.bucket_name = "";
   edit_pool_data.bucket_policy = "";
 
-  edit_pool_data.direct_hostnames = pooldesc["direct_hostnames"].join(' ');
+  edit_pool_data.group_choices = pooldesc["groups"];
+
+  edit_pool_data.direct_hostnames = pooldesc["direct_hostnames"].join(" ");
   edit_pool_data.expiration_date = format_rfc3339_if_not_zero(pooldesc["expiration_date"]);
   edit_pool_data.permit_status = pooldesc["permit_status"];
   edit_pool_data.online_status = pooldesc["online_status"];
@@ -799,5 +795,5 @@ function scan_buckets(buckets, policy) {
       res.push(bucket["name"]);
     }
   }
-  return res.join(' ');
+  return res.join(" ");
 }

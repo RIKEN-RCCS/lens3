@@ -1728,7 +1728,7 @@ of (action, user-id), where an action is "allow" or "deny".
 
 | Key           | Value         | Description   |
 | ----          | ----          | ----          |
-| mm:pool-id    | minio-description |(htable)|
+| mn:pool-id    | minio-description |(htable)|
 | mx:Mux-endpoint | Mux-description |(htable)|
 | lk:??         | -> (lock?)
 

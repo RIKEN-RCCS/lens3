@@ -25,10 +25,16 @@
       </div>
       <div>
         <span class="label">User:</span>
-        <input v-model="user" size="64" disabled /></div>
+        <input v-model="user" size="64" disabled />
+      </div>
       <div>
         <span class="label">Group:</span>
-        <input v-model="group" size="64" :disabled="!make_pool_mode" /></div>
+        <select v-model="group" required="true" v-bind:disabled="!make_pool_mode">
+          <option v-for="(g, i) in group_choices" v-bind:selected="i == 0" >
+            {{ g }}
+          </option>
+         </select>
+      </div>
       <div>
         <span class="label">Buckets directory (absolute path):</span>
         <input v-model="buckets_directory" size="64" :disabled="!make_pool_mode" /></div>
@@ -48,9 +54,8 @@
           <span class="label">Bucket name:</span>
           <input v-model="bucket_name" size="64" placeholder="bucket name" />
           <span class="label">Bucket policy for public access:</span>
-          <select v-model="bucket_policy">
-            <option disabled value="">Please select one</option>
-            <option>none</option>
+          <select v-model="bucket_policy" v-bind:required="true">
+            <option selected>none</option>
             <option>public</option>
             <option>upload</option>
             <option>download</option>
@@ -137,12 +142,12 @@
         <input v-model="endpointURLs" size="64" disabled /></div>
       <hr />
       <div v-if="submit_button_visible">
-        <button v-on:click="kick_make_pool" :disabled="submit_button_disabled">{{submit_button_name}}</button>
+        <button v-on:click="kick_make_pool" v-bind:disabled="submit_button_disabled">{{submit_button_name}}</button>
       </div>
     </div>
 -->
 
-    <div id="pool_list_view22" v-if="pool_data_visible">
+    <div id="pool_list_view" v-if="pool_data_visible">
       <div v-for="(_, p) in pool_li_list.length">
         <hr />
         <input v-on:click="kick_edit_pool(p)" type="button" class="button" value="Edit" />

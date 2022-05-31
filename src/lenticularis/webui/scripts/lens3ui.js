@@ -30,7 +30,7 @@ var edit_pool_data = {
   access_keys_wo: [],
 
   bucket_name: "",
-  bucket_policy: "",
+  bucket_policy: "none",
   direct_hostnames: "",
   expiration_date: "",
   permit_status: "",
@@ -87,9 +87,6 @@ var edit_buckets_app = new Vue({
   methods: {
     kick_make_bucket: run_make_bucket,
     kick_delete_bucket: run_delete_bucket,
-    submitChangeAccessKeyRW: run_change_access_key_rw,
-    submitChangeAccessKeyRO: run_change_access_key_ro,
-    submitChangeAccessKeyWO: run_change_access_key_wo,
   },
 });
 
@@ -99,9 +96,6 @@ var edit_keys_app = new Vue({
   methods: {
     kick_make_key: run_make_access_key,
     kick_delete_key: run_delete_access_key,
-    submitChangeAccessKeyRW: run_change_access_key_rw,
-    submitChangeAccessKeyRO: run_change_access_key_ro,
-    submitChangeAccessKeyWO: run_change_access_key_wo,
   },
 });
 
@@ -199,21 +193,6 @@ function run_delete_bucket(name) {
     body = JSON.stringify(c);
     return {method, url_path, body};
   });
-}
-
-function run_change_access_key_rw() {
-  console.log("change_access_key RW");
-  return submit_operation(3, null)
-}
-
-function run_change_access_key_ro() {
-  console.log("change_access_key RO");
-  return submit_operation(4, null)
-}
-
-function run_change_access_key_wo() {
-  console.log("change_access_key WO");
-  return submit_operation(5, null)
 }
 
 function run_make_access_key(rw) {
@@ -430,35 +409,6 @@ function push_direct_hostnames(direct_hostnames, directHostnameDomains, hosts) {
     }
   }
   return direct_hostnames;
-}
-
-function run_debug() {
-  var post_data = compose_create_dict(csrf_token);
-  var put_data = compose_update_dict(csrf_token);
-  var bkt_data = compose_create_bucket_dict(csrf_token);
-  var key_data = compose_access_key_update_dict(csrf_token);
-  var delete_data = compose_delete_dict(csrf_token);
-  console.log("post_data: " + post_data);
-  console.log("put_data: " + put_data);
-  console.log("bkt_data: " + bkt_data);
-  console.log("key_data: " + key_data);
-  console.log("delete_data: " + delete_data);
-  //parsed = Date.parse("2012-07-04T18:10:00.000+09:00")
-  //console.log("parsed: " + parsed);
-  //var e = "1638401795";
-  //var date = new Date(e * 1000);
-  //var formatted = date.toISOString();
-  //console.log("toISOString: " + e + " => " + formatted);
-  //var t = "2012-07-04T18:10:00.000+09:00";
-  //var parsed = Date.parse(s)
-  //var date2 = new Date(s)
-  //var d2 = date2.getTime() / 1000;
-  //console.log("new Date: " + s + " => " + d2);
-  var s = "2022-03-31T00:00:00.000Z";
-  var t = parse_rfc3339(s);
-  var u = format_rfc3339(t);
-  console.log("parse: " + s + " => " + t);
-  console.log("unparse: " + t + " => " + u);
 }
 
 function run_get_pool_list() {
@@ -714,7 +664,7 @@ function copy_pool_desc_for_edit(pooldesc) {
   edit_pool_data.access_keys_wo = wokeys
 
   edit_pool_data.bucket_name = "";
-  edit_pool_data.bucket_policy = "";
+  edit_pool_data.bucket_policy = "none";
 
   edit_pool_data.group_choices = pooldesc["groups"];
 
@@ -796,4 +746,33 @@ function scan_buckets(buckets, policy) {
     }
   }
   return res.join(" ");
+}
+
+function run_debug() {
+  var post_data = compose_create_dict(csrf_token);
+  var put_data = compose_update_dict(csrf_token);
+  var bkt_data = compose_create_bucket_dict(csrf_token);
+  var key_data = compose_access_key_update_dict(csrf_token);
+  var delete_data = compose_delete_dict(csrf_token);
+  console.log("post_data: " + post_data);
+  console.log("put_data: " + put_data);
+  console.log("bkt_data: " + bkt_data);
+  console.log("key_data: " + key_data);
+  console.log("delete_data: " + delete_data);
+  //parsed = Date.parse("2012-07-04T18:10:00.000+09:00")
+  //console.log("parsed: " + parsed);
+  //var e = "1638401795";
+  //var date = new Date(e * 1000);
+  //var formatted = date.toISOString();
+  //console.log("toISOString: " + e + " => " + formatted);
+  //var t = "2012-07-04T18:10:00.000+09:00";
+  //var parsed = Date.parse(s)
+  //var date2 = new Date(s)
+  //var d2 = date2.getTime() / 1000;
+  //console.log("new Date: " + s + " => " + d2);
+  var s = "2022-03-31T00:00:00.000Z";
+  var t = parse_rfc3339(s);
+  var u = format_rfc3339(t);
+  console.log("parse: " + s + " => " + t);
+  console.log("unparse: " + t + " => " + u);
 }

@@ -8,7 +8,7 @@ import math
 import os
 import platform
 from signal import signal, alarm, SIGTERM, SIGCHLD, SIGALRM, SIG_IGN
-from subprocess import Popen, DEVNULL, PIPE
+from subprocess import Popen, DEVNULL, PIPE, TimeoutExpired
 import random
 import select
 import sys
@@ -91,8 +91,8 @@ class Manager():
         contextlib.redirect_stdout(None)
         contextlib.redirect_stderr(None)
 
-    def _finish_subprocess(self, p):
-        logger.debug(f"AHO _finish_subprocess unimplemented.")
+    def _terminate_subprocess(self, p):
+        logger.debug(f"AHO _terminate_subprocess unimplemented.")
         return
 
     def _set_pool_state(self, state, reason):
@@ -275,57 +275,56 @@ class Manager():
         return None
 
     def _wait_for_minio_to_come_up(self, p):
-        """Checks a minio startup.  It assumes any subprocess outputs at least
+        """Checks a MinIO startup.  It assumes any subprocess outputs at least
         one line of a message or closes stdout.  Otherwise it may wait
         indefinitely.
         """
 
-        # It expects that minio outputs the following lines at a
+        # It expects that MinIO outputs the following lines at a
         # successful start (to stdout):
         # > "API: http://xx.xx.xx.xx:9000  http://127.0.0.1:9000"
         # > "RootUser: minioadmin"
         # > "RootPass: minioadmin"
 
-        outs = b""
-        while True:
-            (outs, errs, closed) = wait_one_line_on_stdout(p, None)
-            if closed:
-                # A closure is presumably an error.
-                self._finish_subprocess(p)
-                p_status = p.wait()
-                (e_, _) = _read_stream(p.stderr)
-                errs += e_
-                if outs.find(_minio_error_response) != -1:
-                    if outs.find(_minio_response_port_in_use) != -1:
-                        logger.debug(f"Starting minio failed with"
-                                     f" wait-status={p_status}"
-                                     f" outs=({outs}) errs=({errs})")
-                        return (False, True)
-                    elif outs.find(_minio_response_unwritable_storage) != -1:
-                        reason = "Storage is unwritable."
-                        self._set_pool_state("inoperable",
-                                             "Storage is unwritable.")
-                        logger.info(f"Starting minio failed with"
-                                    f" wait-status={p_status}"
-                                    f" outs=({outs}) errs=({errs})")
-                        return (False, False)
-                    else:
-                        self._set_pool_state("inoperable",
-                                             "MinIO failed with an error.")
-                        logger.error(f"Starting minio failed with"
-                                     f" wait-status={p_status}"
-                                     f" outs=({outs}) errs=({errs})")
-                        return (False, False)
-                else:
-                    self._set_pool_state("inoperable",
-                                         "MinIO process failed.")
-                    logger.error(f"Starting minio failed with"
-                                 f" wait-status={p_status}"
-                                 f" outs=({outs}) errs=({errs})")
+        (outs, errs, closed) = wait_one_line_on_stdout(p, None)
+        if outs.startswith(_minio_expected_response):
+            logger.info(f"Message on MinIO outs=({outs}) errs=({errs})")
+            return (True, False)
+        else:
+            # A closure of stdout is presumably an error.  Or,
+            # terminate the process on an unexpected message.
+            try:
+                (o_, e_) = p.communicate(timeout=15)
+            except TimeoutExpired:
+                p.kill()
+                (o_, e_) = p.communicate()
+                pass
+            p_status = p.wait()
+            outs += o_
+            errs += e_
+            m0 = f"Starting MinIO failed with"
+            m1 = (f" exit={p_status}" f" outs=({outs}) errs=({errs})")
+            if outs.find(_minio_error_response) != -1:
+                if outs.find(_minio_response_port_in_use) != -1:
+                    reason = "port-in-use (transient)"
+                    logger.debug(f"{m0} {reason}: {m1}")
+                    return (False, True)
+                elif outs.find(_minio_response_unwritable_storage) != -1:
+                    reason = "storage unwritable"
+                    self._set_pool_state("inoperable", reason)
+                    logger.info(f"{m0} {reason}: {m1}")
                     return (False, False)
-            if outs.startswith(_minio_expected_response):
-                logger.info(f"Message on MinIO outs=({outs}) errs=({errs})")
-                return (True, False)
+                else:
+                    reason = "start failed"
+                    self._set_pool_state("inoperable", reason)
+                    logger.error(f"{m0} {reason}: {m1}")
+                    return (False, False)
+                pass
+            else:
+                reason = "start failed (no error)"
+                self._set_pool_state("inoperable", reason)
+                logger.error(f"{m0} {reason}: {m1}")
+                return (False, False)
             pass
         pass
 

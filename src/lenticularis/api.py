@@ -5,8 +5,8 @@
 
 import base64
 import sys
-from lenticularis.pooladm import Pool_Admin
-from lenticularis.pooladm import rephrase_exception_message
+from lenticularis.pooladmin import Pool_Admin
+from lenticularis.pooladmin import rephrase_exception_message
 from lenticularis.poolutil import Api_Error
 from lenticularis.poolutil import check_pool_naming
 from lenticularis.poolutil import check_bucket_naming

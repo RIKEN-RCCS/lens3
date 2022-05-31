@@ -12,7 +12,7 @@ import json
 #import threading
 import sys
 import traceback
-from lenticularis.pooladm import Pool_Admin
+from lenticularis.pooladmin import Pool_Admin
 from lenticularis.readconf import read_adm_conf
 from lenticularis.poolutil import check_user_naming
 from lenticularis.utility import ERROR_EXIT_READCONF, ERROR_EXIT_EXCEPTION, ERROR_EXIT_ARGUMENT

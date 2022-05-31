@@ -92,12 +92,37 @@ class Tables():
 
     ## Storage-table:
 
-    def set_buckets_directory(self, path, pool_id):
-        return self.storage_table.set_buckets_directory(path, pool_id)
+    def set_bucket(self, bucket, desc):
+        self.storage_table.set_bucket(bucket, desc)
+        pass
+
+    def get_bucket(self, bucket):
+        return self.storage_table.get_bucket(bucket)
+
+    def delete_bucket(self, bucket):
+        self.storage_table.delete_bucket(bucket)
+        pass
+
+    def set_ex_buckets_directory(self, path, pool_id):
+        return self.storage_table.set_ex_buckets_directory(path, pool_id)
 
     def delete_buckets_directory(self, path):
         self.storage_table.delete_buckets_directory(path)
         pass
+
+    def set_user(self, id, info):
+        self.storage_table.set_user(id, info)
+        pass
+
+    def get_user(self, id):
+        return self.storage_table.get_user(id)
+
+    def delete_user(self, id):
+        self.storage_table.delete_user(id)
+        pass
+
+    def list_users(self):
+        return self.storage_table.list_users()
 
     ## Process-table:
 
@@ -164,10 +189,12 @@ class Storage_Table(Table_Common):
     def set_pool(self, pool_id, pooldesc):
         assert set(pooldesc.keys()).issubset(self._pool_desc_keys)
         key = f"{self._pool_desc_prefix}{pool_id}"
-        return self.dbase.hset_map(key, pooldesc, self.structured)
+        self.dbase.hset_map(key, pooldesc, self.structured)
+        pass
 
     def delete_pool(self, pool_id):
-        return self.dbase.delete(f"{self._pool_desc_prefix}{pool_id}")
+        self.dbase.delete(f"{self._pool_desc_prefix}{pool_id}")
+        pass
 
     def ins_ptr(self, zoneID, dict):
         # logger.debug(f"+++ {zoneID} {dict}")
@@ -188,7 +215,8 @@ class Storage_Table(Table_Common):
 
     def del_zone(self, zoneID):
         # logger.debug(f"+++ {zoneID}")
-        return self.dbase.delete(f"{self._pool_desc_prefix}{zoneID}")
+        self.dbase.delete(f"{self._pool_desc_prefix}{zoneID}")
+        pass
 
     def del_ptr(self, zoneID, dict):
         # logger.debug(f"+++ {zoneID} {dict}")
@@ -206,7 +234,7 @@ class Storage_Table(Table_Common):
             key = f"{self.directHostnamePrefix}{directHostname}"
             self.dbase.delete(key)
             pass
-        return None
+        pass
 
     def get_pool(self, pool_id):
         key = f"{self._pool_desc_prefix}{pool_id}"
@@ -233,12 +261,14 @@ class Storage_Table(Table_Common):
     def set_permission(self, zoneID, permission):
         # logger.debug(f"+++ {zoneID} {permission}")
         key = f"{self._pool_desc_prefix}{zoneID}"
-        return self.dbase.hset(key, "permit_status", permission, self.structured)
+        self.dbase.hset(key, "permit_status", permission, self.structured)
+        pass
 
     def set_atime(self, zoneID, atime):
         # logger.debug(f"+++ {zoneID} {atime}")
         key = f"{self.atimePrefix}{zoneID}"
-        return self.dbase.set(key, atime)
+        self.dbase.set(key, atime)
+        pass
 
     def get_atime(self, zoneID):
         # logger.debug(f"+++ {zoneID}")
@@ -248,12 +278,14 @@ class Storage_Table(Table_Common):
     def del_atime(self, zoneID):
         # logger.debug(f"+++ {zoneID}")
         key = f"{self.atimePrefix}{zoneID}"
-        return self.dbase.delete(key)
+        self.dbase.delete(key)
+        pass
 
     def set_pool_state(self, pool_id, state, reason):
         key = f"{self._pool_state_prefix}{pool_id}"
         ee = json.dumps((state, reason))
-        return self.dbase.set(key, ee)
+        self.dbase.set(key, ee)
+        pass
 
     def get_pool_state(self, pool_id):
         key = f"{self._pool_state_prefix}{pool_id}"
@@ -264,13 +296,15 @@ class Storage_Table(Table_Common):
 
     def delete_pool_state(self, pool_id):
         key = f"{self._pool_state_prefix}{pool_id}"
-        return self.dbase.delete(key)
+        self.dbase.delete(key)
+        pass
 
     def set_mode(self, zoneID, mode):
         # logger.debug(f"+++ {zoneID} {mode}")
         key = f"{self._pool_state_prefix}{zoneID}"
         ee = json.dumps((mode, None))
-        return self.dbase.set(key, ee)
+        self.dbase.set(key, ee)
+        pass
 
     def get_mode(self, zoneID):
         # logger.debug(f"+++ {zoneID}")
@@ -283,11 +317,13 @@ class Storage_Table(Table_Common):
     def del_mode(self, zoneID):
         # logger.debug(f"+++ {zoneID}")
         key = f"{self._pool_state_prefix}{zoneID}"
-        return self.dbase.delete(key)
+        self.dbase.delete(key)
+        pass
 
     def ins_allow_deny_rules(self, rule):
         # logger.debug(f"+++ {rule}")
-        return self.dbase.set(self.allowDenyRuleKey, json.dumps(rule))
+        self.dbase.set(self.allowDenyRuleKey, json.dumps(rule))
+        pass
 
     def get_allow_deny_rules(self):
         # logger.debug(f"+++ ")
@@ -297,21 +333,23 @@ class Storage_Table(Table_Common):
             return []
         return json.loads(v, parse_int=None)
 
-    def set_unix_user_info(self, id, info):
+    def set_user(self, id, info):
         assert (self._user_info_keys).issubset(set(info.keys()))
         key = f"{self._unix_user_prefix}{id}"
-        return self.dbase.set(key, json.dumps(info))
+        self.dbase.set(key, json.dumps(info))
+        pass
 
-    def get_unix_user_info(self, id):
+    def get_user(self, id):
         key = f"{self._unix_user_prefix}{id}"
         v = self.dbase.get(key)
         return json.loads(v, parse_int=None) if v is not None else None
 
-    def delete_unix_user_info(self, id):
+    def delete_user(self, id):
         key = f"{self._unix_user_prefix}{id}"
-        return self.dbase.delete(key)
+        self.dbase.delete(key)
+        pass
 
-    def get_unix_user_list(self):
+    def list_users(self):
         kk = _scan_table(self.dbase.r, self._unix_user_prefix, None)
         return [k for (k, _) in kk]
 
@@ -319,7 +357,7 @@ class Storage_Table(Table_Common):
         kk = _scan_table(self.dbase.r, self._pool_desc_prefix, pool_id)
         return [k for (k, _) in kk]
 
-    def set_buckets_directory(self, path, pool_id):
+    def set_ex_buckets_directory(self, path, pool_id):
         key = f"{self._buckets_directory_prefix}{path}"
         ok = self.dbase.r.setnx(key, pool_id) != 0
         if ok:
@@ -390,7 +428,8 @@ class Process_Table(Table_Common):
         assert set(procdesc.keys()) == self._minio_desc_keys
         key = f"{self._minio_process_prefix}{pool_id}"
         self.set_minio_proc_expiry(pool_id, timeout)
-        return self.dbase.hset_map(key, procdesc, self.structured)
+        self.dbase.hset_map(key, procdesc, self.structured)
+        pass
 
     def get_minio_proc(self, pool_id):
         key = f"{self._minio_process_prefix}{pool_id}"
@@ -401,12 +440,13 @@ class Process_Table(Table_Common):
 
     def delete_minio_proc(self, pool_id):
         key = f"{self._minio_process_prefix}{pool_id}"
-        return self.dbase.delete(key)
+        self.dbase.delete(key)
+        pass
 
     def set_minio_proc_expiry(self, pool_id, timeout):
         key = f"{self._minio_process_prefix}{pool_id}"
         self.dbase.r.expire(key, timeout)
-        return None
+        pass
 
     def list_minio_procs(self, pool_id):
         return _scan_table(self.dbase.r, self._minio_process_prefix, pool_id, value=self.get_minio_proc)
@@ -417,7 +457,8 @@ class Process_Table(Table_Common):
         r = self.dbase.hset_map(key, mux_desc, self.structured)
         if timeout:
             self._set_mux_expiry(mux_ep, timeout)
-        return r
+            pass
+        pass
 
     def get_mux(self, mux_ep):
         key = f"{self._mux_desc_prefix}{mux_ep}"
@@ -425,7 +466,8 @@ class Process_Table(Table_Common):
 
     def delete_mux(self, mux_ep):
         key = f"{self._mux_desc_prefix}{mux_ep}"
-        return self.dbase.delete(key)
+        self.dbase.delete(key)
+        pass
 
     def _set_mux_expiry(self, mux_ep, timeout):
         key = f"{self._mux_desc_prefix}{mux_ep}"

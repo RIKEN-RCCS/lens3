@@ -87,20 +87,20 @@ def _read_user_list(path):
 
 
 def _store_user_list(zone_adm, user_list):
-    existing = zone_adm.list_unixUsers()
+    existing = zone_adm.tables.list_users()
     for e in user_list:
         id = e["uid"]
-        oldu = zone_adm.tables.storage_table.get_unix_user_info(id)
+        oldu = zone_adm.tables.get_user(id)
         if e["add"] and oldu is not None:
             newu = {"uid": e["uid"], "groups": e["groups"],
                     "permitted": oldu["permitted"]}
-            zone_adm.tables.storage_table.set_unix_user_info(id, newu)
+            zone_adm.tables.set_user(id, newu)
         elif not e["add"] and oldu is not None:
-            zone_adm.tables.storage_table.delete_unix_user_info(id)
+            zone_adm.tables.delete_user(id)
         elif  e["add"] and oldu is None:
             newu = {"uid": e["uid"], "groups": e["groups"],
                     "permitted": True}
-            zone_adm.tables.storage_table.set_unix_user_info(id, newu)
+            zone_adm.tables.set_user(id, newu)
         else:
             pass
         pass
@@ -118,21 +118,21 @@ def format_mux(m, formatting):
         fix_date_format(desc, ["last_interrupted_time", "start_time"])
     return {ep: desc}
 
-def _store_unix_user_info_add(zone_adm, b):
+def _store_user_info_add(zone_adm, b):
     # New Entry (no right hand side)
     logger.debug(f"@@@ >> New {b}")
-    zone_adm.store_unix_user_info(b["uid"], b)
+    zone_adm.tables.set_user(b["uid"], b)
 
-def _store_unix_user_info_delete(zone_adm, e):
+def _store_user_info_delete(zone_adm, e):
     # Deleted Entry (no left hand side)
     logger.debug(f"@@@ >> Delete {e}")
-    zone_adm.delete_unix_user_info(e)
+    zone_adm.delete_user(e)
 
-def _store_unix_user_info_update(zone_adm, x):
+def _store_user_info_update(zone_adm, x):
     # Updated Entry
     (b, e) = x
     logger.debug(f"@@@ >> Update {b} {e}")
-    zone_adm.store_unix_user_info(b["uid"], b)
+    zone_adm.tables.set_user(b["uid"], b)
 
 def _restore_zone_delete(zone_adm, traceid, e):
     # Deleted Entry (no left hand side)
@@ -300,11 +300,10 @@ class Command():
         pass
 
     def fn_show_user_info(self):
-        unix_users = self.zone_adm.list_unixUsers()
-        logger.debug(f"@@@ {unix_users}")
-        uis = [user_info_to_csv_row(self.zone_adm.fetch_unix_user_info(id), id)
-               for id in unix_users]
-        print_json_csv("user info", uis, self.args.format)
+        unix_users = self.zone_adm.tables.list_users()
+        uu = [user_info_to_csv_row(self.zone_adm.tables.get_user(id), id)
+              for id in unix_users]
+        print_json_csv("user info", uu, self.args.format)
 
     def fn_insert_zone(self, zone_id, jsonfile):
         logger.debug(f"@@@ INSERT ZONE")
@@ -364,8 +363,8 @@ class Command():
 
     def fn_dump_zone(self):
         rules = self.zone_adm.fetch_allow_deny_rules()
-        unix_users = self.zone_adm.list_unixUsers()
-        users = [self.zone_adm.fetch_unix_user_info(id) for id in unix_users]
+        unix_users = self.zone_adm.tables.list_users()
+        users = [self.zone_adm.tables.get_user(id) for id in unix_users]
         (zone_list, _) = self.zone_adm.fetch_zone_list(None, include_atime=True)
         dump_data = json.dumps({"rules": rules, "users": users, "zones": zone_list})
         print(dump_data)

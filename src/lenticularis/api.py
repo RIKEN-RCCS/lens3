@@ -82,8 +82,8 @@ class Api():
             ##(zone_list, _) = self.zone_adm.fetch_zone_list(
             ##user_id, decrypt=True, include_atime=True, include_userinfo=True,
             ##zone_id=pool_id)
-            (pools, _) = self.zone_adm.list_pools(traceid, user_id, pool_id)
-            return (200, None, {"pool_list": pools})
+            triple = self.zone_adm.list_pools(traceid, user_id, pool_id)
+            return triple
         except Api_Error as e:
             return (e.code, f"{e}", [])
         except Exception as e:

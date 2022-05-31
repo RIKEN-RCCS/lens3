@@ -73,8 +73,8 @@ var show_pool_list_button_app = new Vue({
   },
 });
 
-var show_or_edit_pool_app = new Vue({
-  el: "#show_or_edit_pool",
+var show_or_make_pool_app = new Vue({
+  el: "#show_or_make_pool",
   data: edit_pool_data,
   methods: {
     kick_make_pool: run_make_pool,
@@ -151,8 +151,24 @@ function run_make_pool() {
   })
 }
 
+//function run_edit_pool(i) {
+//  copy_pool_desc_for_edit(pool_list_view_data.pool_desc_list[i]);
+//  edit_pool_data.pool_name_visible = true;
+//  edit_pool_data.buckets_directory_disabled = true;
+//  edit_pool_data.edit_pool_visible = true;
+//  pool_list_view_data.pool_data_visible = false;
+//  edit_pool_data.submit_button_name = "Update";
+//  edit_pool_data.submit_button_disabled = false;
+//  edit_pool_data.submit_button_visible = true;
+//}
+
 function run_edit_pool(i) {
-  copy_pool_desc_for_edit(pool_list_view_data.pool_desc_list[i]);
+  pool_desc = pool_list_view_data.pool_desc_list[i]
+  display_pool_in_edit_pool(pool_desc)
+}
+
+function display_pool_in_edit_pool(pool_desc) {
+  copy_pool_desc_for_edit(pool_desc);
   edit_pool_data.pool_name_visible = true;
   edit_pool_data.buckets_directory_disabled = true;
   edit_pool_data.edit_pool_visible = true;
@@ -297,6 +313,7 @@ function submit_operation(op, triple) {
           show_message(edit_pool_data.submit_button_name + " pool ... done: " + JSON.stringify(data));
           render_jsondata(data)
           edit_pool_data.mode = data["pool_list"][0]["minio_state"]
+          display_pool_in_edit_pool(data["pool_list"][0])
           // update succeeded. do not re-enable button now.
         })}
     })

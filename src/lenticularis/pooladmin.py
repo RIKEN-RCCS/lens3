@@ -218,6 +218,13 @@ def _add_bucket_to_pool(pooldesc, name, policy):
     return
 
 
+def _drop_non_ui_info_from_keys(access_key):
+    # Drops unnecessary info to pass access-key info to Web-UI.
+    # {"use", "owner", "creation_date"}.
+    needed = {"access_key", "secret_key", "key_policy"}
+    return {k: v for (k, v) in access_key.items() if k in needed}
+
+
 class Pool_Admin():
 
     def __init__(self, adm_conf):
@@ -321,7 +328,7 @@ class Pool_Admin():
             assert zone is not None
             user_id = zone["owner_uid"]
 
-            ui = self.fetch_unix_user_info(user_id)
+            ui = self.tables.get_user(user_id)
             if ui:
                 groups = ui.get("groups", [])
                 group = zone.get("owner_gid")
@@ -347,18 +354,18 @@ class Pool_Admin():
     def fetch_allow_deny_rules(self):
         return self.tables.storage_table.get_allow_deny_rules()
 
-    def list_unixUsers(self):
-        return list(self.tables.storage_table.get_unix_user_list())
+    def list_unixUsers__(self):
+        return list(self.tables.storage_table.list_users())
 
-    def store_unix_user_info(self, user_id, info):
-        self.tables.storage_table.set_unix_user_info(user_id, info)
+    def store_user_info__(self, user_id, info):
+        self.tables.set_user(user_id, info)
         return
 
-    def fetch_unix_user_info(self, user_id):
-        return self.tables.storage_table.get_unix_user_info(user_id)
+    def fetch_user_info__(self, user_id):
+        return self.tables.get_user(user_id)
 
-    def delete_unix_user_info(self, user_id):
-        self.tables.storage_table.delete_unix_user_info(user_id)
+    def delete_user__(self, user_id):
+        self.tables.delete_user(user_id)
         return
 
     def check_user_is_registered(self, user_id):
@@ -369,14 +376,14 @@ class Pool_Admin():
             return False
         elif not check_user_naming(user_id):
             return False
-        elif self.fetch_unix_user_info(user_id) is None:
+        elif self.tables.get_user(user_id) is None:
             return False
         else:
             return True
         pass
 
     def _check_user_is_authorized(self, user_id):
-        u = self.fetch_unix_user_info(user_id)
+        u = self.tables.get_user(user_id)
         assert u is not None
         if not u.get("permitted"):
             raise Api_Error(403, (f"A user disabled: {user_id}"))
@@ -387,7 +394,7 @@ class Pool_Admin():
     def return_user_template(self, user_id):
         # It excludes "root_secret".
         self._check_user_is_authorized(user_id)
-        ui = self.fetch_unix_user_info(user_id)
+        ui = self.tables.get_user(user_id)
         assert ui is not None
         groups = ui.get("groups")
         return {
@@ -426,7 +433,7 @@ class Pool_Admin():
 
         permit_list = self.tables.storage_table.get_allow_deny_rules()
 
-        ui = self.fetch_unix_user_info(user_id)
+        ui = self.tables.get_user(user_id)
         assert ui is not None
         groups = ui.get("groups")
 
@@ -468,7 +475,7 @@ class Pool_Admin():
             pooldesc0["probe_access"] = probe_key
             ##self.tables.set_probe_key(probe_key, pool_id)
 
-            (ok, holder) = self.tables.set_buckets_directory(path, pool_id)
+            (ok, holder) = self.tables.set_ex_buckets_directory(path, pool_id)
             if not ok:
                 owner = self._get_pool_owner_for_messages(holder)
                 raise Api_Error(400, (f"Buckets-directory is already used:"
@@ -529,19 +536,18 @@ class Pool_Admin():
             raise Exception(f"initialize: error: mode is not ready: {mode}")
         else:
             pass
-
-        return pooldesc0
+        pass
 
     def delete_pool(self, traceid, user_id, pool_id):
         """Deletes a pool.  It clears buckets and access-keys set in MinIO.
         """
         self._check_user_is_authorized(user_id)
         self._check_pool_owner(pool_id, user_id)
-        self.clean_minio(traceid, user_id, pool_id)
-        self.clean_database(traceid, user_id, pool_id)
-        pass
+        self._clean_minio(traceid, user_id, pool_id)
+        self._clean_database(traceid, user_id, pool_id)
+        return (200, None, {})
 
-    def clean_minio(self, traceid, user_id, pool_id):
+    def _clean_minio(self, traceid, user_id, pool_id):
         # Clean MinIO and stop.
         try:
             mc = self._make_mc_for_pool(traceid, pool_id)
@@ -568,7 +574,7 @@ class Pool_Admin():
             pass
         pass
 
-    def clean_database(self, traceid, user_id, pool_id):
+    def _clean_database(self, traceid, user_id, pool_id):
         # Clean database.
         pooldesc = self.tables.storage_table.get_pool(pool_id)
         if pooldesc is not None:
@@ -624,7 +630,7 @@ class Pool_Admin():
         except Exception as e:
             logger.info(f"Exception in delete_id_unconditionally: {e}")
             pass
-        return (200, None, {})
+        pass
 
     def list_pools(self, traceid, user_id, pool_id):
         """It lists all pools of the user when pool-id is None."""
@@ -634,7 +640,7 @@ class Pool_Admin():
         include_atime = True
         include_userinfo = True
         if include_userinfo:
-            ui = self.fetch_unix_user_info(user_id)
+            ui = self.tables.get_user(user_id)
             groups = ui.get("groups") if ui is not None else None
         extra_info = False
         if extra_info:
@@ -674,10 +680,10 @@ class Pool_Admin():
 
             pool_list.append(pooldesc)
             pass
-        return (pool_list, [])
+        return (200, None, {"pool_list": pool_list})
 
     def _gather_pool_desc(self, traceid, pool_id):
-        """Returns a pool description displayed by Web-UI."""
+        """Returns a pool description to be displayed by Web-UI."""
         pooldesc = self.tables.storage_table.get_pool(pool_id)
         if pooldesc is None:
             return None
@@ -685,11 +691,17 @@ class Pool_Admin():
         pooldesc["buckets_directory"] = bd
         bkts = self.tables.routing_table.list_buckets(pool_id)
         pooldesc["buckets"] = bkts
+
         keys0 = self.tables.pickone_table.list_access_keys(pool_id)
         # Drop a probing access-key.  It is not visible to users.
-        keys = [k for k in keys0
+        keys1 = [k for k in keys0
                 if (k is not None and k.get("secret_key") != "")]
-        pooldesc["access_keys"] = keys
+        # Drop unnecessary info to users.
+        keys2 = [_drop_non_ui_info_from_keys(k) for k in keys1]
+
+        logger.debug(f"AHO keys={keys2}")
+
+        pooldesc["access_keys"] = keys2
         pooldesc.pop("probe_access")
 
         ##pooldesc["direct_hostnames"]
@@ -697,6 +709,7 @@ class Pool_Admin():
         ##pooldesc["permit_status"]
         ##pooldesc["online_status"]
         ##pooldesc["minio_state"]
+        check_pool_is_well_formed(pooldesc, None)
         return pooldesc
 
     # BUCKETS.
@@ -730,7 +743,8 @@ class Pool_Admin():
         except Exception as e:
             self.tables.routing_table.delete_bucket(bucket)
             raise
-        return
+        pooldesc1 = self._gather_pool_desc(traceid, pool_id)
+        return (200, None, {"pool_list": [pooldesc1]})
 
     def delete_bucket(self, traceid, user_id, pool_id, bucket):
         """Deletes a bucket.  Deleting ignores errors occur in MC commands in
@@ -764,7 +778,8 @@ class Pool_Admin():
                          exc_info=True)
             pass
         self.tables.routing_table.delete_bucket(bucket)
-        return (200, None, {})
+        pooldesc1 = self._gather_pool_desc(traceid, pool_id)
+        return (200, None, {"pool_list": [pooldesc1]})
 
     # SECRETS.
 
@@ -787,12 +802,12 @@ class Pool_Admin():
                 (p_, r) = mc.admin_user_enable(key)
                 assert p_ is None
                 assert_mc_success(r, "mc.admin_user_enable")
-                return (200, None, {})
             pass
         except Exception as e:
             self.tables.delete_id_unconditionally(key)
             raise
-        pass
+        pooldesc1 = self._gather_pool_desc(traceid, pool_id)
+        return (200, None, {"pool_list": [pooldesc1]})
 
     def delete_secret(self, traceid, user_id, pool_id, access_key):
         """Deletes a secret.  Deleting will fail when errors occur in MC
@@ -822,10 +837,10 @@ class Pool_Admin():
                     pass
                 pass
             self.tables.delete_id_unconditionally(access_key)
-            return (200, None, {})
         except Exception as e:
             raise
-        pass
+        pooldesc1 = self._gather_pool_desc(traceid, pool_id)
+        return (200, None, {"pool_list": [pooldesc1]})
 
     def create_pool(self, traceid, user_id, pooldesc0):
         decrypt=True
@@ -1186,7 +1201,7 @@ class Pool_Admin():
         return
 
     def _check_user_group(self, user_id, zone):
-        ui = self.fetch_unix_user_info(user_id)
+        ui = self.tables.get_user(user_id)
         groups = ui.get("groups") if ui else []
         group = zone.get("owner_gid") if zone else None
         if group not in groups:
@@ -1874,7 +1889,7 @@ class Pool_Admin():
         logger.debug(f"@@@ zone_id = {zone_id}")
         groups = None
         if include_userinfo:
-            ui = self.fetch_unix_user_info(user_id)
+            ui = self.tables.get_user(user_id)
             groups = ui.get("groups") if ui is not None else None
         zone_list = []
         broken_zones = []

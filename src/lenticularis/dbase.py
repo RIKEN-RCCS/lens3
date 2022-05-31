@@ -19,6 +19,9 @@ def _wait_for_redis(r):
         except ConnectionError as e:
             logger.debug("Redis is not ready (sleeping).")
             time.sleep(30)
+            pass
+        pass
+    pass
 
 
 class DBase():
@@ -26,9 +29,11 @@ class DBase():
         self.r = Redis(host=host, port=port, db=db, password=password,
                              charset="utf-8", decode_responses=True)
         _wait_for_redis(self.r)
+        pass
 
     def set(self, name, value):
         self.r.set(name, value)
+        pass
 
     def get(self, name, default=None):
         val = self.r.get(name)
@@ -38,8 +43,10 @@ class DBase():
         return self.r.hexists(name, key)
 
     def hset_map(self, name, dict, structured):
+        # hset returns the number of added fields, but ignored.
         dict = _marshal(dict, structured)
         self.r.hset(name, mapping=dict)
+        pass
 
     def hget_map(self, name, structured, default=None):
         val = self.r.hgetall(name)
@@ -47,11 +54,15 @@ class DBase():
             return default
         else:
             return _unmarshal(val, structured)
+        pass
 
     def hset(self, name, key, val, structured):
+        # hset returns the number of added fields, but ignored.
         if key in structured:
             val = json.dumps(val)
+            pass
         self.r.hset(name, key, val)
+        pass
 
     def hget(self, name, key, structured, default=None):
         val = self.r.hget(name, key)
@@ -61,9 +72,14 @@ class DBase():
             return json.loads(val, parse_int=None)
         else:
             return val
+        pass
 
     def delete(self, name):
         self.r.delete(name)
+        pass
+
+    pass
+
 
 def _marshal(dict, keys):
     if keys is None:
@@ -75,6 +91,8 @@ def _marshal(dict, keys):
             if val is not None:
                 dict[key] = json.dumps(val)
         return dict
+    pass
+
 
 def _unmarshal(dict, keys):
     ### It destructively modifies a dict.
@@ -86,3 +104,4 @@ def _unmarshal(dict, keys):
             if val is not None:
                 dict[key] = json.loads(val, parse_int=None)
         return dict
+    pass

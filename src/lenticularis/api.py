@@ -5,7 +5,7 @@
 
 import base64
 import sys
-from lenticularis.pooladm import ZoneAdm
+from lenticularis.pooladm import Pool_Admin
 from lenticularis.pooladm import rephrase_exception_message
 from lenticularis.poolutil import Api_Error
 from lenticularis.poolutil import check_pool_naming
@@ -20,7 +20,7 @@ import time
 class Api():
 
     def __init__(self, adm_conf):
-        self.zone_adm = ZoneAdm(adm_conf)
+        self.zone_adm = Pool_Admin(adm_conf)
         trusted_proxies = adm_conf["webui"]["trusted_proxies"]
         self.trusted_proxies = set([addr for h in trusted_proxies
                                        for addr in get_ip_address(h)])
@@ -29,8 +29,7 @@ class Api():
 
     def api_get_template(self, traceid, user_id):
         try:
-            assert user_id is not None
-            t = self.zone_adm.generate_template(user_id)
+            t = self.zone_adm.return_user_template(user_id)
             return (200, None, {"pool_list": [t]})
         except Api_Error as e:
             return (e.code, f"{e}", [])
@@ -46,7 +45,6 @@ class Api():
 
     def api_make_pool(self, traceid, user_id, pooldesc0):
         try:
-            assert user_id is not None
             pooldesc1 = self.zone_adm.make_pool(traceid, user_id, pooldesc0)
             return (200, None, {"pool_list": [pooldesc1]})
         except Api_Error as e:
@@ -61,7 +59,6 @@ class Api():
 
     def api_delete_pool(self, traceid, user_id, pool_id):
         try:
-            assert user_id is not None and pool_id is not None
             if not check_pool_naming(pool_id):
                 return (403, f"Bad pool={pool_id}", [])
             self.zone_adm.delete_pool(traceid, user_id, pool_id)
@@ -78,8 +75,9 @@ class Api():
 
     def api_list_pools(self, traceid, user_id, pool_id):
         try:
-            assert user_id is not None
-            if not check_pool_naming(pool_id):
+            if pool_id is None:
+                pass
+            elif not check_pool_naming(pool_id):
                 return (403, f"Bad pool-id={pool_id}", [])
             ##(zone_list, _) = self.zone_adm.fetch_zone_list(
             ##user_id, decrypt=True, include_atime=True, include_userinfo=True,
@@ -100,12 +98,15 @@ class Api():
 
     def api_make_bucket(self, traceid, user_id, pool_id, body):
         try:
-            assert user_id is not None
             if not check_pool_naming(pool_id):
                 return (403, f"Bad pool-id={pool_id}", [])
             d = body.get("bucket")
             bucket = d.get("name")
             policy = d.get("policy")
+            if not check_bucket_naming(bucket):
+                return (403, f"Bad bucket name={bucket}", [])
+            if not policy in ["none", "public", "upload", "download"]:
+                return (403, f"Bad bucket policy={policy}", [])
             # assert name == bucket
         except Exception as e:
             m = rephrase_exception_message(e)
@@ -129,7 +130,6 @@ class Api():
 
     def api_delete_bucket(self, traceid, user_id, pool_id, bucket):
         try:
-            assert user_id is not None
             if not check_pool_naming(pool_id):
                 return (403, f"Bad pool={pool_id}", [])
             if not check_bucket_naming(bucket):
@@ -156,11 +156,11 @@ class Api():
 
     def api_make_secret(self, traceid, user_id, pool_id, body):
         try:
-            assert user_id is not None
             if not check_pool_naming(pool_id):
                 return (403, f"Bad pool-id={pool_id}", [])
             rw = body.get("key_policy")
-            assert rw in ["readwrite", "readonly", "writeonly"]
+            if not rw in ["readwrite", "readonly", "writeonly"]:
+                return (403, f"Bad access policy={rw}", [])
         except Exception as e:
             m = rephrase_exception_message(e)
             return (400, m, None)
@@ -180,7 +180,6 @@ class Api():
 
     def api_delete_secret(self, traceid, user_id, pool_id, access_key):
         try:
-            assert user_id is not None
             if not check_pool_naming(pool_id):
                 return (403, f"Bad pool-id={pool_id}", [])
             if not check_pool_naming(access_key):

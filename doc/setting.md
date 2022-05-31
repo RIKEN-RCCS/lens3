@@ -299,18 +299,19 @@ See [Administration Guide](admin-guide.md#).
   * An entry is a user name and a list of groups
 
 ```
-user1,group1a,group1b,group1c
-user2,group2a
+ADD,user1,group1a,group1b,group1c, ...
+ADD,user2,group2a,group2b,group2c, ...
+...
 ```
 
-* Register a user list to Lens3 by `lenticularis-admin` command
+* Register users to Lens3 by `lenticularis-admin` command
 
 ```
 lens3-admin$ lenticularis-admin -c adm-config.yaml load-user-list {csv-file}
 lens3-admin$ lenticularis-admin -c adm-config.yaml show-user-list
 ```
 
-* Prepare a list of users allowed to access
+* (Optionally) Prepare a list of users allowed to access
   * An entry is a "allow" prefix and a list of user names
 
 ```

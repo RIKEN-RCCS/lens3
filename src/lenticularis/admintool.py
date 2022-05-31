@@ -12,8 +12,9 @@ import json
 #import threading
 import sys
 import traceback
-from lenticularis.pooladm import ZoneAdm
+from lenticularis.pooladm import Pool_Admin
 from lenticularis.readconf import read_adm_conf
+from lenticularis.poolutil import check_user_naming
 from lenticularis.utility import ERROR_EXIT_READCONF, ERROR_EXIT_EXCEPTION, ERROR_EXIT_ARGUMENT
 from lenticularis.utility import format_rfc3339_z
 from lenticularis.utility import objdump
@@ -67,14 +68,48 @@ def read_allow_deny_rules(path):
         r = csv.reader(f, delimiter=",", quotechar='"')
         return [[row[0].lower(), row[1]] for row in r]
 
-def read_user_info(path):
+
+def _read_user_list(path):
+    """Reads a CSV file with rows: "uid", add, "group", "group", ..., to
+    load a user-list.  It adds an entry to the user-list if add="add",
+    or deletes otherwise.
+    """
     with open(path, newline="") as f:
-        r = csv.reader(f, delimiter=",", quotechar='"')
-        return [{"id": row[0], "groups": row[1:]} for row in r]
+        rows = csv.reader(f, delimiter=",", quotechar='"')
+        rows = list(rows)
+        print(f"rows={rows}")
+        assert all(r[0].upper() == "ADD" or r[0].upper() == "DELETE"
+                   for r in rows)
+        assert all(check_user_naming(e) for r in rows for e in r[1:])
+        return [{"add": r[0].upper() == "ADD", "uid": r[1], "groups": r[2:]}
+                for r in rows]
+    pass
+
+
+def _store_user_list(zone_adm, user_list):
+    existing = zone_adm.list_unixUsers()
+    for e in user_list:
+        id = e["uid"]
+        oldu = zone_adm.tables.storage_table.get_unix_user_info(id)
+        if e["add"] and oldu is not None:
+            newu = {"uid": e["uid"], "groups": e["groups"],
+                    "permitted": oldu["permitted"]}
+            zone_adm.tables.storage_table.set_unix_user_info(id, newu)
+        elif not e["add"] and oldu is not None:
+            zone_adm.tables.storage_table.delete_unix_user_info(id)
+        elif  e["add"] and oldu is None:
+            newu = {"uid": e["uid"], "groups": e["groups"],
+                    "permitted": True}
+            zone_adm.tables.storage_table.set_unix_user_info(id, newu)
+        else:
+            pass
+        pass
+    pass
+
 
 def user_info_to_csv_row(ui, id):
     if ui:
-        return [ui["id"]] + ui["groups"]
+        return [ui["uid"]] + ui["groups"]
     return [id]
 
 def format_mux(m, formatting):
@@ -86,7 +121,7 @@ def format_mux(m, formatting):
 def _store_unix_user_info_add(zone_adm, b):
     # New Entry (no right hand side)
     logger.debug(f"@@@ >> New {b}")
-    zone_adm.store_unix_user_info(b["id"], b)
+    zone_adm.store_unix_user_info(b["uid"], b)
 
 def _store_unix_user_info_delete(zone_adm, e):
     # Deleted Entry (no left hand side)
@@ -97,20 +132,7 @@ def _store_unix_user_info_update(zone_adm, x):
     # Updated Entry
     (b, e) = x
     logger.debug(f"@@@ >> Update {b} {e}")
-    zone_adm.store_unix_user_info(b["id"], b)
-
-def _store_user_info(zone_adm, user_info):
-    existing = zone_adm.list_unixUsers()
-    logger.debug(f"@@@ existing = {existing}")
-    (ll, pp, rr) = list_diff3(user_info, lambda b: b.get("id"),
-                              existing, lambda e: e)
-    for x in ll:
-        _store_unix_user_info_add(zone_adm, x)
-    for x in rr:
-        _store_unix_user_info_delete(zone_adm, x)
-    for x in pp:
-        _store_unix_user_info_update(zone_adm, x)
-
+    zone_adm.store_unix_user_info(b["uid"], b)
 
 def _restore_zone_delete(zone_adm, traceid, e):
     # Deleted Entry (no left hand side)
@@ -195,7 +217,7 @@ def route_key_order(e):
 class Command():
     def __init__(self, adm_conf, traceid, args, rest):
         self.adm_conf = adm_conf
-        self.zone_adm = ZoneAdm(adm_conf)
+        self.zone_adm = Pool_Admin(adm_conf)
         self.traceid = traceid
         self.args = args
         self.rest = rest
@@ -269,14 +291,13 @@ class Command():
     def fn_show_allow_deny_rules(self):
         rules = self.zone_adm.fetch_allow_deny_rules()
         print_json_csv("allow deny rules", rules, self.args.format)
+        pass
 
     def fn_insert_user_info(self, csvfile):
-        logger.debug(f"@@@ INSERT USER INFO")
-        user_info = read_user_info(csvfile)
-        logger.debug(f"@@@ user_info = {user_info}")
-        _store_user_info(self.zone_adm, user_info)
+        user_info = _read_user_list(csvfile)
+        _store_user_list(self.zone_adm, user_info)
         fixed = self.zone_adm.fix_affected_zone(self.traceid)
-        logger.debug(f"@@@ fixed = {fixed}")
+        pass
 
     def fn_show_user_info(self):
         unix_users = self.zone_adm.list_unixUsers()
@@ -358,7 +379,7 @@ class Command():
         user_info = j["users"]
         zone_list = j["zones"]
         self.zone_adm.store_allow_deny_rules(rules)
-        _store_user_info(self.zone_adm, user_info)
+        _store_user_list(self.zone_adm, user_info)
         (existing, _) = self.zone_adm.fetch_zone_list(None)
         (ll, pp, rr) = list_diff3(zone_list, lambda b: b.get("pool_name"),
                                   existing, lambda e: e.get("pool_name"))
@@ -512,7 +533,7 @@ def main():
 
     try:
         logger.debug(f"@@@ MAIN")
-        ##zone_adm = ZoneAdm(adm_conf)
+        ##zone_adm = Pool_Admin(adm_conf)
         adm = Command(adm_conf, traceid, args, rest)
         adm.execute_command()
     except Exception as e:

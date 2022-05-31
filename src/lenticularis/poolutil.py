@@ -216,11 +216,8 @@ def check_user_naming(user_id):
 
 
 def check_pool_naming(pool_id):
-    if pool_id is None:
-        return True
-    else:
-        return re.fullmatch("[a-zA-Z0-9]{20}", pool_id) is not None
-    pass
+    assert pool_id is not None
+    return re.fullmatch("[a-zA-Z0-9]{20}", pool_id) is not None
 
 
 def check_bucket_naming(name):

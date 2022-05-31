@@ -218,7 +218,7 @@ def _add_bucket_to_pool(pooldesc, name, policy):
     return
 
 
-class ZoneAdm():
+class Pool_Admin():
 
     def __init__(self, adm_conf):
         self.adm_conf = adm_conf
@@ -348,20 +348,23 @@ class ZoneAdm():
         return self.tables.storage_table.get_allow_deny_rules()
 
     def list_unixUsers(self):
-        return list(self.tables.storage_table.get_unixUsers_list())
+        return list(self.tables.storage_table.get_unix_user_list())
 
-    def store_unix_user_info(self, user_id, uinfo):
-        self.tables.storage_table.ins_unix_user_info(user_id, uinfo)
+    def store_unix_user_info(self, user_id, info):
+        self.tables.storage_table.set_unix_user_info(user_id, info)
         return
 
     def fetch_unix_user_info(self, user_id):
         return self.tables.storage_table.get_unix_user_info(user_id)
 
     def delete_unix_user_info(self, user_id):
-        self.tables.storage_table.del_unix_user_info(user_id)
+        self.tables.storage_table.delete_unix_user_info(user_id)
         return
 
-    def check_user_is_authorized(self, user_id):
+    def check_user_is_registered(self, user_id):
+        """Checks user is known to Lens3.  It does not reject disabled-state
+        users to allow them to view the setting.
+        """
         if user_id is None:
             return False
         elif not check_user_naming(user_id):
@@ -372,9 +375,45 @@ class ZoneAdm():
             return True
         pass
 
+    def _check_user_is_authorized(self, user_id):
+        u = self.fetch_unix_user_info(user_id)
+        assert u is not None
+        if not u.get("permitted"):
+            raise Api_Error(403, (f"A user disabled: {user_id}"))
+        pass
+
+    # Web-UI Interface.
+
+    def return_user_template(self, user_id):
+        # It excludes "root_secret".
+        self._check_user_is_authorized(user_id)
+        ui = self.fetch_unix_user_info(user_id)
+        assert ui is not None
+        groups = ui.get("groups")
+        return {
+            "owner_uid": user_id,
+            "owner_gid": groups[0],
+            "groups": groups,
+            "buckets_directory": "",
+            "buckets": [],
+            "access_keys": [
+                   {"key_policy": "readwrite"},
+                   {"key_policy": "readonly"},
+                   {"key_policy": "writeonly"}],
+            "direct_hostnames": [],
+            "expiration_date": self.determine_expiration_date(),
+            "permit_status": "allowed",
+            "online_status": "online",
+            "atime": "0",
+            "directHostnameDomains": self.direct_hostname_domains,
+            "facadeHostname": self.facade_hostname,
+            "endpoint_url": self.endpoint_urls({"direct_hostnames": []})
+        }
+
     # POOLS.
 
     def make_pool(self, traceid, user_id, pooldesc0):
+        self._check_user_is_authorized(user_id)
         #assert "owner_uid" in pooldesc0
         assert "owner_gid" in pooldesc0
         #assert "root_secret" in pooldesc0
@@ -496,7 +535,7 @@ class ZoneAdm():
     def delete_pool(self, traceid, user_id, pool_id):
         """Deletes a pool.  It clears buckets and access-keys set in MinIO.
         """
-        assert user_id is not None and pool_id is not None
+        self._check_user_is_authorized(user_id)
         self._check_pool_owner(pool_id, user_id)
         self.clean_minio(traceid, user_id, pool_id)
         self.clean_database(traceid, user_id, pool_id)
@@ -589,7 +628,7 @@ class ZoneAdm():
 
     def list_pools(self, traceid, user_id, pool_id):
         """It lists all pools of the user when pool-id is None."""
-        assert user_id is not None
+        self._check_user_is_authorized(user_id)
         groups = None
         decrypt = True
         include_atime = True
@@ -663,9 +702,7 @@ class ZoneAdm():
     # BUCKETS.
 
     def make_bucket(self, traceid, user_id, pool_id, bucket, policy):
-        assert user_id is not None and pool_id is not None
-        assert check_bucket_naming(bucket)
-        assert policy in ["none", "public", "upload", "download"]
+        self._check_user_is_authorized(user_id)
         self._check_pool_owner(pool_id, user_id)
         desc = {"pool": pool_id, "policy": policy}
         (ok, holder) = self.tables.routing_table.set_bucket(bucket, desc)
@@ -699,7 +736,7 @@ class ZoneAdm():
         """Deletes a bucket.  Deleting ignores errors occur in MC commands in
         favor of disabling accesses.
         """
-        assert user_id is not None and pool_id is not None
+        self._check_user_is_authorized(user_id)
         self._check_pool_owner(pool_id, user_id)
         self._check_bucket_owner(bucket, pool_id)
         try:
@@ -732,7 +769,7 @@ class ZoneAdm():
     # SECRETS.
 
     def make_secret(self, traceid, user_id, pool_id, policy):
-        assert user_id is not None and pool_id is not None
+        self._check_user_is_authorized(user_id)
         self._check_pool_owner(pool_id, user_id)
         secret = gen_secret_access_key()
         info = {"secret_key": secret, "key_policy": policy}
@@ -761,7 +798,7 @@ class ZoneAdm():
         """Deletes a secret.  Deleting will fail when errors occur in MC
         commands.
         """
-        assert user_id is not None and pool_id is not None
+        self._check_user_is_authorized(user_id)
         self._check_pool_owner(pool_id, user_id)
         self._check_secret_owner(access_key, pool_id)
         try:
@@ -1796,31 +1833,6 @@ class ZoneAdm():
         expDate = min(now + deflZoneLifetime, maxExpDate)
         logger.debug(f"@@@ timeleft = {expDate - now}")
         return str(expDate)
-
-    def generate_template(self, user_id):
-        # It excludes "root_secret".
-        ui = self.fetch_unix_user_info(user_id)
-        assert ui is not None
-        groups = ui.get("groups")
-        return {
-            "owner_uid": user_id,
-            "owner_gid": groups[0],
-            "buckets_directory": "",
-            "buckets": [],
-            "access_keys": [
-                   {"key_policy": "readwrite"},
-                   {"key_policy": "readonly"},
-                   {"key_policy": "writeonly"}],
-            "direct_hostnames": [],
-            "expiration_date": self.determine_expiration_date(),
-            "permit_status": "allowed",
-            "online_status": "online",
-            "groups": groups,
-            "atime": "0",
-            "directHostnameDomains": self.direct_hostname_domains,
-            "facadeHostname": self.facade_hostname,
-            "endpoint_url": self.endpoint_urls({"direct_hostnames": []})
-        }
 
     def decrypt_access_keys(self, zone):
         """Decrypts secrets in the pool description for showing to a user.

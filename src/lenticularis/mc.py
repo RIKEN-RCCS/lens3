@@ -3,6 +3,9 @@
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
+# NOTE: The error cause-code "BucketAlreadyOwnedByYou" returned MC
+# command should be treated as not an error.
+
 import os
 import sys
 import tempfile

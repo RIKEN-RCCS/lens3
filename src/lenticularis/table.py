@@ -158,6 +158,9 @@ class Storage_Table(Table_Common):
     _access_keys_keys = {
         "key_policy", "access_key", "secret_key"}
 
+    _user_info_keys = {
+        "uid", "groups", "permitted"}
+
     def set_pool(self, pool_id, pooldesc):
         assert set(pooldesc.keys()).issubset(self._pool_desc_keys)
         key = f"{self._pool_desc_prefix}{pool_id}"
@@ -294,23 +297,21 @@ class Storage_Table(Table_Common):
             return []
         return json.loads(v, parse_int=None)
 
-    def ins_unix_user_info(self, id, uinfo):
-        # logger.debug(f"+++ {id} {uinfo}")
+    def set_unix_user_info(self, id, info):
+        assert (self._user_info_keys).issubset(set(info.keys()))
         key = f"{self._unix_user_prefix}{id}"
-        return self.dbase.set(key, json.dumps(uinfo))
+        return self.dbase.set(key, json.dumps(info))
 
     def get_unix_user_info(self, id):
-        # logger.debug(f"+++ {id}")
         key = f"{self._unix_user_prefix}{id}"
         v = self.dbase.get(key)
         return json.loads(v, parse_int=None) if v is not None else None
 
-    def del_unix_user_info(self, id):
-        # logger.debug(f"+++ {id}")
+    def delete_unix_user_info(self, id):
         key = f"{self._unix_user_prefix}{id}"
         return self.dbase.delete(key)
 
-    def get_unixUsers_list(self):
+    def get_unix_user_list(self):
         kk = _scan_table(self.dbase.r, self._unix_user_prefix, None)
         return [k for (k, _) in kk]
 
@@ -613,7 +614,8 @@ class Pickone_Table(Table_Common):
     hashes_ = {}
     structured = {}
 
-    _id_desc_keys = {"use", "key"}
+    _id_desc_keys = {"use", "owner", "secret_key", "key_policy",
+                     "creation_data"}
 
     def make_unique_id(self, usage, owner, info={}):
         assert usage in {"pool", "access_key"}

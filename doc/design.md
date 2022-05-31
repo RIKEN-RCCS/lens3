@@ -1795,6 +1795,9 @@ Redis client routines catches socket related exceptions (including
 ConnectionError and TimeoutError).  Others are not checked at all by
 Lens3.
 
+Operations by an administrator is NOT mutexed.  They include
+modifications on the user-list.
+
 ### Adm Processes
 
 Adm is not designed as load-balanced.  Adm may consist of some

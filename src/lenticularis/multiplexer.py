@@ -61,16 +61,15 @@ def _check_url_error_is_connection_errors(x):
         logger.debug(f"Cannot find errno in URLError={x}")
         return 0
 
-def _get_pool_of_probe_key(probe_key):
+def _get_pool_for_probe_key(probe_key, access_info):
     """Checks a key is a probe-key, and returns a pool-id for which it is
     created."""
     if (probe_key is not None
         and probe_key.get("use") == "access_key"
         and probe_key.get("secret_key") == ""):
         return probe_key.get("owner")
-    else:
-        return None
-    pass
+    log_access("401", *access_info)
+    raise Api_Error(403, f"Bad access to the root path")
 
 
 class Multiplexer():
@@ -163,29 +162,101 @@ class Multiplexer():
                                           int(sleeptime + self.refresh_margin))
         return
 
-    def _find_pool_for_bucket(self, path, access_info):
+
+    def _get_dest_addr(self, traceid, headers):
+        # (It drops a host if it is attached by the facade).
+        # (A host may include a port, a facade may not).
+
+        # TEMPORARILY BAN HOST ACCESSES.
+
+        host = headers.get("HOST")
+        host = host.lower() if host is not None else None
+        if host == self._facade_hostname:
+            host = None
+        else:
+            pass
+
+        host = None
+        if host:
+            access_key = None
+            r = self.tables.routing_table.get_route_by_direct_hostname_(host)
+            zone_id = self.tables.storage_table.get_pool_id_by_direct_hostname(host)
+            r = self.tables.routing_table.get_route(zone_id)
+        else:
+            authorization = headers.get("AUTHORIZATION")
+            access_key = parse_s3_auth(authorization)
+            ##r = self.tables.routing_table.get_route_by_access_key_(access_key)
+            zone_id = self.tables.storage_table.get_pool_by_access_key(access_key)
+            r = self.tables.routing_table.get_route(zone_id)
+            pass
+
+        if r is not None:
+            # A MinIO endpoint exists.
+            return (r, 200, zone_id)
+        else:
+            # A route to minio is not found.
+            (r, code, zone_id) = self.controller.start_minio_service(traceid, zone_id, access_key)
+            return (r, code, zone_id)
+
+    def _zone_to_user(self, zoneID):
+        zone = self.tables.storage_table.get_pool(zoneID)
+        if zone is None:
+            return None
+        else:
+            return zone["owner_uid"]
+
+    def _wrap_res(self, res, environ, headers, sniff=False, sniff_marker=""):
+        if _no_buffering(headers) or sniff:
+            return Read1Reader(res, sniff=sniff, sniff_marker=sniff_marker, thunk=res)
+        else:
+            file_wrapper = environ["wsgi.file_wrapper"]
+            return file_wrapper(res)
+
+    def _check_forwarding_host_trusted(self, peer_addr):
+        if peer_addr is None:
+            return False
+        ip = make_typical_ip_address(peer_addr)
+        if (ip in self._trusted_proxies or ip in self._multiplexer_addrs):
+            return True
+        self._multiplexer_addrs = self._list_mux_ip_addresses()
+        if ip in self._multiplexer_addrs:
+            return True
+        return False
+
+    def _find_pool_for_bucket(self, path, access_key, access_info):
+        """Returns a pool-id for a bucket in a path.  It just checks
+        bucket-policy is not none, but does not check the access-key
+        is read/write.
+        """
         request_url = access_info[3]
         assert path.startswith("/")
         pathc = path.split("/")
         pathc.pop(0)
         bucket = pathc[0]
+        # Check a bucket name.
         if bucket == "":
-            status = "404"
-            log_access(status, *access_info)
+            log_access("404", *access_info)
             raise Api_Error(404, f"Bad URL, no bucket name: url={request_url}")
         if not check_bucket_naming(bucket):
-            ok = check_bucket_naming(bucket)
-            status = "400"
-            log_access(status, *access_info)
-            raise Api_Error(400, f"Bad URL, bad bucket name: url={bucket} ok={ok}")
+            log_access("400", *access_info)
+            raise Api_Error(400, f"Bad URL, bad bucket name: url={bucket}")
         desc = self.tables.routing_table.get_bucket(bucket)
         if desc is None:
-            status = "404"
-            log_access(status, *access_info)
+            log_access("404", *access_info)
             raise Api_Error(404, f"Bad URL, no bucket: url={request_url}")
-        # Ignore the desc["policy"] part.
+        # Check the policy in desc["policy"].
         pool_id = desc["pool"]
-        return pool_id
+        policy = desc["policy"]
+        if policy != "none":
+            return pool_id
+        key = self.tables.pickone_table.get_id(access_key)
+        if (key is not None
+            and key.get("use") == "access_key"
+            and key.get("owner") == pool_id
+            and key.get("secret_key") is not None):
+            return pool_id
+        log_access("401", *access_info)
+        raise Api_Error(401, f"Bad bucket policy: url={request_url}")
 
     def _process_request(self, environ, start_response):
         """Processes a request from Gunicorn.  It forwards a request/response
@@ -235,19 +306,20 @@ class Multiplexer():
             raise Api_Error(403, f"Bad access from remote={client_addr}")
 
         if path == "/":
-            # It is not allowed except for probing access from Adm.
+            # Access to "/" is not allowed but for probing access from Adm.
             probe_key = self.tables.pickone_table.get_id(access_key)
-            pool_id = _get_pool_of_probe_key(probe_key)
+            pool_id = _get_pool_for_probe_key(probe_key, access_info)
             logger.debug(f"MUX probe access for pool={pool_id}")
         else:
-            pool_id = self._find_pool_for_bucket(path, access_info)
+            pool_id = self._find_pool_for_bucket(path, access_key, access_info)
             logger.debug(f"MUX by bucket={path} for pool_id={pool_id}")
             pass
 
-        if pool_id is not None:
-            minio_ep = self.tables.routing_table.get_route(pool_id)
-        else:
-            minio_ep = None
+        assert pool_id is not None
+        minio_ep = self.tables.routing_table.get_route(pool_id)
+
+        # It is OK if an endpoint is found.  A check for an
+        # enabled/disabled state of the pool is not checked here.
 
         if minio_ep is None:
             (ep0, code, id) = self.controller.start_minio_service(traceid, pool_id, access_key)
@@ -360,62 +432,4 @@ class Multiplexer():
         start_response(status, r_headers)
         return respiter
 
-    def _get_dest_addr(self, traceid, headers):
-        # (It drops a host if it is attached by the facade).
-        # (A host may include a port, a facade may not).
-
-        # TEMPORARILY BAN HOST ACCESSES.
-
-        host = headers.get("HOST")
-        host = host.lower() if host is not None else None
-        if host == self._facade_hostname:
-            host = None
-        else:
-            pass
-
-        host = None
-        if host:
-            access_key = None
-            r = self.tables.routing_table.get_route_by_direct_hostname_(host)
-            zone_id = self.tables.storage_table.get_pool_id_by_direct_hostname(host)
-            r = self.tables.routing_table.get_route(zone_id)
-        else:
-            authorization = headers.get("AUTHORIZATION")
-            access_key = parse_s3_auth(authorization)
-            ##r = self.tables.routing_table.get_route_by_access_key_(access_key)
-            zone_id = self.tables.storage_table.get_pool_by_access_key(access_key)
-            r = self.tables.routing_table.get_route(zone_id)
-            pass
-
-        if r is not None:
-            # A MinIO endpoint exists.
-            return (r, 200, zone_id)
-        else:
-            # A route to minio is not found.
-            (r, code, zone_id) = self.controller.start_minio_service(traceid, zone_id, access_key)
-            return (r, code, zone_id)
-
-    def _zone_to_user(self, zoneID):
-        zone = self.tables.storage_table.get_pool(zoneID)
-        if zone is None:
-            return None
-        else:
-            return zone["owner_uid"]
-
-    def _wrap_res(self, res, environ, headers, sniff=False, sniff_marker=""):
-        if _no_buffering(headers) or sniff:
-            return Read1Reader(res, sniff=sniff, sniff_marker=sniff_marker, thunk=res)
-        else:
-            file_wrapper = environ["wsgi.file_wrapper"]
-            return file_wrapper(res)
-
-    def _check_forwarding_host_trusted(self, peer_addr):
-        if peer_addr is None:
-            return False
-        ip = make_typical_ip_address(peer_addr)
-        if (ip in self._trusted_proxies or ip in self._multiplexer_addrs):
-            return True
-        self._multiplexer_addrs = self._list_mux_ip_addresses()
-        if ip in self._multiplexer_addrs:
-            return True
-        return False
+    pass

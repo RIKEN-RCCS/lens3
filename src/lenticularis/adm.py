@@ -3,6 +3,8 @@
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
+# NOTE: Maybe, consider adding a "Retry-After" header for 503 error.
+
 import inspect
 import os
 import sys
@@ -19,7 +21,6 @@ from fastapi_csrf_protect import CsrfProtect
 from fastapi_csrf_protect.exceptions import CsrfProtectError
 import lenticularis
 from lenticularis.api import Api
-from lenticularis.pooladm import ZoneAdm
 from lenticularis.readconf import read_adm_conf
 from lenticularis.utility import ERROR_EXIT_READCONF
 from lenticularis.utility import make_typical_ip_address
@@ -51,18 +52,18 @@ with open(os.path.join(_webui_dir, "setting.html")) as f:
     pass
 
 
-async def _get_authorized_user(request: Request):
+async def _get_authorized_user_(request: Request):
     remote_user = request.headers.get("X-REMOTE-USER")
     return remote_user
 
 
-async def _get_client_addr(request: Request):
+async def _get_client_addr_(request: Request):
     real_ip = request.headers.get("X-REAL-IP")
     # forwarded_for = request.headers.get("X-FORWARDED-FOR")
     return real_ip
 
 
-async def _get_traceid(request: Request):
+async def _get_traceid_(request: Request):
     traceid = request.headers.get("X-TRACEID")
     tracing.set(traceid)
     return traceid
@@ -70,16 +71,13 @@ async def _get_traceid(request: Request):
 
 def _make_json_response(status_code, reason, values, csrf_protect,
                         client_addr, user_id, request):
-    # (Maybe, consider adding a "Retry-After" header for 503 error).
     if reason is not None:
         content = {"status": "error", "reason": reason}
-        ##status_code = status.HTTP_400_BAD_REQUEST
     else:
         content = {"status": "success"}
-        ##status_code = status.HTTP_200_OK
         pass
     if values is not None:
-        ##content["pool_list"] = values
+        # Append values to content.
         content.update(values)
         pass
     content["time"] = str(int(time.time()))
@@ -88,7 +86,7 @@ def _make_json_response(status_code, reason, values, csrf_protect,
         pass
     log_access(f"{status_code}", client_addr, user_id, request.method, request.url)
     response = JSONResponse(status_code=status_code, content=content)
-    logger.debug(f"Adm RESPONSE.CONTENT={content}")
+    # logger.debug(f"Adm RESPONSE.CONTENT={content}")
     return response
 
 
@@ -123,28 +121,27 @@ def csrf_protect_exception_handler(request: Request, exc: CsrfProtectError):
 
 @app.middleware("http")
 async def validate_session(request: Request, call_next):
-    peer_addr = str(request.client.host)
-    peer_addr = make_typical_ip_address(peer_addr)
-    user_id = await _get_authorized_user(request)
-    client_addr = await _get_client_addr(request)
+    peer_addr = make_typical_ip_address(str(request.client.host))
+    user_id = request.headers.get("X-REMOTE-USER")
+    client_addr = request.headers.get("X-REAL-IP")
+    now = time.time()
 
     if peer_addr not in api.trusted_proxies:
         logger.error(f"Proxy {peer_addr} is not trusted.")
         content = {"status": "error",
-                   "reason": f"Configuration error (check trusted_proxies)."}
+                   "reason": f"Configuration error (check trusted_proxies)",
+                   "time": str(int(now))}
         status_code = status.HTTP_403_FORBIDDEN
         # Access log contains client_addr but peer_addr.
         log_access(f"{status_code}", client_addr, user_id, request.method, request.url)
         return JSONResponse(status_code=status_code, content=content)
-
-    if (not api.zone_adm.check_user_is_authorized(user_id)):
+    if (not api.zone_adm.check_user_is_registered(user_id)):
         logger.info(f"Accessing Adm by a bad user: ({user_id})")
-        content = {"status": "error", "reason": f"Bad user: ({user_id})"}
-        content["time"] = str(int(time.time()))
+        content = {"status": "error", "reason": f"Bad user: ({user_id})",
+                   "time": str(int(now))}
         status_code = status.HTTP_401_UNAUTHORIZED
         log_access(f"{status_code}", client_addr, user_id, request.method, request.url)
         return JSONResponse(status_code=status_code, content=content)
-
     response = await call_next(request)
     return response
 
@@ -174,6 +171,7 @@ async def app_get_get_template(
         x_real_ip: Union[str, None] = Header(default=None),
         x_traceid: Union[str, None] = Header(default=None),
         csrf_protect: CsrfProtect = Depends()):
+    """Returns a user information for Web-UI."""
     logger.debug(f"APP.GET /template")
     (user_id, client_addr, traceid) = (x_remote_user, x_real_ip, x_traceid)
     tracing.set(traceid)
@@ -237,7 +235,7 @@ async def app_post_make_pool(
 
 
 @app.delete("/pool/{pool_id}")
-async def app_delete_pool(
+async def app_delete_delete_pool(
         request: Request,
         pool_id: str,
         x_remote_user: Union[str, None] = Header(default=None),

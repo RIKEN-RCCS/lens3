@@ -37,9 +37,13 @@ def get_nparams_of_fn(fn):
         varargsp = False
     return (nparams - 1, varargsp)
 
+
 def fix_date_format(d, keys):
     for key in keys:
         d[key] = format_rfc3339_z(float(d[key]))
+        pass
+    pass
+
 
 def print_json_csv(table_name, c, formatting):
     if formatting in {"json"}:
@@ -53,6 +57,9 @@ def print_json_csv(table_name, c, formatting):
                 writer.writerow(r)
             v = out.getvalue()
         print(f"{v}")
+        pass
+    pass
+
 
 def print_json_plain(table_name, outs, formatting, order=None):
     if formatting in {"json"}:
@@ -63,11 +70,16 @@ def print_json_plain(table_name, outs, formatting, order=None):
         for d in outs:
             dump = objdump(d, order=order)
             print(f"{dump}")
+            pass
+        pass
+    pass
+
 
 def read_allow_deny_rules(path):
     with open(path, newline="") as f:
         r = csv.reader(f, delimiter=",", quotechar='"')
         return [[row[0].lower(), row[1]] for row in r]
+    pass
 
 
 def _read_user_list(path):
@@ -116,27 +128,34 @@ def user_info_to_csv_row(id, ui):
     assert ui is not None
     return ["add", id] + ui["groups"]
 
+
 def format_mux(m, formatting):
     (ep, desc) = m
     if formatting not in {"json"}:
         fix_date_format(desc, ["last_interrupted_time", "start_time"])
     return {ep: desc}
 
+
 def _store_user_info_add__(zone_adm, b):
     # New Entry (no right hand side)
     logger.debug(f"@@@ >> New {b}")
     zone_adm.tables.set_user(b["uid"], b)
 
+
 def _store_user_info_delete__(zone_adm, e):
     # Deleted Entry (no left hand side)
     logger.debug(f"@@@ >> Delete {e}")
     zone_adm.delete_user(e)
+    pass
+
 
 def _store_user_info_update__(zone_adm, x):
     # Updated Entry
     (b, e) = x
     logger.debug(f"@@@ >> Update {b} {e}")
     zone_adm.tables.set_user(b["uid"], b)
+    pass
+
 
 def _restore_zone_delete(zone_adm, traceid, e):
     # Deleted Entry (no left hand side)
@@ -144,6 +163,8 @@ def _restore_zone_delete(zone_adm, traceid, e):
     zone_id = e.get("pool_name")
     logger.debug(f"@@@ >> Delete {user_id} {zone_id}")
     zone_adm.delete_zone(traceid, user_id, zone_id)
+    pass
+
 
 def _restore_zone_add(zone_adm, traceid, b):
     # New Entry (no right hand side)
@@ -154,11 +175,14 @@ def _restore_zone_add(zone_adm, traceid, b):
     b.pop("minio_state")
     zone_adm.restore_pool(traceid, user_id, zone_id, b,
                           include_atime=True, initialize=False)
+    pass
+
 
 def _restore_zone_update(zone_adm, traceid, x):
     # Updated Entry
     (b, e) = x
     _restore_zone_add(zone_adm, traceid, b)
+    pass
 
 
 def pool_key_order(e):
@@ -186,6 +210,7 @@ def pool_key_order(e):
         "bkt_policy"]
     return order.index(e) if e in order else len(order)
 
+
 def _mux_key_order(e):
     order = [
         "host",
@@ -197,6 +222,7 @@ def _mux_key_order(e):
         "multiplexer"]
     return order.index(e) if e in order else len(order)
 
+
 def proc_key_order(e):
     order = [
         "minio_ep",
@@ -205,6 +231,7 @@ def proc_key_order(e):
         "mux_port",
         "manager_pid"]
     return order.index(e) if e in order else len(order)
+
 
 def route_key_order(e):
     order = [
@@ -225,89 +252,44 @@ class Command():
         self.traceid = traceid
         self.args = args
         self.rest = rest
+        pass
 
-    def fn_usage(self):
-        progname = os.path.basename(sys.argv[0])
-        sys.stderr.write(
-            f"USAGE:\n"
-            f"{progname} help\n"
-
-            # fn_insert_allow_deny_rules
-            f"{progname} load-permit-list file\n"
-            # fn_show_allow_deny_rules
-            f"{progname} show-permit-list\n"
-
-            # fn_insert_user_info
-            f"{progname} load-user-list file\n"
-            # fn_show_user_info
-            f"{progname} show-user-list\n"
-
-            # fn_insert_zone
-            f"{progname} insert-zone Zone-ID jsonfile\n"
-            # fn_delete_zone ...
-            f"{progname} delete-zone Zone-ID...\n"
-            # fn_disable_zone ...
-            f"{progname} disable-zone Zone-ID...\n"
-            # fn_enable_zone ...
-            f"{progname} enable-zone Zone-ID...\n"
-            # fn_show_zone ...
-            f"{progname} show-zone [--decrypt] [pool-id ...]\n"
-            # fn_dump_zone
-            f"{progname} dump-zone\n"
-            # fn_restore_zone
-            f"{progname} restore-zone dump-file\n"
-            # fn_drop_zone
-            f"{progname} drop-zone\n"
-            # fn_reset_database
-            f"{progname} reset-db\n"
-            # fn_print_database
-            f"{progname} list-db\n"
-
-            # fn_show_multiplexer
-            f"{progname} show-muxs\n"
-            # f"{progname} flush-multiplexer\n" NOT IMPLEMENTED
-
-            # fn_show_server_processes
-            f"{progname} show-minios\n"
-            # fn_flush_server_processes
-            f"{progname} flush-server-processes\n"
-            # fn_delete_server_processes ...
-            f"{progname} delete-server-processes [Server-ID...]\n"
-
-            # fn_throw_decoy
-            f"{progname} throw-decoy Zone-ID\n"
-
-            # fn_show_routing_table
-            f"{progname} show-routing\n"
-            # fn_flush_routing_table
-            f"{progname} clear-routing\n"
-        )
+    def fn_help(self):
+        prog = os.path.basename(sys.argv[0])
+        print(f"USAGE")
+        for (k, v) in self.opdict.items():
+            (fn, args, help) = v
+            print(f"{prog} {args}\n\t{help}")
+            pass
         sys.exit(ERROR_EXIT_ARGUMENT)
+        pass
 
-    def fn_insert_allow_deny_rules(self, csvfile):
+    def fn_load_permit_list(self, csvfile):
         logger.debug(f"@@@ INSERT ALLOW DENY RULES")
         rules = read_allow_deny_rules(csvfile)
         logger.debug(f"@@@ rules = {rules}")
         self.zone_adm.store_allow_deny_rules(rules)
         fixed = self.zone_adm.fix_affected_zone(self.traceid)
         logger.debug(f"@@@ fixed = {fixed}")
+        pass
 
-    def fn_show_allow_deny_rules(self):
+    def fn_show_permit_list(self):
         rules = self.zone_adm.fetch_allow_deny_rules()
         print_json_csv("allow deny rules", rules, self.args.format)
         pass
 
-    def fn_insert_user_info(self, csvfile):
+    def fn_load_user_list(self, csvfile):
         user_info = _read_user_list(csvfile)
         _load_user_list(self.zone_adm, user_info)
         fixed = self.zone_adm.fix_affected_zone(self.traceid)
         pass
 
-    def fn_show_user_info(self):
+    def fn_show_user_list(self):
         users = self.zone_adm.tables.list_users()
         uu = [user_info_to_csv_row(id, self.zone_adm.tables.get_user(id))
               for id in users]
         print_json_csv("user info", uu, self.args.format)
+        pass
 
     def fn_insert_zone(self, zone_id, jsonfile):
         logger.debug(f"@@@ INSERT ZONE")
@@ -326,24 +308,31 @@ class Command():
         user_id = zone["owner_uid"]
         self.zone_adm.restore_pool(self.traceid, user_id, zone_id, zone,
                                    include_atime=False, initialize=True)
+        pass
 
     def fn_delete_zone(self, *zoneIDs):
         logger.debug(f"@@@ DISABLE ZONE")
         for zone_id in zoneIDs:
             user_id = self.zone_adm.zone_to_user(zone_id)
             self.zone_adm.delete_zone(self.traceid, user_id, zone_id)
+            pass
+        pass
 
     def fn_disable_zone(self, *zoneIDs):
         logger.debug(f"@@@ DISABLE ZONE")
         for zone_id in zoneIDs:
             user_id = self.zone_adm.zone_to_user(zone_id)
             self.zone_adm.disable_zone(self.traceid, user_id, zone_id)
+            pass
+        pass
 
     def fn_enable_zone(self, *zoneIDs):
         logger.debug(f"@@@ ENABLE ZONE")
         for zone_id in zoneIDs:
             user_id = self.zone_adm.zone_to_user(zone_id)
             self.zone_adm.enable_zone(self.traceid, user_id, zone_id)
+            pass
+        pass
 
     def fn_show_zone(self, *zoneIDs):
         decrypt = False
@@ -351,6 +340,7 @@ class Command():
             zoneIDs = list(zoneIDs)
             zoneIDs.pop(0)
             decrypt = True
+            pass
         zoneIDs = set(zoneIDs)
         (zone_list, broken_zone) = self.zone_adm.fetch_zone_list(None, extra_info=True, include_atime=True, decrypt=decrypt)
         outs = []
@@ -360,10 +350,13 @@ class Command():
                 continue
             if self.args.format not in {"json"}:
                 fix_date_format(zone, ["atime", "expiration_date"])
+                pass
             zone.pop("pool_name")
             outs.append({zone_id: zone})
+            pass
         print_json_plain("zones", outs, self.args.format, order=pool_key_order)
         logger.debug(f"broken zones: {broken_zone}")
+        pass
 
     def fn_dump_zone(self):
         rules = self.zone_adm.fetch_allow_deny_rules()
@@ -372,11 +365,13 @@ class Command():
         (zone_list, _) = self.zone_adm.fetch_zone_list(None, include_atime=True)
         dump_data = json.dumps({"rules": rules, "users": users, "zones": zone_list})
         print(dump_data)
+        pass
 
     def fn_restore_zone(self, dump_file):
         logger.debug(f"@@@ INSERT ZONE")
         with open(dump_file) as f:
             dump_data = f.read()
+            pass
         j = json.loads(dump_data, parse_int=None)
         rules = j["rules"]
         user_info = j["users"]
@@ -388,51 +383,65 @@ class Command():
                                   existing, lambda e: e.get("pool_name"))
         for x in rr:
             _restore_zone_delete(self.zone_adm, self.traceid, x)
+            pass
         for x in ll:
             _restore_zone_add(self.zone_adm, self.traceid, x)
+            pass
         for x in pp:
             _restore_zone_update(self.zone_adm, self.traceid, x)
+            pass
+        pass
 
     def fn_drop_zone(self):
         everything = self.args.everything
         self.zone_adm.flush_storage_table(everything=everything)
+        pass
 
-    def fn_reset_database(self):
+    def fn_reset_db(self):
         everything = self.args.everything
         self.zone_adm.reset_database(everything=everything)
+        pass
 
-    def fn_print_database(self):
+    def fn_list_db(self):
         self.zone_adm.print_database()
+        pass
 
-    def fn_show_multiplexer(self):
+    def fn_show_muxs(self):
         muxs = sorted(list(self.zone_adm.fetch_multiplexer_list()))
         outs = [format_mux(m, self.args.format) for m in muxs]
         print_json_plain("muxs", outs, self.args.format, order=_mux_key_order)
+        pass
 
     def fn_show_server_processes(self):
         process_list = sorted(list(self.zone_adm.fetch_process_list()))
         logger.debug(f"@@@ process_list = {process_list}")
         outs = [{zone: process} for (zone, process) in process_list]
         print_json_plain("servers", outs, self.args.format, order=proc_key_order)
+        pass
 
     def fn_flush_server_processes(self):
         everything = self.args.everything
         logger.debug(f"@@@ EVERYTHING = {everything}")
         self.zone_adm.flush_process_table(everything=everything)
+        pass
 
     def fn_delete_server_processes(self, *processIDs):
         logger.debug(f"@@@ DELETE = {processIDs}")
         for processID in processIDs:
             logger.debug(f"@@@ DELETE = {processID}")
             self.zone_adm.delete_process(processID)
+            pass
+        pass
 
     def fn_throw_decoy(self, zone_id):
         logger.debug(f"@@@ THROW DECOY zone_id = {zone_id}")
         self.zone_adm.access_mux_for_pool(self.traceid, zone_id, force=True)
+        pass
 
     def fn_show_routing_table(self):
         pairs = self.zone_adm.tables.routing_table.list_routes()
         print_json_plain("routing table", pairs, self.args.format, order=route_key_order)
+        pass
 
     ##def fn_show_routing_table(self):
     ##    (akey_list, host_list, atime_list) = self.zone_adm.fetch_route_list()
@@ -459,59 +468,86 @@ class Command():
     def fn_flush_routing_table(self):
         everything = self.args.everything
         self.zone_adm.flush_routing_table(everything=everything)
+        pass
 
-    optbl = {
-        "help": fn_usage,
+    op_help_list = [
+        (fn_help, "Print help."),
 
-        "load-user-list": fn_insert_user_info,
-        "show-user-list": fn_show_user_info,
-        "load-permit-list": fn_insert_allow_deny_rules,
-        "show-permit-list": fn_show_allow_deny_rules,
+        (fn_load_user_list, "Loads user list."),
+        (fn_show_user_list, "Prints user list."),
 
-        "insert-zone": fn_insert_zone,
-        "delete-zone": fn_delete_zone,
-        "disable-zone": fn_disable_zone,
-        "enable-zone": fn_enable_zone,
-        "show-zone": fn_show_zone,
+        (fn_load_permit_list, "Loads permit list."),
+        (fn_show_permit_list, "Shows permit list."),
 
-        "dump-zone": fn_dump_zone,
-        "restore-zone": fn_restore_zone,
-        "drop-zone": fn_drop_zone,
-        "reset-db": fn_reset_database,
-        "list-db": fn_print_database,
+        (fn_insert_zone, "insert-zone"),
+        (fn_delete_zone, "delete-zone"),
+        (fn_disable_zone, "disable-zone"),
+        (fn_enable_zone, "enable-zone"),
+        (fn_show_zone, "show-zone"),
 
-        "show-muxs": fn_show_multiplexer,
+        (fn_dump_zone, "dump-zone"),
+        (fn_restore_zone, "restore-zone"),
+        (fn_drop_zone, "drop-zone"),
 
-        "show-minios": fn_show_server_processes,
-        "flush-server-processes": fn_flush_server_processes,
-        "delete-server-processes": fn_delete_server_processes,
+        (fn_reset_db, "reset-db"),
+        (fn_list_db, "list-db"),
 
-        "throw-decoy": fn_throw_decoy,
+        (fn_show_muxs, "show-muxs"),
 
-        "show-routing": fn_show_routing_table,
-        "clear-routing": fn_flush_routing_table,
-    }
+        (fn_show_server_processes, "show-minios"),
+        (fn_flush_server_processes, "flush-server-processes"),
+        (fn_delete_server_processes, "delete-server-processes"),
+
+        (fn_throw_decoy, "throw-decoy"),
+
+        (fn_show_routing_table, "show-routing"),
+        (fn_flush_routing_table, "clear-routing"),
+    ]
+
+    def make_op_help_entry(self, fn, help):
+        # sig.parameters=['self', 'csvfile']
+        (nparams, varargs) = get_nparams_of_fn(fn)
+        name = fn.__name__.removeprefix("fn_").replace("_", "-")
+        sig = inspect.signature(fn)
+        pars = list(sig.parameters)
+        self_ = pars.pop(0)
+        assert self_ == "self"
+        prog = [name, *pars]
+        usage = " ".join(prog)
+        return (name, fn, usage, help)
+
+    def make_op_dict(self):
+        d = {name: (fn, args, help)
+             for (name, fn, args, help)
+             in (self.make_op_help_entry(fn, help)
+                 for (fn, help) in self.op_help_list)}
+        self.opdict = d
+        pass
 
     def execute_command(self):
-        fn = Command.optbl.get(self.args.operation)
-
-        if fn is None:
+        # fn = Command.optbl.get(self.args.operation)
+        ent = self.opdict.get(self.args.operation)
+        # if fn is None:
+        if ent is None:
             raise Exception(f"undefined operation: {self.args.operation}")
-
+        (fn, _, _) = ent
         (nparams, varargsp) = get_nparams_of_fn(fn)
-
         if not varargsp and len(self.rest) != nparams:
             sys.stderr.write("Missing/excessive arguments for command.\n")
-            self.fn_usage()
+            self.fn_help()
+            pass
         return fn(self, *self.rest)
+
+    pass
 
 
 def main():
-    _commands = Command.optbl.keys()
+    # _commands = Command.optbl.keys()
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("operation",
-                        choices=_commands)
+    #parser.add_argument("operation",
+    #choices=_commands)
+    parser.add_argument("operation")
     parser.add_argument("--configfile", "-c")
     parser.add_argument("--format", "-f", choices=["text", "json"])
     parser.add_argument("--everything", type=bool, default=False)
@@ -525,6 +561,7 @@ def main():
     except Exception as e:
         sys.stderr.write(f"Reading conf failed: {e}\n")
         sys.exit(ERROR_EXIT_READCONF)
+        pass
 
     traceid = random_str(12)
     #threading.current_thread().name = traceid
@@ -538,12 +575,17 @@ def main():
         logger.debug(f"@@@ MAIN")
         ##zone_adm = Pool_Admin(adm_conf)
         adm = Command(adm_conf, traceid, args, rest)
+
+        adm.make_op_dict()
+
         adm.execute_command()
     except Exception as e:
         sys.stderr.write(f"Executing admin command failed: {e}\n")
         print(traceback.format_exc())
-        ##adm.fn_usage()
+        ##adm.fn_help()
         sys.exit(ERROR_EXIT_EXCEPTION)
+        pass
+    pass
 
 
 if __name__ == "__main__":

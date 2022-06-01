@@ -127,7 +127,8 @@ async def validate_session(request: Request, call_next):
     now = int(time.time())
 
     if peer_addr not in api.trusted_proxies:
-        logger.error(f"Proxy {peer_addr} is not trusted.")
+        logger.error(f"Untrusted proxy: {peer_addr};"
+                     f" Check configuration")
         content = {"status": "error",
                    "reason": f"Configuration error (check trusted_proxies)",
                    "time": str(now)}

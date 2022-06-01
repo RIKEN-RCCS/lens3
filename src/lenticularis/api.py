@@ -1,4 +1,4 @@
-"""Adm Web-API.  An object for Adm."""
+"""An object used in Adm Web-API"""
 
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
@@ -11,7 +11,7 @@ from lenticularis.poolutil import Api_Error
 from lenticularis.poolutil import check_pool_naming
 from lenticularis.poolutil import check_bucket_naming
 from lenticularis.table import get_tables
-from lenticularis.utility import get_ip_address
+from lenticularis.utility import get_ip_addresses
 from lenticularis.utility import logger
 from lenticularis.utility import random_str
 import time
@@ -23,7 +23,7 @@ class Api():
         self.zone_adm = Pool_Admin(adm_conf)
         trusted_proxies = adm_conf["webui"]["trusted_proxies"]
         self.trusted_proxies = set([addr for h in trusted_proxies
-                                       for addr in get_ip_address(h)])
+                                    for addr in get_ip_addresses(h)])
         logger.debug(f"@@@ self.trusted_proxies = {self.trusted_proxies}")
         return
 

@@ -92,12 +92,18 @@ class Tables():
 
     ## Storage-table:
 
+    def get_pool(self, pool_id):
+        return self.storage_table.get_pool(pool_id)
+
     def set_ex_buckets_directory(self, path, pool_id):
         return self.storage_table.set_ex_buckets_directory(path, pool_id)
 
     def delete_buckets_directory(self, path):
         self.storage_table.delete_buckets_directory(path)
         pass
+
+    def get_buckets_directory_of_pool(self, pool_id):
+        return self.storage_table.get_buckets_directory_of_pool(pool_id)
 
     def set_user(self, id, info):
         self.storage_table.set_user(id, info)
@@ -117,15 +123,28 @@ class Tables():
 
     ## Routing-table:
 
-    def set_bucket(self, bucket, desc):
-        self.routing_table.set_bucket(bucket, desc)
-        pass
+    def set_ex_bucket(self, bucket, desc):
+        return self.routing_table.set_ex_bucket(bucket, desc)
 
     def get_bucket(self, bucket):
         return self.routing_table.get_bucket(bucket)
 
     def delete_bucket(self, bucket):
         self.routing_table.delete_bucket(bucket)
+        pass
+
+    def list_buckets(self, pool_id):
+        return self.routing_table.list_buckets(pool_id)
+
+    def set_route(self, pool_id, ep, timeout):
+        self.routing_table.set_route(pool_id, ep, timeout)
+        pass
+
+    def get_route(self, pool_id):
+        return self.routing_table.get_route(pool_id)
+
+    def delete_route(self, pool_id):
+        self.routing_table.delete_route(pool_id)
         pass
 
     def set_probe_key__(self, access_key, pool_id):
@@ -144,6 +163,9 @@ class Tables():
     def delete_id_unconditionally(self, id):
         self.pickone_table.delete_id_unconditionally(id)
         pass
+
+    def list_access_keys_of_pool(self, pool_id):
+        return self.pickone_table.list_access_keys_of_pool(pool_id)
 
     pass
 
@@ -587,7 +609,7 @@ class Routing_Table(Table_Common):
             self.dbase.r.expire(key, default_ttl)
         return retval
 
-    def set_bucket(self, bucket, desc):
+    def set_ex_bucket(self, bucket, desc):
         assert set(desc.keys()) == self._bucket_desc_keys
         key = f"{self._bucket_prefix}{bucket}"
         v = json.dumps(desc)
@@ -686,13 +708,13 @@ class Pickone_Table(Table_Common):
         self.dbase.delete(key)
         pass
 
-    def list_access_keys(self, pool_id):
+    def list_access_keys_of_pool(self, pool_id):
         """It includes an access-key for probing.  A probe access-key has no
         corresponding secret-key and it is used only to wake up MinIO
         from Adm.
         """
         keyi = _scan_table(self.dbase.r, self._id_prefix, None,
-                         value=self.get_id)
+                           value=self.get_id)
         ##"secret_key": d.get("secret_key"),
         ##"key_policy": d.get("key_policy")
         keys = [{"access_key": id, **d}

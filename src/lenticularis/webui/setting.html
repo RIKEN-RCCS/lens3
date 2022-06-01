@@ -27,10 +27,14 @@
         <span class="label">User:</span>
         <input v-model="user" size="64" disabled />
       </div>
-      <div>
+      <div v-if="!make_pool_mode">
         <span class="label">Group:</span>
-        <select v-model="group" required="true" v-bind:disabled="!make_pool_mode">
-          <option v-for="(g, i) in group_choices" v-bind:selected="i == 0" >
+        <input v-model="group" size="64" disabled />
+      </div>
+      <div v-if="make_pool_mode">
+        <span class="label">Group:</span>
+        <select v-model="group" required="true">
+          <option v-for="(g, i) in group_choices" v-bind:selected="i == 0">
             {{ g }}
           </option>
          </select>
@@ -70,7 +74,7 @@
         <span class="label">Buckets and policies</span>
         <div v-for="b in list_of_buckets">
           <input v-model="b.name" size="64" disabled />
-          <input v-model="b.policy" size="64" disabled />
+          <input v-model="b.bkt_policy" size="64" disabled />
           <button v-on:click="kick_delete_bucket(b.name)">Delete</button>
         </div>
       </div>
@@ -110,43 +114,6 @@
       </div>
     </div>
 
-<!--
-    <div>
-      <div>
-        <span class="label">Direct Hostname (label or FQDN):</span>
-        <input v-model="directHostnames" size="64" /></div>
-      <div>
-        <span class="label">Direct Hostname Domain:</span>
-        <input v-model="directHostnameDomains" size="64" disabled /></div>
-      <div>
-        <span class="label">Expiration Date:</span>
-        <input v-model="expiration_date" size="64" /></div>
-      <div>
-        <span class="label">Status:</span>
-        <input v-model="online_status" size="64" /></div>
-      <div>
-        <span class="label">Mode:</span>
-        <input v-model="minio_state" size="64" disabled /></div>
-      <hr />
-      <div>
-        <span class="label">atime:</span>
-        <input v-model="atime" size="64" disabled /></div>
-      <div>
-        <span class="label">Groups:</span>
-        <input v-model="groups" size="64" disabled /></div>
-      <div>
-        <span class="label">Facade Hostname:</span>
-        <input v-model="facadeHostname" size="64" disabled /></div>
-      <div>
-        <span class="label">Endpoint-URLs:</span>
-        <input v-model="endpointURLs" size="64" disabled /></div>
-      <hr />
-      <div v-if="submit_button_visible">
-        <button v-on:click="kick_make_pool" v-bind:disabled="submit_button_disabled">{{submit_button_name}}</button>
-      </div>
-    </div>
--->
-
     <div id="pool_list_section" v-if="pool_data_visible">
       <div v-for="(_, p) in pool_li_list.length">
         <hr />
@@ -160,13 +127,6 @@
         </ul>
       </div>
     </div>
-
-    <!--
-    <div id="pool_list_label" v-if="pool_list_visible">
-      <div id="pool_list" v-if="pool_list_visible">
-      </div>
-    </div>
-    -->
 
     <div>
       <hr />
@@ -182,6 +142,7 @@
         data on javascript console)
       </div>
     </div>
+
     <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
     <script src="scripts/lens3ui.js"></script>
   </body>

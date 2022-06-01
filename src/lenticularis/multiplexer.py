@@ -1,5 +1,5 @@
-"""Multiplexer.  It is a Gunicorn app.  It forwards a request/response
-from/to MinIO.
+"""Multiplexer.  It forwards a request/response from/to MinIO.  It is
+a Gunicorn app.
 """
 
 # Copyright (c) 2022 RIKEN R-CCS
@@ -14,10 +14,12 @@ import http.client
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 import urllib.parse
+from lenticularis.scheduler import Scheduler
 from lenticularis.poolutil import Api_Error
 from lenticularis.poolutil import check_bucket_naming
+from lenticularis.utility import access_mux, host_port
 from lenticularis.utility import Read1Reader, parse_s3_auth
-from lenticularis.utility import get_ip_address
+from lenticularis.utility import get_ip_addresses
 from lenticularis.utility import make_typical_ip_address
 from lenticularis.utility import host_port
 from lenticularis.utility import log_access
@@ -29,12 +31,12 @@ _connection_errors = [errno.ETIMEDOUT, errno.ECONNREFUSED,
                       errno.EHOSTDOWN, errno.EHOSTUNREACH]
 
 
-def _uppercase_headers(d):
+def _uppercase_headers__(d):
     assert isinstance(d, http.client.HTTPMessage)
     return {k.upper(): d.get(k).upper() for k in d}
 
 
-def _uppercase_dict(d):
+def _uppercase_dict__(d):
     assert isinstance(d, dict)
     return {k.upper(): v.upper() for (k, v) in d.items()}
 
@@ -49,7 +51,7 @@ def _no_buffering(headers):
 
 def _fake_user_id(access_key):
     """Returns an access-key as a substitute of user-id for logging."""
-    return f"access-key-id={access_key}"
+    return f"access-key={access_key}"
 
 
 def _check_url_error_is_connection_errors(x):
@@ -60,6 +62,7 @@ def _check_url_error_is_connection_errors(x):
     else:
         logger.debug(f"Cannot find errno in URLError={x}")
         return 0
+
 
 def _get_pool_for_probe_key(probe_key, access_info):
     """Checks a key is a probe-key, and returns a pool-id for which it is
@@ -73,6 +76,7 @@ def _get_pool_for_probe_key(probe_key, access_info):
 
 
 class Multiplexer():
+    """Mux.  It forwards requests to MinIO."""
 
     def __init__(self, mux_conf, tables, controller, host, port):
         self._verbose = False
@@ -89,10 +93,11 @@ class Multiplexer():
         self._facade_hostname = multiplexer_conf["facade_hostname"].lower()
         proxies = multiplexer_conf["trusted_proxies"]
         self._trusted_proxies = {addr for h in proxies
-                                 for addr in get_ip_address(h)}
+                                 for addr in get_ip_addresses(h)}
         self.request_timeout = int(multiplexer_conf["request_timeout"])
         timer = int(multiplexer_conf["timer_interval"])
         self.periodic_work_interval = timer
+        self.probe_access_timeout = int(multiplexer_conf["probe_access_timeout"])
 
         self._multiplexer_addrs = self._list_mux_ip_addresses()
 
@@ -100,6 +105,7 @@ class Multiplexer():
         self.watch_interval = int(controller_conf["watch_interval"])
         self.mc_info_timelimit = int(controller_conf["mc_info_timelimit"])
         self.refresh_margin = int(controller_conf["refresh_margin"])
+        self.scheduler = Scheduler(tables)
         return
 
     def __del__(self):
@@ -146,7 +152,7 @@ class Multiplexer():
 
     def _list_mux_ip_addresses(self):
         muxs = self.tables.process_table.list_mux_eps()
-        return {addr for (h, p) in muxs for addr in get_ip_address(h)}
+        return {addr for (h, p) in muxs for addr in get_ip_addresses(h)}
 
     def _register_mux_info(self, sleeptime):
         if self._verbose:
@@ -161,49 +167,6 @@ class Multiplexer():
         self.tables.process_table.set_mux(ep, mux_desc,
                                           int(sleeptime + self.refresh_margin))
         return
-
-
-    def _get_dest_addr(self, traceid, headers):
-        # (It drops a host if it is attached by the facade).
-        # (A host may include a port, a facade may not).
-
-        # TEMPORARILY BAN HOST ACCESSES.
-
-        host = headers.get("HOST")
-        host = host.lower() if host is not None else None
-        if host == self._facade_hostname:
-            host = None
-        else:
-            pass
-
-        host = None
-        if host:
-            access_key = None
-            r = self.tables.routing_table.get_route_by_direct_hostname_(host)
-            zone_id = self.tables.storage_table.get_pool_id_by_direct_hostname(host)
-            r = self.tables.routing_table.get_route(zone_id)
-        else:
-            authorization = headers.get("AUTHORIZATION")
-            access_key = parse_s3_auth(authorization)
-            ##r = self.tables.routing_table.get_route_by_access_key_(access_key)
-            zone_id = self.tables.storage_table.get_pool_by_access_key(access_key)
-            r = self.tables.routing_table.get_route(zone_id)
-            pass
-
-        if r is not None:
-            # A MinIO endpoint exists.
-            return (r, 200, zone_id)
-        else:
-            # A route to minio is not found.
-            (r, code, zone_id) = self.controller.start_minio_service(traceid, zone_id, access_key)
-            return (r, code, zone_id)
-
-    def _zone_to_user(self, zoneID):
-        zone = self.tables.storage_table.get_pool(zoneID)
-        if zone is None:
-            return None
-        else:
-            return zone["owner_uid"]
 
     def _wrap_res(self, res, environ, headers, sniff=False, sniff_marker=""):
         if _no_buffering(headers) or sniff:
@@ -243,7 +206,7 @@ class Multiplexer():
         desc = self.tables.routing_table.get_bucket(bucket)
         if desc is None:
             log_access("404", *access_info)
-            raise Api_Error(404, f"Bad URL, no bucket: url={request_url}")
+            raise Api_Error(404, f"No bucket: url={request_url}")
         # Check the policy in desc["bkt_policy"].
         pool_id = desc["pool"]
         policy = desc["bkt_policy"]
@@ -257,6 +220,48 @@ class Multiplexer():
             return pool_id
         log_access("401", *access_info)
         raise Api_Error(401, f"Bad bucket policy: url={request_url}")
+
+    def _start_service(self, traceid, pool_id, probe_key):
+        # CURRENTLY, IT STARTS A SERVICE ON A LOCAL HOST.
+        """Runs MinIO on a local or remote host.  Use of probe_key forces to
+        run on a local host.  Otherwise, the chooser chooses a host to
+        run.
+        """
+        if probe_key is not None:
+            ep = None
+        else:
+            # ep = self._choose_server_host(pool_id)
+            ep = None
+            pass
+        if ep is None:
+            # Run MinIO on a local host.
+            (code, ep0) = self.controller.start_service(traceid, pool_id, probe_key)
+            logger.debug(f"AHOAHO MUX start_service returned: code={code}, ep={ep0}")
+            return (code, ep0)
+        else:
+            # Run MinIO on a remote host.
+            assert probe_key is None
+            pooldesc = self.tables.storage_table.get_pool(pool_id)
+            probe_key = pooldesc["probe_access"]
+            facade_hostname = self._facade_hostname
+            code = access_mux(traceid, ep, probe_key, facade_hostname,
+                              self.probe_access_timeout)
+            return (code, ep)
+        pass
+
+    def _choose_server_host(self, pool_id):
+        # THIS IS NOT USED NOW.
+        """Chooses a host to run a MinIO.  It returns None to mean the
+        localhost.
+        """
+        (host, port) = self.scheduler.schedule(pool_id)
+        if host is None:
+            return None
+        elif host == self._mux_host:
+            return None
+        else:
+            return host_port(host, port)
+        pass
 
     def _process_request(self, environ, start_response):
         """Processes a request from Gunicorn.  It forwards a request/response
@@ -302,39 +307,39 @@ class Multiplexer():
                      f" remote=({client_addr}), auth=({authorization})")
 
         if not self._check_forwarding_host_trusted(peer_addr):
+            logger.error(f"Untrusted proxy or unknonwn Mux: {peer_addr};"
+                         f" Check configuration")
             log_access("403", *access_info)
             raise Api_Error(403, f"Bad access from remote={client_addr}")
 
         if path == "/":
-            # Access to "/" is not allowed but for probing access from Adm.
+            # Access to "/" is only allowed for probing access from Adm.
             probe_key = self.tables.pickone_table.get_id(access_key)
             pool_id = _get_pool_for_probe_key(probe_key, access_info)
-            logger.debug(f"MUX probe access for pool={pool_id}")
+            assert probe_key is not None
+            logger.debug(f"MUX probing-access for pool={pool_id}")
         else:
+            probe_key = None
             pool_id = self._find_pool_for_bucket(path, access_key, access_info)
-            logger.debug(f"MUX by bucket={path} for pool_id={pool_id}")
+            logger.debug(f"MUX access for bucket={path} in pool={pool_id}")
             pass
 
         assert pool_id is not None
         minio_ep = self.tables.routing_table.get_route(pool_id)
 
+        if minio_ep is None:
+            (code, ep0) = self._start_service(traceid, pool_id, probe_key)
+            if code == 200:
+                assert ep0 is not None and id == pool_id
+                minio_ep = ep0
+                pass
+            pass
+
         # It is OK if an endpoint is found.  A check for an
         # enabled/disabled state of the pool is not checked here.
 
         if minio_ep is None:
-            (ep0, code, id) = self.controller.start_minio_service(traceid, pool_id, access_key)
-            logger.debug(f"AHO MUX start_minio_service returned: code={code}, ep={ep0}")
-            if code == 200:
-                assert ep0 is not None and id == pool_id
-                minio_ep = ep0
-            else:
-                pass
-        else:
-            pass
-
-        if minio_ep is None:
-            status = "404"
-            log_access(status, *access_info)
+            log_access("404", *access_info)
             raise Api_Error(404, f"Bucket inaccessible: url={request_url}")
 
         # Copy request headers.
@@ -351,18 +356,6 @@ class Multiplexer():
             q_headers["CONTENT-LENGTH"] = content_length
         else:
             pass
-
-        ##(dest_addr, code, zone_id) = self._get_dest_addr(traceid, q_headers)
-
-        ##if dest_addr is None:
-        ##    status = f"{code}"
-        ##    logger.debug(f"@@@ FAIL: status(dest_addr) = {status}")
-        ##    user_id = self._zone_to_user(zone_id) if zone_id else None
-        ##    user_id = user_id if user_id else _fake_user_id(access_key)
-        ##    log_access(status, *access_info)
-        ##    logger.debug(f"(MUX) FAILED")
-        ##    start_response(status, [])
-        ##    return []
 
         proto = "http"
         url = f"{proto}://{minio_ep}{path_and_query}"
@@ -420,7 +413,7 @@ class Multiplexer():
         else:
             pass
 
-        user_id = self._zone_to_user(pool_id)
+        ##user_id = self._zone_to_user(pool_id)
 
         content_length_downstream = next((v for (k, v) in r_headers if k.lower() == "content-length"), None)
 

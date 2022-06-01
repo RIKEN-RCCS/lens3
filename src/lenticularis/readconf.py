@@ -109,12 +109,14 @@ def mux_schema(number_type):
             "trusted_proxies": {"type": "array", "items": {"type": "string"}},
             "timer_interval": number_type,
             "request_timeout": number_type,
+            "probe_access_timeout": number_type,
         },
         "required": [
             "facade_hostname",
             "trusted_proxies",
             "timer_interval",
             "request_timeout",
+            "probe_access_timeout",
         ],
         "additionalProperties": False,
     }

@@ -1809,7 +1809,7 @@ Adm is not designed as load-balanced.  Adm may consist of some
 processes (started by Gunicorn), but they need to run on a single node
 in order to share the configuration directory of the "mc" command.
 
-### Mux processes
+### Mux Processes
 
 There exists multiple Mux processes for a single Mux service, as it is
 started by Gunicorn.  Some book-keeping periodical operations (running
@@ -1832,10 +1832,15 @@ process will be terminated when a Manager exits.
 
 ### RANDOM MEMO
 
-NOTE: Python Popen seems to dup a PIPE fd and does not close the
-original.  It results in that a closure of stdout/stderr in a
-subprocess cannot be detected at the parent.
+__Load balancing__: The "scheduler.py" file is not used in v1.2, which
+is for distributing the processes.  Lens3 now assumes accesses to Mux
+is in itself balanced by a front-end reverse-proxy.
 
-Note: Lens3 does not remove buckets at all.  It just makes them
-inaccessible.  It is because MinIO's "mc rb" command removes the
-contents of a bucket that is not useful usually.
+__Removing buckets__: Lens3 does not remove buckets at all.  It just
+makes them inaccessible.  It is because MinIO's "mc rb" command
+removes the contents of a bucket that is not useful usually.
+
+__Python Popen behavior__: A closure of a pipe created by Python Popen
+is not detectable until the process exits.  Lens3 uses a one line
+message on stdout to detect a start of a subprocess, but it does not
+wait for an EOF.

@@ -405,8 +405,7 @@ def remove_trailing_slash(s):
 
 
 def format_rfc3339_z(t):
-    """
-    RFC 3339
+    """RFC 3339
     """
     i = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(t))
     f = (int)((t % 1) * 1000000)
@@ -441,7 +440,7 @@ def uniform_distribution_jitter():
     return random.random() * 2
 
 
-def get_ip_address(host):
+def get_ip_addresses(host):
     return [make_typical_ip_address(addr[0])
             for (_, _, _, _, addr) in socket.getaddrinfo(host, None)]
 
@@ -512,6 +511,9 @@ def log_access(status_, client_, user_, method_, url_, *,
 
 
 def make_typical_ip_address(ip):
+    """Makes IP address strings comparable.  It drops the hex part (not
+    RFC-5952).
+    """
     if ip.startswith("::ffff:"):
         return ip[7:]
     else:

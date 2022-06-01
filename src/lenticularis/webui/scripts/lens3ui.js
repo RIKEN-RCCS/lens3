@@ -12,37 +12,38 @@ var edit_pool_data = {
   edit_pool_visible: false,
   pool_list_visible: true,
   make_pool_mode: true,
+
   pool_name: "",
   user: "",
   group: "",
   buckets_directory: "",
   list_of_buckets: [],
-  accessKeys: [],
-  accessKeyIDrw: "",
-  accessKeyIDro: "",
-  accessKeyIDwo: "",
-  secretAccessKeyrw: "",
-  secretAccessKeyro: "",
-  secretAccessKeywo: "",
+  //accessKeys: [],
+  //accessKeyIDrw: "",
+  //accessKeyIDro: "",
+  //accessKeyIDwo: "",
+  //secretAccessKeyrw: "",
+  //secretAccessKeyro: "",
+  //secretAccessKeywo: "",
+
+  bucket_name: "",
+  bucket_policy: "none",
+  group_choices: [],
+  //groups: "",
 
   access_keys_rw: [],
   access_keys_ro: [],
   access_keys_wo: [],
 
-  bucket_name: "",
-  bucket_policy: "none",
   direct_hostnames: "",
   expiration_date: "",
   permit_status: "",
   online_status: "",
   mode: "",
-  atime: "",
-  groups: "",
+  //atime: "",
   directHostnameDomains: "",
   facadeHostname: "",
   endpointURLs: "",
-
-  group_choices: [],
 
   submit_button_name: "",
   submit_button_disabled: false,
@@ -245,13 +246,13 @@ function submit_operation(op, triple) {
     // Create pool.
     method = "POST";
     url_path = "/pool";
-    body = compose_create_dict(csrf_token);
+    body = compose_create_dict__(csrf_token);
   }
   else if (op == 1) {
     // Update pool.
     method = "PUT";
     url_path = "/pool/" + edit_pool_data.pool_name;
-    body = compose_update_dict(csrf_token);
+    body = compose_update_dict__(csrf_token);
   }
   else if (op == 2) {
     // Create bucket.
@@ -351,7 +352,7 @@ function build_pool_desc() {
   return pooldesc;
 }
 
-function compose_create_dict(csrf_token) {
+function compose_create_dict__(csrf_token) {
   var pooldesc = build_pool_desc();
   var dict = {"pool": pooldesc};
   //return stringify_dict(dict, csrf_token);
@@ -360,9 +361,9 @@ function compose_create_dict(csrf_token) {
   return body;
 }
 
-function compose_update_dict(csrf_token) {
+function compose_update_dict__(csrf_token) {
   var pooldesc = build_pool_desc();
-  pooldesc["access_keys"] = edit_pool_data.accessKeys; // overwrite a dummy entry
+  //pooldesc["access_keys"] = edit_pool_data.accessKeys;
   var dict = {"pool": pooldesc};
   //return stringify_dict(dict, csrf_token);
   dict["CSRF-Token"] = csrf_token;
@@ -606,11 +607,30 @@ function parse_pool_desc_list(pool_desc_list) {
 }
 
 function render_pool_as_ul_entry(pooldesc) {
-  var buckets = pooldesc["buckets"];
-  var keys = pooldesc["access_keys"];
-  //var rwkey = chooseAccessKey_(keys, "readwrite");
-  //var rokey = chooseAccessKey_(keys, "readonly");
-  //var wokey = chooseAccessKey_(keys, "writeonly");
+  const bkts = pooldesc["buckets"];
+  //const bkts_none = scan_buckets(buckets, "none");
+  //const bkts_upload = scan_buckets(buckets, "upload");
+  //const bkts_download = scan_buckets(buckets, "download");
+  //const bkts_public = scan_buckets(buckets, "public");
+  const bkts_none = (bkts.filter(d => d["bkt_policy"] == "none")
+                     .map(d => d["name"]).join(" "));
+  const bkts_upload = (bkts.filter(d => d["bkt_policy"] == "upload")
+                       .map(d => d["name"]).join(" "));
+  const bkts_download = (bkts.filter(d => d["bkt_policy"] == "download")
+                         .map(d => d["name"]).join(" "));
+  const bkts_public = (bkts.filter(d => d["bkt_policy"] == "public")
+                       .map(d => d["name"]).join(" "));
+  const bkt_entries = [
+    {text: {label: "Private buckets", value: bkts_none}},
+    {text: {label: "Public buckets", value: bkts_public}},
+    {text: {label: "Public download buckets", value: bkts_download}},
+    {text: {label: "Public upload buckets", value: bkts_upload}},
+  ];
+
+  const keys = pooldesc["access_keys"];
+  //var rwkey = chooseAccessKey__(keys, "readwrite");
+  //var rokey = chooseAccessKey__(keys, "readonly");
+  //var wokey = chooseAccessKey__(keys, "writeonly");
   const rwkeys = keys.filter(d => d["key_policy"] == "readwrite")
   const rokeys = keys.filter(d => d["key_policy"] == "readonly")
   const wokeys = keys.filter(d => d["key_policy"] == "writeonly")
@@ -633,10 +653,7 @@ function render_pool_as_ul_entry(pooldesc) {
     {text: {label: "Buckets directory", value: pooldesc["buckets_directory"]}},
     {text: {label: "Unix user", value: pooldesc["owner_uid"]}},
     {text: {label: "Unix group", value: pooldesc["owner_gid"]}},
-    {text: {label: "Private buckets", value: scan_buckets(buckets, "none")}},
-    {text: {label: "Public buckets", value: scan_buckets(buckets, "public")}},
-    {text: {label: "Public download buckets", value: scan_buckets(buckets, "download")}},
-    {text: {label: "Public upload buckets", value: scan_buckets(buckets, "upload")}},
+    ... bkt_entries,
     ... key_entries,
     {text: {label: "Endpoint-URL", value: pooldesc["endpoint_url"]}},
     {text: {label: "Pool-ID", value: pooldesc["pool_name"]}},
@@ -645,22 +662,27 @@ function render_pool_as_ul_entry(pooldesc) {
     {text: {label: "Expiration date", value: format_rfc3339_if_not_zero(pooldesc["expiration_date"])}},
     {text: {label: "User enabled", value: pooldesc["permit_status"]}},
     {text: {label: "Pool online", value: pooldesc["online_status"]}},
-    {text: {label: "Last access time", value: format_rfc3339_if_not_zero(pooldesc["atime"])}},
+    //{text: {label: "Last access time", value: format_rfc3339_if_not_zero(pooldesc["atime"])}},
   ];
 }
 
 function copy_pool_desc_for_edit(pooldesc) {
-  var accessKeys = pooldesc["access_keys"];
-  var rwkey = chooseAccessKey_(accessKeys, "readwrite");
-  var rokey = chooseAccessKey_(accessKeys, "readonly");
-  var wokey = chooseAccessKey_(accessKeys, "writeonly");
+  //var accessKeys = pooldesc["access_keys"];
+  //var rwkey = chooseAccessKey__(accessKeys, "readwrite");
+  //var rokey = chooseAccessKey__(accessKeys, "readonly");
+  //var wokey = chooseAccessKey__(accessKeys, "writeonly");
 
   edit_pool_data.pool_name = pooldesc["pool_name"];
   edit_pool_data.user = pooldesc["owner_uid"];
   edit_pool_data.group = pooldesc["owner_gid"];
   edit_pool_data.buckets_directory = pooldesc["buckets_directory"];
   edit_pool_data.list_of_buckets = pooldesc["buckets"];
-  edit_pool_data.accessKeys = accessKeys;
+
+  edit_pool_data.bucket_name = "";
+  edit_pool_data.bucket_policy = "none";
+  edit_pool_data.group_choices = pooldesc["groups"];
+  //edit_pool_data.groups = pooldesc["groups"];
+
   //edit_pool_data.accessKeyIDrw = rwkey["access_key"];
   //edit_pool_data.accessKeyIDro = rokey["access_key"];
   //edit_pool_data.accessKeyIDwo = wokey["access_key"];
@@ -672,23 +694,18 @@ function copy_pool_desc_for_edit(pooldesc) {
   const rwkeys = keys.filter(d => d["key_policy"] == "readwrite")
   const rokeys = keys.filter(d => d["key_policy"] == "readonly")
   const wokeys = keys.filter(d => d["key_policy"] == "writeonly")
-
   edit_pool_data.access_keys_rw = rwkeys
   edit_pool_data.access_keys_ro = rokeys
   edit_pool_data.access_keys_wo = wokeys
 
-  edit_pool_data.bucket_name = "";
-  edit_pool_data.bucket_policy = "none";
-
-  edit_pool_data.group_choices = pooldesc["groups"];
+  //edit_pool_data.accessKeys = keys;
 
   edit_pool_data.direct_hostnames = pooldesc["direct_hostnames"].join(" ");
   edit_pool_data.expiration_date = format_rfc3339_if_not_zero(pooldesc["expiration_date"]);
   edit_pool_data.permit_status = pooldesc["permit_status"];
   edit_pool_data.online_status = pooldesc["online_status"];
   edit_pool_data.mode = pooldesc["minio_state"];
-  edit_pool_data.atime = format_rfc3339_if_not_zero(pooldesc["atime"]);
-  edit_pool_data.groups = pooldesc["groups"];
+  //edit_pool_data.atime = format_rfc3339_if_not_zero(pooldesc["atime"]);
   edit_pool_data.directHostnameDomains = pooldesc["directHostnameDomains"];
   edit_pool_data.facadeHostname = pooldesc["facadeHostname"];
   edit_pool_data.endpointURLs = pooldesc["endpoint_url"];
@@ -741,7 +758,7 @@ function format_rfc3339_if_not_zero(d) {
   return format_rfc3339(d);
 }
 
-function chooseAccessKey_(accessKeys, policyName) {
+function chooseAccessKey__(accessKeys, policyName) {
   for (var i = 0; i < accessKeys.length; i++) {
     var accessKey = accessKeys[i];
     if (accessKey["key_policy"] == policyName) {
@@ -751,7 +768,7 @@ function chooseAccessKey_(accessKeys, policyName) {
   return undefined;
 }
 
-function scan_buckets(buckets, policy) {
+function scan_buckets__(buckets, policy) {
   var res = new Array();
   for (var i = 0; i < buckets.length; i++) {
     var bucket = buckets[i];
@@ -764,8 +781,8 @@ function scan_buckets(buckets, policy) {
 
 function run_debug() {
   console.log("Dump internal data");
-  var post_data = compose_create_dict(csrf_token);
-  var put_data = compose_update_dict(csrf_token);
+  //var post_data = compose_create_dict__(csrf_token);
+  //var put_data = compose_update_dict__(csrf_token);
   var bkt_data = compose_create_bucket_dict(csrf_token);
   var key_data = compose_access_key_update_dict(csrf_token);
   var delete_data = compose_delete_dict(csrf_token);

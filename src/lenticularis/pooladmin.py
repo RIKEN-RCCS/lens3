@@ -597,7 +597,7 @@ class Pool_Admin():
             pass
         path = self.tables.storage_table.get_buckets_directory_of_pool(pool_id)
         bkts = self.tables.routing_table.list_buckets(pool_id)
-        keys = self.tables.pickone_table.list_access_keys(pool_id)
+        keys = self.tables.pickone_table.list_access_keys_of_pool(pool_id)
         logger.debug(f"Deleting buckets-directory: {path}")
         try:
             self.tables.delete_buckets_directory(path)
@@ -693,28 +693,28 @@ class Pool_Admin():
 
             pool_list.append(pooldesc)
             pass
+        pool_list = sorted(pool_list, key=lambda k: k["buckets_directory"])
         return (200, None, {"pool_list": pool_list})
 
     def _gather_pool_desc(self, traceid, pool_id):
         """Returns a pool description to be displayed by Web-UI."""
-        pooldesc = self.tables.storage_table.get_pool(pool_id)
+        pooldesc = self.tables.get_pool(pool_id)
         if pooldesc is None:
             return None
-        bd = self.tables.storage_table.get_buckets_directory_of_pool(pool_id)
+
+        bd = self.tables.get_buckets_directory_of_pool(pool_id)
         pooldesc["buckets_directory"] = bd
-        bkts = self.tables.routing_table.list_buckets(pool_id)
+        # Gather buckets.
+        bkts = self.tables.list_buckets(pool_id)
+        bkts = sorted(bkts, key=lambda k: k["name"])
         pooldesc["buckets"] = bkts
-
-        keys0 = self.tables.pickone_table.list_access_keys(pool_id)
-        # Drop a probing access-key.  It is not visible to users.
-        keys1 = [k for k in keys0
+        # Gather keys, but drop a probing-key and unnecessary fields to users.
+        keys = self.tables.list_access_keys_of_pool(pool_id)
+        keys = sorted(keys, key=lambda k: k["modification_date"])
+        keys = [k for k in keys
                 if (k is not None and k.get("secret_key") != "")]
-        # Drop unnecessary info to users.
-        keys2 = [_drop_non_ui_info_from_keys(k) for k in keys1]
-
-        logger.debug(f"AHO keys={keys2}")
-
-        pooldesc["access_keys"] = keys2
+        keys = [_drop_non_ui_info_from_keys(k) for k in keys]
+        pooldesc["access_keys"] = keys
         pooldesc.pop("probe_access")
 
         ##pooldesc["direct_hostnames"]
@@ -733,7 +733,7 @@ class Pool_Admin():
         now = int(time.time())
         desc = {"pool": pool_id, "bkt_policy": policy,
                 "modification_date": now}
-        (ok, holder) = self.tables.set_bucket(bucket, desc)
+        (ok, holder) = self.tables.set_ex_bucket(bucket, desc)
         if not ok:
             owner = self._get_pool_owner_for_messages(holder)
             raise Api_Error(403, f"Bucket name taken: owner={owner}")
@@ -749,7 +749,6 @@ class Pool_Admin():
                     _add_bucket_to_pool(pooldesc, bucket, policy)
                     check_pool_is_well_formed(pooldesc, None)
                     self.tables.storage_table.set_pool(pool_id, pooldesc)
-                    return (200, None, {"pool_list": [pooldesc]})
                 finally:
                     self._unlock_pool_entry(lock, pool_id)
                     pass

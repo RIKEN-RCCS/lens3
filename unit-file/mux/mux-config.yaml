@@ -22,6 +22,7 @@ multiplexer:
         - localhost
     timer_interval: 30
     request_timeout: 60
+    probe_access_timeout: 60
 
 controller:
     port_min: 9000

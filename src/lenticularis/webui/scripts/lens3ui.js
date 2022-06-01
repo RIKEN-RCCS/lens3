@@ -69,20 +69,19 @@ var show_pool_list_button_app = new Vue({
       edit_pool_data.make_pool_mode = false;
       run_get_pool_list();
     },
-    kick_debug: run_debug,
   },
 });
 
-var show_or_make_pool_app = new Vue({
-  el: "#show_or_make_pool",
+var pool_section_app = new Vue({
+  el: "#pool_section",
   data: edit_pool_data,
   methods: {
     kick_make_pool: run_make_pool,
   },
 });
 
-var edit_buckets_app = new Vue({
-  el: "#edit_buckets",
+var buckets_section_app = new Vue({
+  el: "#buckets_section",
   data: edit_pool_data,
   methods: {
     kick_make_bucket: run_make_bucket,
@@ -90,8 +89,8 @@ var edit_buckets_app = new Vue({
   },
 });
 
-var edit_keys_app = new Vue({
-  el: "#edit_keys",
+var keys_section_app = new Vue({
+  el: "#keys_section",
   data: edit_pool_data,
   methods: {
     kick_make_key: run_make_access_key,
@@ -99,17 +98,15 @@ var edit_keys_app = new Vue({
   },
 });
 
-//// Pool List ////
-
-var pool_list_view_data = {
+var pool_list_section_data = {
   pool_data_visible: true,
   pool_desc_list: [],
   pool_li_list: [],
 };
 
-var pool_list_view_app = new Vue({
-  el: "#pool_list_view",
-  data: pool_list_view_data,
+var pool_list_section_app = new Vue({
+  el: "#pool_list_section",
+  data: pool_list_section_data,
   methods: {
     kick_edit_pool: run_edit_pool,
     kick_delete_pool: run_delete_pool,
@@ -152,18 +149,18 @@ function run_make_pool() {
 }
 
 //function run_edit_pool(i) {
-//  copy_pool_desc_for_edit(pool_list_view_data.pool_desc_list[i]);
+//  copy_pool_desc_for_edit(pool_list_section_data.pool_desc_list[i]);
 //  edit_pool_data.pool_name_visible = true;
 //  edit_pool_data.buckets_directory_disabled = true;
 //  edit_pool_data.edit_pool_visible = true;
-//  pool_list_view_data.pool_data_visible = false;
+//  pool_list_section_data.pool_data_visible = false;
 //  edit_pool_data.submit_button_name = "Update";
 //  edit_pool_data.submit_button_disabled = false;
 //  edit_pool_data.submit_button_visible = true;
 //}
 
 function run_edit_pool(i) {
-  pool_desc = pool_list_view_data.pool_desc_list[i]
+  pool_desc = pool_list_section_data.pool_desc_list[i]
   display_pool_in_edit_pool(pool_desc)
 }
 
@@ -172,14 +169,14 @@ function display_pool_in_edit_pool(pool_desc) {
   edit_pool_data.pool_name_visible = true;
   edit_pool_data.buckets_directory_disabled = true;
   edit_pool_data.edit_pool_visible = true;
-  pool_list_view_data.pool_data_visible = false;
+  pool_list_section_data.pool_data_visible = false;
   edit_pool_data.submit_button_name = "Update";
   edit_pool_data.submit_button_disabled = false;
   edit_pool_data.submit_button_visible = true;
 }
 
 function run_delete_pool(i) {
-  const pooldesc = pool_list_view_data.pool_desc_list[i]
+  const pooldesc = pool_list_section_data.pool_desc_list[i]
   const pool_name = pooldesc["pool_name"];
   perform_delete_pool(pool_name);
 }
@@ -192,7 +189,7 @@ function run_make_bucket() {
     var policy = edit_pool_data.bucket_policy;
     method = "PUT";
     url_path = ("/pool/" + edit_pool_data.pool_name + "/bucket");
-    var c = {"bucket": {"name": name, "policy": policy}};
+    var c = {"bucket": {"name": name, "bkt_policy": policy}};
     c["CSRF-Token"] = csrf_token;
     body = JSON.stringify(c);
     return {method, url_path, body};
@@ -377,7 +374,7 @@ function compose_create_bucket_dict(csrf_token, name, policy) {
   if (policy != "none" && policy != "upload" && policy != "download") {
     throw new Error("error: invalid policy: " + policy);
   }
-  var pooldesc = {"buckets": [{"name": name, "policy": policy}]};
+  var pooldesc = {"buckets": [{"name": name, "bkt_policy": policy}]};
   var dict = {"pool": pooldesc};
   //return stringify_dict(dict, csrf_token);
   dict["CSRF-Token"] = csrf_token;
@@ -407,7 +404,7 @@ function push_buckets(buckets, bucketList, policy) {
   for (var i = 0; i < xs.length; i++) {
     var bucket = xs[i];
     if (bucket != "") {
-      var v = {"name": bucket, "policy": policy};
+      var v = {"name": bucket, "bkt_policy": policy};
       buckets.push(v);
     }
   }
@@ -501,7 +498,7 @@ function fun_get_template_body(pool_desc_list) {
   edit_pool_data.pool_name_visible = true;
   edit_pool_data.buckets_directory_disabled = false;
   edit_pool_data.edit_pool_visible = false;
-  pool_list_view_data.pool_data_visible = false;
+  pool_list_section_data.pool_data_visible = false;
 }
 
 function disable_create_button() {
@@ -585,27 +582,27 @@ function parse_pool_desc_list(pool_desc_list) {
     pool_li_items.push(render_pool_as_ul_entry(pooldesc));
   }
 
-  //var div = "<div id='pool_list_view' v-if='pool_data_visible'>" +
+  //var div = "<div id='pool_list_section' v-if='pool_data_visible'>" +
   //    res.join("") +
   //    "</div>";
   //var el = document.getElementById("pool_list")
   //el.innerHTML = "";
   //el.insertAdjacentHTML("beforeend", div);
 
-  pool_list_view_data.pool_li_list = pool_li_items;
-  pool_list_view_data.pool_desc_list = pool_desc_list;
-  pool_list_view_data.pool_data_visible = true;
+  pool_list_section_data.pool_li_list = pool_li_items;
+  pool_list_section_data.pool_desc_list = pool_desc_list;
+  pool_list_section_data.pool_data_visible = true;
 
-  //pool_list_view_app = new Vue({
-  //  el: "#pool_list_view",
-  //  data: pool_list_view_data,
+  //pool_list_section_app = new Vue({
+  //  el: "#pool_list_section",
+  //  data: pool_list_section_data,
   //  methods: {
   //    kick_edit_pool: run_edit_pool,
   //    kick_delete_pool: run_delete_pool,
   //  }
   //});
 
-  //pool_list_view_app.$mount();
+  //pool_list_section_app.$mount();
 }
 
 function render_pool_as_ul_entry(pooldesc) {
@@ -758,7 +755,7 @@ function scan_buckets(buckets, policy) {
   var res = new Array();
   for (var i = 0; i < buckets.length; i++) {
     var bucket = buckets[i];
-    if (bucket["policy"] == policy) {
+    if (bucket["bkt_policy"] == policy) {
       res.push(bucket["name"]);
     }
   }
@@ -766,6 +763,7 @@ function scan_buckets(buckets, policy) {
 }
 
 function run_debug() {
+  console.log("Dump internal data");
   var post_data = compose_create_dict(csrf_token);
   var put_data = compose_update_dict(csrf_token);
   var bkt_data = compose_create_bucket_dict(csrf_token);

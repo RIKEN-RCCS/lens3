@@ -440,6 +440,7 @@ class Manager():
         return
 
     def _register_minio_process(self, pid, pooldesc, timeout):
+        now = int(time.time())
         self._minio_proc = {
             "minio_ep": self._minio_ep,
             "minio_pid": f"{pid}",
@@ -448,6 +449,7 @@ class Manager():
             "mux_host": self._mux_host,
             "mux_port": self._mux_port,
             "manager_pid": f"{os.getpid()}",
+            "modification_date": now
         }
 
         ##self.route = zone_to_route(pooldesc)

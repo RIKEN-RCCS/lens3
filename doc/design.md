@@ -1706,20 +1706,26 @@ Note that a bucket-pool has another state `status`, but it is always
 
 ## Redis database keys (prefixes)
 
+Notes: Entries with "(*)" are set atomically (by "setnx").
+
 #### storage-table
 
 | Key           | Value         | Description   |
 | ----          | ----          | ----          |
 | po:pool-id    | pool-description |(htable)|
-| (ar:access-key) | pool-id       |       |
 | ps:pool-id    | pool-state    |(json)|
-| ac:pool-id    | timestamp     |       |
-| pr::          | permit-list   |(json)|
 | uu:user       | user-info     |(json)|
+| bd:directory  | pool-id       | A bucket-directory (*) |
+| ac:pool-id    | timestamp     |       |
+| (ar:access-key) | pool-id     |       |
+| (pr::)        | permit-list   |(json)|
 | (dr:host)     | pool-id       |       |
-| bd:directory  | pool-id       | A bucket-directory occupancy |
 | lk:           | -             |(for locking the whole table)|
 | lk:pool-id    | -             |(for locking a ru:pool-id)|
+
+"user-info" is a record of {"groups", "permitted",
+"modification_date"} where "groups" is a string list and "permitted"
+is a boolean.
 
 The "permit-list" is a list of permits of users.  An entry is a tuple
 of (action, user-id), where an action is "allow" or "deny".
@@ -1728,13 +1734,13 @@ of (action, user-id), where an action is "allow" or "deny".
 
 | Key           | Value         | Description   |
 | ----          | ----          | ----          |
-| mn:pool-id    | minio-description |(htable)|
+| mn:pool-id    | MinIO-description |(json)|
 | mx:Mux-endpoint | Mux-description |(htable)|
 | lk:??         | -> (lock?)
 
-A minio-description is a htable record of a MinIO process:
-{"mux_host", "mux_port", "minio_ep", "minio_pid", "manager_pid",
-"admin", "password"}.
+A MinIO-description is a MinIO process and a record of: {"minio_ep",
+"minio_pid", "admin", "password", "mux_host", "mux_port",
+"manager_pid", "modification_date"}.
 
 A Mux-description is a htable record: {"host", "port", "start_time",
 "last_interrupted_time"}, where a host+port is an endpoint of a Mux.
@@ -1745,27 +1751,26 @@ start-time ...  last-interrupted-time? ...
 | Key           | Value         | Description   |
 | ----          | ----          | ----          |
 | ep:pool-id    | MinIO-endpoint | |
-| bk:bucket-name | pool-id + b-policy | A mapping by a bucket-name |
-| (wu:access-key) | pool-id       | A key used for probe-access from Adm |
+| bk:bucket-name | pool-id + b-policy | A mapping by a bucket-name (*) |
 | ts:pool-id    | timestamp     | Timestamp on the last access |
 
-"pool-id + b-policy" is a record with keys "pool" and "policy".  A
-bucket-policy indicates public R/W status: {"none", "upload",
-"download", "public"}, which are borrowed from MinIO.
+"pool-id + b-policy" is a record of {"pool", "bkt_policy",
+"modification_date"}.  A bkt-policy indicates public R/W status of a
+bucket: {"none", "upload", "download", "public"}, which are borrowed
+from MinIO.
 
 #### pickone-table
 
 | Key           | Value         | Description   |
 | ----          | ----          | ----          |
-| id:random     | key-description | An entry to keep uniqueness |
+| id:random     | key-description | An entry to keep uniqueness (*) |
 
 It stores generated keys for pool-id's and access-keys.  A
-key-description is a record {"use": usage, "owner": owner,
-"secret_key": secret, "key_policy": policy, "creation_data": date}.
-A usage/owner pair is either "pool"/user-id or
-"access_key"/pool-id.  A secret-key and a key-policy fields are
-missing for a pool-id.  A policy is one of {"readwrite", "readonly",
-"writeonly"}, which are borrowed from MinIO.
+key-description is a record {"use", "owner", "secret_key",
+"key_policy", "modification_date"}.  A use/owner pair is either
+"pool"/user-id or "access_key"/pool-id.  A secret-key and a key-policy
+fields are missing for an entry for use=pool.  A key-policy is one of
+{"readwrite", "readonly", "writeonly"}, which are borrowed from MinIO.
 
 ## Bucket policy
 

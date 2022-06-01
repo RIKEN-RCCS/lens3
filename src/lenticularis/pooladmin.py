@@ -60,7 +60,7 @@ def rephrase_exception_message(e):
 
 def _check_bucket_fmt(bucket):
     bucket_keys = set(bucket.keys())
-    return bucket_keys == {"name", "policy"}
+    return bucket_keys == {"name", "bkt_policy"}
 
 
 def _check_access_key_fmt(access_key):
@@ -70,8 +70,8 @@ def _check_access_key_fmt(access_key):
 
 
 def _check_create_bucket_keys(zone):
-    """ _ ::= {"buckets": [{"key": bucket_name,
-                               "policy": policy}]}
+    """ _ ::= {"buckets": [{"name": bucket_name,
+                            "bkt_policy": policy}]}
     """
     if zone.keys() != {"buckets"}:
         raise Exception(f"update_buckets: invalid key set: {set(zone.keys())}")
@@ -89,6 +89,7 @@ def _check_change_secret_keys(zone):
         raise Exception(f"update_secret_keys: invalid key set: {set(zone.keys())}")
     if not all(_check_access_key_fmt(access_key) for access_key in zone["access_keys"]):
         raise Exception(f"change_secret_key: invalid accessKey: {zone}")
+    pass
 
 
 def _check_zone_keys(zone):
@@ -103,6 +104,7 @@ def _check_zone_keys(zone):
         raise Exception(f"upsert_zone: invalid key set: missing {mandatory_keys - given_keys}")
     if not given_keys.issubset(allowed_keys):
         raise Exception(f"upsert_zone: invalid key set {given_keys - allowed_keys}")
+    pass
 
 
 def check_pool_owner(user_id, pool_id, pool):
@@ -112,6 +114,7 @@ def check_pool_owner(user_id, pool_id, pool):
     if owner != user_id:
         raise Exception(f"Mismatch in pool owner and authenticated user:"
                         f" owner={owner} to user={user_id}")
+    pass
 
 
 def _gen_unique_key(key_generator, allkeys):
@@ -126,14 +129,20 @@ def _gen_unique_key(key_generator, allkeys):
 def _encrypt_or_generate(dic, key):
     val = dic.get(key)
     dic[key] = encrypt_secret(val if val else gen_secret_access_key())
+    pass
 
 
 def _check_bucket_names(zone):
     for bucket in zone.get("buckets", []):
-        _check_bucket_name(zone, bucket)
+        ##_check_bucket_name(zone, bucket)
+        name = bucket["name"]
+        if not check_bucket_naming(name):
+            raise Exception(f"Bad bucket name: {name}")
+        pass
+    pass
 
 
-def _check_bucket_name(zone, bucket):
+def _check_bucket_name__(zone, bucket):
     name = bucket["name"]
     if len(name) < 3:
         raise Exception(f"too short bucket name: {name}")
@@ -149,7 +158,9 @@ def _check_bucket_name(zone, bucket):
     #    # buckets: 3..63, [a-z0-9][-\.a-z0-9][a-z0-9]
     #    #          no .. , not ip-address form
 
-    check_policy(bucket["policy"])  # {"none", "upload", "download", "public"}
+    # {"none", "upload", "download", "public"}
+    check_policy(bucket["bkt_policy"])
+    pass
 
 
 def _check_direct_hostname_flat(host_label):
@@ -159,6 +170,7 @@ def _check_direct_hostname_flat(host_label):
         raise Exception(f"invalid direct hostname: {host_label}: only one level label is allowed")
     _check_rfc1035_label(host_label)
     _check_rfc1122_hostname(host_label)
+    pass
 
 
 def _check_rfc1035_label(label):
@@ -166,7 +178,7 @@ def _check_rfc1035_label(label):
         raise Exception(f"{label}: too long")
     if len(label) < 1:
         raise Exception(f"{label}: too short")
-
+    pass
 
 def _check_rfc1122_hostname(label):
     alnum = string.ascii_lowercase + string.digits
@@ -176,6 +188,7 @@ def _check_rfc1122_hostname(label):
         raise Exception(f"{label}: must start with a letter or a digit")
     if not label[-1] in alnum:
         raise Exception(f"{label}: must end with a letter or a digit")
+    pass
 
 
 def _is_subdomain(host_fqdn, domain):
@@ -204,7 +217,7 @@ def _list_access_keys(pooldesc):
 
 
 def _add_bucket_to_pool(pooldesc, name, policy):
-    v = {"name": name, "policy": policy}
+    v = {"name": name, "bkt_policy": policy}
     buckets = pooldesc.get("buckets")
     one = next((b for b in buckets if b.get("name") == name), None)
     if one is not None:
@@ -220,7 +233,7 @@ def _add_bucket_to_pool(pooldesc, name, policy):
 
 def _drop_non_ui_info_from_keys(access_key):
     # Drops unnecessary info to pass access-key info to Web-UI.
-    # {"use", "owner", "creation_date"}.
+    # {"use", "owner", "modification_date"}.
     needed = {"access_key", "secret_key", "key_policy"}
     return {k: v for (k, v) in access_key.items() if k in needed}
 
@@ -717,8 +730,10 @@ class Pool_Admin():
     def make_bucket(self, traceid, user_id, pool_id, bucket, policy):
         self._check_user_is_authorized(user_id)
         self._check_pool_owner(pool_id, user_id)
-        desc = {"pool": pool_id, "policy": policy}
-        (ok, holder) = self.tables.routing_table.set_bucket(bucket, desc)
+        now = int(time.time())
+        desc = {"pool": pool_id, "bkt_policy": policy,
+                "modification_date": now}
+        (ok, holder) = self.tables.set_bucket(bucket, desc)
         if not ok:
             owner = self._get_pool_owner_for_messages(holder)
             raise Api_Error(403, f"Bucket name taken: owner={owner}")
@@ -1680,9 +1695,11 @@ class Pool_Admin():
             raise Exception(f"update_zone: bucket names are not unique: {bucket_names}")
 
         for bucket in zone.get("buckets", []):
-            if not bucket.get("policy"):
-                bucket["policy"] = "none"
-            # bucket name and policy will be checed in `check_zone_values`
+            if not bucket.get("bkt_policy"):
+                bucket["bkt_policy"] = "none"
+                # bucket name and policy will be checed in `check_zone_values`
+                pass
+            pass
 
         need_uniquify = False
         access_keys = zone.get("access_keys", [])
@@ -1690,6 +1707,7 @@ class Pool_Admin():
             if not accessKey.get("access_key"):  # (unset) or ""
                 accessKey["access_key"] = ""   # temporary value
                 need_uniquify = True   # access_key is updated in uniquify_zone
+                pass
 
             _encrypt_or_generate(accessKey, "secret_key")
 
@@ -1737,6 +1755,7 @@ class Pool_Admin():
         # to make the controller checks minio_address_table and zone.
         ##route = zone_to_route(zone)
         self.tables.routing_table.delete_route(zone_id)
+        pass
 
     def _lock_and_store_zone(self, user_id, zone_id, zone, need_conflict_check, need_uniquify):
         lock = LockDB(self.tables.storage_table, "Adm")
@@ -1797,6 +1816,7 @@ class Pool_Admin():
             if z.get("owner_uid") == user_id:
                 num_zones_of_user += 1
                 pass
+            pass
 
         if reasons != []:
             raise Exception(f"update_zone: conflict with another zone: {reasons}")
@@ -1869,6 +1889,7 @@ class Pool_Admin():
         #      know minio's id that serves for this zone.
         atime = self.tables.storage_table.get_atime(zoneID)
         zone["atime"] = atime
+        pass
 
     def _pullup_ptr(self, zoneID, zone, access_key_ptr, direct_host_ptr):
         ##AHO
@@ -1914,18 +1935,23 @@ class Pool_Admin():
 
             if decrypt:
                 self.decrypt_access_keys(zone)
+                pass
 
             self._pullup_mode(zoneID, zone)
             if include_atime:
                 self._pullup_atime(zoneID, zone)
+                pass
 
             if extra_info:
                 self._pullup_ptr(zoneID, zone, access_key_ptr, direct_host_ptr)
+                pass
 
             if include_userinfo:
                 self._add_info_for_webui(zoneID, zone, groups)
+                pass
 
             zone_list.append(zone)
+            pass
         # logger.debug(f"@@@ {zone_list} {broken_zones}")
         return (zone_list, broken_zones)
 
@@ -1935,3 +1961,5 @@ class Pool_Admin():
                  for h in [self.facade_hostname]] +
                 [template.format(hostname=h)
                  for h in zone.get("direct_hostnames", [])])
+
+    pass

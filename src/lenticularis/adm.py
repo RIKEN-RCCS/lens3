@@ -124,13 +124,13 @@ async def validate_session(request: Request, call_next):
     peer_addr = make_typical_ip_address(str(request.client.host))
     user_id = request.headers.get("X-REMOTE-USER")
     client_addr = request.headers.get("X-REAL-IP")
-    now = time.time()
+    now = int(time.time())
 
     if peer_addr not in api.trusted_proxies:
         logger.error(f"Proxy {peer_addr} is not trusted.")
         content = {"status": "error",
                    "reason": f"Configuration error (check trusted_proxies)",
-                   "time": str(int(now))}
+                   "time": str(now)}
         status_code = status.HTTP_403_FORBIDDEN
         # Access log contains client_addr but peer_addr.
         log_access(f"{status_code}", client_addr, user_id, request.method, request.url)
@@ -138,7 +138,7 @@ async def validate_session(request: Request, call_next):
     if (not api.zone_adm.check_user_is_registered(user_id)):
         logger.info(f"Accessing Adm by a bad user: ({user_id})")
         content = {"status": "error", "reason": f"Bad user: ({user_id})",
-                   "time": str(int(now))}
+                   "time": str(now)}
         status_code = status.HTTP_401_UNAUTHORIZED
         log_access(f"{status_code}", client_addr, user_id, request.method, request.url)
         return JSONResponse(status_code=status_code, content=content)

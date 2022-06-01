@@ -471,7 +471,7 @@ class Mc():
         (p_, r) = self.make_bucket(name)
         assert p_ is None
         assert_mc_success(r, "mc.make_bucket")
-        policy = b["policy"]
+        policy = b["bkt_policy"]
         (p_, r) = self.policy_set(name, policy)
         assert p_ is None
         assert_mc_success(r, "mc.policy_set")
@@ -487,7 +487,7 @@ class Mc():
     def _set_bucket_policy_update(self, x):
         (b, e) = x
         name = b["name"]
-        policy = b["policy"]
+        policy = b["bkt_policy"]
         (p_, r) = self.policy_set(name, policy)
         assert p_ is None
         assert_mc_success(r, "mc.policy_set")

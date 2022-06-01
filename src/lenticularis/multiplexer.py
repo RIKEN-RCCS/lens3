@@ -153,7 +153,7 @@ class Multiplexer():
             logger.debug(f"Updating Mux info periodically, interval={sleeptime}.")
         else:
             pass
-        now = time.time()
+        now = int(time.time())
         mux_desc = {"host": self._mux_host, "port": self._mux_port,
                     "start_time": f"{self.start}",
                     "last_interrupted_time": f"{now}"}
@@ -244,9 +244,9 @@ class Multiplexer():
         if desc is None:
             log_access("404", *access_info)
             raise Api_Error(404, f"Bad URL, no bucket: url={request_url}")
-        # Check the policy in desc["policy"].
+        # Check the policy in desc["bkt_policy"].
         pool_id = desc["pool"]
-        policy = desc["policy"]
+        policy = desc["bkt_policy"]
         if policy != "none":
             return pool_id
         key = self.tables.pickone_table.get_id(access_key)

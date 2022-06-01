@@ -187,7 +187,7 @@ def check_pool_dict_is_sound(pooldesc, user, adm_conf):
     """
 
     for bucket in pooldesc.get("buckets", []):
-        check_policy(bucket["policy"])
+        check_policy(bucket["bkt_policy"])
     check_status(pooldesc["online_status"])
     check_permission(pooldesc["permit_status"])
     for accessKey in pooldesc.get("access_keys", []):
@@ -242,11 +242,11 @@ def _pool_desc_schema(type_number):
         "type": "object",
         "properties": {
             "name": {"type": "string"},
-            "policy": {"type": "string"},
+            "bkt_policy": {"type": "string"},
         },
         "required": [
             "name",
-            "policy",
+            "bkt_policy",
         ],
         "additionalProperties": False,
     }

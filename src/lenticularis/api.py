@@ -102,7 +102,7 @@ class Api():
                 return (403, f"Bad pool-id={pool_id}", [])
             d = body.get("bucket")
             bucket = d.get("name")
-            policy = d.get("policy")
+            policy = d.get("bkt_policy")
             if not check_bucket_naming(bucket):
                 return (403, f"Bad bucket name={bucket}", [])
             if not policy in ["none", "public", "upload", "download"]:

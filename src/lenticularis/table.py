@@ -92,17 +92,6 @@ class Tables():
 
     ## Storage-table:
 
-    def set_bucket(self, bucket, desc):
-        self.storage_table.set_bucket(bucket, desc)
-        pass
-
-    def get_bucket(self, bucket):
-        return self.storage_table.get_bucket(bucket)
-
-    def delete_bucket(self, bucket):
-        self.storage_table.delete_bucket(bucket)
-        pass
-
     def set_ex_buckets_directory(self, path, pool_id):
         return self.storage_table.set_ex_buckets_directory(path, pool_id)
 
@@ -127,6 +116,17 @@ class Tables():
     ## Process-table:
 
     ## Routing-table:
+
+    def set_bucket(self, bucket, desc):
+        self.routing_table.set_bucket(bucket, desc)
+        pass
+
+    def get_bucket(self, bucket):
+        return self.routing_table.get_bucket(bucket)
+
+    def delete_bucket(self, bucket):
+        self.routing_table.delete_bucket(bucket)
+        pass
 
     def set_probe_key__(self, access_key, pool_id):
         self.routing_table.set_probe_key__(access_key, pool_id)
@@ -418,8 +418,8 @@ class Process_Table(Table_Common):
     ## See _register_mux_info for the content of a Mux description.
 
     _minio_desc_keys = {
-        "minio_ep", "minio_pid", "mux_host", "mux_port", "manager_pid",
-        "admin", "password"}
+        "minio_ep", "minio_pid", "admin", "password",
+        "mux_host", "mux_port", "manager_pid", "modification_date"}
 
     _mux_desc_keys = {
         "host", "port", "start_time", "last_interrupted_time"}
@@ -428,15 +428,17 @@ class Process_Table(Table_Common):
         assert set(procdesc.keys()) == self._minio_desc_keys
         key = f"{self._minio_process_prefix}{pool_id}"
         self.set_minio_proc_expiry(pool_id, timeout)
-        self.dbase.hset_map(key, procdesc, self.structured)
+        ##self.dbase.hset_map(key, procdesc, self.structured)
+        self.dbase.set(key, json.dumps(procdesc))
         pass
 
     def get_minio_proc(self, pool_id):
         key = f"{self._minio_process_prefix}{pool_id}"
-        if not self.dbase.hexists(key, "minio_ep"):
-            return None
-        procdesc = self.dbase.hget_map(key, self.structured)
-        return procdesc
+        ##if not self.dbase.hexists(key, "minio_ep"):
+        ##    return None
+        ##procdesc = self.dbase.hget_map(key, self.structured)
+        v = self.dbase.get(key)
+        return json.loads(v, parse_int=None) if v is not None else None
 
     def delete_minio_proc(self, pool_id):
         key = f"{self._minio_process_prefix}{pool_id}"
@@ -518,7 +520,7 @@ def zone_to_route_(zone):
 
 class Routing_Table(Table_Common):
     _minio_ep_prefix = "ep:"
-    _bucket_prefix = "bu:"
+    _bucket_prefix = "bk:"
     _probe_access_prefix__ = "wu:"
     _timestamp_prefix = "ts:"
     _host_style_prefix = "da:"
@@ -526,7 +528,7 @@ class Routing_Table(Table_Common):
     hashes_ = {}
     structured = {}
 
-    _bucket_desc_keys = {"pool", "policy"}
+    _bucket_desc_keys = {"pool", "bkt_policy", "modification_date"}
 
     def set_route(self, pool_id, ep, timeout):
         assert isinstance(ep, str)
@@ -591,14 +593,10 @@ class Routing_Table(Table_Common):
         v = json.dumps(desc)
         ok = self.dbase.r.setnx(key, v) != 0
         if ok:
-            return (ok, None)
+            return (True, None)
+        # Race, returns failure.
         o = self.get_bucket(bucket)
-        if o is None:
-            # (Possible race, ignored, returns failure).
-            return (ok, None)
-        else:
-            return (ok, o.get("pool"))
-        pass
+        return (False, o.get("pool") if o is not None else None)
 
     def get_bucket(self, bucket):
         key = f"{self._bucket_prefix}{bucket}"
@@ -627,7 +625,7 @@ class Routing_Table(Table_Common):
     def list_buckets(self, pool_id):
         kk0 = _scan_table(self.dbase.r, self._bucket_prefix,
                           None, value=self.get_bucket)
-        kk1 = [{"name": name, "policy": d.get("policy")} for (name, d)
+        kk1 = [{"name": name, "bkt_policy": d.get("bkt_policy")} for (name, d)
                in kk0 if d is not None and d.get("pool") == pool_id]
         return kk1
 
@@ -663,7 +661,7 @@ class Pickone_Table(Table_Common):
         assert usage in {"pool", "access_key"}
         assert usage != "access_key" or info != {}
         now = int(time.time())
-        d = {"use": usage, "owner": owner, **info, "creation_date": now}
+        d = {"use": usage, "owner": owner, **info, "modification_date": now}
         desc = json.dumps(d)
         id_generation_loops = 0
         while True:

@@ -8,6 +8,7 @@ import csv
 import inspect
 import io
 import os
+import time
 import json
 #import threading
 import sys
@@ -70,9 +71,10 @@ def read_allow_deny_rules(path):
 
 
 def _read_user_list(path):
-    """Reads a CSV file with rows: "uid", add, "group", "group", ..., to
-    load a user-list.  It adds an entry to the user-list if add="add",
-    or deletes otherwise.
+    """Reads a CSV file with rows: "add"/"delete", "uid", "group",
+    "group", ..., to load a user-list.  It adds an entry to the
+    user-list if add="add", or deletes otherwise.
+
     """
     with open(path, newline="") as f:
         rows = csv.reader(f, delimiter=",", quotechar='"')
@@ -86,20 +88,22 @@ def _read_user_list(path):
     pass
 
 
-def _store_user_list(zone_adm, user_list):
-    existing = zone_adm.tables.list_users()
+def _load_user_list(zone_adm, user_list):
+    now = int(time.time())
     for e in user_list:
         id = e["uid"]
         oldu = zone_adm.tables.get_user(id)
         if e["add"] and oldu is not None:
-            newu = {"uid": e["uid"], "groups": e["groups"],
-                    "permitted": oldu["permitted"]}
+            newu = {"uid": id, "groups": e["groups"],
+                    "permitted": oldu["permitted"],
+                    "modification_date": now}
             zone_adm.tables.set_user(id, newu)
         elif not e["add"] and oldu is not None:
             zone_adm.tables.delete_user(id)
         elif  e["add"] and oldu is None:
-            newu = {"uid": e["uid"], "groups": e["groups"],
-                    "permitted": True}
+            newu = {"uid": id, "groups": e["groups"],
+                    "permitted": True,
+                    "modification_date": now}
             zone_adm.tables.set_user(id, newu)
         else:
             pass
@@ -107,10 +111,10 @@ def _store_user_list(zone_adm, user_list):
     pass
 
 
-def user_info_to_csv_row(ui, id):
-    if ui:
-        return [ui["uid"]] + ui["groups"]
-    return [id]
+def user_info_to_csv_row(id, ui):
+    # "permitted" entry is ignored.
+    assert ui is not None
+    return ["add", id] + ui["groups"]
 
 def format_mux(m, formatting):
     (ep, desc) = m
@@ -118,17 +122,17 @@ def format_mux(m, formatting):
         fix_date_format(desc, ["last_interrupted_time", "start_time"])
     return {ep: desc}
 
-def _store_user_info_add(zone_adm, b):
+def _store_user_info_add__(zone_adm, b):
     # New Entry (no right hand side)
     logger.debug(f"@@@ >> New {b}")
     zone_adm.tables.set_user(b["uid"], b)
 
-def _store_user_info_delete(zone_adm, e):
+def _store_user_info_delete__(zone_adm, e):
     # Deleted Entry (no left hand side)
     logger.debug(f"@@@ >> Delete {e}")
     zone_adm.delete_user(e)
 
-def _store_user_info_update(zone_adm, x):
+def _store_user_info_update__(zone_adm, x):
     # Updated Entry
     (b, e) = x
     logger.debug(f"@@@ >> Update {b} {e}")
@@ -179,7 +183,7 @@ def pool_key_order(e):
         "key_policy",
         "ptr",
         "name",
-        "policy"]
+        "bkt_policy"]
     return order.index(e) if e in order else len(order)
 
 def _mux_key_order(e):
@@ -295,14 +299,14 @@ class Command():
 
     def fn_insert_user_info(self, csvfile):
         user_info = _read_user_list(csvfile)
-        _store_user_list(self.zone_adm, user_info)
+        _load_user_list(self.zone_adm, user_info)
         fixed = self.zone_adm.fix_affected_zone(self.traceid)
         pass
 
     def fn_show_user_info(self):
-        unix_users = self.zone_adm.tables.list_users()
-        uu = [user_info_to_csv_row(self.zone_adm.tables.get_user(id), id)
-              for id in unix_users]
+        users = self.zone_adm.tables.list_users()
+        uu = [user_info_to_csv_row(id, self.zone_adm.tables.get_user(id))
+              for id in users]
         print_json_csv("user info", uu, self.args.format)
 
     def fn_insert_zone(self, zone_id, jsonfile):
@@ -378,7 +382,7 @@ class Command():
         user_info = j["users"]
         zone_list = j["zones"]
         self.zone_adm.store_allow_deny_rules(rules)
-        _store_user_list(self.zone_adm, user_info)
+        _load_user_list(self.zone_adm, user_info)
         (existing, _) = self.zone_adm.fetch_zone_list(None)
         (ll, pp, rr) = list_diff3(zone_list, lambda b: b.get("pool_name"),
                                   existing, lambda e: e.get("pool_name"))

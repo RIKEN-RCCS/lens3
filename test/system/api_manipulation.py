@@ -33,7 +33,7 @@ def mangle_zone(zone):
     zone.pop("mode")
     zone.pop("zoneID")
     zone.pop("endpoint_url")
-    zone.pop("delegateHostnames")
+    zone.pop("facadeHostname")
     return zone
 
 

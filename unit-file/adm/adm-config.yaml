@@ -1,0 +1,48 @@
+redis:
+    host: localhost
+    port: 6378
+    password: ZXjmrOLwQ8Ri51pb5FI79z51gAHfIQ4oMvtWrG8q
+
+gunicorn:
+    port: 8003
+    workers: 2
+    timeout: 120
+    access_logfile: "/var/tmp/lenticularis/lens3-gunicorn-adm-access-log"
+    log_file: "/var/tmp/lenticularis/lens3-gunicorn-adm-log"
+    log_level: debug
+    #log_syslog_facility: LOCAL8
+    reload: yes
+
+aws_signature: "AWS4-HMAC-SHA256"
+
+multiplexer:
+    facade_hostname: fgkvm-010-128-008-026.fdcs.r-ccs.riken.jp
+
+controller:
+    max_lock_duration: 60
+
+system_settings:
+    max_zone_per_user: 3
+    max_direct_hostnames_per_user: 2
+    default_zone_lifetime: 630720000
+    allowed_maximum_zone_exp_date: 2279404800
+    endpoint_url: https://{hostname}/
+    direct_hostname_validator: flat
+    direct_hostname_domain: fgkvm-010-128-008-026.fdcs.r-ccs.riken.jp
+    reserved_hostnames:
+        - bad.lens3.fdcs.r-ccs.riken.jp
+    probe_access_timeout: 60
+
+webui:
+    trusted_proxies:
+        - localhost
+    CSRF_secret_key: xyzzy
+
+minio:
+    minio: /home/lens3/bin/minio
+    mc: /home/lens3/bin/mc
+
+log_file: "/var/tmp/lenticularis/lens3-adm-log"
+log_syslog:
+    facility: LOCAL7
+    priority: DEBUG

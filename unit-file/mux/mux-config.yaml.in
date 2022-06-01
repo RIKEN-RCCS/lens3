@@ -1,0 +1,44 @@
+gunicorn:
+    bind: "[::]:8000"
+    workers: 2
+    threads: 40
+    timeout: 60
+    log_syslog_facility: LOCAL7
+    reload: yes
+
+redis:
+    host: @REDIS_HOST@
+    port: @REDIS_PORT@
+    password: @REDIS_PASSWORD@
+
+multiplexer:
+    port: @SERVER_PORT@
+    facade_hostname: @FACADE_HOSTNAME@
+    trusted_proxies:
+        - @REVERSE_PROXY_ADDRESS@
+        - @API_ADDRESS@
+    timer_interval: 30
+    request_timeout: 60
+
+controller:
+    port_min: @PORT_MIN@
+    port_max: @PORT_MAX@
+    watch_interval: 30
+    keepalive_limit: 600
+    heartbeat_miss_tolerance: 3
+    max_lock_duration: 60
+    mc_info_timelimit: 20
+    mc_stop_timelimit: 20
+    kill_supervisor_wait: 60
+    minio_user_install_timelimit: 60
+    refresh_margin: 5
+    sudo: /usr/bin/sudo
+
+minio:
+    minio: @MINIO@
+    minio_http_trace: @MINIO_HTTP_TRACE@
+    mc: @MC@
+
+syslog:
+    facility: @FACILITY@
+    priority: @PRIORITY@

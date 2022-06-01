@@ -1,36 +1,35 @@
-# Copyright (c) 2022 RIKEN R-CCS.
+"""A config file reader."""
+
+# Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
-from jsonschema import validate
+import jsonschema
 import os
 import yaml
 
-default_mux_conf = "/etc/lenticularis/mux-config.yaml"
+##default_mux_conf = "/etc/lenticularis/mux-config.yaml"
 mux_conf_envname = "LENTICULARIS_MUX_CONFIG"
 
-
-default_adm_conf = "/etc/lenticularis/adm-config.yaml"
+##default_adm_conf = "/etc/lenticularis/adm-config.yaml"
 adm_conf_envname = "LENTICULARIS_ADM_CONFIG"
-
 
 node_envname = "LENTICULARIS_MUX_NODE"
 
 
 def read_mux_conf(configfile=None):
     return readconf(configfile, fix_mux_conf, validate_mux_conf,
-                    mux_conf_envname, default_mux_conf)
+                    mux_conf_envname)
 
 
 def read_adm_conf(configfile=None):
     return readconf(configfile, fix_adm_conf, validate_adm_conf,
-                    adm_conf_envname, default_adm_conf)
+                    adm_conf_envname)
 
 
-def readconf(configfile, fix, vali, envname, default_conf):
+def readconf(configfile, fixfn, valfn, envname):
     if configfile is None:
         configfile = os.environ.get(envname)
-    if configfile is None:
-        configfile = default_conf
+    assert configfile is not None
 
     try:
         with open(configfile, "r") as f:
@@ -40,45 +39,39 @@ def readconf(configfile, fix, vali, envname, default_conf):
     except Exception as e:
         raise Exception(f"cannot read {configfile} {e}")
 
-    conf = fix(conf)
-    vali(conf)
+    conf = fixfn(conf)
+    valfn(conf)
 
     return (conf, configfile)
 
 
-def gunicorn_schema(type_number):
+def gunicorn_schema(number_type):
     return {
         "type": "object",
         "properties": {
-            "bind": {"type": "string"},
-            "workers": type_number,
-            "threads": type_number,
-            "timeout": type_number,
+            "port": {"type": "string"},
+            "workers": number_type,
+            "threads": number_type,
+            "timeout": number_type,
+            "access_logfile": {"type": "string"},
             "log_file": {"type": "string"},
             "log_level": {"type": "string"},
             "log_syslog_facility": {"type": "string"},
             "reload": {"type": "string"},
         },
         "required": [
-            "bind",
-            # OPTIONAL "workers",
-            # OPTIONAL "threads",
-            # OPTIONAL "timeout",
-            # OPTIONAL "log_file",
-            # OPTIONAL "log_level",
-            # OPTIONAL "log_syslog_facility",
-            # OPTIONAL "reload",
+            "port",
         ],
         "additionalProperties": False,
     }
 
 
-def redis_schema(type_number):
+def redis_schema(number_type):
     return {
         "type": "object",
         "properties": {
             "host": {"type": "string"},
-            "port": type_number,
+            "port": number_type,
             "password": {"type": "string"},
         },
         "required": [
@@ -105,23 +98,25 @@ def syslog_schema():
     }
 
 
-def mux_schema(type_number):
+def mux_schema(number_type):
 
     multiplexer = {
         "type": "object",
         "properties": {
-            "port": type_number,
-            "delegate_hostnames": {"type": "array", "items": {"type": "string"}},
-            "trusted_hosts": {"type": "array", "items": {"type": "string"}},
-            "timer_interval": type_number,
-            "request_timeout": type_number,
+            #"port": number_type,
+            #"facade_hostnames": {"type": "array", "items": {"type": "string"}},
+            "facade_hostname": {"type": "string"},
+            "trusted_proxies": {"type": "array", "items": {"type": "string"}},
+            "timer_interval": number_type,
+            "request_timeout": number_type,
+            "probe_access_timeout": number_type,
         },
         "required": [
-            "port",
-            "delegate_hostnames",
-            "trusted_hosts",
+            "facade_hostname",
+            "trusted_proxies",
             "timer_interval",
             "request_timeout",
+            "probe_access_timeout",
         ],
         "additionalProperties": False,
     }
@@ -129,17 +124,18 @@ def mux_schema(type_number):
     controller = {
         "type": "object",
         "properties": {
-            "port_min": type_number,
-            "port_max": type_number,
-            "watch_interval": type_number,
-            "keepalive_limit": type_number,
-            "allowed_down_count": type_number,
-            "max_lock_duration": type_number,
-            "mc_info_timelimit": type_number,
-            "mc_stop_timelimit": type_number,
-            "kill_supervisor_wait": type_number,
-            "minio_user_install_timelimit": type_number,
-            "refresh_margin": type_number,
+            "port_min": number_type,
+            "port_max": number_type,
+            "watch_interval": number_type,
+            "keepalive_limit": number_type,
+            "heartbeat_miss_tolerance": number_type,
+            "minio_startup_timeout": number_type,
+            "max_lock_duration": number_type,
+            "mc_info_timelimit": number_type,
+            "mc_stop_timelimit": number_type,
+            "kill_supervisor_wait": number_type,
+            "minio_user_install_timelimit": number_type,
+            "refresh_margin": number_type,
             "sudo": {"type": "string"},
         },
         "required": [
@@ -147,7 +143,8 @@ def mux_schema(type_number):
             "port_max",
             "watch_interval",
             "keepalive_limit",
-            "allowed_down_count",
+            "heartbeat_miss_tolerance",
+            "minio_startup_timeout",
             "max_lock_duration",
             "mc_info_timelimit",
             "mc_stop_timelimit",
@@ -163,30 +160,11 @@ def mux_schema(type_number):
         "type": "object",
         "properties": {
             "minio": {"type": "string"},
-            "minio_http_trace": {"type": "string"},
             "mc": {"type": "string"},
         },
         "required": [
             "minio",
-            # OPTIONAL "minio_http_trace",
             "mc",
-        ],
-        "additionalProperties": False,
-    }
-
-    lenticularis = {
-        "type": "object",
-        "properties": {
-            "multiplexer": multiplexer,
-            "controller": controller,
-            "minio": minio,
-            "syslog": syslog_schema(),
-        },
-        "required": [
-            "multiplexer",
-            "controller",
-            "minio",
-            "syslog",
         ],
         "additionalProperties": False,
     }
@@ -194,28 +172,37 @@ def mux_schema(type_number):
     return {
         "type": "object",
         "properties": {
-            "gunicorn": gunicorn_schema(type_number),
-            "redis": redis_schema(type_number),
-            "lenticularis": lenticularis,
+            "redis": redis_schema(number_type),
+            "gunicorn": gunicorn_schema(number_type),
+            "aws_signature": {"type": "string"},
+            "multiplexer": multiplexer,
+            "controller": controller,
+            "minio": minio,
+            "log_file": {"type": "string"},
+            "log_syslog": syslog_schema(),
         },
         "required": [
-            "gunicorn",
             "redis",
-            "lenticularis",
+            "gunicorn",
+            "multiplexer",
+            "controller",
+            "minio",
+            "log_syslog",
         ],
         "additionalProperties": False,
     }
 
 
-def adm_schema(type_number):
+def adm_schema(number_type):
 
     multiplexer = {
         "type": "object",
         "properties": {
-            "delegate_hostnames": {"type": "array", "items": {"type": "string"}},
+            #"facade_hostnames": {"type": "array", "items": {"type": "string"}},
+            "facade_hostname": {"type": "string"},
         },
         "required": [
-            "delegate_hostnames",
+            "facade_hostname",
         ],
         "additionalProperties": False,
     }
@@ -223,7 +210,7 @@ def adm_schema(type_number):
     controller = {
         "type": "object",
         "properties": {
-            "max_lock_duration": type_number,
+            "max_lock_duration": number_type,
         },
         "required": [
             "max_lock_duration",
@@ -234,15 +221,15 @@ def adm_schema(type_number):
     system_settings = {
         "type": "object",
         "properties": {
-            "max_zone_per_user": type_number,
-            "max_direct_hostnames_per_user": type_number,
-            "default_zone_lifetime": type_number,
-            "allowed_maximum_zone_exp_date": type_number,
+            "max_zone_per_user": number_type,
+            "max_direct_hostnames_per_user": number_type,
+            "default_zone_lifetime": number_type,
+            "allowed_maximum_zone_exp_date": number_type,
             "endpoint_url": {"type": "string"},
             "direct_hostname_validator": {"type": "string"},  # choice = ["flat"]
             "direct_hostname_domains": {"type": "array", "items": {"type": "string"}},
             "reserved_hostnames": {"type": "array", "items": {"type": "string"}},
-            "decoy_connection_timeout": type_number,
+            "probe_access_timeout": number_type,
         },
         "required": [
             "max_zone_per_user",
@@ -253,24 +240,7 @@ def adm_schema(type_number):
             "direct_hostname_validator",
             "direct_hostname_domains",
             "reserved_hostnames",
-            "decoy_connection_timeout",
-        ],
-        "additionalProperties": False,
-    }
-
-    lenticularis = {
-        "type": "object",
-        "properties": {
-            "multiplexer": multiplexer,
-            "controller": controller,
-            "system_settings": system_settings,
-            "syslog": syslog_schema(),
-        },
-        "required": [
-            "multiplexer",
-            "controller",
-            "system_settings",
-            "syslog",
+            "probe_access_timeout",
         ],
         "additionalProperties": False,
     }
@@ -278,12 +248,25 @@ def adm_schema(type_number):
     webui = {
         "type": "object",
         "properties": {
-            "trusted_hosts": {"type": "array", "items": {"type": "string"}},
+            "trusted_proxies": {"type": "array", "items": {"type": "string"}},
             "CSRF_secret_key": {"type": "string"},
         },
         "required": [
-            "trusted_hosts",
+            "trusted_proxies",
             "CSRF_secret_key",
+        ],
+        "additionalProperties": False,
+    }
+
+    minio = {
+        "type": "object",
+        "properties": {
+            "minio": {"type": "string"},
+            "mc": {"type": "string"},
+        },
+        "required": [
+            "minio",
+            "mc",
         ],
         "additionalProperties": False,
     }
@@ -291,28 +274,38 @@ def adm_schema(type_number):
     return {
         "type": "object",
         "properties": {
-            "gunicorn": gunicorn_schema(type_number),
-            "redis": redis_schema(type_number),
-            "lenticularis": lenticularis,
+            "gunicorn": gunicorn_schema(number_type),
+            "redis": redis_schema(number_type),
+            "aws_signature": {"type": "string"},
+            "multiplexer": multiplexer,
+            "controller": controller,
+            "system_settings": system_settings,
             "webui": webui,
+            "minio": minio,
+            "log_file": {"type": "string"},
+            "log_syslog": syslog_schema(),
         },
         "required": [
             "gunicorn",
             "redis",
-            "lenticularis",
+            "multiplexer",
+            "controller",
+            "system_settings",
             "webui",
+            "minio",
+            "log_syslog",
         ],
         "additionalProperties": False,
     }
 
 
 def validate_mux_conf(conf):
-    validate(instance=conf, schema=mux_schema({"type": "string"}))
+    jsonschema.validate(instance=conf, schema=mux_schema({"type": "string"}))
     check_type_number(conf, mux_schema({"type": "number"}))
 
 
 def validate_adm_conf(conf):
-    validate(instance=conf, schema=adm_schema({"type": "string"}))
+    jsonschema.validate(instance=conf, schema=adm_schema({"type": "string"}))
     check_type_number(conf, adm_schema({"type": "number"}))
 
 
@@ -341,19 +334,19 @@ def check_type_number(conf, schema):
 
 
 def fix_adm_conf(conf):
-    multiplexer_param = conf["lenticularis"]["multiplexer"]
-    merge_single_key_into_list_key(multiplexer_param, "delegate_hostname",
-                                 "delegate_hostnames")
-    system_settings_param = conf["lenticularis"]["system_settings"]
+    multiplexer_param = conf["multiplexer"]
+    #merge_single_key_into_list_key(multiplexer_param, "facade_hostname",
+    #                               "facade_hostnames")
+    system_settings_param = conf["system_settings"]
     merge_single_key_into_list_key(system_settings_param, "direct_hostname_domain",
                                  "direct_hostname_domains")
     return conf
 
 
 def fix_mux_conf(conf):
-    multiplexer_param = conf["lenticularis"]["multiplexer"]
-    merge_single_key_into_list_key(multiplexer_param, "delegate_hostname",
-                                 "delegate_hostnames")
+    multiplexer_param = conf["multiplexer"]
+    #merge_single_key_into_list_key(multiplexer_param, "facade_hostname",
+    #                               "facade_hostnames")
     return conf
 
 

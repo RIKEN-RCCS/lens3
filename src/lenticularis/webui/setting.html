@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta name="generator" content="HTML Tidy for HTML5 for Linux version 5.2.0" />
+    <meta charset="utf-8" />
+    <style type="text/css">.label {
+    width: 520px !important;
+    display: inline-block;
+  }
+  </style>
+    <title>Manage Pools</title>
+  </head>
+  <body>
+    <div id="make_new_pool_button">
+      <button v-on:click="kick_add_new_pool">New bucket pool</button>
+    </div>
+    <div id="show_pool_list_button">
+      <button v-on:click="kick_show_pool_list">Show bucket pools</button>
+    </div>
+
+    <div id="pool_section" v-if="pool_name_visible">
+      <hr />
+      <div>
+        <span class="label">POOL</span>
+      </div>
+      <div>
+        <span class="label">User:</span>
+        <input v-model="user" size="64" disabled />
+      </div>
+      <div v-if="!make_pool_mode">
+        <span class="label">Group:</span>
+        <input v-model="group" size="64" disabled />
+      </div>
+      <div v-if="make_pool_mode">
+        <span class="label">Group:</span>
+        <select v-model="group" required="true">
+          <option v-for="(g, i) in group_choices" v-bind:selected="i == 0">
+            {{ g }}
+          </option>
+         </select>
+      </div>
+      <div>
+        <span class="label">Buckets directory (absolute path):</span>
+        <input v-model="buckets_directory" size="64" :disabled="!make_pool_mode" /></div>
+      <div v-if="make_pool_mode">
+        <button v-on:click="kick_make_pool">Create</button>
+      </div>
+    </div>
+
+    <div id="buckets_section" v-if="edit_pool_visible">
+      <hr />
+      <div>
+        <span class="label">BUCKETS</span>
+      </div>
+      <div>
+        <span class="label">New bucket</span>
+        <div>
+          <span class="label">Bucket name:</span>
+          <input v-model="bucket_name" size="64" placeholder="bucket name" />
+          <span class="label">Bucket policy for public access:</span>
+          <select v-model="bucket_policy" v-bind:required="true">
+            <option selected>none</option>
+            <option>public</option>
+            <option>upload</option>
+            <option>download</option>
+          </select>
+        </div>
+        <div>
+          <button v-on:click="kick_make_bucket">Add</button>
+        </div>
+      </div>
+
+      <div>
+        <span class="label">Buckets and policies</span>
+        <div v-for="b in list_of_buckets">
+          <input v-model="b.name" size="64" disabled />
+          <input v-model="b.bkt_policy" size="64" disabled />
+          <button v-on:click="kick_delete_bucket(b.name)">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="keys_section" v-if="edit_pool_visible">
+      <hr />
+      <div>
+        <span class="label">ACCESS KEYS</span>
+      </div>
+      <div>
+        <span class="label">Access keys (rw)</span>
+        <button v-on:click="kick_make_key('readwrite')">New</button>
+      </div>
+      <div v-for="k in access_keys_rw">
+        <input v-model="k.access_key" size="64" disabled />
+        <input v-model="k.secret_key" size="64" disabled />
+        <button v-on:click="kick_delete_key(k.access_key)">Delete</button>
+      </div>
+      <div>
+        <span class="label">Access keys (ro)</span>
+        <button v-on:click="kick_make_key('readonly')">New</button>
+      </div>
+      <div v-for="k in access_keys_ro">
+        <input v-model="k.access_key" size="64" disabled />
+        <input v-model="k.secret_key" size="64" disabled />
+        <button v-on:click="kick_delete_key(k.access_key)">Delete</button>
+      </div>
+      <div>
+        <span class="label">Access keys (wo)</span>
+        <button v-on:click="kick_make_key('writeonly')">New</button>
+      </div>
+      <div v-for="k in access_keys_wo">
+        <input v-model="k.access_key" size="64" disabled />
+        <input v-model="k.secret_key" size="64" disabled />
+        <button v-on:click="kick_delete_key(k.access_key)">Delete</button>
+      </div>
+    </div>
+
+    <div id="pool_list_section" v-if="pool_data_visible">
+      <div v-for="(_, p) in pool_li_list.length">
+        <hr />
+        <input v-on:click="kick_edit_pool(p)" type="button" class="button" value="Edit" />
+        <input v-on:click="kick_delete_pool(p)" type="button" class="button" value="Delete" />
+        <ul style="list-style: none;">
+          <li v-for="item in pool_li_list[p]">
+            <span class="label"> {{ item.text.label }}: </span>
+            {{ item.text.value }}
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div>
+      <hr />
+      <div>
+        <span class="label">STATUS</span>
+      </div>
+      <div id="show_status">
+        <div>{{message}}</div>
+        <div>{{status}}</div>
+        <div>{{reason}}</div>
+        <div>{{time}}</div>
+        <button v-on:click="kick_debug">Debug</button> (dump internal
+        data on javascript console)
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+    <script src="scripts/lens3ui.js"></script>
+  </body>
+</html>

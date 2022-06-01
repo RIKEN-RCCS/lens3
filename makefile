@@ -1,10 +1,19 @@
-all: archive
+## makefile
+
+all::
+	@echo "USAGE: make install"
 
 install::
-	pip3 -qq install -r requirements.txt --user
+	pip3 install --user -r requirements.txt
 
-ARCHIVE=/tmp/archive-$$(date +%Y%m%d).zip
-FORMAT=zip
+pycodestyle::
+	cd src/lenticularis ; make pycodestyle
 
-archive::
-	git archive HEAD --format=$(FORMAT) -o $(ARCHIVE)
+pylint::
+	cd src/lenticularis ; make pylint
+
+pyright::
+	cd src/lenticularis ; make pyright
+
+typestubs::
+	(cd src ; pyright --createstub lenticularis.table)

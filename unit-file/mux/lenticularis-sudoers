@@ -1,0 +1,2 @@
+Defaults env_keep += "MINIO_ROOT_USER MINIO_ROOT_PASSWORD MINIO_BROWSER"
+lens3	ALL=(ALL, !root)	NOPASSWD: /home/lens3/bin/minio

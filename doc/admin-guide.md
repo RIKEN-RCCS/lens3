@@ -486,3 +486,8 @@ distribute accesses to Muxes.  In contrast, Adm service is single.  In
 multiple Muxes setting, firewall settings shall be fixed.  The port
 range of communication for both Muxes and MinIO's on hosts must be
 open to Adm, since Adm accesses both Muxes and MinIO's.
+
+### RANDOM MEMO
+
+__Increasing Logging verbosity__: Some classes has a `self._verbose`
+variable.  Setting it true makes debug logging more verbose.

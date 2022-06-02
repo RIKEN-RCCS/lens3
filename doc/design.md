@@ -1704,9 +1704,10 @@ Note that a bucket-pool has another state `status`, but it is always
   * "online"
   * "offline"
 
-## Redis database keys (prefixes)
+## Redis Database Keys (prefixes)
 
-Notes: Entries with "(*)" are set atomically (by "setnx").
+Note: Entries with "(\*)" are set atomically (by "setnx"), and entries
+with "(\*\*)" are with expiry, in the tables below.
 
 #### storage-table
 
@@ -1715,46 +1716,46 @@ Notes: Entries with "(*)" are set atomically (by "setnx").
 | po:pool-id    | pool-description |(htable)|
 | ps:pool-id    | pool-state    |(json)|
 | uu:user       | user-info     |(json)|
-| bd:directory  | pool-id       | A bucket-directory (*) |
-| ac:pool-id    | timestamp     |       |
-| (ar:access-key) | pool-id     |       |
-| (pr::)        | permit-list   |(json)|
-| (dr:host)     | pool-id       |       |
-| lk:           | -             |(for locking the whole table)|
-| lk:pool-id    | -             |(for locking a ru:pool-id)|
+| bd:directory  | pool-id       | A bucket-directory (\*) |
 
-"user-info" is a record of {"groups", "permitted",
-"modification_date"} where "groups" is a string list and "permitted"
-is a boolean.
+A pool-description is a record: {}.
 
-The "permit-list" is a list of permits of users.  An entry is a tuple
-of (action, user-id), where an action is "allow" or "deny".
+A user-info is a record: {"groups", "permitted", "modification_date"}
+where "groups" is a string list and "permitted" is a boolean.
 
 #### process-table
 
 | Key           | Value         | Description   |
 | ----          | ----          | ----          |
+| ma:pool-id    | MinIO-manager |(json) (\*,\*\*)|
 | mn:pool-id    | MinIO-description |(json)|
-| mx:Mux-endpoint | Mux-description |(htable)|
-| lk:??         | -> (lock?)
+| mx:mux-endpoint | Mux-description |(htable)|
 
-A MinIO-description is a MinIO process and a record of: {"minio_ep",
-"minio_pid", "admin", "password", "mux_host", "mux_port",
-"manager_pid", "modification_date"}.
+An __ma:pool-id__ entry is used as a mutex.  A MinIO-manager records a
+Mux under which a MinIO process runs: {"mux_host", "mux_port",
+"manager_pid", "modification_date"}.  An __ma:pool-id__ entry protects
+accesses to __mn:pool-id__ and __ep:pool-id__.
+
+A MinIO-description records a record of: {"minio_ep", "minio_pid",
+"admin", "password", "mux_host", "mux_port", "manager_pid",
+"modification_date"}.
 
 A Mux-description is a htable record: {"host", "port", "start_time",
 "last_interrupted_time"}, where a host+port is an endpoint of a Mux.
-start-time ...  last-interrupted-time? ...
+start-time ...  last-interrupted-time ...  This has no particular use.
 
 #### routing-table
 
 | Key           | Value         | Description   |
 | ----          | ----          | ----          |
 | ep:pool-id    | MinIO-endpoint | |
-| bk:bucket-name | pool-id + b-policy | A mapping by a bucket-name (*) |
+| bk:bucket-name | bucket-description | A mapping by a bucket-name (\*) |
 | ts:pool-id    | timestamp     | Timestamp on the last access |
 
-"pool-id + b-policy" is a record of {"pool", "bkt_policy",
+A MinIO-endpoint is an endpoint (a host+port string).  It is with
+expiry set and periodically refreshed.
+
+A bucket-description is a record of {"pool", "bkt_policy",
 "modification_date"}.  A bkt-policy indicates public R/W status of a
 bucket: {"none", "upload", "download", "public"}, which are borrowed
 from MinIO.
@@ -1790,11 +1791,12 @@ accessible using access-keys.
 
 ### Redis Database Operations
 
-* inserting a pool
-  * lock db -> insert pool -> unlock
-* deleting a pool
-  * lock pool -> lock db -> move to deleling-state
-    -> stop minio -> delete pool -> unlock -> unlock
+A single Redis instance is used, and not distributed.
+
+Usually, it is required an uniqueness guarantee, such as for an
+access-keys and ID's for pools, and atomic set is suffice.  A failure
+is concidered only for MinIO endpoints, and timeouts are set for
+"ma:pool-id" entries.  See the section Redis Database Keys.
 
 Redis client routines catches socket related exceptions (including
 ConnectionError and TimeoutError).  Others are not checked at all by

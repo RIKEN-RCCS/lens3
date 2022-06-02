@@ -27,9 +27,9 @@ class Controller():
         self.executable = sys.executable
         ##self.scheduler = Scheduler(tables)
         ##lenticularis_conf = mux_conf["lenticularis"]
-        controller_param = mux_conf["controller"]
-        self.port_min = controller_param["port_min"]
-        self.port_max = controller_param["port_max"]
+        ctl_param = mux_conf["controller"]
+        self.port_min = ctl_param["port_min"]
+        self.port_max = ctl_param["port_max"]
         pass
 
     def start_service(self, traceid, pool_id, probe_key):

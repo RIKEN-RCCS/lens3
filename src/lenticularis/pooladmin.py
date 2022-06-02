@@ -243,11 +243,11 @@ class Pool_Admin():
     def __init__(self, adm_conf):
         self.adm_conf = adm_conf
 
-        controller_param = adm_conf["controller"]
-        self.timeout = int(controller_param["max_lock_duration"])
+        ctl_param = adm_conf["controller"]
+        self.timeout = int(ctl_param["max_lock_duration"])
 
-        multiplexer_param = adm_conf["multiplexer"]
-        self.facade_hostname = multiplexer_param["facade_hostname"]
+        mux_param = adm_conf["multiplexer"]
+        self.facade_hostname = mux_param["facade_hostname"]
 
         system_settings_param = adm_conf["system_settings"]
         self.system_settings_param = system_settings_param

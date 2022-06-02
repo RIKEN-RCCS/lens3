@@ -121,6 +121,30 @@ class Tables():
 
     ## Process-table:
 
+    def set_ex_minio_manager(self, pool_id, desc):
+        return self.process_table.set_ex_minio_manager(pool_id, desc)
+
+    def set_minio_manager_expiry(self, pool_id, timeout):
+        return self.process_table.set_minio_manager_expiry(pool_id, timeout)
+
+    def get_minio_manager(self, pool_id):
+        return self.process_table.get_minio_manager(pool_id)
+
+    def delete_minio_manager(self, pool_id):
+        self.process_table.delete_minio_manager(pool_id)
+        pass
+
+    def set_minio_proc(self, pool_id, procdesc, timeout):
+        self.process_table.set_minio_proc(pool_id, procdesc, timeout)
+        pass
+
+    def get_minio_proc(self, pool_id):
+        return self.process_table.get_minio_proc(pool_id)
+
+    def delete_minio_proc(self, pool_id):
+        self.process_table.delete_minio_proc(pool_id)
+        pass
+
     ## Routing-table:
 
     def set_ex_bucket(self, bucket, desc):
@@ -136,8 +160,8 @@ class Tables():
     def list_buckets(self, pool_id):
         return self.routing_table.list_buckets(pool_id)
 
-    def set_route(self, pool_id, ep, timeout):
-        self.routing_table.set_route(pool_id, ep, timeout)
+    def set_route(self, pool_id, ep):
+        self.routing_table.set_route(pool_id, ep)
         pass
 
     def get_route(self, pool_id):
@@ -430,6 +454,7 @@ class Storage_Table(Table_Common):
 
 
 class Process_Table(Table_Common):
+    _minio_manager_prefix = "ma:"
     _minio_process_prefix = "mn:"
     _mux_desc_prefix = "mx:"
     process_table_lock_prefix = "lk:"
@@ -439,12 +464,40 @@ class Process_Table(Table_Common):
     ## See _record_minio_process for the content of a MinIO process.
     ## See _register_mux_info for the content of a Mux description.
 
+    _minio_manager_desc_keys = {
+        "mux_host", "mux_port", "manager_pid", "modification_date"}
+
     _minio_desc_keys = {
         "minio_ep", "minio_pid", "admin", "password",
         "mux_host", "mux_port", "manager_pid", "modification_date"}
 
     _mux_desc_keys = {
         "host", "port", "start_time", "last_interrupted_time"}
+
+    def set_ex_minio_manager(self, pool_id, desc):
+        assert set(desc.keys()) == self._minio_manager_desc_keys
+        key = f"{self._minio_manager_prefix}{pool_id}"
+        v = json.dumps(desc)
+        ok = self.dbase.r.setnx(key, v) != 0
+        if ok:
+            return (True, None)
+        # Race, returns failure.
+        o = self.get_minio_manager(pool_id)
+        return (False, o.get("pool") if o is not None else None)
+
+    def set_minio_manager_expiry(self, pool_id, timeout):
+        key = f"{self._minio_manager_prefix}{pool_id}"
+        return self.dbase.r.expire(key, timeout) != 0
+
+    def get_minio_manager(self, pool_id):
+        key = f"{self._minio_manager_prefix}{pool_id}"
+        v = self.dbase.get(key)
+        return json.loads(v, parse_int=None) if v is not None else None
+
+    def delete_minio_manager(self, pool_id):
+        key = f"{self._minio_manager_prefix}{pool_id}"
+        self.dbase.delete(key)
+        pass
 
     def set_minio_proc(self, pool_id, procdesc, timeout):
         assert set(procdesc.keys()) == self._minio_desc_keys
@@ -552,11 +605,10 @@ class Routing_Table(Table_Common):
 
     _bucket_desc_keys = {"pool", "bkt_policy", "modification_date"}
 
-    def set_route(self, pool_id, ep, timeout):
+    def set_route(self, pool_id, ep):
         assert isinstance(ep, str)
         key = f"{self._minio_ep_prefix}{pool_id}"
         self.dbase.set(key, ep)
-        ##self.dbase.r.expire(key, timeout)
         pass
 
     def get_route(self, pool_id):

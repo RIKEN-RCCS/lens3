@@ -251,3 +251,12 @@ directory.
 Lens3 prohibits accesses to the "/" of the bucket namespace, because
 the bucket namespace is shared by multiple users (and MinIO
 processes).
+
+## Glossary
+
+* __Pool__: A management unit of S3 buckets.  It corresponds to a
+  single MinIO instance.
+
+## Changes from v1.1
+
+* A support for bucket host-style naming is dropped.

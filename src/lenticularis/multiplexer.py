@@ -137,7 +137,7 @@ class Multiplexer():
     def periodic_work(self):
         interval = self.periodic_work_interval
         logger.debug(f"Mux periodic_work started: interval={interval}.")
-        assert interval >= 10
+        assert self.periodic_work_interval >= 10
         time.sleep(random.random() * interval)
         while True:
             try:
@@ -409,7 +409,7 @@ class Multiplexer():
             atime_timeout = initial_idle_duration + self.refresh_margin
             ##atime = f"{int(time.time())}"
             ##self.tables.routing_table.set_atime_by_addr_(dest_addr, atime, atime_timeout)
-            self.tables.routing_table.set_route_expiry(pool_id, atime_timeout)
+            ##self.tables.routing_table.set_route_expiry(pool_id, atime_timeout)
         else:
             pass
 

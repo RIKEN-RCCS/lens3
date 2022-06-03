@@ -89,22 +89,21 @@ class Multiplexer():
         ##gunicorn_conf = mux_conf["gunicorn"]
         ##lenticularis_conf = mux_conf["lenticularis"]
 
-        multiplexer_conf = mux_conf["multiplexer"]
-        self._facade_hostname = multiplexer_conf["facade_hostname"].lower()
-        proxies = multiplexer_conf["trusted_proxies"]
+        mux_param = mux_conf["multiplexer"]
+        self._facade_hostname = mux_param["facade_hostname"].lower()
+        proxies = mux_param["trusted_proxies"]
         self._trusted_proxies = {addr for h in proxies
                                  for addr in get_ip_addresses(h)}
-        self.request_timeout = int(multiplexer_conf["request_timeout"])
-        timer = int(multiplexer_conf["timer_interval"])
+        self._forwarding_timeout = int(mux_param["forwarding_timeout"])
+        timer = int(mux_param["mux_endpoint_update"])
         self.periodic_work_interval = timer
-        self.probe_access_timeout = int(multiplexer_conf["probe_access_timeout"])
+        self.probe_access_timeout = int(mux_param["probe_access_timeout"])
 
         self._multiplexer_addrs = self._list_mux_ip_addresses()
 
-        controller_conf = mux_conf["controller"]
-        self.watch_interval = int(controller_conf["watch_interval"])
-        self.mc_info_timelimit = int(controller_conf["mc_info_timelimit"])
-        self.refresh_margin = int(controller_conf["refresh_margin"])
+        ctl_param = mux_conf["controller"]
+        self.watch_interval = int(ctl_param["watch_interval"])
+        self.heartbeat_timeout = int(ctl_param["heartbeat_timeout"])
         self.scheduler = Scheduler(tables)
         return
 
@@ -121,7 +120,7 @@ class Multiplexer():
             logger.error(f"Unhandled exception in MUX(port={port}) processing:"
                          f" exception={e}",
                          exc_info=True)
-            status = f"{e._code}"
+            status = f"{e.code}"
             start_response(status, [])
             return []
 
@@ -141,7 +140,7 @@ class Multiplexer():
         time.sleep(random.random() * interval)
         while True:
             try:
-                self._register_mux_info(interval)
+                self._register_mux()
             except Exception as e:
                 logger.error(f"Mux periodic_work failed: exception={e}")
                 pass
@@ -154,18 +153,16 @@ class Multiplexer():
         muxs = self.tables.process_table.list_mux_eps()
         return {addr for (h, p) in muxs for addr in get_ip_addresses(h)}
 
-    def _register_mux_info(self, sleeptime):
+    def _register_mux(self):
         if self._verbose:
-            logger.debug(f"Updating Mux info periodically, interval={sleeptime}.")
-        else:
+            logger.debug(f"Updating Mux info (periodically).")
             pass
         now = int(time.time())
         mux_desc = {"host": self._mux_host, "port": self._mux_port,
                     "start_time": f"{self.start}",
                     "last_interrupted_time": f"{now}"}
         ep = host_port(self._mux_host, self._mux_port)
-        self.tables.process_table.set_mux(ep, mux_desc,
-                                          int(sleeptime + self.refresh_margin))
+        self.tables.set_mux(ep, mux_desc)
         return
 
     def _wrap_res(self, res, environ, headers, sniff=False, sniff_marker=""):
@@ -342,6 +339,8 @@ class Multiplexer():
             log_access("404", *access_info)
             raise Api_Error(404, f"Bucket inaccessible: url={request_url}")
 
+        self.tables.set_access_timestamp(pool_id)
+
         # Copy request headers.
 
         q_headers = {h[5:].replace("_", "-"): environ.get(h)
@@ -372,7 +371,7 @@ class Multiplexer():
 
         req = Request(url, data=input, headers=q_headers, method=request_method)
         try:
-            res = urlopen(req, timeout=self.request_timeout)
+            res = urlopen(req, timeout=self._forwarding_timeout)
             status = f"{res.status}"
             r_headers = res.getheaders()
             respiter = self._wrap_res(res, environ, r_headers, sniff=sniff, sniff_marker="<")
@@ -405,8 +404,8 @@ class Multiplexer():
         if respiter != []:
             # update atime
             jitter = 0  # NOTE: fixed to 0
-            initial_idle_duration = self.watch_interval + jitter + self.mc_info_timelimit
-            atime_timeout = initial_idle_duration + self.refresh_margin
+            initial_idle_duration = self.watch_interval + jitter + self.heartbeat_timeout
+            ##atime_timeout = initial_idle_duration + self.refresh_margin
             ##atime = f"{int(time.time())}"
             ##self.tables.routing_table.set_atime_by_addr_(dest_addr, atime, atime_timeout)
             ##self.tables.routing_table.set_route_expiry(pool_id, atime_timeout)

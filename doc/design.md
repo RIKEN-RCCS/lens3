@@ -648,7 +648,7 @@ A Controller starts a MinIO instance and manages its life-time.
         --If an error occurs on the way, set "error: reason".
       --There is a possibility that it will not come back from mc.
         --Use alarm () to time out.
-        --Setting item name: `minio_user_install_timelimit`
+        --Setting item name: `minio_setup_timeout`
 
   + When the Manager process && MinIO ends
 
@@ -676,7 +676,7 @@ A Controller starts a MinIO instance and manages its life-time.
       --mc admin service stop $ alias
       --If you come here from `SIGCHLD`, MinIO no longer exists, STOPPED.
         If it is STOPPED, it may not come back from mc.
-        Use alarm () to time out. (`mc_stop_timelimit`)
+        Use alarm () to time out. (`minio_stop_timeout`)
     --Wait MinIO
       --If you come here from `SIGCHLD`, you should be back with -1 immediately. (Excluding STOP)
 
@@ -719,7 +719,7 @@ A Controller starts a MinIO instance and manages its life-time.
     --If there is no response from MinIO, perform the apoptosis procedure.
       (In implementation, break the watch_minio loop)
     --There is a possibility that it will not come back from mc.
-      Use alarm () to time out. (mc_info_timelimit)
+      Use alarm () to time out. (heartbeat_timeout)
 
   + MinIO activity monitoring (polling)
     --The manager kills MinIO that has not been accessed for a certain period of time.

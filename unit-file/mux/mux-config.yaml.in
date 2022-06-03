@@ -17,22 +17,19 @@ multiplexer:
     trusted_proxies:
         - @REVERSE_PROXY_ADDRESS@
         - @API_ADDRESS@
-    timer_interval: 30
-    request_timeout: 60
+    mux_endpoint_update: 30
+    forwarding_timeout: 60
 
 controller:
     port_min: @PORT_MIN@
     port_max: @PORT_MAX@
-    watch_interval: 30
-    keepalive_limit: 600
-    heartbeat_miss_tolerance: 3
-    max_lock_duration: 60
-    mc_info_timelimit: 20
-    mc_stop_timelimit: 20
-    kill_supervisor_wait: 60
-    minio_user_install_timelimit: 60
-    refresh_margin: 5
     sudo: /usr/bin/sudo
+    watch_interval: 30
+    heartbeat_miss_tolerance: 3
+    heartbeat_timeout: 20
+    minio_start_timeout: 60
+    minio_setup_timeout: 60
+    minio_stop_timeout: 20
 
 minio:
     minio: @MINIO@

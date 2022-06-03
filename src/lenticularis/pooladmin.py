@@ -18,7 +18,7 @@ from lenticularis.table import Storage_Table
 from lenticularis.poolutil import Api_Error
 from lenticularis.poolutil import check_user_naming
 from lenticularis.poolutil import check_bucket_naming
-from lenticularis.utility import make_clean_env
+from lenticularis.utility import copy_minimal_env
 from lenticularis.utility import decrypt_secret, encrypt_secret
 from lenticularis.utility import gen_access_key_id, gen_secret_access_key
 from lenticularis.utility import logger
@@ -94,7 +94,7 @@ def _check_change_secret_keys(zone):
 
 def _check_zone_keys(zone):
     given_keys = set(zone.keys())
-    mandatory_keys = Storage_Table.pool_desc_required_keys
+    mandatory_keys = Storage_Table.pool_desc_stored_keys
     optional_keys = Storage_Table.pool_desc_optional_keys
     allowed_keys = mandatory_keys.union(optional_keys)
     ##mandatory_keys = {"owner_gid", "buckets_directory", "buckets", "access_keys",
@@ -261,7 +261,7 @@ class Pool_Admin():
 
         minio_param = adm_conf["minio"]
         self._bin_mc = minio_param["mc"]
-        env = make_clean_env(os.environ)
+        env = copy_minimal_env(os.environ)
         self._env_mc = env
         return
 
@@ -276,7 +276,20 @@ class Pool_Admin():
             return "unknown-user"
         return pooldesc.get("owner_uid")
 
-    def _check_pool_owner(self, pool_id, user_id):
+    def _ensure_user_is_authorized(self, user_id):
+        u = self.tables.get_user(user_id)
+        assert u is not None
+        if not u.get("permitted"):
+            raise Api_Error(403, (f"A user disabled: {user_id}"))
+        pass
+
+    def _ensure_mux_is_running(self):
+        muxs = self.tables.list_mux_eps()
+        if len(muxs) == 0:
+            raise Api_Error(500, (f"No Mux services in Lens3"))
+        pass
+
+    def _ensure_pool_owner(self, pool_id, user_id):
         # owner = self._get_pool_owner_for_messages(pool_id)
         pooldesc = self.tables.storage_table.get_pool(pool_id)
         if pooldesc is None:
@@ -285,7 +298,7 @@ class Pool_Admin():
             raise Api_Error(403, (f"Not an owner of the pool: {pool_id}"))
         pass
 
-    def _check_bucket_owner(self, bucket, pool_id):
+    def _ensure_bucket_owner(self, bucket, pool_id):
         desc = self.tables.routing_table.get_bucket(bucket)
         if desc is None:
             raise Api_Error(403, f"Non-exisiting bucket: {bucket}")
@@ -293,13 +306,33 @@ class Pool_Admin():
             raise Api_Error(403, (f"A bucket for a wrong pool: {bucket}"))
         pass
 
-    def _check_secret_owner(self, access_key, pool_id):
+    def _ensure_secret_owner(self, access_key, pool_id):
         desc = self.tables.pickone_table.get_id(access_key)
         if desc is None:
             raise Api_Error(403, f"Non-existing access-key: {access_key}")
         if not (desc.get("use") == "access_key"
                 and desc.get("owner") == pool_id):
             raise Api_Error(403, f"A wrong access-key: {access_key}")
+        pass
+
+    def _ensure_make_pool_arguments(self, user_id, pooldesc):
+        """It normalizes the bucket-directory path."""
+        u = self.tables.get_user(user_id)
+        assert u is not None
+        groups = u.get("groups")
+        # Check GID.  UID is not in the arguments.
+        assert "owner_gid" in pooldesc
+        gid = pooldesc["owner_gid"]
+        if gid not in groups:
+            raise Api_Error(403, (f"Bad group : {gid}"))
+        # Check Bucket-directory path.
+        assert "buckets_directory" in pooldesc
+        bd = pooldesc["buckets_directory"]
+        path = posixpath.normpath(bd)
+        if not posixpath.isabs(path):
+            raise Api_Error(400, (f"Buckets-directory is not absolute:"
+                                  f" path=({path})"))
+        pooldesc["buckets_directory"] = path
         pass
 
     def _make_mc_for_pool(self, traceid, pool_id):
@@ -395,18 +428,20 @@ class Pool_Admin():
             return True
         pass
 
-    def _check_user_is_authorized(self, user_id):
-        u = self.tables.get_user(user_id)
-        assert u is not None
-        if not u.get("permitted"):
-            raise Api_Error(403, (f"A user disabled: {user_id}"))
+    def _set_pool_state(self, pool_id, state, reason="no-reason"):
+        o = self.tables.get_pool_state(pool_id)
+        logger.debug(f"pool-state change pool={pool_id}: {o} to {state}")
+        self.tables.set_pool_state(pool_id, state, reason)
         pass
+
+    def _get_pool_state(self, pool_id):
+        return self.tables.get_pool_state(pool_id)
 
     # Web-UI Interface.
 
     def return_user_template(self, user_id):
         # It excludes "root_secret".
-        self._check_user_is_authorized(user_id)
+        self._ensure_user_is_authorized(user_id)
         ui = self.tables.get_user(user_id)
         assert ui is not None
         groups = ui.get("groups")
@@ -420,7 +455,7 @@ class Pool_Admin():
                    {"key_policy": "readwrite"},
                    {"key_policy": "readonly"},
                    {"key_policy": "writeonly"}],
-            "direct_hostnames": [],
+            #"direct_hostnames": [],
             "expiration_date": self.determine_expiration_date(),
             "permit_status": "allowed",
             "online_status": "online",
@@ -433,50 +468,17 @@ class Pool_Admin():
     # POOLS.
 
     def make_pool(self, traceid, user_id, pooldesc0):
-        self._check_user_is_authorized(user_id)
-        #assert "owner_uid" in pooldesc0
-        assert "owner_gid" in pooldesc0
-        #assert "root_secret" in pooldesc0
-        assert "buckets_directory" in pooldesc0
-        #assert "buckets", existing in pooldesc0
-        #assert "access_keys" in pooldesc0
-        #assert "direct_hostnames" in pooldesc0
-        #assert "expiration_date" in pooldesc0
-        #assert "online_status" in pooldesc0
+        self._ensure_mux_is_running()
+        self._ensure_user_is_authorized(user_id)
+        self._ensure_make_pool_arguments(user_id, pooldesc0)
+        path = pooldesc0["buckets_directory"]
 
         permit_list = self.tables.storage_table.get_allow_deny_rules()
-
-        ui = self.tables.get_user(user_id)
-        assert ui is not None
-        groups = ui.get("groups")
-
-        pooldesc0["pool_name"] = "(* given later *)"
-        pooldesc0["root_secret"] = "(* FAKE VALUE *)"
+        pooldesc0["pool_name"] = "(* given-later *)"
         pooldesc0["owner_uid"] = user_id
-        pooldesc0["buckets"] = []
-        pooldesc0["access_keys"] = []
-        pooldesc0["direct_hostnames"] = []
         pooldesc0["expiration_date"] = self.determine_expiration_date()
         pooldesc0["permit_status"] = check_permission(user_id, permit_list)
         pooldesc0["online_status"] = "online"
-        #pooldesc0["groups"] = groups
-        #pooldesc0["atime"] = "0"
-        #pooldesc0["directHostnameDomains"] = self.direct_hostname_domains
-        #pooldesc0["facadeHostname"] = self.facade_hostname
-        #pooldesc0["endpoint_url"] = self.endpoint_urls({"direct_hostnames": []})
-
-        _check_zone_keys(pooldesc0)
-
-        bd = pooldesc0.get("buckets_directory")
-        path = posixpath.normpath(bd)
-        if not posixpath.isabs(path):
-            raise Api_Error(400, (f"Buckets-directory is not absolute:"
-                                  f" path=({path})"))
-
-        #_encrypt_or_generate(zone, "root_secret")
-        #check_pool_is_well_formed(zone, user_id)
-        #check_pool_dict_is_sound(zone, user_id, self.adm_conf)
-        #_check_zone_values(user_id, zone)
 
         pool_id = None
         probe_key = None
@@ -486,15 +488,16 @@ class Pool_Admin():
             info = {"secret_key": "", "key_policy": "readwrite"}
             probe_key = self.tables.make_unique_id("access_key", pool_id, info)
             pooldesc0["probe_access"] = probe_key
-            ##self.tables.set_probe_key(probe_key, pool_id)
-
             (ok, holder) = self.tables.set_ex_buckets_directory(path, pool_id)
             if not ok:
                 owner = self._get_pool_owner_for_messages(holder)
                 raise Api_Error(400, (f"Buckets-directory is already used:"
                                       f" path=({path}), holder={owner}"))
             try:
-                self._store_pool_in_lock(traceid, user_id, pooldesc0)
+                stored_keys = Storage_Table.pool_desc_stored_keys
+                pooldesc0 = {k: v for (k, v) in pooldesc0.items()
+                             if k in stored_keys}
+                self._store_pool(traceid, user_id, pooldesc0)
             except Exception as e:
                 self.tables.delete_buckets_directory(path)
                 raise
@@ -505,16 +508,26 @@ class Pool_Admin():
                 pass
             if probe_key is not None:
                 self.tables.delete_id_unconditionally(probe_key)
-                ##self.tables.delete_probe_key(probe_key)
                 pass
             raise
-        pooldesc1 = self._gather_pool_desc(traceid, pool_id)
-        assert pooldesc1 is not None
-        logger.debug(f"AHOAHO {pooldesc1}")
-        check_pool_is_well_formed(pooldesc1, None)
+        # Return a pool description for Web-Ui.
+        pooldesc1 = None
+        try:
+            pooldesc1 = self._gather_pool_desc(traceid, pool_id)
+            assert pooldesc1 is not None
+            logger.debug(f"AHOAHO {pooldesc1}")
+            check_pool_is_well_formed(pooldesc1, None)
+        except Exception as e:
+            assert pool_id is not None
+            assert probe_key is not None
+            assert path is not None
+            self.tables.delete_id_unconditionally(pool_id)
+            self.tables.delete_id_unconditionally(probe_key)
+            self.tables.delete_buckets_directory(path)
+            raise
         return pooldesc1
 
-    def _store_pool_in_lock(self, traceid, user_id, pooldesc0):
+    def _store_pool(self, traceid, user_id, pooldesc0):
         permission=None
         initialize=True
         decrypt=True
@@ -522,31 +535,38 @@ class Pool_Admin():
         pool_id = pooldesc0["pool_name"]
         assert pool_id is not None
 
-        lock = LockDB(self.tables.storage_table, "Adm")
-        lock_status = False
+        #lock = LockDB(self.tables.storage_table, "Adm")
+        #lock_status = False
         try:
-            lock_status = self._lock_pool_table(lock)
+            #lock_status = self._lock_pool_table(lock)
             self.tables.storage_table.set_pool(pool_id, pooldesc0)
-            self.tables.storage_table.set_atime(pool_id, "0")
+            self.tables.set_access_timestamp(pool_id)
         finally:
-            self._unlock_pool_table(lock)
+            #self._unlock_pool_table(lock)
             pass
-
+        self._set_pool_state(pool_id, "initial")
         try:
-            self.set_current_mode(pool_id, "initial")
-            self._send_decoy_with_zoneid_ptr(traceid, pool_id)
+            status = self.access_mux_for_pool(traceid, pool_id, force=True)
         except Exception as e:
             logger.debug(f"@@@ ignore exception {e}")
+            ##AHO
             pass
+        else:
+            self._set_pool_state(pool_id, "ready")
+            pass
+        ##AHO
+        self._set_pool_state(pool_id, "ready")
 
         ##self.tables.storage_table.set_atime(pool_id, atime_from_arg)
         ##self.tables.storage_table.ins_ptr(pool_id, pooldesc0)
 
-        mode = self.fetch_current_mode(pool_id)
+        (poolstate, _) = self._get_pool_state(pool_id)
 
-        if mode not in {"ready"}:
-            logger.error(f"initialize: error: mode is not ready: {mode}")
-            raise Exception(f"initialize: error: mode is not ready: {mode}")
+        if poolstate not in {"ready"}:
+            logger.error(f"initialize: error: pool-state is not ready:"
+                         f" {poolstate}")
+            raise Exception(f"initialize: error: mode is not ready:"
+                            f" {poolstate}")
         else:
             pass
         pass
@@ -554,8 +574,9 @@ class Pool_Admin():
     def delete_pool(self, traceid, user_id, pool_id):
         """Deletes a pool.  It clears buckets and access-keys set in MinIO.
         """
-        self._check_user_is_authorized(user_id)
-        self._check_pool_owner(pool_id, user_id)
+        self._ensure_mux_is_running()
+        self._ensure_user_is_authorized(user_id)
+        self._ensure_pool_owner(pool_id, user_id)
         self._clean_minio(traceid, user_id, pool_id)
         self._clean_database(traceid, user_id, pool_id)
         return (200, None, {})
@@ -581,9 +602,9 @@ class Pool_Admin():
             logger.info(f"Exception in delete_route: exception={e}")
             pass
         try:
-            self.tables.routing_table.delete_route_expiry(pool_id)
+            self.tables.delete_access_timestamp(pool_id)
         except Exception as e:
-            logger.info(f"Exception in delete_route_expiry: exception={e}")
+            logger.info(f"Exception in delete_access_timestamp: exception={e}")
             pass
         pass
 
@@ -647,7 +668,8 @@ class Pool_Admin():
 
     def list_pools(self, traceid, user_id, pool_id):
         """It lists all pools of the user when pool-id is None."""
-        self._check_user_is_authorized(user_id)
+        self._ensure_mux_is_running()
+        self._ensure_user_is_authorized(user_id)
         groups = None
         decrypt = True
         include_atime = True
@@ -666,7 +688,7 @@ class Pool_Admin():
         for id in self.tables.storage_table.list_pool_ids(pool_id):
             pooldesc = self._gather_pool_desc(traceid, id)
             if pooldesc is None:
-                logger.debug(f"Pool deleted in race; list-pools runs"
+                logger.debug(f"Pool removed in race; list-pools runs"
                              f" without a lock (ignored): {id}")
                 continue
             if pooldesc["owner_uid"] != user_id:
@@ -677,7 +699,7 @@ class Pool_Admin():
                 #self.decrypt_access_keys(pooldesc)
                 pass
 
-            pooldesc["minio_state"] = self.fetch_current_mode(id)
+            pooldesc["minio_state"] = self._get_pool_state(id)
             if include_atime:
                 atime = self.tables.storage_table.get_atime(id)
                 pooldesc["atime"] = atime
@@ -697,13 +719,14 @@ class Pool_Admin():
         return (200, None, {"pool_list": pool_list})
 
     def _gather_pool_desc(self, traceid, pool_id):
-        """Returns a pool description to be displayed by Web-UI."""
+        """Returns a pool description for displaying by Web-UI."""
         pooldesc = self.tables.get_pool(pool_id)
         if pooldesc is None:
             return None
 
         bd = self.tables.get_buckets_directory_of_pool(pool_id)
         pooldesc["buckets_directory"] = bd
+        assert pooldesc["buckets_directory"] is not None
         # Gather buckets.
         bkts = self.tables.list_buckets(pool_id)
         bkts = sorted(bkts, key=lambda k: k["name"])
@@ -728,8 +751,9 @@ class Pool_Admin():
     # BUCKETS.
 
     def make_bucket(self, traceid, user_id, pool_id, bucket, policy):
-        self._check_user_is_authorized(user_id)
-        self._check_pool_owner(pool_id, user_id)
+        self._ensure_mux_is_running()
+        self._ensure_user_is_authorized(user_id)
+        self._ensure_pool_owner(pool_id, user_id)
         now = int(time.time())
         desc = {"pool": pool_id, "bkt_policy": policy,
                 "modification_date": now}
@@ -741,16 +765,16 @@ class Pool_Admin():
             mc = self._make_mc_for_pool(traceid, pool_id)
             assert mc is not None
             with mc:
-                lock = LockDB(self.tables.storage_table, "Adm")
-                self._lock_pool_entry(lock, pool_id)
+                #lock = LockDB(self.tables.storage_table, "Adm")
+                #self._lock_pool_entry(lock, pool_id)
                 try:
                     mc.make_bucket_with_policy(bucket, policy)
-                    pooldesc = self.tables.storage_table.get_pool(pool_id)
-                    _add_bucket_to_pool(pooldesc, bucket, policy)
-                    check_pool_is_well_formed(pooldesc, None)
-                    self.tables.storage_table.set_pool(pool_id, pooldesc)
+                    #pooldesc = self.tables.storage_table.get_pool(pool_id)
+                    #_add_bucket_to_pool(pooldesc, bucket, policy)
+                    #check_pool_is_well_formed(pooldesc, None)
+                    #self.tables.storage_table.set_pool(pool_id, pooldesc)
                 finally:
-                    self._unlock_pool_entry(lock, pool_id)
+                    #self._unlock_pool_entry(lock, pool_id)
                     pass
                 pass
             pass
@@ -764,9 +788,10 @@ class Pool_Admin():
         """Deletes a bucket.  Deleting ignores errors occur in MC commands in
         favor of disabling accesses.
         """
-        self._check_user_is_authorized(user_id)
-        self._check_pool_owner(pool_id, user_id)
-        self._check_bucket_owner(bucket, pool_id)
+        self._ensure_mux_is_running()
+        self._ensure_user_is_authorized(user_id)
+        self._ensure_pool_owner(pool_id, user_id)
+        self._ensure_bucket_owner(bucket, pool_id)
         try:
             mc = self._make_mc_for_pool(traceid, pool_id)
             assert mc is not None
@@ -798,8 +823,9 @@ class Pool_Admin():
     # SECRETS.
 
     def make_secret(self, traceid, user_id, pool_id, policy):
-        self._check_user_is_authorized(user_id)
-        self._check_pool_owner(pool_id, user_id)
+        self._ensure_mux_is_running()
+        self._ensure_user_is_authorized(user_id)
+        self._ensure_pool_owner(pool_id, user_id)
         secret = gen_secret_access_key()
         info = {"secret_key": secret, "key_policy": policy}
         key = self.tables.make_unique_id("access_key", pool_id, info)
@@ -827,9 +853,10 @@ class Pool_Admin():
         """Deletes a secret.  Deleting will fail when errors occur in MC
         commands.
         """
-        self._check_user_is_authorized(user_id)
-        self._check_pool_owner(pool_id, user_id)
-        self._check_secret_owner(access_key, pool_id)
+        self._ensure_mux_is_running()
+        self._ensure_user_is_authorized(user_id)
+        self._ensure_pool_owner(pool_id, user_id)
+        self._ensure_secret_owner(access_key, pool_id)
         try:
             mc = self._make_mc_for_pool(traceid, pool_id)
             assert mc is not None
@@ -855,6 +882,8 @@ class Pool_Admin():
             raise
         pooldesc1 = self._gather_pool_desc(traceid, pool_id)
         return (200, None, {"pool_list": [pooldesc1]})
+
+    ################################################################
 
     def create_pool(self, traceid, user_id, pooldesc0):
         decrypt=True
@@ -985,14 +1014,15 @@ class Pool_Admin():
         self.tables.process_table.clear_all(everything=everything)
         return
 
-    def access_mux_for_pool(self, traceid, zoneID, *, force, access_key=None):
+    def access_mux_for_pool(self, traceid, pool_id, *, force, access_key=None):
         """Tries to access a Mux of the pool.  Always use with force=True, to
         let access regardless of the running state of MinIO.
         """
+        pooldesc = self.tables.get_pool(pool_id)
+        if pooldesc is None:
+            raise Api_Error(500, (f"Pool removed: pool={pool_id}"))
 
-        logger.debug(f"zone={zoneID}, access_key={access_key}, force={force}")
-
-        procdesc = self.tables.process_table.get_minio_proc(zoneID)
+        procdesc = self.tables.process_table.get_minio_proc(pool_id)
         if procdesc is not None:
             mux_host = procdesc.get("mux_host")
             mux_port = procdesc.get("mux_port")
@@ -1000,35 +1030,34 @@ class Pool_Admin():
         elif force:
             muxs = self.tables.process_table.list_mux_eps()
             pair = pick_one(muxs)
+            assert pair is not None
             ep = host_port(pair[0], pair[1])
         else:
             # Do nothing, when not force and MinIO is not running.
             return ""
         assert ep is not None
+
+        ##AHO
         if access_key is None:
-            pooldesc = self.tables.storage_table.get_pool(zoneID)
             if pooldesc is None:
-                # Done if neither access-key nor pool exists.
-                logger.debug(f"No check, as neither access-key nor zone.")
+                # Done, if neither access-key nor pool exists.
+                logger.debug(f"No check, as neither access-key nor pool.")
                 return ""
             else:
-                # Choose any key in the list.
-                ##access_key = _choose_any_access_key(pooldesc)
+                # Use probe-access key.
                 access_key = pooldesc["probe_access"]
-                logger.debug(f"AHO probe_access={access_key}")
                 pass
         else:
             pass
 
         ##AHO
-        pooldesc = self.tables.storage_table.get_pool(zoneID)
         access_key = pooldesc["probe_access"]
         logger.debug(f"AHOAHO probe_access={access_key}")
 
         facade_hostname = self.facade_hostname
         status = access_mux(traceid, ep, access_key, facade_hostname,
                             self.probe_access_timeout)
-        logger.debug(f"Access Mux for pool={zoneID}: status={status}")
+        logger.debug(f"Access Mux for pool={pool_id}: status={status}")
         return status
 
     ##def fetch_route_list(self):
@@ -1285,7 +1314,7 @@ class Pool_Admin():
     ##        omode = self.fetch_current_mode(zone_id)
     ##
     ##    if zone_id:
-    ##        self.set_current_mode(zone_id, "suspended")
+    ##        self._set_current_state(zone_id, "suspended")
     ##
     ##    ### XXX can we merge following two tries into one?
     ##
@@ -1319,9 +1348,9 @@ class Pool_Admin():
     ##
     ##    try:
     ##        if delete_zone:
-    ##            self.set_current_mode(zone_id, "deprecated")
+    ##            self._set_current_state(zone_id, "deprecated")
     ##        elif need_initialize:
-    ##            self.set_current_mode(zone_id, "initial")
+    ##            self._set_current_state(zone_id, "initial")
     ##            self._send_decoy_with_zoneid_ptr(traceid, zone_id)  # trigger initialize minio
     ##        else:
     ##            pass
@@ -1339,7 +1368,7 @@ class Pool_Admin():
     ##        self.tables.storage_table.ins_ptr(zone_id, zone)
     ##
     ##    if not delete_zone and omode:
-    ##        self.set_current_mode(zone_id, omode)
+    ##        self._set_current_state(zone_id, omode)
     ##        mode = omode
     ##    elif not initialize:
     ##        # intentionally leave mode be unset
@@ -1396,7 +1425,7 @@ class Pool_Admin():
             omode = self.fetch_current_mode(zone_id)
             pass
         if zone_id:
-            self.set_current_mode(zone_id, "suspended")
+            self._set_current_state(zone_id, "suspended")
             pass
 
         if existing and initialize:
@@ -1418,7 +1447,7 @@ class Pool_Admin():
 
         try:
             if need_initialize:
-                self.set_current_mode(zone_id, "initial")
+                self._set_current_state(zone_id, "initial")
                 self._send_decoy_with_zoneid_ptr(traceid, zone_id)
             else:
                 pass
@@ -1432,7 +1461,7 @@ class Pool_Admin():
         self.tables.storage_table.ins_ptr(zone_id, zone)
 
         if omode:
-            self.set_current_mode(zone_id, omode)
+            self._set_current_state(zone_id, omode)
             mode = omode
         elif not initialize:
             mode = None
@@ -1475,7 +1504,7 @@ class Pool_Admin():
             pass
 
         if zone_id:
-            self.set_current_mode(zone_id, "suspended")
+            self._set_current_state(zone_id, "suspended")
             pass
 
         if initialize:
@@ -1490,7 +1519,7 @@ class Pool_Admin():
         try:
             if need_initialize:
                 # Trigger initialization of MinIO.
-                self.set_current_mode(zone_id, "initial")
+                self._set_current_state(zone_id, "initial")
                 self._send_decoy_with_zoneid_ptr(traceid, zone_id)
             else:
                 pass
@@ -1504,7 +1533,7 @@ class Pool_Admin():
         self.tables.storage_table.ins_ptr(zone_id, zone)
 
         if omode:
-            self.set_current_mode(zone_id, omode)
+            self._set_current_state(zone_id, omode)
             mode = omode
         elif not initialize:
             mode = None
@@ -1540,8 +1569,8 @@ class Pool_Admin():
             user_id, zone_id, existing, zone, permission, how)
 
         omode = self.fetch_current_mode(zone_id)
-        self.set_current_mode(zone_id, "suspended")
-        self.set_current_mode(zone_id, "deprecated")
+        self._set_current_state(zone_id, "suspended")
+        self._set_current_state(zone_id, "deprecated")
         self._delete_existing_zone(zone_id, existing)
         mode = self.fetch_current_mode(zone_id)
         assert mode is None
@@ -1843,12 +1872,13 @@ class Pool_Admin():
         return
 
     def fetch_current_mode(self, zoneID):
-        return self.tables.storage_table.get_mode(zoneID)
+        (state, reason) = self.tables.get_pool_state(zoneID)
+        return state
 
-    def set_current_mode(self, zoneID, state):
+    def _set_current_state(self, zoneID, state):
         o = self.fetch_current_mode(zoneID)
         logger.debug(f"pool-state change pool=({zoneID}): {o} to {state}")
-        self.tables.storage_table.set_mode(zoneID, state)
+        self.tables.set_pool_state(zoneID, state, "no-reason")
         return
 
     def zone_to_user(self, zoneID):
@@ -1859,13 +1889,8 @@ class Pool_Admin():
     def determine_expiration_date(self):
         now = int(time.time())
         maxExpDate = int(self.system_settings_param["allowed_maximum_zone_exp_date"])
-        logger.debug(f"@@@ maxExpDate = {maxExpDate}")
         deflZoneLifetime = int(self.system_settings_param["default_zone_lifetime"])
-        logger.debug(f"@@@ deflZoneLifetime = {deflZoneLifetime}")
-        logger.debug(f"@@@ now = {now}")
-        logger.debug(f"@@@ now + deflZoneLifetime = {now + deflZoneLifetime}")
         expDate = min(now + deflZoneLifetime, maxExpDate)
-        logger.debug(f"@@@ timeleft = {expDate - now}")
         return str(expDate)
 
     def decrypt_access_keys(self, zone):

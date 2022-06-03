@@ -12,7 +12,7 @@ from lenticularis.utility import logger
 
 class Api_Error(Exception):
     def __init__(self, code, *args):
-        self._code = code
+        self.code = code
         super().__init__(*args)
         return
 
@@ -272,12 +272,12 @@ def _pool_desc_schema(type_number):
             "pool_name": {"type": "string"},
             "owner_uid": {"type": "string"},
             "owner_gid": {"type": "string"},
-            "root_secret": {"type": "string"},
+            #"root_secret": {"type": "string"},
             "buckets_directory": {"type": "string"},
             "buckets": {"type": "array", "items": bucket},
             "probe_access": {"type": "string"},
             "access_keys": {"type": "array", "items": access_key},
-            "direct_hostnames": {"type": "array", "items": {"type": "string"}},
+            #"direct_hostnames": {"type": "array", "items": {"type": "string"}},
             "expiration_date": type_number,
             "permit_status": {"type": "string"},
             "online_status": {"type": "string"},
@@ -289,11 +289,11 @@ def _pool_desc_schema(type_number):
             # "pool_name",
             "owner_uid",
             "owner_gid",
-            "root_secret",
+            #"root_secret",
             "buckets_directory",
             "buckets",
             "access_keys",
-            "direct_hostnames",
+            #"direct_hostnames",
             "expiration_date",
             "permit_status",
             "online_status",

@@ -8,7 +8,7 @@ from subprocess import Popen, PIPE, DEVNULL
 import sys
 import select
 from lenticularis.scheduler import Scheduler
-from lenticularis.utility import make_clean_env, host_port
+from lenticularis.utility import copy_minimal_env, host_port
 from lenticularis.utility import wait_one_line_on_stdout
 from lenticularis.utility import logger
 
@@ -76,7 +76,7 @@ class Controller():
         cmd = [self.executable, "-m", self.manager]
         args = [self._mux_host, self._mux_port, self.port_min, self.port_max,
                 "--configfile", self.configfile]
-        env = make_clean_env(os.environ)
+        env = copy_minimal_env(os.environ)
         env["LENTICULARIS_POOL_ID"] = zone_id
         ##if access_key_id == zone_id:
         ##    args.append("--accessByZoneID=True")

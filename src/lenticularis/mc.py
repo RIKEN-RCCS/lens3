@@ -114,7 +114,7 @@ class Mc():
     """
 
     def __init__(self, bin_mc, env_mc, minio_ep, pool_id):
-        self._verbose = True
+        self._verbose = False
         self.mc = bin_mc
         self.env = env_mc
         self._minio_ep = minio_ep
@@ -345,6 +345,7 @@ class Mc():
         pass
 
     def setup_minio(self, p, pooldesc):
+        ##AHO
         try:
             a_children = self._set_access_keys(pooldesc)
         except Exception as e:
@@ -361,6 +362,9 @@ class Mc():
         return
 
     def _set_access_keys(self, pooldesc):
+        if "access_keys" not in pooldesc:
+            return []
+
         children = []
 
         access_keys = pooldesc["access_keys"]
@@ -437,8 +441,9 @@ class Mc():
         return []
 
     def _set_bucket_policy(self, pooldesc):
-        logger.debug("@@@ +++")
-        logger.debug("@@@ set_bucket_policy")
+        if "buckets" not in pooldesc:
+            return []
+
         children = []
 
         buckets = pooldesc["buckets"]

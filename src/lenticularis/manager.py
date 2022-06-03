@@ -24,7 +24,7 @@ from lenticularis.table import get_tables
 from lenticularis.utility import ERROR_EXIT_READCONF, ERROR_EXIT_FORK, ERROR_EXIT_START_MINIO
 from lenticularis.utility import decrypt_secret, list_diff3
 from lenticularis.utility import gen_access_key_id, gen_secret_access_key
-from lenticularis.utility import make_clean_env, host_port
+from lenticularis.utility import copy_minimal_env, host_port
 from lenticularis.utility import uniform_distribution_jitter
 from lenticularis.utility import wait_one_line_on_stdout
 from lenticularis.utility import logger, openlog
@@ -65,12 +65,44 @@ class Manager():
     """A sentinel for a MinIO process.  It is started by a Controller as a
     daemon (and exits immediately), and it informs the caller about a
     successful start-up of a MinIO by placing a one line message on
-    stdout.
+    stdout.  A Redis key for a manager record is used as a mutex with
+    expiry, which protects the activity of a manager.
     """
 
-    def __init__(self):
+    def __init__(self, pool_id, args, mux_conf):
         self._verbose = False
         self._alarm_section = None
+
+        self._pool_id = pool_id
+        self._mux_host = args.host
+        self._mux_port = args.port
+        self._mux_ep = host_port(self._mux_host, self._mux_port)
+        self._port_min = int(args.port_min)
+        self._port_max = int(args.port_max)
+
+        minio_param = mux_conf["minio"]
+        self._bin_minio = minio_param["minio"]
+        self._bin_mc = minio_param["mc"]
+
+        ctl_param = mux_conf["controller"]
+        self._bin_sudo = ctl_param["sudo"]
+        self._keep_awake = int(ctl_param["keep_awake"])
+        self._watch_interval = int(ctl_param["watch_interval"])
+        self._heartbeat_tolerance = int(ctl_param["heartbeat_miss_tolerance"])
+        self._heartbeat_timeout = int(ctl_param["heartbeat_timeout"])
+        self._minio_start_timeout = int(ctl_param["minio_start_timeout"])
+        self._minio_setup_timeout = int(ctl_param["minio_setup_timeout"])
+        self._minio_stop_timeout = int(ctl_param["minio_stop_timeout"])
+        self._watch_gap_minimal = (self._watch_interval / 8)
+        self._expiry = (self._heartbeat_tolerance * self._watch_interval)
+
+        ## NOTE: FIX VALUE of timeout_margin.
+        ##self.timeout_margin = 2
+        ##self.kill_supervisor_wait = 10
+        ##self.refresh_margin = int(ctl_param["refresh_margin"])
+
+        self.tables = get_tables(mux_conf)
+
         pass
 
     def _sigalrm(self, n, stackframe):
@@ -90,52 +122,20 @@ class Manager():
         sys.stderr.close()
         contextlib.redirect_stdout(None)
         contextlib.redirect_stderr(None)
-
-    def _terminate_subprocess(self, p):
-        logger.debug(f"AHO _terminate_subprocess unimplemented.")
         pass
 
-    def _set_pool_state(self, state, reason):
-        logger.debug(f"AHO _set_pool_state unimplemented.")
-        self._set_current_mode(self._pool_id, state, reason)
+    def _set_pool_state(self, poolstate, reason):
+        self.tables.set_pool_state(self._pool_id, poolstate, reason)
         pass
 
-    def _manager_main(self, pool_id, args, mux_conf):
+    def manager_main(self):
+        pool_id = self._pool_id
         logger.info(f"Starting a Manager process for pool={pool_id}.")
 
         # Check the thread is main for using signals:
         assert threading.current_thread() == threading.main_thread()
 
         signal(SIGALRM, self._sigalrm)
-
-        self._pool_id = pool_id
-        self._mux_host = args.host
-        self._mux_port = args.port
-        self._mux_ep = host_port(self._mux_host, self._mux_port)
-        port_min = int(args.port_min)
-        port_max = int(args.port_max)
-
-        minio_param = mux_conf["minio"]
-        self._bin_minio = minio_param["minio"]
-        self._bin_mc = minio_param["mc"]
-
-        ctl_param = mux_conf["controller"]
-        self._bin_sudo = ctl_param["sudo"]
-        self._watch_interval = int(ctl_param["watch_interval"])
-        self._heartbeat_tolerance = int(ctl_param["heartbeat_miss_tolerance"])
-        self._expiry = self._heartbeat_tolerance * self._watch_interval
-        self._lock_timeout = int(ctl_param["minio_startup_timeout"])
-
-        ## NOTE: FIX VALUE of timeout_margin.
-        self.timeout_margin = 2
-        self.keepalive_limit = int(ctl_param["keepalive_limit"])
-        self.minio_user_install_timelimit = int(ctl_param["minio_user_install_timelimit"])
-        self._mc_info_timelimit = int(ctl_param["mc_info_timelimit"])
-        self._mc_stop_timelimit = int(ctl_param["mc_stop_timelimit"])
-        self.kill_supervisor_wait = int(ctl_param["kill_supervisor_wait"])
-        self.refresh_margin = int(ctl_param["refresh_margin"])
-
-        self.tables = get_tables(mux_conf)
 
         pooldesc = self.tables.get_pool(pool_id)
         if pooldesc is None:
@@ -166,7 +166,7 @@ class Manager():
 
         try:
             self._deregister_minio_process(clean_stale_entries=True)
-            ok = self._manage_minio(port_min, port_max)
+            ok = self._manage_minio()
         finally:
             ma = self.tables.get_minio_manager(pool_id)
             if ma == self._minio_manager:
@@ -178,26 +178,21 @@ class Manager():
             pass
         return ok
 
-    def _manage_minio(self, port_min, port_max):
+    def _manage_minio(self):
         pooldesc = self.tables.get_pool(self._pool_id)
         if pooldesc is None:
             logger.error(f"Manager failed: pool deleted: pool={self._pool_id}")
             return False
 
         use_pool_id_for_minio_root_user = False
-        if use_pool_id_for_minio_root_user:
-            self._MINIO_ROOT_USER = self._pool_id
-            self._MINIO_ROOT_PASSWORD = decrypt_secret(pooldesc["root_secret"])
-        else:
-            self._MINIO_ROOT_USER = gen_access_key_id()
-            self._MINIO_ROOT_PASSWORD = gen_secret_access_key()
-            pass
+        self._minio_root_user = gen_access_key_id()
+        self._minio_root_password = gen_secret_access_key()
 
-        env = make_clean_env(os.environ)
+        env = copy_minimal_env(os.environ)
         self._env_minio = env
         self._env_mc = env.copy()
-        self._env_minio["MINIO_ROOT_USER"] = self._MINIO_ROOT_USER
-        self._env_minio["MINIO_ROOT_PASSWORD"] = self._MINIO_ROOT_PASSWORD
+        self._env_minio["MINIO_ROOT_USER"] = self._minio_root_user
+        self._env_minio["MINIO_ROOT_PASSWORD"] = self._minio_root_password
         self._env_minio["MINIO_BROWSER"] = "off"
         ##if self.minio_http_trace != "":
         ##    self._env_minio["MINIO_HTTP_TRACE"] = self.minio_http_trace
@@ -209,7 +204,7 @@ class Manager():
         ## self._env_minio["MINIO_CACHE_WATERMARK_HIGH"] = "90"
 
         now = int(time.time())
-        mode = self.tables.storage_table.get_mode(self._pool_id)
+        (poolstate, _) = self.tables.get_pool_state(self._pool_id)
 
         assert pooldesc is not None
 
@@ -231,48 +226,57 @@ class Manager():
 
         procdesc = self.tables.get_minio_proc(self._pool_id)
         assert procdesc is None
-        assert mode == "initial" or mode == "ready"
+        logger.error(f"AHO poolstate={poolstate}")
+        assert poolstate == "initial" or poolstate == "ready"
 
-        ports = list(range(port_min, port_max + 1))
+        ports = list(range(self._port_min, self._port_max + 1))
         random.shuffle(ports)
-        p = self._try_start_minio(ports, mode, user, group, directory)
+        p = None
+        for port in ports:
+            (p, nonfatal) = self._try_start_minio(port, user, group, directory)
+            if p is not None:
+                break
+            if not nonfatal:
+                break
+            pass
         if p is None:
             return False
         ok = self._setup_and_watch_minio(p, pooldesc)
         return ok
 
-    def _try_start_minio(self, ports, mode, user, group, directory):
+    def _try_start_minio(self, port, user, group, directory):
         p = None
-        for port in ports:
+        ##for port in ports:
+        try:
+            alarm(self._minio_start_timeout)
             address = f":{port}"
             cmd = [self._bin_sudo, "-u", user, "-g", group, self._bin_minio,
                    "server", "--anonymous", "--address", address, directory]
-            logger.info(f"Starting MinIO: {cmd}")
+            logger.debug(f"Starting MinIO: {cmd}")
             p = Popen(cmd, stdin=DEVNULL, stdout=PIPE, stderr=PIPE,
                       env=self._env_minio)
-            try:
-                (ok, error_is_nonfatal) = self._wait_for_minio_to_come_up(p)
-                if ok:
-                    host = self._mux_host
-                    self._minio_ep = host_port(host, port)
-                    return p
-                elif error_is_nonfatal:
-                    p = None
-                    continue
-                else:
-                    self._minio_ep = None
-                    return None
-            except Exception as e:
-                # (e is SubprocessError, OSError, ValueError, usually).
-                logger.error(f"Starting MinIO failed with exception={e}",
-                             exc_info=True)
-                self._set_pool_state("inoperable", "MinIO does not start.")
+            (ok, error_is_nonfatal) = self._wait_for_minio_to_come_up(p)
+            alarm(0)
+            if ok:
+                logger.info(f"MinIO started: {cmd}")
+                self._minio_ep = host_port(self._mux_host, port)
+                return (p, True)
+            else:
                 self._minio_ep = None
-                return None
+                return (None, error_is_nonfatal)
+        except Exception as e:
+            # (e is SubprocessError, OSError, ValueError, usually).
+            logger.error(f"Starting MinIO failed with exception={e}",
+                         exc_info=True)
+            self._set_pool_state("inoperable", "MinIO does not start")
+            self._minio_ep = None
+            return (None, False)
+        finally:
+            alarm(0)
             pass
         assert p is None
         self._minio_ep = None
-        return None
+        return (None, True)
 
     def _wait_for_minio_to_come_up(self, p):
         """Checks a MinIO startup.  It assumes any subprocess outputs at least
@@ -338,15 +342,12 @@ class Manager():
             self._stop_minio(p)
             raise
         else:
-            jitter = 0
-            duration0 = self._watch_interval + self._mc_info_timelimit
-            timeo = duration0 + self.refresh_margin + jitter
-            self._register_minio_process(p.pid, pooldesc, timeo)
+            self._register_minio_process(p.pid, pooldesc)
         finally:
             self._tell_controller_minio_starts()
             pass
 
-        self._set_current_mode(self._pool_id, "ready", None)
+        self._set_pool_state("ready", None)
 
         try:
             self._watch_minio(p)
@@ -357,22 +358,22 @@ class Manager():
         pass
 
     def _setup_minio(self, p, pooldesc):
-        with self._mc.alias_set(self._MINIO_ROOT_USER,
-                                self._MINIO_ROOT_PASSWORD):
+        with self._mc.alias_set(self._minio_root_user,
+                                self._minio_root_password):
             try:
-                alarm(self.minio_user_install_timelimit)
+                alarm(self._minio_setup_timeout)
                 self._alarm_section = "setup_minio"
                 self._mc.setup_minio(p, pooldesc)
                 alarm(0)
                 self._alarm_section = None
             except Alarmed as e:
                 x = Exception("MinIO initialization failed (timeout)")
-                self._set_current_mode(self._pool_id, "error", f"{x}")
+                self._set_pool_state("error", f"{x}")
                 raise x
             except Exception as e:
                 alarm(0)
                 self._alarm_section = None
-                self._set_current_mode(self._pool_id, "error", f"{e}")
+                self._set_pool_state("error", f"{e}")
                 logger.error(f"MinIO initialization failed for"
                              f" pool={self._pool_id}: exception=({e})")
                 logger.exception(e)
@@ -391,11 +392,8 @@ class Manager():
         signal(SIGCHLD, SIG_IGN)
 
         try:
-            jitter = 0
-            duration0 = self._watch_interval + self._mc_info_timelimit
-            duration1 = duration0 + self.refresh_margin + jitter
-            ##self._refresh_table_status(duration1)
-            lastcheck = 0
+            self._last_check_ts = 0
+            self._last_access_ts = 0
             while True:
                 jitter = uniform_distribution_jitter()
                 timeo = self._watch_interval + jitter
@@ -418,16 +416,12 @@ class Manager():
                     pass
 
                 now = int(time.time())
-                if lastcheck + (self._watch_interval / 8) < now:
-                    lastcheck = now
+                if self._last_check_ts + self._watch_gap_minimal < now:
+                    self._last_check_ts = now
                     self._check_pool_status()
+                    self._refresh_manager_expiry()
                     self._check_minio_health()
-                    self._refresh_minio_ep()
                     pass
-
-                duration3 = self._watch_interval + self._mc_info_timelimit
-                duration4 = duration3 + self.refresh_margin + jitter
-                ##self._refresh_table_status(duration4)
                 pass
 
         except Termination as e:
@@ -441,31 +435,31 @@ class Manager():
         logger.debug(f"Manager for {self._minio_ep} exits.")
         pass
 
-    def _register_minio_process(self, pid, pooldesc, timeout):
+    def _register_minio_process(self, pid, pooldesc):
         now = int(time.time())
         self._minio_proc = {
             "minio_ep": self._minio_ep,
             "minio_pid": pid,
-            "admin": self._MINIO_ROOT_USER,
-            "password": self._MINIO_ROOT_PASSWORD,
+            "admin": self._minio_root_user,
+            "password": self._minio_root_password,
             "mux_host": self._mux_host,
             "mux_port": self._mux_port,
             "manager_pid": os.getpid(),
             "modification_date": now
         }
-        timeout = math.ceil(timeout)
-        self.tables.set_minio_proc(self._pool_id, self._minio_proc, timeout)
+        self.tables.set_minio_proc(self._pool_id, self._minio_proc)
         self.tables.set_route(self._pool_id, self._minio_ep)
-        self._refresh_minio_ep()
+        self._refresh_manager_expiry()
         pass
 
-    def _refresh_minio_ep(self):
+    def _refresh_manager_expiry(self):
+        # It may extend expiry for other managers (as intended).
         ok = self.tables.set_minio_manager_expiry(self._pool_id, self._expiry)
         ma = self.tables.get_minio_manager(self._pool_id)
         if ma != self._minio_manager:
-            logger.error(f"Inconsistent mutex state of MinIO processes:"
+            logger.error(f"Manager exiting for a stale state:"
                          f" pool={self._pool_id} at Mux={self._mux_ep}")
-            raise Termination("Inconsistent mutex state")
+            raise Termination("Stale state")
         pass
 
     def _deregister_minio_process(self, *, clean_stale_entries):
@@ -498,10 +492,10 @@ class Manager():
         pass
 
     def _stop_minio(self, p):
-        with self._mc.alias_set(self._MINIO_ROOT_USER,
-                                self._MINIO_ROOT_PASSWORD):
+        with self._mc.alias_set(self._minio_root_user,
+                                self._minio_root_password):
             try:
-                alarm(self._mc_stop_timelimit)
+                alarm(self._minio_stop_timeout)
                 self._alarm_section = "stop_minio"
                 (p_, r) = self._mc.admin_service_stop()
                 assert p_ is None
@@ -519,20 +513,6 @@ class Manager():
                 self._alarm_section = None
                 pass
             pass
-
-    def _kill_manager_process(self, manager_pid):
-        logger.debug("@@@ +++")
-        os.kill(manager_pid, SIGTERM)
-        for i in range(self.kill_supervisor_wait):
-            a = self.tables.process_table.get_minio_proc(self._pool_id)
-            if not a:
-                break
-            time.sleep(1)
-            pass
-        pass
-
-    def _set_current_mode(self, pool_id, mode, reason):
-        self.tables.storage_table.set_mode(pool_id, mode)
         pass
 
     def _check_pool_status(self):
@@ -555,6 +535,19 @@ class Manager():
         procdesc = self.tables.get_minio_proc(self._pool_id)
         if procdesc != self._minio_proc:
             raise Termination("MinIO process overtaken")
+        # Check the life-time is expired.
+        elapsed = now - self._last_access_ts
+        if elapsed > self._keep_awake:
+            ts = self.tables.get_access_timestamp(self._pool_id)
+            if ts is None:
+                logger.warning(f"Timestamp not found: pool={self._pool_id}")
+                raise Termination("Timestamp not found")
+            self._last_access_ts = ts
+            elapsed = now - ts
+            if elapsed > self._keep_awake:
+                logger.info(f"Keep-awake expired: pool={self._pool_id}")
+                raise Termination("Keep-awake expired")
+            pass
         pass
 
     def _check_minio_health(self):
@@ -573,7 +566,7 @@ class Manager():
     def _heartbeat_minio(self):
         url = f"http://{self._minio_ep}/minio/health/live"
         try:
-            res = urlopen(url, timeout=self._mc_info_timelimit)
+            res = urlopen(url, timeout=self._heartbeat_timeout)
             if self._verbose:
                 logger.debug(f"Heartbeat MinIO OK: url={url}")
                 pass
@@ -602,7 +595,7 @@ class Manager():
             pass
         r = None
         try:
-            alarm(self._mc_info_timelimit)
+            alarm(self._heartbeat_timeout)
             self._alarm_section = "check_minio_info"
             (p_, r) = self._mc.admin_info()
             assert p_ is None
@@ -640,7 +633,7 @@ def main():
     try:
         (mux_conf, configfile) = read_mux_conf(args.configfile)
     except Exception as e:
-        sys.stderr.write(f"manager:main: {e}\n")
+        sys.stderr.write(f"Manager failed to read a config file: {e}\n")
         sys.exit(ERROR_EXIT_READCONF)
         pass
 
@@ -654,16 +647,16 @@ def main():
             # (parent).
             sys.exit(0)
     except OSError as e:
-        logger.error(f"fork failed: {os.strerror(e.errno)}")
+        logger.error(f"Manager failed to fork: {os.strerror(e.errno)}")
         sys.exit(ERROR_EXIT_FORK)
         pass
 
-    # (A Manager be a session leader).
+    # Let a manager be a session leader.
 
     try:
         os.setsid()
     except OSError as e:
-        logger.error(f"setsid failed (ignored): {os.strerror(e.errno)}")
+        logger.error(f"Manager setsid failed (ignored): {os.strerror(e.errno)}")
         pass
 
     try:
@@ -672,12 +665,12 @@ def main():
         logger.error(f"set umask failed (ignored): {os.strerror(e.errno)}")
         pass
 
-    manager = Manager()
+    manager = Manager(pool_id, args, mux_conf)
     ok = False
     try:
-        ok = manager._manager_main(pool_id, args, mux_conf)
+        ok = manager.manager_main()
     except Exception as e:
-        logger.error(f"A Manager for pool={pool_id} failed:"
+        logger.error(f"Manager for pool={pool_id} failed:"
                      f" exception={e}",
                      exc_info=True)
         pass

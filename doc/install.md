@@ -657,9 +657,9 @@ Install Manual of Lenticularis
                   - localhost
       # and also trust API node (in this example, they are same so you can omit it)
                   - localhost
-              timer_interval: 30
+              mux_endpoint_update: 30
       # time limit of connecting to minio
-              request_timeout: 60
+              forwarding_timeout: 60
 
           controller:
       # port for MinIO (lower)
@@ -679,7 +679,7 @@ Install Manual of Lenticularis
       # minimum duration that manager wait for mc info command
               mc_info_timelimit: 20
       # minimum duration that manager wait for mc stop command
-              mc_stop_timelimit: 20
+              minio_stop_timeout: 20
       # minimum duration that manager wait after sending SIGHUP to manager
               kill_supervisor_wait: 60
       # minimum duration that manager wait for mc user add command

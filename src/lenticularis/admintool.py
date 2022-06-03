@@ -193,7 +193,7 @@ def pool_key_order(e):
         "access_keys",
         "buckets_directory",
         "buckets",
-        "direct_hostnames",
+        #"direct_hostnames",
         "expiration_date",
         "permit_status",
         "online_status",

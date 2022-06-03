@@ -40,14 +40,12 @@
       # password of Redis (see redis.conf's requirepass above)
           password: deadbeef
 
-      lenticularis:
+      multiplexer:
+          # set facade hostname
+          facade_hostname: lens3.example.com
 
-          multiplexer:
-      # set facade hostname
-              facade_hostname: lens3.example.com
-
-          controller:
-      # maximum allowed time during initializing a zone
+      controller:
+              # maximum allowed time during initializing a zone
               max_lock_duration: 60
 
           system_settings:

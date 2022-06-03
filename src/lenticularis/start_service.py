@@ -10,7 +10,7 @@ import sys
 from lenticularis.readconf import read_mux_conf
 from lenticularis.readconf import read_adm_conf
 from lenticularis.utility import logger, openlog
-from lenticularis.utility import make_clean_env
+from lenticularis.utility import copy_minimal_env
 
 
 def start_mux():
@@ -27,7 +27,7 @@ def start_mux():
     gunicorn_conf = mux_conf["gunicorn"]
     _port = gunicorn_conf["port"]
     bind = f"[::]:{_port}"
-    env = make_clean_env(os.environ)
+    env = copy_minimal_env(os.environ)
     env["LENTICULARIS_MUX_CONFIG"] = configfile
     cmd = [sys.executable, "-m", "gunicorn"]
     args = ["--bind", bind]
@@ -52,7 +52,7 @@ def start_adm():
     gunicorn_conf = adm_conf["gunicorn"]
     _port = gunicorn_conf["port"]
     bind = f"[::]:{_port}"
-    env = make_clean_env(os.environ)
+    env = copy_minimal_env(os.environ)
     env["LENTICULARIS_ADM_CONFIG"] = configfile
     cmd = [sys.executable, "-m", "gunicorn"]
     args = ["--worker-class", "uvicorn.workers.UvicornWorker", "--bind", bind]

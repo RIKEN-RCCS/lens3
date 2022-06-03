@@ -245,21 +245,21 @@ def access_mux(traceid, ep, access_key, facade_hostname, timeout):
         assert isinstance(status, int)
     except urllib.error.HTTPError as e:
         b = e.read()
-        logger.debug(f"Exception from urlopen to Mux url=({url}):"
-                     f" exception=({e}) body=({b})")
+        logger.warning(f"Exception from urlopen to Mux url=({url}):"
+                       f" exception=({e}) body=({b})")
         status = e.code
         assert isinstance(status, int)
     except urllib.error.URLError as e:
-        logger.debug(f"Exception from urlopen to Mux url=({url}):"
+        logger.error(f"Exception from urlopen to Mux url=({url}):"
                      f" exception=({e})")
         status = 400
     except Exception as e:
-        logger.debug(f"Exception from urlopen to Mux url=({url}):"
-                     f" exception=({e})")
-        logger.debug(traceback.format_exc())
+        logger.error(f"Exception from urlopen to Mux url=({url}):"
+                     f" exception=({e})",
+                     exc_info=True)
         status = 400
         pass
-    logger.debug(f"urlopen for access_mux: status={status}")
+    logger.debug(f"urlopen to Mux: status={status}")
     return status
 
 
@@ -279,11 +279,8 @@ def check_permission(user, allow_deny_rules):
     return "allowed"
 
 
-def make_clean_env(oenv):
-    """
-    create_env_for_minio()
-    create new environment and
-    pick up required environment variables from `oenv`
+def copy_minimal_env(oenv):
+    """Copies minimal environ to run services.
     """
     keys = {
         "HOME",

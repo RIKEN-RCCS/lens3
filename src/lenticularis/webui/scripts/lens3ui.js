@@ -35,7 +35,7 @@ var edit_pool_data = {
   access_keys_ro: [],
   access_keys_wo: [],
 
-  direct_hostnames: "",
+  //direct_hostnames: "",
   expiration_date: "",
   permit_status: "",
   online_status: "",
@@ -329,7 +329,7 @@ const policyNames = ["readwrite", "readonly", "writeonly"];
 //  return JSON.stringify(dict);
 //}
 
-function build_pool_desc() {
+function build_pool_desc__() {
   var pooldesc = {};
   var buckets = new Array();
   var direct_hostnames = new Array();
@@ -353,7 +353,7 @@ function build_pool_desc() {
 }
 
 function compose_create_dict__(csrf_token) {
-  var pooldesc = build_pool_desc();
+  var pooldesc = build_pool_desc__();
   var dict = {"pool": pooldesc};
   //return stringify_dict(dict, csrf_token);
   dict["CSRF-Token"] = csrf_token;
@@ -362,7 +362,7 @@ function compose_create_dict__(csrf_token) {
 }
 
 function compose_update_dict__(csrf_token) {
-  var pooldesc = build_pool_desc();
+  var pooldesc = build_pool_desc__();
   //pooldesc["access_keys"] = edit_pool_data.accessKeys;
   var dict = {"pool": pooldesc};
   //return stringify_dict(dict, csrf_token);
@@ -657,7 +657,7 @@ function render_pool_as_ul_entry(pooldesc) {
     ... key_entries,
     {text: {label: "Endpoint-URL", value: pooldesc["endpoint_url"]}},
     {text: {label: "Pool-ID", value: pooldesc["pool_name"]}},
-    {text: {label: "Direct hostname", value: pooldesc["direct_hostnames"].join(" ")}},
+    //{text: {label: "Direct hostname", value: pooldesc["direct_hostnames"].join(" ")}},
     {text: {label: "MinIO state", value: pooldesc["minio_state"]}},
     {text: {label: "Expiration date", value: format_rfc3339_if_not_zero(pooldesc["expiration_date"])}},
     {text: {label: "User enabled", value: pooldesc["permit_status"]}},
@@ -700,7 +700,7 @@ function copy_pool_desc_for_edit(pooldesc) {
 
   //edit_pool_data.accessKeys = keys;
 
-  edit_pool_data.direct_hostnames = pooldesc["direct_hostnames"].join(" ");
+  //edit_pool_data.direct_hostnames = pooldesc["direct_hostnames"].join(" ");
   edit_pool_data.expiration_date = format_rfc3339_if_not_zero(pooldesc["expiration_date"]);
   edit_pool_data.permit_status = pooldesc["permit_status"];
   edit_pool_data.online_status = pooldesc["online_status"];

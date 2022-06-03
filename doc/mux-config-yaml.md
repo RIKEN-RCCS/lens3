@@ -29,9 +29,9 @@ multiplexer:
     * facade_hostname: lens3.example.com
     * trusted_proxies:
       are proxies and hosts running adminitorator commands.
-    * timer_interval: 30
+    * mux_endpoint_update: 30
       is a time limit of connecting to minio
-    * request_timeout: 60
+    * forwarding_timeout: 60
 
 controller:
     # port for MinIO (lower)
@@ -49,13 +49,13 @@ controller:
     # maximum time allowed to initialize zone
     max_lock_duration: 60
     # minimum duration that manager wait for mc info command
-    mc_info_timelimit: 20
+    heartbeat_timeout: 20
     # minimum duration that manager wait for mc stop command
-    mc_stop_timelimit: 20
+    minio_stop_timeout: 20
     # minimum duration that manager wait after sending SIGHUP to manager
     kill_supervisor_wait: 60
     # minimum duration that manager wait for mc user add command
-    minio_user_install_timelimit: 60
+    minio_setup_timeout: 60
     # max allowed excess time to watch_interval
     refresh_margin: 5
     # absolute path to sudo

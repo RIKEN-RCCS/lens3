@@ -95,14 +95,14 @@ class Multiplexer():
         self._trusted_proxies = {addr for h in proxies
                                  for addr in get_ip_addresses(h)}
         self._forwarding_timeout = int(mux_param["forwarding_timeout"])
-        timer = int(mux_param["mux_endpoint_update"])
+        timer = int(mux_param["mux_ep_update_interval"])
         self.periodic_work_interval = timer
         self.probe_access_timeout = int(mux_param["probe_access_timeout"])
 
         self._multiplexer_addrs = self._list_mux_ip_addresses()
 
-        ctl_param = mux_conf["controller"]
-        self.watch_interval = int(ctl_param["watch_interval"])
+        ctl_param = mux_conf["minio_manager"]
+        self.heartbeat_interval = int(ctl_param["heartbeat_interval"])
         self.heartbeat_timeout = int(ctl_param["heartbeat_timeout"])
         self.scheduler = Scheduler(tables)
         return
@@ -404,7 +404,7 @@ class Multiplexer():
         if respiter != []:
             # update atime
             jitter = 0  # NOTE: fixed to 0
-            initial_idle_duration = self.watch_interval + jitter + self.heartbeat_timeout
+            initial_idle_duration = self.heartbeat_interval + jitter + self.heartbeat_timeout
             ##atime_timeout = initial_idle_duration + self.refresh_margin
             ##atime = f"{int(time.time())}"
             ##self.tables.routing_table.set_atime_by_addr_(dest_addr, atime, atime_timeout)

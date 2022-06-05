@@ -20,9 +20,11 @@ class Api_Error(Exception):
 
 
 class Pool_State(enum.Enum):
-    Initial = "initial"
-    Ready = "ready"
-    Inoperable = "inoperable"
+    INITIAL = "initial"
+    READY = "ready"
+    DISABLED = "disabled"
+    INOPERABLE = "inoperable"
+    ERROR = "error"
 
     def __str__(self):
         return self.value
@@ -43,7 +45,7 @@ def _update_for_key(dict0, key, dict1, overwrite):
     return
 
 
-def merge_pool_descriptions(user_id, existing, zone):
+def merge_pool_descriptions__(user_id, existing, zone):
     ## Note it disallows updating "root_secret" by preferring an
     ## existing one.
     if not existing:
@@ -60,7 +62,7 @@ def merge_pool_descriptions(user_id, existing, zone):
     return
 
 
-def compare_access_keys(existing, zone):
+def compare_access_keys__(existing, zone):
     if existing is None:
         return []
     e = existing.get("access_keys")
@@ -76,7 +78,7 @@ def compare_access_keys(existing, zone):
     return dict_diff(e_dic, z_dic)
 
 
-def compare_buckets_directory(existing, zone):
+def compare_buckets_directory__(existing, zone):
     if existing is None:
         return []
     e = existing.get("buckets_directory")
@@ -88,7 +90,7 @@ def compare_buckets_directory(existing, zone):
     return []
 
 
-def compare_buckets(existing, zone):
+def compare_buckets__(existing, zone):
     if existing is None:
         return []
     e = existing.get("buckets")
@@ -110,7 +112,7 @@ def _direct_hostnames(zone):
     return set(zone.get("direct_hostnames"))
 
 
-def check_conflict(zoneID, zone, z_id, z):
+def check_conflict__(zoneID, zone, z_id, z):
     #logger.debug(f"@@@ zoneID = {zoneID}, zone = {zone}, z_id = {z_id}, z = {z}")
 
     reasons = []
@@ -152,31 +154,31 @@ def check_conflict(zoneID, zone, z_id, z):
     return reasons
 
 
-def check_policy(policy):
+def _check_bkt_policy(policy):
     if policy not in {"none", "upload", "download", "public"}:
         raise Exception(f"invalid policy: {policy}")
     return
 
 
-def check_key_policy(key_policy):
+def _check_key_policy(key_policy):
     if key_policy not in {"readwrite", "readonly", "writeonly"}:
         raise Exception(f"invalid key_policy: {key_policy}")
     return
 
 
-def check_status(status):
-    if status not in {"online", "offline"}:
-        raise Exception(f"invalid status: {status}")
+def _check_online_status(status):
+    ##if status not in {"online", "offline"}:
+    ##    raise Exception(f"invalid status: {status}")
     return
 
 
-def check_permission(permission):
-    if permission not in {"allowed", "denied"}:
-        raise Exception(f"invalid permission: {permission}")
+def _check_permit_status(permission):
+    ##if permission not in {"allowed", "denied"}:
+    ##    raise Exception(f"invalid permission: {permission}")
     return
 
 
-def check_number(number):
+def _check_number(number):
     if not number.isdigit():
         raise Exception(f"number expected: {number}")
     return
@@ -185,18 +187,17 @@ def check_number(number):
 def check_pool_dict_is_sound(pooldesc, user, adm_conf):
     """Checks somewhat on values are defined in _check_zone_values.
     """
-
     for bucket in pooldesc.get("buckets", []):
-        check_policy(bucket["bkt_policy"])
-    check_status(pooldesc["online_status"])
-    check_permission(pooldesc["permit_status"])
-    for accessKey in pooldesc.get("access_keys", []):
-        check_key_policy(accessKey["key_policy"])
+        _check_bkt_policy(bucket["bkt_policy"])
         pass
-
-    check_number(pooldesc["expiration_date"])
-    check_number(pooldesc.get("atime", "0"))  # may be absent
-
+    _check_online_status(pooldesc["online_status"])
+    _check_permit_status(pooldesc["permit_status"])
+    for accessKey in pooldesc.get("access_keys", []):
+        _check_key_policy(accessKey["key_policy"])
+        pass
+    # _check_number(pooldesc["expiration_date"])
+    # _check_number(pooldesc.get("atime", "0"))
+    #
     # XXX fixme check_policy()
     # XXX FIXME
     # group: user's group
@@ -210,6 +211,7 @@ def check_pool_dict_is_sound(pooldesc, user, adm_conf):
     # Secret Access Key: 1..128 string
     # status: online/offline
     return
+
 
 def check_user_naming(user_id):
     return re.fullmatch("^[a-z_][-a-z0-9_]{0,31}$", user_id) is not None
@@ -272,28 +274,26 @@ def _pool_desc_schema(type_number):
             "pool_name": {"type": "string"},
             "owner_uid": {"type": "string"},
             "owner_gid": {"type": "string"},
-            #"root_secret": {"type": "string"},
             "buckets_directory": {"type": "string"},
             "buckets": {"type": "array", "items": bucket},
             "probe_access": {"type": "string"},
             "access_keys": {"type": "array", "items": access_key},
-            #"direct_hostnames": {"type": "array", "items": {"type": "string"}},
-            "expiration_date": type_number,
-            "permit_status": {"type": "string"},
-            "online_status": {"type": "string"},
             "minio_state": {"type": "string"},
+            "expiration_date": {"type": "integer"},
+            #"permit_status": {"type": "string"},
+            #"online_status": {"type": "string"},
+            "permit_status": {"type": "boolean"},
+            "online_status": {"type": "boolean"},
+            "modification_date": {"type": "integer"},
             # Below keys are internally held:
-            # "atime"
        },
         "required": [
             # "pool_name",
             "owner_uid",
             "owner_gid",
-            #"root_secret",
             "buckets_directory",
             "buckets",
             "access_keys",
-            #"direct_hostnames",
             "expiration_date",
             "permit_status",
             "online_status",

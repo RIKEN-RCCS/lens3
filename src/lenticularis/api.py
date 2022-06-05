@@ -3,33 +3,27 @@
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
-import base64
-import sys
 from lenticularis.pooladmin import Pool_Admin
 from lenticularis.pooladmin import rephrase_exception_message
 from lenticularis.poolutil import Api_Error
 from lenticularis.poolutil import check_pool_naming
 from lenticularis.poolutil import check_bucket_naming
-from lenticularis.table import get_tables
 from lenticularis.utility import get_ip_addresses
 from lenticularis.utility import logger
-from lenticularis.utility import random_str
-import time
 
 
 class Api():
 
     def __init__(self, adm_conf):
-        self.zone_adm = Pool_Admin(adm_conf)
+        self.pool_adm = Pool_Admin(adm_conf)
         trusted_proxies = adm_conf["webui"]["trusted_proxies"]
         self.trusted_proxies = set([addr for h in trusted_proxies
                                     for addr in get_ip_addresses(h)])
-        logger.debug(f"@@@ self.trusted_proxies = {self.trusted_proxies}")
         return
 
-    def api_get_template(self, traceid, user_id):
+    def return_user_template_ui(self, traceid, user_id):
         try:
-            t = self.zone_adm.return_user_template(user_id)
+            t = self.pool_adm.return_user_template(user_id)
             return (200, None, {"pool_list": [t]})
         except Api_Error as e:
             return (e.code, f"{e}", [])
@@ -43,10 +37,10 @@ class Api():
 
     # POOLS.
 
-    def api_make_pool(self, traceid, user_id, pooldesc0):
+    def make_pool_ui(self, traceid, user_id, pooldesc0):
         try:
-            pooldesc1 = self.zone_adm.make_pool(traceid, user_id, pooldesc0)
-            return (200, None, {"pool_list": [pooldesc1]})
+            triple = self.pool_adm.make_pool_ui(traceid, user_id, pooldesc0)
+            return triple
         except Api_Error as e:
             return (e.code, f"{e}", [])
         except Exception as e:
@@ -57,11 +51,11 @@ class Api():
             return (500, m, None)
         pass
 
-    def api_delete_pool(self, traceid, user_id, pool_id):
+    def delete_pool_ui(self, traceid, user_id, pool_id):
         try:
             if not check_pool_naming(pool_id):
                 return (403, f"Bad pool={pool_id}", [])
-            self.zone_adm.delete_pool(traceid, user_id, pool_id)
+            self.pool_adm.delete_pool_ui(traceid, user_id, pool_id)
             return (200, None, [])
         except Api_Error as e:
             return (e.code, f"{e}", [])
@@ -73,16 +67,13 @@ class Api():
             return (500, m, [])
         pass
 
-    def api_list_pools(self, traceid, user_id, pool_id):
+    def list_pools_ui(self, traceid, user_id, pool_id):
         try:
             if pool_id is None:
                 pass
             elif not check_pool_naming(pool_id):
                 return (403, f"Bad pool-id={pool_id}", [])
-            ##(zone_list, _) = self.zone_adm.fetch_zone_list(
-            ##user_id, decrypt=True, include_atime=True, include_userinfo=True,
-            ##zone_id=pool_id)
-            triple = self.zone_adm.list_pools(traceid, user_id, pool_id)
+            triple = self.pool_adm.list_pools_ui(traceid, user_id, pool_id)
             return triple
         except Api_Error as e:
             return (e.code, f"{e}", [])
@@ -96,7 +87,7 @@ class Api():
 
     # BUCKETS.
 
-    def api_make_bucket(self, traceid, user_id, pool_id, body):
+    def make_bucket_ui(self, traceid, user_id, pool_id, body):
         try:
             if not check_pool_naming(pool_id):
                 return (403, f"Bad pool-id={pool_id}", [])
@@ -114,8 +105,8 @@ class Api():
         try:
             logger.debug(f"Adding a bucket to pool={pool_id}"
                          f": name={bucket}, policy={policy}")
-            triple = self.zone_adm.make_bucket(traceid, user_id, pool_id,
-                                               bucket, policy)
+            triple = self.pool_adm.make_bucket_ui(traceid, user_id, pool_id,
+                                                  bucket, policy)
             return triple
         except Api_Error as e:
             return (e.code, f"{e}", [])
@@ -128,7 +119,7 @@ class Api():
             return (500, m, None)
         pass
 
-    def api_delete_bucket(self, traceid, user_id, pool_id, bucket):
+    def delete_bucket_ui(self, traceid, user_id, pool_id, bucket):
         try:
             if not check_pool_naming(pool_id):
                 return (403, f"Bad pool={pool_id}", [])
@@ -139,7 +130,7 @@ class Api():
             return (400, m, None)
         try:
             logger.debug(f"Deleting a bucket: {bucket}")
-            triple = self.zone_adm.delete_bucket(traceid, user_id, pool_id, bucket)
+            triple = self.pool_adm.delete_bucket_ui(traceid, user_id, pool_id, bucket)
             return triple
         except Api_Error as e:
             return (e.code, f"{e}", [])
@@ -154,7 +145,7 @@ class Api():
 
     # SECRETS.
 
-    def api_make_secret(self, traceid, user_id, pool_id, body):
+    def make_secret_ui(self, traceid, user_id, pool_id, body):
         try:
             if not check_pool_naming(pool_id):
                 return (403, f"Bad pool-id={pool_id}", [])
@@ -166,7 +157,7 @@ class Api():
             return (400, m, None)
         try:
             logger.debug(f"Adding a new secret: {rw}")
-            triple = self.zone_adm.make_secret(traceid, user_id, pool_id, rw)
+            triple = self.pool_adm.make_secret_ui(traceid, user_id, pool_id, rw)
             return triple
         except Api_Error as e:
             return (e.code, f"{e}", [])
@@ -178,7 +169,7 @@ class Api():
             return (500, m, None)
         pass
 
-    def api_delete_secret(self, traceid, user_id, pool_id, access_key):
+    def delete_secret_ui(self, traceid, user_id, pool_id, access_key):
         try:
             if not check_pool_naming(pool_id):
                 return (403, f"Bad pool-id={pool_id}", [])
@@ -189,7 +180,8 @@ class Api():
             return (400, m, None)
         try:
             logger.debug(f"Deleting a secret: {access_key}")
-            triple = self.zone_adm.delete_secret(traceid, user_id, pool_id, access_key)
+            triple = self.pool_adm.delete_secret_ui(traceid, user_id, pool_id,
+                                                    access_key)
             return triple
         except Api_Error as e:
             return (e.code, f"{e}", [])

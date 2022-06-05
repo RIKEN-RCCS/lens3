@@ -20,21 +20,21 @@ multiplexer:
     facade_hostname: fgkvm-010-128-008-026.fdcs.r-ccs.riken.jp
     trusted_proxies:
         - localhost
-    mux_endpoint_update: 300
+    mux_ep_update_interval: 307
     forwarding_timeout: 60
     probe_access_timeout: 60
 
-controller:
+minio_manager:
+    sudo: /usr/bin/sudo
     port_min: 9000
     port_max: 9999
-    sudo: /usr/bin/sudo
-    keep_awake: 1800
-    watch_interval: 30
+    minio_awake_duration: 1800
+    heartbeat_interval: 61
     heartbeat_miss_tolerance: 3
-    heartbeat_timeout: 20
+    heartbeat_timeout: 30
     minio_start_timeout: 60
     minio_setup_timeout: 60
-    minio_stop_timeout: 20
+    minio_stop_timeout: 30
 
 minio:
     minio: /home/lens3/bin/minio

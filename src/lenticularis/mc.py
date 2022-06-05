@@ -296,9 +296,9 @@ class Mc():
         assert_mc_success(r, "mc.policy_set")
         return
 
-    def clean_minio_setting(self, user_id, pool_id):
+    def clean_minio_setting(self, pool_id):
         """Tries to delete all access-keys and set "none"-policy to all
-        buckets.
+        buckets.  pool_id is used only for printing messages.
         """
         # Delete access-keys.
         try:

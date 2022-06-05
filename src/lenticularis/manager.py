@@ -21,9 +21,11 @@ from lenticularis.mc import Mc, assert_mc_success
 from lenticularis.readconf import read_mux_conf
 from lenticularis.lockdb import LockDB
 from lenticularis.table import get_tables
+from lenticularis.poolutil import Pool_State
 from lenticularis.utility import ERROR_EXIT_READCONF, ERROR_EXIT_FORK, ERROR_EXIT_START_MINIO
 from lenticularis.utility import decrypt_secret, list_diff3
-from lenticularis.utility import gen_access_key_id, gen_secret_access_key
+from lenticularis.utility import generate_access_key
+from lenticularis.utility import generate_secret_key
 from lenticularis.utility import copy_minimal_env, host_port
 from lenticularis.utility import uniform_distribution_jitter
 from lenticularis.utility import wait_one_line_on_stdout
@@ -80,21 +82,21 @@ class Manager():
         self._port_min = int(args.port_min)
         self._port_max = int(args.port_max)
 
-        minio_param = mux_conf["minio"]
-        self._bin_minio = minio_param["minio"]
-        self._bin_mc = minio_param["mc"]
-
-        ctl_param = mux_conf["controller"]
+        ctl_param = mux_conf["minio_manager"]
         self._bin_sudo = ctl_param["sudo"]
-        self._keep_awake = int(ctl_param["keep_awake"])
-        self._watch_interval = int(ctl_param["watch_interval"])
+        self._minio_awake_duration = int(ctl_param["minio_awake_duration"])
+        self._heartbeat_interval = int(ctl_param["heartbeat_interval"])
         self._heartbeat_tolerance = int(ctl_param["heartbeat_miss_tolerance"])
         self._heartbeat_timeout = int(ctl_param["heartbeat_timeout"])
         self._minio_start_timeout = int(ctl_param["minio_start_timeout"])
         self._minio_setup_timeout = int(ctl_param["minio_setup_timeout"])
         self._minio_stop_timeout = int(ctl_param["minio_stop_timeout"])
-        self._watch_gap_minimal = (self._watch_interval / 8)
-        self._expiry = (self._heartbeat_tolerance * self._watch_interval)
+        self._watch_gap_minimal = (self._heartbeat_interval / 8)
+        self._expiry = (self._heartbeat_tolerance * self._heartbeat_interval)
+
+        minio_param = mux_conf["minio"]
+        self._bin_minio = minio_param["minio"]
+        self._bin_mc = minio_param["mc"]
 
         ## NOTE: FIX VALUE of timeout_margin.
         ##self.timeout_margin = 2
@@ -125,7 +127,51 @@ class Manager():
         pass
 
     def _set_pool_state(self, poolstate, reason):
+        pool_id = self._pool_id
+        (o, _) = self.tables.get_pool_state(pool_id)
+        logger.debug(f"pool-state change pool={pool_id}: {o} to {poolstate}")
         self.tables.set_pool_state(self._pool_id, poolstate, reason)
+        pass
+
+    def _check_pool_is_enabled(self):
+        """Checks expiration, permit-status, and online-status of a pool, and
+        updates the pool-state if it changes.  It returns a pair of OK status
+        and a string for an exception.
+        """
+        now = int(time.time())
+        pool_id = self._pool_id
+        pooldesc = self.tables.get_pool(pool_id)
+        if pooldesc is None:
+            return (False, ("Pool removed"))
+        (poolstate, _) = self.tables.get_pool_state(pool_id)
+        if poolstate in {Pool_State.INOPERABLE, Pool_State.ERROR}:
+            return (False, ("Pool in error"))
+        user_id = pooldesc["owner_uid"]
+        unexpired = now < pooldesc["expiration_date"]
+        u = self.tables.get_user(user_id)
+        permitted = u["permitted"]
+        online = pooldesc["online_status"]
+        ok = (unexpired and permitted and online)
+        if not ok and poolstate in {Pool_State.READY}:
+            self._set_pool_state(Pool_State.DISABLED,
+                                 f"Pool states:"
+                                 f" expired={not unexpired},"
+                                 f" permitted={permitted},"
+                                 f" online={online}.")
+            if not unexpired:
+                return (False, ("Pool expired"))
+            if not permitted:
+                return (False, ("User disabled"))
+            if not online:
+                return (False, ("Pool offline"))
+            return (False, ("Pool in error"))
+        elif ok and poolstate in {Pool_State.DISABLED}:
+            self._set_pool_state(Pool_State.READY, f"")
+            return (True, "")
+        else:
+            # State unchanged.
+            ready = poolstate in {Pool_State.READY}
+            return (ready, ("Pool in error"))
         pass
 
     def manager_main(self):
@@ -185,8 +231,8 @@ class Manager():
             return False
 
         use_pool_id_for_minio_root_user = False
-        self._minio_root_user = gen_access_key_id()
-        self._minio_root_password = gen_secret_access_key()
+        self._minio_root_user = generate_access_key()
+        self._minio_root_password = generate_secret_key()
 
         env = copy_minimal_env(os.environ)
         self._env_minio = env
@@ -203,37 +249,42 @@ class Manager():
         ## self._env_minio["MINIO_CACHE_WATERMARK_LOW"] = "70"
         ## self._env_minio["MINIO_CACHE_WATERMARK_HIGH"] = "90"
 
-        now = int(time.time())
         (poolstate, _) = self.tables.get_pool_state(self._pool_id)
 
         assert pooldesc is not None
 
-        user = pooldesc["owner_uid"]
-        group = pooldesc["owner_gid"]
+        user_id = pooldesc["owner_uid"]
+        group_id = pooldesc["owner_gid"]
         directory = pooldesc["buckets_directory"]
 
-        unexpired = now < int(pooldesc["expiration_date"])
-        permitted = pooldesc["permit_status"] == "allowed"
-        online = pooldesc["online_status"] == "online"
-
-        if not (unexpired and permitted and online):
-            self._set_pool_state("disabled",
-                                 f"Pool states:"
-                                 f" expired={not unexpired},"
-                                 f" permitted={permitted},"
-                                 f" online={online}.")
+        (ok, reason) = self._check_pool_is_enabled()
+        if not ok:
             return False
+
+        ##now = int(time.time())
+        ##unexpired = now < pooldesc["expiration_date"]
+        ##online = pooldesc["online_status"]
+        ##u = self.tables.get_user(user_id)
+        ##permitted = u["permitted"]
+        ##if not (unexpired and permitted and online):
+        ##    self._set_pool_state(Pool_State.DISABLED,
+        ##                         f"Pool states:"
+        ##                         f" expired={not unexpired},"
+        ##                         f" permitted={permitted},"
+        ##                         f" online={online}.")
+        ##    return False
 
         procdesc = self.tables.get_minio_proc(self._pool_id)
         assert procdesc is None
         logger.error(f"AHO poolstate={poolstate}")
-        assert poolstate == "initial" or poolstate == "ready"
+        assert poolstate in {Pool_State.INITIAL, Pool_State.READY}
 
         ports = list(range(self._port_min, self._port_max + 1))
         random.shuffle(ports)
         p = None
         for port in ports:
-            (p, nonfatal) = self._try_start_minio(port, user, group, directory)
+            (p, nonfatal) = self._try_start_minio(port, user_id, group_id,
+                                                  directory)
             if p is not None:
                 break
             if not nonfatal:
@@ -268,7 +319,7 @@ class Manager():
             # (e is SubprocessError, OSError, ValueError, usually).
             logger.error(f"Starting MinIO failed with exception={e}",
                          exc_info=True)
-            self._set_pool_state("inoperable", "MinIO does not start")
+            self._set_pool_state(Pool_State.INOPERABLE, "MinIO does not start")
             self._minio_ep = None
             return (None, False)
         finally:
@@ -315,18 +366,18 @@ class Manager():
                     return (False, True)
                 elif outs.find(_minio_response_unwritable_storage) != -1:
                     reason = "storage unwritable"
-                    self._set_pool_state("inoperable", reason)
+                    self._set_pool_state(Pool_State.INOPERABLE, reason)
                     logger.info(f"{m0} {reason}: {m1}")
                     return (False, False)
                 else:
                     reason = "start failed"
-                    self._set_pool_state("inoperable", reason)
+                    self._set_pool_state(Pool_State.INOPERABLE, reason)
                     logger.error(f"{m0} {reason}: {m1}")
                     return (False, False)
                 pass
             else:
                 reason = "start failed (no error)"
-                self._set_pool_state("inoperable", reason)
+                self._set_pool_state(Pool_State.INOPERABLE, reason)
                 logger.error(f"{m0} {reason}: {m1}")
                 return (False, False)
             pass
@@ -347,7 +398,7 @@ class Manager():
             self._tell_controller_minio_starts()
             pass
 
-        self._set_pool_state("ready", None)
+        self._set_pool_state(Pool_State.READY, None)
 
         try:
             self._watch_minio(p)
@@ -368,12 +419,12 @@ class Manager():
                 self._alarm_section = None
             except Alarmed as e:
                 x = Exception("MinIO initialization failed (timeout)")
-                self._set_pool_state("error", f"{x}")
+                self._set_pool_state(Pool_State.ERROR, f"{x}")
                 raise x
             except Exception as e:
                 alarm(0)
                 self._alarm_section = None
-                self._set_pool_state("error", f"{e}")
+                self._set_pool_state(Pool_State.ERROR, f"{e}")
                 logger.error(f"MinIO initialization failed for"
                              f" pool={self._pool_id}: exception=({e})")
                 logger.exception(e)
@@ -396,7 +447,7 @@ class Manager():
             self._last_access_ts = 0
             while True:
                 jitter = uniform_distribution_jitter()
-                timeo = self._watch_interval + jitter
+                timeo = self._heartbeat_interval + jitter
                 (readable, _, _) = select.select(
                     [p.stdout, p.stderr], [], [], timeo)
 
@@ -432,7 +483,7 @@ class Manager():
             logger.exception(e)
             pass
 
-        logger.debug(f"Manager for {self._minio_ep} exits.")
+        logger.debug(f"Manager for {self._minio_ep} exiting.")
         pass
 
     def _register_minio_process(self, pid, pooldesc):
@@ -521,30 +572,34 @@ class Manager():
         """
         now = int(time.time())
         # Check the status of a pool.
-        pooldesc = self.tables.storage_table.get_pool(self._pool_id)
-        if pooldesc is None:
-            raise Termination("Pool removed")
-        ##AHO
-        if now >= int(pooldesc["expiration_date"]):
-            raise Termination("Pool expired")
-        if pooldesc["permit_status"] != "allowed":
-            raise Termination("Pool disabled")
-        if pooldesc["online_status"] != "online":
-            raise Termination("Pool offline")
+        (ok, reason) = self._check_pool_is_enabled()
+        if not ok:
+            raise Termination(reason)
+        ##pooldesc = self.tables.get_pool(self._pool_id)
+        ##if pooldesc is None:
+        ##    raise Termination("Pool removed")
+        ##if now >= pooldesc["expiration_date"]:
+        ##    raise Termination("Pool expired")
+        ##if not pooldesc["online_status"]:
+        ##    raise Termination("Pool offline")
+        ##user_id = pooldesc["owner_uid"]
+        ##u = self.tables.get_user(user_id)
+        ##if not u["permitted"]:
+        ##    raise Termination("User disabled")
         # Check the status of a process.
         procdesc = self.tables.get_minio_proc(self._pool_id)
         if procdesc != self._minio_proc:
             raise Termination("MinIO process overtaken")
         # Check the life-time is expired.
         elapsed = now - self._last_access_ts
-        if elapsed > self._keep_awake:
+        if elapsed > self._minio_awake_duration:
             ts = self.tables.get_access_timestamp(self._pool_id)
             if ts is None:
                 logger.warning(f"Timestamp not found: pool={self._pool_id}")
                 raise Termination("Timestamp not found")
             self._last_access_ts = ts
             elapsed = now - ts
-            if elapsed > self._keep_awake:
+            if elapsed > self._minio_awake_duration:
                 logger.info(f"Keep-awake expired: pool={self._pool_id}")
                 raise Termination("Keep-awake expired")
             pass

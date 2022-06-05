@@ -5,10 +5,11 @@
 
 import time
 import json
-from lenticularis.utility import logger
+from lenticularis.poolutil import Pool_State
 from lenticularis.dbase import DBase
-from lenticularis.utility import gen_access_key_id
-from lenticularis.utility import gen_secret_access_key
+from lenticularis.utility import generate_access_key
+from lenticularis.utility import generate_secret_key
+from lenticularis.utility import logger
 
 # Redis DB number.
 
@@ -57,8 +58,8 @@ def delete_all(r, match):
 def _scan_table(r, prefix, target, *, value=None):
     """Returns an iterator to scan a table for a prefix+target pattern,
     where target is * if it is None.  It drops the prefix from the
-    returned key.  It returns key+value pairs, where value is None if
-    value= is not specified.
+    returned key.  It returns a pair of key+value, where value is None
+    if value= option is not specified.
     """
     target = target if target else "*"
     pattern = f"{prefix}{target}"
@@ -92,18 +93,32 @@ class Tables():
 
     ## Storage-table:
 
+    def set_pool(self, pool_id, pooldesc):
+        self.storage_table.set_pool(pool_id, pooldesc)
+        pass
+
     def get_pool(self, pool_id):
         return self.storage_table.get_pool(pool_id)
+
+    def delete_pool(self, pool_id):
+        self.storage_table.delete_pool(pool_id)
+        pass
+
+    def list_pools(self, pool_id):
+        """Returns a ID list of pools if argument is None.  Or, it just checks
+        existence of a pool.
+        """
+        return self.storage_table.list_pools(pool_id)
 
     def set_ex_buckets_directory(self, path, pool_id):
         return self.storage_table.set_ex_buckets_directory(path, pool_id)
 
+    def get_buckets_directory_of_pool(self, pool_id):
+        return self.storage_table.get_buckets_directory_of_pool(pool_id)
+
     def delete_buckets_directory(self, path):
         self.storage_table.delete_buckets_directory(path)
         pass
-
-    def get_buckets_directory_of_pool(self, pool_id):
-        return self.storage_table.get_buckets_directory_of_pool(pool_id)
 
     def set_user(self, id, info):
         self.storage_table.set_user(id, info)
@@ -129,7 +144,6 @@ class Tables():
     def delete_pool_state(self, pool_id):
         self.storage_table.delete_pool_state(pool_id)
         pass
-
 
     ## Process-table:
 
@@ -221,6 +235,12 @@ class Tables():
     def make_unique_id(self, usage, owner, info={}):
         return self.pickone_table.make_unique_id(usage, owner, info)
 
+    def set_ex_id(self, id, desc):
+        return self.pickone_table.set_ex_id(id, desc)
+
+    def get_id(self, id):
+        return self.pickone_table.get_id(id)
+
     def delete_id_unconditionally(self, id):
         self.pickone_table.delete_id_unconditionally(id)
         pass
@@ -240,11 +260,11 @@ class Table_Common():
 class Storage_Table(Table_Common):
     _pool_desc_prefix = "po:"
     _pool_state_prefix = "ps:"
-    allowDenyRuleKey = "pr::"
-    _unix_user_prefix = "uu:"
+    _user_info_prefix = "uu:"
     storage_table_lock_prefix = "zk:"
     _access_key_id_prefix = "ar:"
     _buckets_directory_prefix = "bd:"
+    allowDenyRuleKey__ = "pr::"
     directHostnamePrefix = "dr:"
     atimePrefix = "ac:"
     hashes_ = {_pool_desc_prefix}
@@ -255,8 +275,7 @@ class Storage_Table(Table_Common):
     pool_desc_stored_keys = {
         "pool_name", "owner_uid", "owner_gid",
         "buckets_directory", "probe_access",
-        "expiration_date", "permit_status", "online_status"}
-    pool_desc_optional_keys = {}
+        "expiration_date", "online_status", "modification_date",}
     _pool_desc_keys = pool_desc_stored_keys
 
     _access_keys_keys = {
@@ -266,16 +285,23 @@ class Storage_Table(Table_Common):
         "uid", "groups", "permitted"}
 
     def set_pool(self, pool_id, pooldesc):
-        assert set(pooldesc.keys()).issubset(self._pool_desc_keys)
+        assert set(pooldesc.keys()) == self._pool_desc_keys
         key = f"{self._pool_desc_prefix}{pool_id}"
-        self.dbase.hset_map(key, pooldesc, self.structured)
+        ##self.dbase.hset_map(key, pooldesc, self.structured)
+        v = json.dumps(pooldesc)
+        logger.debug(f"AHO set-pool {v}")
+        self.dbase.set(key, v)
         pass
 
     def get_pool(self, pool_id):
         key = f"{self._pool_desc_prefix}{pool_id}"
-        if not self.dbase.hexists(key, "owner_uid"):
-            return None
-        return self.dbase.hget_map(key, self.structured)
+        ##if not self.dbase.hexists(key, "owner_uid"):
+        ##    return None
+        ##return self.dbase.hget_map(key, self.structured)
+        v = self.dbase.get(key)
+        pooldesc = (json.loads(v, parse_int=None)
+                    if v is not None else None)
+        return pooldesc
 
     def delete_pool(self, pool_id):
         self.dbase.delete(f"{self._pool_desc_prefix}{pool_id}")
@@ -349,22 +375,24 @@ class Storage_Table(Table_Common):
         key = f"{self.atimePrefix}{zoneID}"
         return self.dbase.get(key)
 
-    def del_atime(self, zoneID):
+    def del_atime__(self, zoneID):
         key = f"{self.atimePrefix}{zoneID}"
         self.dbase.delete(key)
         pass
 
-    def set_pool_state(self, pool_id, state, reason):
+    def set_pool_state(self, pool_id, state : Pool_State, reason):
         key = f"{self._pool_state_prefix}{pool_id}"
-        ee = json.dumps((state, reason))
-        self.dbase.set(key, ee)
+        s = str(state)
+        v = json.dumps((s, reason))
+        self.dbase.set(key, v)
         pass
 
     def get_pool_state(self, pool_id):
         key = f"{self._pool_state_prefix}{pool_id}"
-        ee = self.dbase.get(key)
-        (state, reason) = (json.loads(ee, parse_int=None)
-                           if ee is not None else (None, None))
+        v = self.dbase.get(key)
+        (s, reason) = (json.loads(v, parse_int=None)
+                       if v is not None else (None, None))
+        state = Pool_State(s) if s is not None else None
         return (state, reason)
 
     def delete_pool_state(self, pool_id):
@@ -375,8 +403,8 @@ class Storage_Table(Table_Common):
     def set_mode__(self, zoneID, mode):
         # logger.debug(f"+++ {zoneID} {mode}")
         key = f"{self._pool_state_prefix}{zoneID}"
-        ee = json.dumps((mode, None))
-        self.dbase.set(key, ee)
+        v = json.dumps((mode, None))
+        self.dbase.set(key, v)
         pass
 
     def get_mode__(self, zoneID):
@@ -393,40 +421,28 @@ class Storage_Table(Table_Common):
         self.dbase.delete(key)
         pass
 
-    def ins_allow_deny_rules(self, rule):
-        # logger.debug(f"+++ {rule}")
-        self.dbase.set(self.allowDenyRuleKey, json.dumps(rule))
-        pass
-
-    def get_allow_deny_rules(self):
-        # logger.debug(f"+++ ")
-        v = self.dbase.get(self.allowDenyRuleKey)
-        # logger.debug(f"@@@ v = {v}")
-        if not v:
-            return []
-        return json.loads(v, parse_int=None)
-
-    def set_user(self, id, info):
-        assert (self._user_info_keys).issubset(set(info.keys()))
-        key = f"{self._unix_user_prefix}{id}"
-        self.dbase.set(key, json.dumps(info))
+    def set_user(self, id, userinfo):
+        assert set(userinfo.keys()) == self._user_info_keys
+        key = f"{self._user_info_prefix}{id}"
+        v = json.dumps(userinfo)
+        self.dbase.set(key, v)
         pass
 
     def get_user(self, id):
-        key = f"{self._unix_user_prefix}{id}"
+        key = f"{self._user_info_prefix}{id}"
         v = self.dbase.get(key)
         return json.loads(v, parse_int=None) if v is not None else None
 
     def delete_user(self, id):
-        key = f"{self._unix_user_prefix}{id}"
+        key = f"{self._user_info_prefix}{id}"
         self.dbase.delete(key)
         pass
 
     def list_users(self):
-        kk = _scan_table(self.dbase.r, self._unix_user_prefix, None)
+        kk = _scan_table(self.dbase.r, self._user_info_prefix, None)
         return [k for (k, _) in kk]
 
-    def list_pool_ids(self, pool_id):
+    def list_pools(self, pool_id):
         kk = _scan_table(self.dbase.r, self._pool_desc_prefix, pool_id)
         return [k for (k, _) in kk]
 
@@ -468,8 +484,7 @@ class Storage_Table(Table_Common):
         delete_all(self.dbase.r, self._pool_state_prefix)
         delete_all(self.dbase.r, self.storage_table_lock_prefix)
         if everything:
-            delete_all(self.dbase.r, self.allowDenyRuleKey)
-            delete_all(self.dbase.r, self._unix_user_prefix)
+            delete_all(self.dbase.r, self._user_info_prefix)
             pass
         pass
 
@@ -531,7 +546,8 @@ class Process_Table(Table_Common):
         key = f"{self._minio_process_prefix}{pool_id}"
         ##self.set_minio_proc_expiry(pool_id, timeout)
         ##self.dbase.hset_map(key, procdesc, self.structured)
-        self.dbase.set(key, json.dumps(procdesc))
+        v = json.dumps(procdesc)
+        self.dbase.set(key, v)
         pass
 
     def get_minio_proc(self, pool_id):
@@ -723,10 +739,10 @@ class Routing_Table(Table_Common):
         pass
 
     def list_buckets(self, pool_id):
-        keyi = _scan_table(self.dbase.r, self._bucket_prefix, None,
-                           value=self.get_bucket)
+        keyi = _scan_table(self.dbase.r, self._bucket_prefix, None)
         kk = [{"name": name, "bkt_policy": d.get("bkt_policy")}
-              for (name, d) in keyi
+              for (name, d)
+              in [(name, self.get_bucket(name)) for (name, _) in keyi]
               if (d is not None and d.get("pool") == pool_id)]
         return kk
 
@@ -756,19 +772,19 @@ class Pickone_Table(Table_Common):
     structured = {}
 
     _id_desc_keys = {"use", "owner", "secret_key", "key_policy",
-                     "creation_data"}
+                     "modification_date"}
 
     def make_unique_id(self, usage, owner, info={}):
         assert usage in {"pool", "access_key"}
         assert usage != "access_key" or info != {}
         now = int(time.time())
-        d = {"use": usage, "owner": owner, **info, "modification_date": now}
-        desc = json.dumps(d)
+        desc = {"use": usage, "owner": owner, **info, "modification_date": now}
+        v = json.dumps(desc)
         id_generation_loops = 0
         while True:
-            id = gen_access_key_id()
+            id = generate_access_key()
             key = f"{self._id_prefix}{id}"
-            ok = self.dbase.r.setnx(key, desc)
+            ok = self.dbase.r.setnx(key, v)
             if ok:
                 return id
             id_generation_loops += 1
@@ -776,6 +792,13 @@ class Pickone_Table(Table_Common):
             pass
         assert False
         pass
+
+    def set_ex_id(self, id, desc):
+        assert set(desc.keys()) == self._id_desc_keys
+        key = f"{self._id_prefix}{id}"
+        v = json.dumps(desc)
+        ok = self.dbase.r.setnx(key, v)
+        return ok
 
     def get_id(self, id):
         key = f"{self._id_prefix}{id}"
@@ -788,19 +811,18 @@ class Pickone_Table(Table_Common):
         pass
 
     def list_access_keys_of_pool(self, pool_id):
-        """It includes an access-key for probing.  A probe access-key has no
-        corresponding secret-key and it is used only to wake up MinIO
-        from Adm.
+        """Lists access-keys of a pool.  It includes an probe-key.  A
+        probe-key is an access-key but has no corresponding secret-key
+        and it is used only to wake up MinIO from Adm.
         """
-        keyi = _scan_table(self.dbase.r, self._id_prefix, None,
-                           value=self.get_id)
+        keyi = _scan_table(self.dbase.r, self._id_prefix, None)
         ##"secret_key": d.get("secret_key"),
         ##"key_policy": d.get("key_policy")
         keys = [{"access_key": id, **d}
-                for (id, d) in keyi
+                for (id, d) in [(id, self.get_id(id)) for (id, _) in keyi]
                 if (d is not None
-                    and d.get("use") == "access_key"
-                    and d.get("owner") == pool_id)]
+                    and d["use"] == "access_key"
+                    and d["owner"] == pool_id)]
         return keys
 
     def clear_all(self, everything):

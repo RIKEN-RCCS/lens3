@@ -1713,9 +1713,9 @@ with "(\*\*)" are with expiry, in the tables below.
 
 | Key           | Value         | Description   |
 | ----          | ----          | ----          |
-| po:pool-id    | pool-description |(htable)|
-| ps:pool-id    | pool-state    |(json)|
+| po:pool-id    | pool-description |(json)|
 | uu:user       | user-info     |(json)|
+| ps:pool-id    | pool-state    |(json)|
 | bd:directory  | pool-id       | A bucket-directory (\*) |
 
 A pool-description is a record: {}.

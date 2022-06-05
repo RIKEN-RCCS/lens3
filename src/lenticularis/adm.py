@@ -40,7 +40,7 @@ except Exception as e:
 
 openlog(_adm_conf["log_file"],
         **_adm_conf["log_syslog"])
-logger.info("**** START ADM ****")
+logger.info("START ADM.")
 
 _pkgdir = os.path.dirname(inspect.getfile(lenticularis))
 _webui_dir = os.path.join(_pkgdir, "webui")
@@ -138,7 +138,7 @@ async def validate_session(request: Request, call_next):
         # Access log contains client_addr but peer_addr.
         log_access(f"{status_code}", client_addr, user_id, request.method, request.url)
         return JSONResponse(status_code=status_code, content=content)
-    if (not api.zone_adm.check_user_is_registered(user_id)):
+    if (not api.pool_adm.check_user_is_registered(user_id)):
         logger.info(f"Accessing Adm by a bad user: ({user_id})")
         content = {"status": "error", "reason": f"Bad user: ({user_id})",
                    "time": str(now)}
@@ -178,7 +178,7 @@ async def app_get_get_template(
     logger.debug(f"APP.GET /template")
     (user_id, client_addr, traceid) = (x_remote_user, x_real_ip, x_traceid)
     tracing.set(traceid)
-    (code, reason, values) = api.api_get_template(traceid, user_id)
+    (code, reason, values) = api.return_user_template_ui(traceid, user_id)
     response = _make_json_response(code, reason, values, csrf_protect,
                                    client_addr, user_id, request)
     return response
@@ -194,7 +194,7 @@ async def app_get_list_pools(
     logger.debug(f"APP.GET /pool")
     (user_id, client_addr, traceid) = (x_remote_user, x_real_ip, x_traceid)
     tracing.set(traceid)
-    (code, reason, values) = api.api_list_pools(traceid, user_id, None)
+    (code, reason, values) = api.list_pools_ui(traceid, user_id, None)
     response = _make_json_response(code, reason, values, csrf_protect,
                                    client_addr, user_id, request)
     return response
@@ -211,7 +211,7 @@ async def app_get_get_pool(
     logger.debug(f"APP.GET /pool/{pool_id}")
     (user_id, client_addr, traceid) = (x_remote_user, x_real_ip, x_traceid)
     tracing.set(traceid)
-    (code, reason, values) = api.api_list_pools(traceid, user_id, pool_id)
+    (code, reason, values) = api.list_pools_ui(traceid, user_id, pool_id)
     response = _make_json_response(code, reason, values, csrf_protect,
                                    client_addr, user_id, request)
     return response
@@ -231,7 +231,7 @@ async def app_post_make_pool(
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
     pooldesc = body.get("pool")
-    (code, reason, values) = api.api_make_pool(traceid, user_id, pooldesc)
+    (code, reason, values) = api.make_pool_ui(traceid, user_id, pooldesc)
     response = _make_json_response(code, reason, values, csrf_protect,
                                    client_addr, user_id, request)
     return response
@@ -251,7 +251,7 @@ async def app_delete_delete_pool(
     body = await _get_request_body(request)
     csrf_token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(csrf_token)
-    (code, reason, values) = api.api_delete_pool(traceid, user_id, pool_id)
+    (code, reason, values) = api.delete_pool_ui(traceid, user_id, pool_id)
     response = _make_json_response(code, reason, values, csrf_protect,
                                    client_addr, user_id, request)
     return response
@@ -271,7 +271,7 @@ async def app_put_make_bucket(
     body = await _get_request_body(request)
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
-    (code, reason, values) = api.api_make_bucket(traceid, user_id, pool_id, body)
+    (code, reason, values) = api.make_bucket_ui(traceid, user_id, pool_id, body)
     response = _make_json_response(code, reason, values, csrf_protect,
                                    client_addr, user_id, request)
     return response
@@ -292,7 +292,7 @@ async def app_delete_delete_bucket(
     body = await _get_request_body(request)
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
-    (code, reason, values) = api.api_delete_bucket(traceid, user_id, pool_id, bucket)
+    (code, reason, values) = api.delete_bucket_ui(traceid, user_id, pool_id, bucket)
     response = _make_json_response(code, reason, values, csrf_protect,
                                    client_addr, user_id, request)
     return response
@@ -312,7 +312,7 @@ async def app_put_make_secret(
     body = await _get_request_body(request)
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
-    (code, reason, values) = api.api_make_secret(traceid, user_id, pool_id, body)
+    (code, reason, values) = api.make_secret_ui(traceid, user_id, pool_id, body)
     response = _make_json_response(code, reason, values, csrf_protect,
                                    client_addr, user_id, request)
     return response
@@ -332,7 +332,7 @@ async def app_delete_delete_secret(
     body = await _get_request_body(request)
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
-    (code, reason, values) = api.api_delete_secret(traceid, user_id, pool_id, access_key)
+    (code, reason, values) = api.delete_secret_ui(traceid, user_id, pool_id, access_key)
     response = _make_json_response(code, reason, values, csrf_protect,
                                    client_addr, user_id, request)
     return response

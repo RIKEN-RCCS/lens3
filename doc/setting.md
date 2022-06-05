@@ -311,11 +311,11 @@ lens3-admin$ lenticularis-admin -c adm-config.yaml load-user-list {csv-file}
 lens3-admin$ lenticularis-admin -c adm-config.yaml show-user-list
 ```
 
-* (Optionally) Prepare a list of users allowed to access
-  * An entry is a "allow" prefix and a list of user names
+* (Optionally) Prepare a list of users enabled to access
+  * An entry is a "enable" prefix and a list of user names
 
 ```
-allow,user1,user2
+ENABLE,user1,user2,user3, ...
 ```
 
 * Register permit-list to Lens3 by `lenticularis-admin` command.

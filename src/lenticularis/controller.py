@@ -27,7 +27,7 @@ class Controller():
         self.executable = sys.executable
         ##self.scheduler = Scheduler(tables)
         ##lenticularis_conf = mux_conf["lenticularis"]
-        ctl_param = mux_conf["controller"]
+        ctl_param = mux_conf["minio_manager"]
         self.port_min = ctl_param["port_min"]
         self.port_max = ctl_param["port_max"]
         pass

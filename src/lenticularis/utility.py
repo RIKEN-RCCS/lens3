@@ -187,11 +187,11 @@ def random_str(n):
     return a + "".join(b)
 
 
-def gen_access_key_id():
+def generate_access_key():
     return random_str(ACCESS_KEY_ID_LEN)
 
 
-def gen_secret_access_key():
+def generate_secret_key():
     return random_str(SECRET_ACCESS_KEY_LEN)
 
 
@@ -263,7 +263,7 @@ def access_mux(traceid, ep, access_key, facade_hostname, timeout):
     return status
 
 
-def check_permission(user, allow_deny_rules):
+def check_permit_status__(user, allow_deny_rules):
     if user is None:
         return "denied"
     logger.debug(f"@@@ allow_deny_rules = {allow_deny_rules}")
@@ -541,3 +541,39 @@ def wait_one_line_on_stdout(p, timeout):
                 closed = True
             outs += o0
     return (outs, errs, closed)
+
+
+def _check_direct_hostname_flat(host_label):
+    if "." in host_label:
+        raise Exception(f"invalid direct hostname: {host_label}: only one level label is allowed")
+    _check_rfc1035_label(host_label)
+    _check_rfc1122_hostname(host_label)
+    pass
+
+
+def _check_rfc1035_label(label):
+    if len(label) > 63:
+        raise Exception(f"{label}: too long")
+    if len(label) < 1:
+        raise Exception(f"{label}: too short")
+    pass
+
+
+def _check_rfc1122_hostname(label):
+    alnum = string.ascii_lowercase + string.digits
+    if not all(c in alnum + "-" for c in label):
+        raise Exception(f"{label}: contains invalid char(s)")
+    if not label[0] in alnum:
+        raise Exception(f"{label}: must start with a letter or a digit")
+    if not label[-1] in alnum:
+        raise Exception(f"{label}: must end with a letter or a digit")
+    pass
+
+
+def _is_subdomain(host_fqdn, domain):
+    return host_fqdn.endswith("." + domain)
+
+
+def _strip_domain(host_fqdn, domain):
+    domain_len = 1 + len(domain)
+    return host_fqdn[:-domain_len]

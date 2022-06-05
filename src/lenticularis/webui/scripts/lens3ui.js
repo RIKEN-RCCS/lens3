@@ -14,10 +14,15 @@ var edit_pool_data = {
   make_pool_mode: true,
 
   pool_name: "",
+  buckets_directory: "",
   user: "",
   group: "",
-  buckets_directory: "",
-  list_of_buckets: [],
+
+  expiration_date: "",
+  permit_status: true,
+  online_status: true,
+  pool_state: "",
+
   //accessKeys: [],
   //accessKeyIDrw: "",
   //accessKeyIDro: "",
@@ -26,6 +31,7 @@ var edit_pool_data = {
   //secretAccessKeyro: "",
   //secretAccessKeywo: "",
 
+  list_of_buckets: [],
   bucket_name: "",
   bucket_policy: "none",
   group_choices: [],
@@ -36,19 +42,15 @@ var edit_pool_data = {
   access_keys_wo: [],
 
   //direct_hostnames: "",
-  expiration_date: "",
-  permit_status: "",
-  online_status: "",
-  mode: "",
   //atime: "",
-  directHostnameDomains: "",
-  facadeHostname: "",
-  endpointURLs: "",
+  //direct_hostname_domains: "",
+  //facade_hostname: "",
+  //endpointURLs: "",
 
   submit_button_name: "",
   submit_button_disabled: false,
   submit_button_visible: false,
-  deleteButtonDisabled: false,
+  //deleteButtonDisabled: false,
   buckets_directory_disabled: false,
 };
 
@@ -242,19 +244,21 @@ function submit_operation(op, triple) {
   var url_path;
   var body;
 
-  if (op == 0) {
-    // Create pool.
-    method = "POST";
-    url_path = "/pool";
-    body = compose_create_dict__(csrf_token);
-  }
-  else if (op == 1) {
-    // Update pool.
-    method = "PUT";
-    url_path = "/pool/" + edit_pool_data.pool_name;
-    body = compose_update_dict__(csrf_token);
-  }
-  else if (op == 2) {
+  console.assert(op == 2, "");
+//  if (op == 0) {
+//    // Create pool.
+//    method = "POST";
+//    url_path = "/pool";
+//    body = compose_create_dict__(csrf_token);
+//  }
+//  else if (op == 1) {
+//    // Update pool.
+//    method = "PUT";
+//    url_path = "/pool/" + edit_pool_data.pool_name;
+//    body = compose_update_dict__(csrf_token);
+//  }
+//  else
+    if (op == 2) {
     // Create bucket.
     //var name = edit_pool_data.bucket_name;
     //var policy = edit_pool_data.bucket_policy;
@@ -266,22 +270,21 @@ function submit_operation(op, triple) {
     url_path = tt.url_path;
     body = tt.body;
   }
-  else if (op == 3 || op == 4 || op == 5) {
-    var accessKeyID;
-    if (op == 3) {
-      accessKeyID = edit_pool_data.accessKeyIDrw;
-    }
-    else if (op == 4) {
-      accessKeyID = edit_pool_data.accessKeyIDro;
-    }
-    else if (op == 5) {
-      accessKeyID = edit_pool_data.accessKeyIDwo;
-    }
-
-    method = "PUT";
-    url_path = "/pool/" + edit_pool_data.pool_name + "/accessKeys";
-    body = compose_access_key_update_dict(csrf_token, accessKeyID);
-  }
+//  else if (op == 3 || op == 4 || op == 5) {
+//    var accessKeyID;
+//    if (op == 3) {
+//      accessKeyID = edit_pool_data.accessKeyIDrw;
+//    }
+//    else if (op == 4) {
+//      accessKeyID = edit_pool_data.accessKeyIDro;
+//    }
+//    else if (op == 5) {
+//      accessKeyID = edit_pool_data.accessKeyIDwo;
+//    }
+//    method = "PUT";
+//    url_path = "/pool/" + edit_pool_data.pool_name + "/accessKeys";
+//    body = compose_access_key_update_dict(csrf_token, accessKeyID);
+//  }
 
   console.log("method: " + method);
   console.log("url_path: " + url_path);
@@ -300,7 +303,7 @@ function submit_operation(op, triple) {
               show_message(edit_pool_data.submit_button_name + " pool ... error: " + JSON.stringify(data));
               render_jsondata(data)
               if (data["pool_list"] != null) {
-                edit_pool_data.mode = data["pool_list"][0]["minio_state"];
+                edit_pool_data.pool_state = data["pool_list"][0]["minio_state"];
               }
               edit_pool_data.submit_button_disabled = false;
               edit_pool_data.submit_button_visible = true;
@@ -310,7 +313,7 @@ function submit_operation(op, triple) {
         return response.json().then(function(data) {
           show_message(edit_pool_data.submit_button_name + " pool ... done: " + JSON.stringify(data));
           render_jsondata(data)
-          edit_pool_data.mode = data["pool_list"][0]["minio_state"]
+          edit_pool_data.pool_state = data["pool_list"][0]["minio_state"]
           display_pool_in_edit_pool(data["pool_list"][0])
           // update succeeded. do not re-enable button now.
         })}
@@ -320,68 +323,67 @@ function submit_operation(op, triple) {
     });
 }
 
-const policies = ["none", "public", "upload", "download"];
-
-const policyNames = ["readwrite", "readonly", "writeonly"];
+const bkt_policy_names = ["none", "public", "upload", "download"];
+const key_policy_names = ["readwrite", "readonly", "writeonly"];
 
 //function stringify_dict(dict, csrf_token) {
 //  dict["CSRF-Token"] = csrf_token;
 //  return JSON.stringify(dict);
 //}
 
-function build_pool_desc__() {
-  var pooldesc = {};
-  var buckets = new Array();
-  var direct_hostnames = new Array();
-  for (var i = 0; i < policies.length; i++) {
-    buckets = push_buckets(buckets, edit_pool_data.list_of_buckets[i], policies[i]);
-  }
-  direct_hostnames = push_direct_hostnames(direct_hostnames,
-                                           edit_pool_data.directHostnameDomains,
-                                           edit_pool_data.direct_hostnames);
-  pooldesc["owner_gid"] = edit_pool_data.group;
-  pooldesc["buckets_directory"] = edit_pool_data.buckets_directory;
-  pooldesc["buckets"] = buckets;
-  // A dummy entry.
-  pooldesc["access_keys"] = [{"key_policy": "readwrite"}, {"key_policy": "readonly"}, {"key_policy": "writeonly"}];
-  pooldesc["direct_hostnames"] = direct_hostnames;
-  pooldesc["expiration_date"] = parse_rfc3339(edit_pool_data.expiration_date);
-  pooldesc["permit_status"] = edit_pool_data.permit_status;
-  pooldesc["online_status"] = edit_pool_data.online_status;
-  // Do not include "minio_state" nor "atime".
-  return pooldesc;
-}
+//function build_pool_desc__() {
+//  var pooldesc = {};
+//  var buckets = new Array();
+//  var direct_hostnames = new Array();
+//  for (var i = 0; i < policies.length; i++) {
+//    buckets = push_buckets(buckets, edit_pool_data.list_of_buckets[i], policies[i]);
+//  }
+//  direct_hostnames = push_direct_hostnames(direct_hostnames,
+//                                           edit_pool_data.direct_hostname_domains,
+//                                           edit_pool_data.direct_hostnames);
+//  pooldesc["owner_gid"] = edit_pool_data.group;
+//  pooldesc["buckets_directory"] = edit_pool_data.buckets_directory;
+//  pooldesc["buckets"] = buckets;
+//  // A dummy entry.
+//  pooldesc["access_keys"] = [{"key_policy": "readwrite"}, {"key_policy": "readonly"}, {"key_policy": "writeonly"}];
+//  pooldesc["direct_hostnames"] = direct_hostnames;
+//  pooldesc["expiration_date"] = parse_rfc3339(edit_pool_data.expiration_date);
+//  pooldesc["permit_status"] = edit_pool_data.permit_status;
+//  pooldesc["online_status"] = edit_pool_data.online_status;
+//  // Do not include "minio_state" nor "atime".
+//  return pooldesc;
+//}
 
-function compose_create_dict__(csrf_token) {
-  var pooldesc = build_pool_desc__();
-  var dict = {"pool": pooldesc};
-  //return stringify_dict(dict, csrf_token);
-  dict["CSRF-Token"] = csrf_token;
-  body = JSON.stringify(dict);
-  return body;
-}
+//function compose_create_dict__(csrf_token) {
+//  var pooldesc = build_pool_desc__();
+//  var dict = {"pool": pooldesc};
+//  //return stringify_dict(dict, csrf_token);
+//  dict["CSRF-Token"] = csrf_token;
+//  body = JSON.stringify(dict);
+//  return body;
+//}
 
-function compose_update_dict__(csrf_token) {
-  var pooldesc = build_pool_desc__();
-  //pooldesc["access_keys"] = edit_pool_data.accessKeys;
-  var dict = {"pool": pooldesc};
-  //return stringify_dict(dict, csrf_token);
-  dict["CSRF-Token"] = csrf_token;
-  body = JSON.stringify(dict);
-  return body;
-}
+//function compose_update_dict__(csrf_token) {
+//  var pooldesc = build_pool_desc__();
+//  //pooldesc["access_keys"] = edit_pool_data.accessKeys;
+//  var dict = {"pool": pooldesc};
+//  //return stringify_dict(dict, csrf_token);
+//  dict["CSRF-Token"] = csrf_token;
+//  body = JSON.stringify(dict);
+//  return body;
+//}
 
-function compose_create_bucket_dict(csrf_token, name, policy) {
-  if (policy != "none" && policy != "upload" && policy != "download") {
-    throw new Error("error: invalid policy: " + policy);
-  }
-  var pooldesc = {"buckets": [{"name": name, "bkt_policy": policy}]};
-  var dict = {"pool": pooldesc};
-  //return stringify_dict(dict, csrf_token);
-  dict["CSRF-Token"] = csrf_token;
-  body = JSON.stringify(dict);
-  return body;
-}
+//function compose_create_bucket_dict(csrf_token, name, policy) {
+//  if (policy != "none" && policy != "upload" && policy != "download") {
+//    throw new Error("error: invalid policy: " + policy);
+//  }
+//  var pooldesc = {"buckets": [{"name": name, "bkt_policy": policy}]};
+//  var dict = {"pool": pooldesc};
+//  //return stringify_dict(dict, csrf_token);
+//  dict["CSRF-Token"] = csrf_token;
+//  body = JSON.stringify(dict);
+//  return body;
+//}
 
 function compose_access_key_update_dict(csrf_token, accessKeyID) {
   var pooldesc = {"access_keys": [{"access_key": accessKeyID}]};
@@ -400,31 +402,31 @@ function compose_delete_dict(csrf_token) {
   return body;
 }
 
-function push_buckets(buckets, bucketList, policy) {
-  var xs = bucketList.split(" ");
-  for (var i = 0; i < xs.length; i++) {
-    var bucket = xs[i];
-    if (bucket != "") {
-      var v = {"name": bucket, "bkt_policy": policy};
-      buckets.push(v);
-    }
-  }
-  return buckets;
-}
+//function push_buckets(buckets, bucketList, policy) {
+//  var xs = bucketList.split(" ");
+//  for (var i = 0; i < xs.length; i++) {
+//    var bucket = xs[i];
+//    if (bucket != "") {
+//      var v = {"name": bucket, "bkt_policy": policy};
+//      buckets.push(v);
+//    }
+//  }
+//  return buckets;
+//}
 
-function push_direct_hostnames(direct_hostnames, directHostnameDomains, hosts) {
-  var xs = hosts.split(" ");
-  for (var i = 0; i < xs.length; i++) {
-    var directHostname = xs[i];
-    if (directHostname != "") {
-      if (!directHostname.endsWith("." + directHostnameDomains[0])) {
-        directHostname += "." + directHostnameDomains[0];
-      }
-      direct_hostnames.push(directHostname);
-    }
-  }
-  return direct_hostnames;
-}
+//function push_direct_hostnames(direct_hostnames, direct_hostname_domains, hosts) {
+//  var xs = hosts.split(" ");
+//  for (var i = 0; i < xs.length; i++) {
+//    var directHostname = xs[i];
+//    if (directHostname != "") {
+//      if (!directHostname.endsWith("." + direct_hostname_domains[0])) {
+//        directHostname += "." + direct_hostname_domains[0];
+//      }
+//      direct_hostnames.push(directHostname);
+//    }
+//  }
+//  return direct_hostnames;
+//}
 
 function run_get_pool_list() {
   show_message("get pool list ...");
@@ -514,16 +516,16 @@ function set_create_button_visibility(v) {
   edit_pool_data.submit_button_visible = v;
 }
 
-function disable_delete_button() {
-  edit_pool_data.deleteButtonDisabled = true;
-}
+//function disable_delete_button() {
+//  edit_pool_data.deleteButtonDisabled = true;
+//}
 
 function enable_delete_button() {
   edit_pool_data.deleteButtonDisabled = false;
 }
 
 function perform_delete_pool(pool_name) {
-  disable_delete_button();
+  //disable_delete_button();
   show_message("delete pool ...");
   clear_status_field();
   console.log(`pool_name = ${pool_name}`);
@@ -655,14 +657,14 @@ function render_pool_as_ul_entry(pooldesc) {
     {text: {label: "Unix group", value: pooldesc["owner_gid"]}},
     ... bkt_entries,
     ... key_entries,
-    {text: {label: "Endpoint-URL", value: pooldesc["endpoint_url"]}},
+    //{text: {label: "Endpoint-URL", value: pooldesc["endpoint_url"]}},
     {text: {label: "Pool-ID", value: pooldesc["pool_name"]}},
     //{text: {label: "Direct hostname", value: pooldesc["direct_hostnames"].join(" ")}},
     {text: {label: "MinIO state", value: pooldesc["minio_state"]}},
     {text: {label: "Expiration date", value: format_rfc3339_if_not_zero(pooldesc["expiration_date"])}},
     {text: {label: "User enabled", value: pooldesc["permit_status"]}},
     {text: {label: "Pool online", value: pooldesc["online_status"]}},
-    //{text: {label: "Last access time", value: format_rfc3339_if_not_zero(pooldesc["atime"])}},
+    {text: {label: "Creation date", value: format_rfc3339_if_not_zero(pooldesc["modification_date"])}},
   ];
 }
 
@@ -704,11 +706,11 @@ function copy_pool_desc_for_edit(pooldesc) {
   edit_pool_data.expiration_date = format_rfc3339_if_not_zero(pooldesc["expiration_date"]);
   edit_pool_data.permit_status = pooldesc["permit_status"];
   edit_pool_data.online_status = pooldesc["online_status"];
-  edit_pool_data.mode = pooldesc["minio_state"];
+  edit_pool_data.pool_state = pooldesc["minio_state"];
   //edit_pool_data.atime = format_rfc3339_if_not_zero(pooldesc["atime"]);
-  edit_pool_data.directHostnameDomains = pooldesc["directHostnameDomains"];
-  edit_pool_data.facadeHostname = pooldesc["facadeHostname"];
-  edit_pool_data.endpointURLs = pooldesc["endpoint_url"];
+  //edit_pool_data.direct_hostname_domains = pooldesc["direct_hostname_domains"];
+  //edit_pool_data.facade_hostname = pooldesc["facade_hostname"];
+  //edit_pool_data.endpointURLs = pooldesc["endpoint_url"];
   show_message("editing");
 }
 
@@ -723,7 +725,7 @@ function clear_status_field() {
 function render_jsondata(data) {
   show_status(data["status"])
   show_reason(data["reason"])
-  show_time(data["time"])
+  show_duration(data["time"])
 }
 
 function show_status(s) {
@@ -734,7 +736,7 @@ function show_reason(s) {
   show_status_data.reason = "Reason: " + s;
 }
 
-function show_time(s) {
+function show_duration(s) {
   if (s != null) {
     show_status_data.time = "Finished at: " + format_rfc3339_if_not_zero(s);
   } else {
@@ -758,39 +760,39 @@ function format_rfc3339_if_not_zero(d) {
   return format_rfc3339(d);
 }
 
-function chooseAccessKey__(accessKeys, policyName) {
-  for (var i = 0; i < accessKeys.length; i++) {
-    var accessKey = accessKeys[i];
-    if (accessKey["key_policy"] == policyName) {
-      return accessKey;
-    }
-  }
-  return undefined;
-}
+//function chooseAccessKey__(accessKeys, policyName) {
+//  for (var i = 0; i < accessKeys.length; i++) {
+//    var accessKey = accessKeys[i];
+//    if (accessKey["key_policy"] == policyName) {
+//      return accessKey;
+//    }
+//  }
+//  return undefined;
+//}
 
-function scan_buckets__(buckets, policy) {
-  var res = new Array();
-  for (var i = 0; i < buckets.length; i++) {
-    var bucket = buckets[i];
-    if (bucket["bkt_policy"] == policy) {
-      res.push(bucket["name"]);
-    }
-  }
-  return res.join(" ");
-}
+//function scan_buckets__(buckets, policy) {
+//  var res = new Array();
+//  for (var i = 0; i < buckets.length; i++) {
+//    var bucket = buckets[i];
+//    if (bucket["bkt_policy"] == policy) {
+//      res.push(bucket["name"]);
+//    }
+//  }
+//  return res.join(" ");
+//}
 
 function run_debug() {
   console.log("Dump internal data");
   //var post_data = compose_create_dict__(csrf_token);
   //var put_data = compose_update_dict__(csrf_token);
-  var bkt_data = compose_create_bucket_dict(csrf_token);
-  var key_data = compose_access_key_update_dict(csrf_token);
-  var delete_data = compose_delete_dict(csrf_token);
-  console.log("post_data: " + post_data);
-  console.log("put_data: " + put_data);
-  console.log("bkt_data: " + bkt_data);
-  console.log("key_data: " + key_data);
-  console.log("delete_data: " + delete_data);
+  //var bkt_data = compose_create_bucket_dict(csrf_token);
+  //var key_data = compose_access_key_update_dict(csrf_token);
+  //var delete_data = compose_delete_dict(csrf_token);
+  //console.log("post_data: " + post_data);
+  //console.log("put_data: " + put_data);
+  //console.log("bkt_data: " + bkt_data);
+  //console.log("key_data: " + key_data);
+  //console.log("delete_data: " + delete_data);
   //parsed = Date.parse("2012-07-04T18:10:00.000+09:00")
   //console.log("parsed: " + parsed);
   //var e = "1638401795";

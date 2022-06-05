@@ -238,7 +238,7 @@ $ aws --endpoint-url=http://lens3.example.com/ s3 ls s3://somebucket1/
 
 Bucket names must be in lowercase alphanums and "-".  Lens3 bans dots.
 Also, Lens3 bans names "aws", "amazon", "minio", and the names that
-begins with "goog", and "g00g".
+begin with "goog" and "g00g".
 
 ## Residue Files
 
@@ -261,7 +261,7 @@ It does not include the process status of a MinIO instance.
     a pool or an administrator.  The causes of a transition include an
     expiration of a pool, disabling an owner account, or making a pool
     offline.
-  * __"INOPERABLE"__ indicates an error state and a pool is
+  * __INOPERABLE__ indicates an error state and a pool is
     permanently unusable.  It has failed to run a MinIO.  This pool
     cannot be used and should be removed.
 
@@ -279,4 +279,4 @@ processes).
 
 ## Changes from v1.1 to v1.2
 
-* A support for bucket host-style naming is dropped.
+* A support for buckets by host-style naming is dropped.

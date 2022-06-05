@@ -135,48 +135,57 @@ class Manager():
 
     def _check_pool_is_enabled(self):
         """Checks expiration, permit-status, and online-status of a pool, and
-        updates the pool-state if it changes.  It returns a pair of OK status
-        and a string for an exception.
+        updates the pool-state if it changes.  It returns a pair of OK
+        status and a string for an exception.
         """
         now = int(time.time())
         pool_id = self._pool_id
         pooldesc = self.tables.get_pool(pool_id)
         if pooldesc is None:
-            return (False, ("Pool removed"))
-        (poolstate, _) = self.tables.get_pool_state(pool_id)
-        if poolstate in {Pool_State.INOPERABLE, Pool_State.ERROR}:
-            return (False, ("Pool in error"))
+            reason = "Pool removed"
+            return (False, reason)
+        (poolstate, reason) = self.tables.get_pool_state(pool_id)
+        if poolstate is None:
+            logger.error(f"Pool-state not found for pool={pool_id}")
+            reason = "No pool state"
+            return (False, reason)
+        if poolstate in {Pool_State.INOPERABLE}:
+            return (False, reason)
         user_id = pooldesc["owner_uid"]
         unexpired = now < pooldesc["expiration_date"]
         u = self.tables.get_user(user_id)
         permitted = u["permitted"]
         online = pooldesc["online_status"]
         ok = (unexpired and permitted and online)
-        if not ok and poolstate in {Pool_State.READY}:
-            self._set_pool_state(Pool_State.DISABLED,
-                                 f"Pool states:"
-                                 f" expired={not unexpired},"
-                                 f" permitted={permitted},"
-                                 f" online={online}.")
+        if not ok and poolstate in {Pool_State.INITIAL}:
+            reason = "Pool disabled initially"
+            self._set_pool_state(Pool_State.INOPERABLE, reason)
+            return (False, reason)
+        elif not ok and poolstate in {Pool_State.READY}:
             if not unexpired:
-                return (False, ("Pool expired"))
+                reason = "Pool expired"
+                self._set_pool_state(Pool_State.DISABLED, reason)
+                return (False, reason)
             if not permitted:
-                return (False, ("User disabled"))
+                reason = "User disabled"
+                self._set_pool_state(Pool_State.DISABLED, reason)
+                return (False, reason)
             if not online:
-                return (False, ("Pool offline"))
-            return (False, ("Pool in error"))
+                reason = "Pool offline"
+                self._set_pool_state(Pool_State.DISABLED, reason)
+                return (False, reason)
+            return (False, "Pool in error")
         elif ok and poolstate in {Pool_State.DISABLED}:
-            self._set_pool_state(Pool_State.READY, f"")
+            self._set_pool_state(Pool_State.READY, "-")
             return (True, "")
         else:
             # State unchanged.
-            ready = poolstate in {Pool_State.READY}
-            return (ready, ("Pool in error"))
+            ok = poolstate in {Pool_State.INITIAL, Pool_State.READY}
+            return (ok, reason)
         pass
 
     def manager_main(self):
         pool_id = self._pool_id
-        logger.info(f"Starting a Manager process for pool={pool_id}.")
 
         # Check the thread is main for using signals:
         assert threading.current_thread() == threading.main_thread()
@@ -249,17 +258,17 @@ class Manager():
         ## self._env_minio["MINIO_CACHE_WATERMARK_LOW"] = "70"
         ## self._env_minio["MINIO_CACHE_WATERMARK_HIGH"] = "90"
 
-        (poolstate, _) = self.tables.get_pool_state(self._pool_id)
-
         assert pooldesc is not None
-
         user_id = pooldesc["owner_uid"]
         group_id = pooldesc["owner_gid"]
         directory = pooldesc["buckets_directory"]
 
         (ok, reason) = self._check_pool_is_enabled()
         if not ok:
+            logger.debug(f"Pool is not enabled: ({reason})");
             return False
+        # (poolstate, _) = self.tables.get_pool_state(self._pool_id)
+        # assert poolstate in {Pool_State.INITIAL, Pool_State.READY}
 
         ##now = int(time.time())
         ##unexpired = now < pooldesc["expiration_date"]
@@ -276,8 +285,6 @@ class Manager():
 
         procdesc = self.tables.get_minio_proc(self._pool_id)
         assert procdesc is None
-        logger.error(f"AHO poolstate={poolstate}")
-        assert poolstate in {Pool_State.INITIAL, Pool_State.READY}
 
         ports = list(range(self._port_min, self._port_max + 1))
         random.shuffle(ports)
@@ -319,7 +326,8 @@ class Manager():
             # (e is SubprocessError, OSError, ValueError, usually).
             logger.error(f"Starting MinIO failed with exception={e}",
                          exc_info=True)
-            self._set_pool_state(Pool_State.INOPERABLE, "MinIO does not start")
+            reason = "Start failed (exec failure)"
+            self._set_pool_state(Pool_State.INOPERABLE, reason)
             self._minio_ep = None
             return (None, False)
         finally:
@@ -365,18 +373,18 @@ class Manager():
                     logger.debug(f"{m0} {reason}: {m1}")
                     return (False, True)
                 elif outs.find(_minio_response_unwritable_storage) != -1:
-                    reason = "storage unwritable"
+                    reason = "Storage unwritable"
                     self._set_pool_state(Pool_State.INOPERABLE, reason)
                     logger.info(f"{m0} {reason}: {m1}")
                     return (False, False)
                 else:
-                    reason = "start failed"
+                    reason = "Start failed"
                     self._set_pool_state(Pool_State.INOPERABLE, reason)
                     logger.error(f"{m0} {reason}: {m1}")
                     return (False, False)
                 pass
             else:
-                reason = "start failed (no error)"
+                reason = "Start failed (no error)"
                 self._set_pool_state(Pool_State.INOPERABLE, reason)
                 logger.error(f"{m0} {reason}: {m1}")
                 return (False, False)
@@ -397,9 +405,7 @@ class Manager():
         finally:
             self._tell_controller_minio_starts()
             pass
-
-        self._set_pool_state(Pool_State.READY, None)
-
+        self._set_pool_state(Pool_State.READY, "-")
         try:
             self._watch_minio(p)
         finally:
@@ -418,16 +424,19 @@ class Manager():
                 alarm(0)
                 self._alarm_section = None
             except Alarmed as e:
-                x = Exception("MinIO initialization failed (timeout)")
-                self._set_pool_state(Pool_State.ERROR, f"{x}")
-                raise x
+                alarm(0)
+                self._alarm_section = None
+                reason = "Initialization failed (timeout)"
+                self._set_pool_state(Pool_State.INOPERABLE, reason)
+                raise Exception(reason)
             except Exception as e:
                 alarm(0)
                 self._alarm_section = None
-                self._set_pool_state(Pool_State.ERROR, f"{e}")
+                reason = f"{e}"
+                self._set_pool_state(Pool_State.INOPERABLE, reason)
                 logger.error(f"MinIO initialization failed for"
-                             f" pool={self._pool_id}: exception=({e})")
-                logger.exception(e)
+                             f" pool={self._pool_id}: exception=({e})",
+                             exc_info=True)
                 raise
             pass
         pass
@@ -479,8 +488,8 @@ class Manager():
             pass
 
         except Exception as e:
-            logger.error(f"Manager failed: exception={e}")
-            logger.exception(e)
+            logger.error(f"Manager failed: exception={e}",
+                         exc_info=True)
             pass
 
         logger.debug(f"Manager for {self._minio_ep} exiting.")
@@ -557,8 +566,8 @@ class Manager():
                              f" exception ignored: exception=({e})")
             except Exception as e:
                 logger.error(f"Stopping MinIO failed:"
-                             f" exception ignored: exception=({e})")
-                logger.exception(e)
+                             f" exception ignored: exception=({e})",
+                             exc_info=True)
             finally:
                 alarm(0)
                 self._alarm_section = None
@@ -636,8 +645,8 @@ class Manager():
             return 503
         except Exception as e:
             logger.error(f"Heartbeat MinIO failed, urlopen error:"
-                         f" url=({url}); exception={e}")
-            logger.exception(e)
+                         f" url=({url}); exception={e}",
+                         exc_info=True)
             return 500
         pass
 
@@ -658,9 +667,9 @@ class Manager():
             alarm(0)
             self._alarm_section = None
         except Alarmed:
-            raise Exception("health check timeout")
+            raise Exception("Hearbeat timeout")
         except Exception as e:
-            logger.exception(e)
+            logger.error(f"Hearbeat failed: exception={e}")
             alarm(0)
             self._alarm_section = None
             raise
@@ -722,6 +731,7 @@ def main():
 
     manager = Manager(pool_id, args, mux_conf)
     ok = False
+    logger.info(f"A Manager starting for pool={pool_id}.")
     try:
         ok = manager.manager_main()
     except Exception as e:
@@ -729,7 +739,7 @@ def main():
                      f" exception={e}",
                      exc_info=True)
         pass
-
+    logger.info(f"A Manager exiting for pool={pool_id}.")
     sys.exit(0)
     pass
 

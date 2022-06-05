@@ -61,12 +61,12 @@ class Controller():
 
         ok = self._start_manager(traceid, pool_id)
         if not ok:
-            return (None, 503)
+            return (503, None)
         ep = self.tables.routing_table.get_route(pool_id)
         if ep:
-            return (ep, 200)
+            return (200, ep)
         else:
-            return (None, 503)
+            return (503, None)
         pass
 
     def _start_manager(self, traceid, zone_id):

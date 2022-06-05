@@ -33,10 +33,10 @@ def get_nparams_of_fn(fn):
     if nparams > 0:
         v = sig.parameters.get(params[-1])
         assert v is not None
-        varargsp = (v.kind == v.VAR_POSITIONAL)
+        varargs = (v.kind == v.VAR_POSITIONAL)
     else:
-        varargsp = False
-    return (nparams - 1, varargsp)
+        varargs = False
+    return (nparams - 1, varargs)
 
 
 def fix_date_format(d, keys):
@@ -199,25 +199,23 @@ def pool_key_order(e):
     order = [
         "owner_uid",
         "owner_gid",
-        "root_secret",
-        "access_keys",
         "buckets_directory",
         "buckets",
-        #"direct_hostnames",
+        "access_keys",
+        "minio_state",
+        "minio_reason",
         "expiration_date",
         "permit_status",
         "online_status",
-        "minio_state",
-        "atime",
+        "probe_access",
+        "modification_date",
         ##AHO
-        "accessKeysPtr",
-        "directHostnamePtr",
+        "name",
+        "bkt_policy",
         "access_key",
         "secret_key",
         "key_policy",
-        "ptr",
-        "name",
-        "bkt_policy"]
+    ]
     return order.index(e) if e in order else len(order)
 
 
@@ -327,9 +325,9 @@ class Command():
         rows = [["ENABLE", *bid], ["DISABLE", *ban]]
         return rows
 
-    def op_show_pool(self, *pool_id_dotdotdot):
+    def op_show_pool(self, *pool_id):
         """Show pools."""
-        pool_list = set(pool_id_dotdotdot)
+        pool_list = set(pool_id)
         if pool_list == set():
             pool_list = self.pool_adm.tables.list_pools(None)
             pass
@@ -347,9 +345,10 @@ class Command():
         print_json_plain("pools", pools, self.args.format, order=pool_key_order)
         pass
 
-    def op_delete_pool(self, *pool_id_dotdotdot):
+    def op_delete_pool(self, *pool_id):
         """Delete pools by pool-id."""
-        for pool_id in pool_id_dotdotdot:
+        pool_list = pool_id
+        for pool_id in pool_list:
             self.pool_adm.do_delete_pool(self._traceid, pool_id)
             pass
         pass
@@ -507,9 +506,10 @@ class Command():
         self.pool_adm.tables.process_table.clear_all(everything=everything)
         pass
 
-    def op_delete_server_processes(self, *pool_id_dotdotdot):
+    def op_delete_server_processes(self, *pool_id):
         """delete-server-processes"""
-        for pool_id in pool_id_dotdotdot:
+        pool_list = pool_id
+        for pool_id in pool_list:
             self.pool_adm.tables.process_table.delete_minio_proc(pool_id)
             pass
         pass
@@ -593,7 +593,8 @@ class Command():
         pars = list(sig.parameters)
         self_ = pars.pop(0)
         assert self_ == "self"
-        prog = [name, *pars]
+        prog = [name, *pars] + (["..."] if varargs else [])
+        prog = [s.replace("_", "-") for s in prog]
         usage = " ".join(prog)
         return (name, fn, usage, None)
 
@@ -612,8 +613,8 @@ class Command():
         if ent is None:
             raise Exception(f"undefined operation: {self.args.operation}")
         (fn, _, _) = ent
-        (nparams, varargsp) = get_nparams_of_fn(fn)
-        if not varargsp and len(self.rest) != nparams:
+        (nparams, varargs) = get_nparams_of_fn(fn)
+        if not varargs and len(self.rest) != nparams:
             sys.stderr.write("Missing/excessive arguments for command.\n")
             self.op_help()
             pass

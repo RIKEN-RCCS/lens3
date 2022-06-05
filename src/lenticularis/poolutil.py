@@ -24,7 +24,6 @@ class Pool_State(enum.Enum):
     READY = "ready"
     DISABLED = "disabled"
     INOPERABLE = "inoperable"
-    ERROR = "error"
 
     def __str__(self):
         return self.value
@@ -279,9 +278,8 @@ def _pool_desc_schema(type_number):
             "probe_access": {"type": "string"},
             "access_keys": {"type": "array", "items": access_key},
             "minio_state": {"type": "string"},
+            "minio_reason": {"type": "string"},
             "expiration_date": {"type": "integer"},
-            #"permit_status": {"type": "string"},
-            #"online_status": {"type": "string"},
             "permit_status": {"type": "boolean"},
             "online_status": {"type": "boolean"},
             "modification_date": {"type": "integer"},

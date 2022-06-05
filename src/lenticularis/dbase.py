@@ -14,10 +14,10 @@ def _wait_for_redis(r):
     while True:
         try:
             r.ping()
-            logger.debug("Redis is ready.")
+            logger.debug("Connected to Redis.")
             return
         except ConnectionError as e:
-            logger.debug("Redis is not ready (sleeping).")
+            logger.debug("Connection to Redis failed (sleeping).")
             time.sleep(30)
             pass
         pass

@@ -382,6 +382,7 @@ class Storage_Table(Table_Common):
 
     def set_pool_state(self, pool_id, state : Pool_State, reason):
         key = f"{self._pool_state_prefix}{pool_id}"
+        assert reason is not None
         s = str(state)
         v = json.dumps((s, reason))
         self.dbase.set(key, v)

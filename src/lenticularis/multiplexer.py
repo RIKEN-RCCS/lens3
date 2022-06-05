@@ -327,7 +327,7 @@ class Multiplexer():
         if minio_ep is None:
             (code, ep0) = self._start_service(traceid, pool_id, probe_key)
             if code == 200:
-                assert ep0 is not None and id == pool_id
+                assert ep0 is not None
                 minio_ep = ep0
                 pass
             pass

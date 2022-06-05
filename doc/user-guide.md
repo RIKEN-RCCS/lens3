@@ -245,6 +245,26 @@ begins with "goog", and "g00g".
 Running MinIO leaves files in a directory ".minio.sys" in the pool
 directory.
 
+## Bucket-Pool State
+
+A bucket-pool has a state reflecting the state of a MinIO instance.
+It does not include the process status of a MinIO instance.
+
+* Bucket-pool state
+  * __None__ is quickly moves to the INITIAL state.
+  * __INITIAL__ indicates some setup is not performed yet on a MinIO
+    instance (a transient state).
+  * __READY__ indicates a service is ready, a setup for servicing is
+    done.  It does not mean a MinIO instance is running.
+  * __DISABLED__ indicates a pool is temporarily unusable.  It may
+    transition between "READY" and "DISABLED" by actions of a owner of
+    a pool or an administrator.  The causes of a transition include an
+    expiration of a pool, disabling an owner account, or making a pool
+    offline.
+  * __"INOPERABLE"__ indicates an error state and a pool is
+    permanently unusable.  It has failed to run a MinIO.  This pool
+    cannot be used and should be removed.
+
 ## Other Limitations
 
 * Lens3 does not support listing of buckets by `aws s3 ls`.  Simply,
@@ -257,6 +277,6 @@ processes).
 * __Pool__: A management unit of S3 buckets.  It corresponds to a
   single MinIO instance.
 
-## Changes from v1.1
+## Changes from v1.1 to v1.2
 
 * A support for bucket host-style naming is dropped.

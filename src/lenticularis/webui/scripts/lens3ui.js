@@ -119,9 +119,9 @@ var pool_list_section_app = new Vue({
 //// Server Response ////
 
 var show_status_data = {
-  message: "---",
   status: "---",
   reason: "---",
+  message: "---",
   time: "---",
 };
 
@@ -660,7 +660,9 @@ function render_pool_as_ul_entry(pooldesc) {
     //{text: {label: "Endpoint-URL", value: pooldesc["endpoint_url"]}},
     {text: {label: "Pool-ID", value: pooldesc["pool_name"]}},
     //{text: {label: "Direct hostname", value: pooldesc["direct_hostnames"].join(" ")}},
-    {text: {label: "MinIO state", value: pooldesc["minio_state"]}},
+    {text: {label: "MinIO state",
+            value: (pooldesc["minio_state"]
+                    + " (" + pooldesc["minio_reason"] + ")")}},
     {text: {label: "Expiration date", value: format_rfc3339_if_not_zero(pooldesc["expiration_date"])}},
     {text: {label: "User enabled", value: pooldesc["permit_status"]}},
     {text: {label: "Pool online", value: pooldesc["online_status"]}},

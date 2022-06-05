@@ -1677,29 +1677,6 @@ Figure 3 Credential
 
 ### Bucket-pools
 
-A bucket-pool has a state reflecting the state of a MinIO instance.
-It does not include the process status of a MinIO instance.
-
-* Bucket-pool state (`mode`)
-  * None ?
-  * __"initial"__ indicates an alias is not set in a MinIO.
-  * __"ready"__ indicates a setup for servicing is done.  It means an
-    alias for management are set.  It does not mean a MinIO process is
-    running.
-  * __"suspended"__ indicates a transient state that a running MinIO
-    is to be stopped.
-  * __"deprecated"__ indicates a pool will be removed.
-  * __"disabled"__ indicates a pool is temporarily unusable.  It may
-    transition to "initial" by actions of administration.
-  * __"inoperable"__ indicates a pool cannot be used.  It has failed
-    to run a MinIO.  This pool cannot be used and should be removed.
-
-A bucket-pool state changes: None → __"initial"__ → __"ready"__.
-`initialize_minio` moves the state from __"initial"__ to __"ready"__.
-
-Note that a bucket-pool has another state `status`, but it is always
-"online".
-
 * Bucket-pool state (status)
   * "online"
   * "offline"

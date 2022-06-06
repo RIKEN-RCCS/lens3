@@ -23,7 +23,7 @@ class Scheduler():
             return (None, None)
 
         servers = self.tables.process_table.list_minio_procs(None)
-        minios = [procdesc["mux_host"] for (zone, procdesc) in servers]
+        minios = [procdesc["mux_host"] for (_, procdesc) in servers]
         muxs = [host for (host, port) in multiplexers]
         occupancy = collections.Counter(minios + muxs)
         occupancy = sorted(occupancy.items(), key=lambda e: e[1])

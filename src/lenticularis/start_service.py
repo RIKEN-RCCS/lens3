@@ -117,8 +117,9 @@ def run(servicename, env, cmd, args):
         with Popen(cmd + args, stdin=DEVNULL, stdout=PIPE, stderr=PIPE, env=env) as p:
             (outs, errs) = p.communicate()
             p_status = p.wait()
-    except Exception as e:
-        logger.exception(f"{servicename} failed to start")
+    except:
+        logger.error(f"{servicename} failed to start.",
+                     exc_info=True)
         sys.exit(1)
         pass
     if p_status == 0:

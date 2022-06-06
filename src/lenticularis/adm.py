@@ -15,7 +15,7 @@ from pydantic import BaseModel
 import starlette
 from fastapi import Request
 from fastapi import Header
-from fastapi import Body, Depends, FastAPI, status
+from fastapi import Depends, FastAPI, status
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from fastapi.responses import JSONResponse
@@ -52,23 +52,6 @@ app.mount("/scripts/",
 with open(os.path.join(_webui_dir, "setting.html")) as f:
     _setting_html = f.read()
     pass
-
-
-async def _get_authorized_user_(request: Request):
-    remote_user = request.headers.get("X-REMOTE-USER")
-    return remote_user
-
-
-async def _get_client_addr_(request: Request):
-    real_ip = request.headers.get("X-REAL-IP")
-    # forwarded_for = request.headers.get("X-FORWARDED-FOR")
-    return real_ip
-
-
-async def _get_traceid_(request: Request):
-    traceid = request.headers.get("X-TRACEID")
-    tracing.set(traceid)
-    return traceid
 
 
 def _make_json_response(status_code, reason, values, csrf_protect,

@@ -16,7 +16,7 @@ def _wait_for_redis(r):
             r.ping()
             logger.debug("Connected to Redis.")
             return
-        except ConnectionError as e:
+        except ConnectionError:
             logger.debug("Connection to Redis failed (sleeping).")
             time.sleep(30)
             pass

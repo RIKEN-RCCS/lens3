@@ -310,11 +310,8 @@ def check_type_number(conf, schema):
 
 
 def fix_adm_conf(conf):
-    mux_param = conf["multiplexer"]
-    system_param = conf["system"]
     return conf
 
 
 def fix_mux_conf(conf):
-    mux_param = conf["multiplexer"]
     return conf

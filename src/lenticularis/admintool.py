@@ -16,11 +16,11 @@ import traceback
 from lenticularis.pooladmin import Pool_Admin
 from lenticularis.readconf import read_adm_conf
 from lenticularis.poolutil import Api_Error
+from lenticularis.poolutil import gather_pool_desc
 from lenticularis.poolutil import check_user_naming
 from lenticularis.utility import ERROR_EXIT_READCONF, ERROR_EXIT_EXCEPTION, ERROR_EXIT_ARGUMENT
 from lenticularis.utility import format_rfc3339_z
 from lenticularis.utility import objdump
-from lenticularis.utility import list_diff3
 from lenticularis.utility import random_str
 from lenticularis.utility import logger, openlog
 from lenticularis.utility import tracing
@@ -84,7 +84,6 @@ def _read_user_list(path):
     with open(path, newline="") as f:
         rows = csv.reader(f, delimiter=",", quotechar='"')
         rows = list(rows)
-        print(f"AHO rows={rows}")
         assert all(r[0].upper() == "ADD" or r[0].upper() == "DELETE"
                    for r in rows)
         assert all(check_user_naming(e) for r in rows for e in r[1:])
@@ -101,7 +100,6 @@ def _read_permit_list(path):
     with open(path, newline="") as f:
         rows = csv.reader(f, delimiter=",", quotechar='"')
         rows = list(rows)
-        print(f"AHO rows={rows}")
         assert all(len(r) >= 2 for r in rows)
         assert all(r[0].upper() == "ENABLE" or r[0].upper() == "DISABLE"
                    for r in rows)
@@ -118,14 +116,14 @@ def _load_user_list(pool_adm, user_list):
         if e["add"] and oldu is not None:
             newu = {"uid": id, "groups": e["groups"],
                     "permitted": oldu["permitted"],
-                    "modification_date": now}
+                    "modification_time": now}
             pool_adm.tables.set_user(id, newu)
         elif not e["add"] and oldu is not None:
             pool_adm.tables.delete_user(id)
         elif  e["add"] and oldu is None:
             newu = {"uid": id, "groups": e["groups"],
                     "permitted": True,
-                    "modification_date": now}
+                    "modification_time": now}
             pool_adm.tables.set_user(id, newu)
         else:
             pass
@@ -136,63 +134,14 @@ def _load_user_list(pool_adm, user_list):
 def user_info_to_csv_row(id, ui):
     # "permitted" entry is ignored.
     assert ui is not None
-    return ["add", id] + ui["groups"]
+    return ["ADD", id] + ui["groups"]
 
 
 def format_mux(m, formatting):
     (ep, desc) = m
     if formatting not in {"json"}:
-        fix_date_format(desc, ["last_interrupted_time", "start_time"])
+        fix_date_format(desc, ["modification_time", "start_time"])
     return {ep: desc}
-
-
-def _store_user_info_add__(pool_adm, b):
-    # New Entry (no right hand side)
-    logger.debug(f"@@@ >> New {b}")
-    pool_adm.tables.set_user(b["uid"], b)
-
-
-def _store_user_info_delete__(pool_adm, e):
-    # Deleted Entry (no left hand side)
-    logger.debug(f"@@@ >> Delete {e}")
-    pool_adm.delete_user(e)
-    pass
-
-
-def _store_user_info_update__(pool_adm, x):
-    # Updated Entry
-    (b, e) = x
-    logger.debug(f"@@@ >> Update {b} {e}")
-    pool_adm.tables.set_user(b["uid"], b)
-    pass
-
-
-def _restore_zone_delete(pool_adm, traceid, e):
-    # Deleted Entry (no left hand side)
-    user_id = e.get("owner_uid")
-    zone_id = e.get("pool_name")
-    logger.debug(f"@@@ >> Delete {user_id} {zone_id}")
-    pool_adm.delete_zone(traceid, user_id, zone_id)
-    pass
-
-
-def _restore_zone_add(pool_adm, traceid, b):
-    # New Entry (no right hand side)
-    user_id = b.get("owner_uid")
-    zone_id = b.get("pool_name")
-    logger.debug(f"@@@ >> Insert / Update {user_id} {zone_id}")
-    b.pop("pool_name")
-    b.pop("minio_state")
-    ##pool_adm.restore_pool(traceid, user_id, zone_id, b,
-    ##                      include_atime=True, initialize=False)
-    pass
-
-
-def _restore_zone_update(pool_adm, traceid, x):
-    # Updated Entry
-    (b, e) = x
-    _restore_zone_add(pool_adm, traceid, b)
-    pass
 
 
 def pool_key_order(e):
@@ -208,8 +157,7 @@ def pool_key_order(e):
         "permit_status",
         "online_status",
         "probe_access",
-        "modification_date",
-        ##AHO
+        "modification_time",
         "name",
         "bkt_policy",
         "access_key",
@@ -225,7 +173,7 @@ def _mux_key_order(e):
         "port",
         "mux_conf",
         "start_time",
-        "last_interrupted_time",
+        "modification_time",
         "lenticularis",
         "multiplexer"]
     return order.index(e) if e in order else len(order)
@@ -243,10 +191,9 @@ def proc_key_order(e):
 
 def route_key_order(e):
     order = [
-        ##AHO
-        "accessKey",
-        "host",
-        "atime"]
+        "pool",
+        "bkt_policy",
+        "modification_time"]
     return order.index(e) if e in order else len(order)
 
 
@@ -266,7 +213,7 @@ class Command():
         """Print help."""
         prog = os.path.basename(sys.argv[0])
         print(f"USAGE")
-        for (k, v) in self.opdict.items():
+        for (_, v) in self.opdict.items():
             (fn, args, _) = v
             help = inspect.getdoc(fn)
             print(f"{prog} {args}\n\t{help}")
@@ -278,7 +225,6 @@ class Command():
         """Loads a user list."""
         user_info = _read_user_list(csvfile)
         _load_user_list(self.pool_adm, user_info)
-        ##fixed = self.pool_adm.fix_affected_zone(self._traceid)
         pass
 
     def op_show_user_list(self):
@@ -333,7 +279,7 @@ class Command():
             pass
         pools = []
         for pool_id in pool_list:
-            pooldesc = self.pool_adm.gather_pool_desc(pool_id)
+            pooldesc = gather_pool_desc(self.pool_adm.tables, pool_id)
             if pooldesc is None:
                 continue
             if self.args.format not in {"json"}:
@@ -353,23 +299,23 @@ class Command():
             pass
         pass
 
-    def op_insert_zone(self, zone_id, jsonfile):
-        """insert-zone."""
+    def op_insert_pool(self, pool_id, jsonfile):
+        """insert-pool."""
         try:
             with open(jsonfile, "r") as f:
                 r = f.read()
         except OSError as e:
             sys.stderr.write(f"{jsonfile}: {os.strerror(e.errno)}\n")
-            logger.exception(e)
+            traceback.print_exc()
             return
         except Exception as e:
             sys.stderr.write(f"{jsonfile}: {e}\n")
-            logger.exception(e)
+            traceback.print_exc()
             return
-        zone = json.loads(r, parse_int=None)
-        user_id = zone["owner_uid"]
-        ##self.pool_adm.restore_pool(self._traceid, user_id, zone_id, zone,
-        ##                           include_atime=False, initialize=True)
+        pooldesc = json.loads(r, parse_int=None)
+        ##user_id = pooldesc["owner_uid"]
+        self._restore_pool(self._traceid, pooldesc)
+        ##user_id, pool_id,
         pass
 
     def op_dump_pools(self):
@@ -377,7 +323,8 @@ class Command():
         user_list = self.pool_adm.tables.list_users()
         users = [self.pool_adm.tables.get_user(id) for id in user_list]
         pool_list = self.pool_adm.tables.list_pools(None)
-        pools = [self.pool_adm.gather_pool_desc(id) for id in pool_list]
+        pools = [gather_pool_desc(self.pool_adm.tables, id)
+                 for id in pool_list]
         dump_data = json.dumps({"users": users, "pools": pools})
         print(dump_data)
         pass
@@ -419,9 +366,9 @@ class Command():
                                                  owner_gid, path)
             assert pool_id is not None
             pooldesc["pool_name"] = pool_id
-        except Exception as e:
+        except:
             raise
-        now = int(time.time())
+        ##now = int(time.time())
         # Add buckets.
         try:
             bkts = pooldesc["buckets"]
@@ -430,7 +377,7 @@ class Command():
                 bkt_policy = desc["bkt_policy"]
                 self.pool_adm.do_make_bucket(traceid, pool_id,
                                              bucket, bkt_policy)
-        except Exception as e:
+        except:
             self.pool_adm.do_delete_pool(traceid, pool_id)
             raise
         # Add access-keys.
@@ -448,13 +395,13 @@ class Command():
                     raise Api_Error(500, f"Duplicate access-key: {id}")
                 self.pool_adm.do_record_secret(traceid, pool_id,
                                                id, secret, key_policy)
-        except Exception as e:
+        except:
             self.pool_adm.do_delete_pool(traceid, pool_id)
             raise
         pass
 
-    def op_drop_zone(self):
-        """drop-zone"""
+    def op_drop_pool(self):
+        """drop-pool"""
         everything = self.args.everything
         ##self.pool_adm.flush_storage_table(everything=everything)
         pass
@@ -514,9 +461,9 @@ class Command():
             pass
         pass
 
-    def op_throw_decoy(self, zone_id):
+    def op_throw_decoy(self, pool_id):
         """throw-decoy"""
-        self.pool_adm.access_mux_for_pool(self._traceid, zone_id, force=True)
+        self.pool_adm.access_mux_for_pool(self._traceid, pool_id)
         pass
 
     def op_show_routing_table(self):
@@ -564,11 +511,11 @@ class Command():
 
         op_show_pool,
         op_delete_pool,
-        op_insert_zone,
+        op_insert_pool,
 
         op_dump_pools,
         op_restore_pools,
-        op_drop_zone,
+        op_drop_pool,
 
         op_reset_db,
         op_list_db,
@@ -587,7 +534,7 @@ class Command():
 
     def make_op_entry(self, fn, _):
         # sig.parameters=['self', 'csvfile']
-        (nparams, varargs) = get_nparams_of_fn(fn)
+        (_, varargs) = get_nparams_of_fn(fn)
         name = fn.__name__.removeprefix("op_").replace("_", "-")
         sig = inspect.signature(fn)
         pars = list(sig.parameters)
@@ -639,7 +586,7 @@ def main():
     args, rest = parser.parse_known_args()
 
     try:
-        (adm_conf, configfile) = read_adm_conf(args.configfile)
+        (adm_conf, _) = read_adm_conf(args.configfile)
     except Exception as e:
         sys.stderr.write(f"Reading conf failed: {e}\n")
         sys.exit(ERROR_EXIT_READCONF)
@@ -654,7 +601,6 @@ def main():
     logger.debug(f"traceid = {traceid}")
 
     try:
-        logger.debug(f"@@@ MAIN")
         ##pool_adm = Pool_Admin(adm_conf)
         adm = Command(adm_conf, traceid, args, rest)
 

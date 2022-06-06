@@ -6,9 +6,7 @@
 import os
 from subprocess import Popen, PIPE, DEVNULL
 import sys
-import select
-from lenticularis.scheduler import Scheduler
-from lenticularis.utility import copy_minimal_env, host_port
+from lenticularis.utility import copy_minimal_env
 from lenticularis.utility import wait_one_line_on_stdout
 from lenticularis.utility import logger
 
@@ -19,7 +17,7 @@ class Controller():
     manager = "lenticularis.manager"
 
     def __init__(self, mux_conf, tables, configfile, host, port):
-        gunicorn_conf = mux_conf["gunicorn"]
+        ##gunicorn_conf = mux_conf["gunicorn"]
         self.tables = tables
         self.configfile = configfile
         self._mux_host = host
@@ -69,7 +67,7 @@ class Controller():
             return (503, None)
         pass
 
-    def _start_manager(self, traceid, zone_id):
+    def _start_manager(self, traceid, pool_id):
         """Starts a MinIO under a manager process.  It waits for a manager to
         write a message host:port on stdout.
         """
@@ -77,8 +75,8 @@ class Controller():
         args = [self._mux_host, self._mux_port, self.port_min, self.port_max,
                 "--configfile", self.configfile]
         env = copy_minimal_env(os.environ)
-        env["LENTICULARIS_POOL_ID"] = zone_id
-        ##if access_key_id == zone_id:
+        env["LENTICULARIS_POOL_ID"] = pool_id
+        ##if access_key_id == pool_id:
         ##    args.append("--accessByZoneID=True")
         ##    pass
         if traceid is not None:
@@ -102,8 +100,8 @@ class Controller():
                                 f" stdout=({outs}), stderr=({errs})")
                     pass
         except Exception as e:
-            logger.error(f"Starting a Manager failed: exception={e}")
-            logger.exception(e)
+            logger.error(f"Starting a Manager failed: exception={e}",
+                         exc_info=True)
             if outs != b"" or errs != b"":
                 logger.error(f"Output from a Manager:"
                              f" stdout=({outs}), stderr=({errs})")

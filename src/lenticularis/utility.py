@@ -16,7 +16,6 @@ from urllib.request import Request, urlopen
 import urllib.error
 import logging
 import logging.handlers
-import traceback
 import contextvars
 
 
@@ -43,12 +42,16 @@ class HostnameFilter(logging.Filter):
         setattr(record, "hostname", self.hostname)
         return True
 
+    pass
+
 
 class MicrosecondFilter(logging.Filter):
     def filter(self, record):
         ##record.microsecond = format_rfc3339_z(time.time())
         setattr(record, "microsecond", format_rfc3339_z(time.time()))
         return True
+
+    pass
 
 
 def openlog(file, facility, priority):
@@ -67,6 +70,7 @@ def openlog(file, facility, priority):
     else:
         fa = logging.handlers.SysLogHandler.LOG_LOCAL7
         handler = logging.handlers.SysLogHandler(address=address, facility=fa)
+        pass
 
     if priority in {
             "EMERG", "ALERT", "CRIT", "ERR", "WARNING",
@@ -74,6 +78,7 @@ def openlog(file, facility, priority):
         pr = eval(f"logging.{priority}")
     else:
         pr = logging.INFO
+        pass
 
     if file is not None:
         format = ("%(asctime)s %(levelname)s: "
@@ -82,10 +87,11 @@ def openlog(file, facility, priority):
         if pr == logging.DEBUG:
             format = ("lenticularis: %(levelname)s:[%(hostname)s:%(threadName)s.%(thread)d]:"
                       "%(filename)s:%(lineno)s:%(funcName)s: %(message)s")
-
         else:
             format = ("lenticularis: %(levelname)s: "
                       "%(filename)s:%(lineno)s:%(funcName)s: %(message)s")
+            pass
+        pass
 
     handler.addFilter(HostnameFilter())
     handler.addFilter(MicrosecondFilter())
@@ -95,10 +101,13 @@ def openlog(file, facility, priority):
 
     if priority == logging.DEBUG:
         logger.debug("*** openlog: priority=DEBUG ***")
+        pass
+    pass
 
 
 class Read1Reader():
-    amt = 8192  # same size with HTTPResponse.read()
+    # Note 8192 is the same size with HTTPResponse.read().
+    amt = 8192
     total = 0
     count = 0
     sniff_offset = 0
@@ -106,16 +115,14 @@ class Read1Reader():
 
     def __init__(self, stream, thunk=None,
                  sniff=False, sniff_marker="-", use_read=False):
-        #self.response = response
-
+        # self.response = response
         self.stream = stream
         self.use_read = use_read
         self.thunk = thunk
         self.start = time.time()
         self.sniff = sniff
         self.sniff_marker = sniff_marker
-        #AHO
-        logger.debug("READ1READER START")
+        pass
 
     def __iter__(self):
         return self
@@ -127,15 +134,14 @@ class Read1Reader():
             else:
                 b = self.stream.read1(self.amt)
         except Exception as e:
-            #AHO
-            logger.debug("READ1READER EXCEPTION")
-            logger.exception(e)
+            logger.error(f"Reading network failed: exception=({e})",
+                         exc_info=True)
             b = b""
+            pass
         if len(b) == 0:
             self.end = time.time()
             duration = self.end - self.start
-            #AHO
-            logger.debug(f"READ1READER END total: {self.total} count: {self.count} duration: {duration:.3f}")
+            # logger.debug(f"READ1READER END total: {self.total} count: {self.count} duration: {duration:.3f}")
             raise StopIteration
         self.total += len(b)
         self.count += 1
@@ -148,12 +154,17 @@ class Read1Reader():
                 bl = self.sniff_rest
                 bb = b[:bl]
                 self.sniff_rest = 0
+                pass
             bflag = ""
             if any(True for e in bb if chr(e) not in string.printable):
                 bflag = "<binary data> "
+                pass
             logger.debug(f"SNIFF: {self.sniff_marker} {self.sniff_offset} {bflag}{bb}")
             self.sniff_offset += bl
+            pass
         return b
+
+    pass
 
 
 ROT13_PREFIX = "$13$"
@@ -245,38 +256,22 @@ def access_mux(traceid, ep, access_key, facade_hostname, timeout):
         assert isinstance(status, int)
     except urllib.error.HTTPError as e:
         b = e.read()
-        logger.warning(f"Exception from urlopen to Mux url=({url}):"
-                       f" exception=({e}) body=({b})")
+        logger.warning(f"urlopen to Mux failed for url=({url}):"
+                       f" exception=({e}); body=({b})")
         status = e.code
         assert isinstance(status, int)
     except urllib.error.URLError as e:
-        logger.error(f"Exception from urlopen to Mux url=({url}):"
+        logger.error(f"urlopen to Mux failed for url=({url}):"
                      f" exception=({e})")
         status = 400
     except Exception as e:
-        logger.error(f"Exception from urlopen to Mux url=({url}):"
+        logger.error(f"urlopen to Mux failed for url=({url}):"
                      f" exception=({e})",
                      exc_info=True)
         status = 400
         pass
     logger.debug(f"urlopen to Mux: status={status}")
     return status
-
-
-def check_permit_status__(user, allow_deny_rules):
-    if user is None:
-        return "denied"
-    logger.debug(f"@@@ allow_deny_rules = {allow_deny_rules}")
-    for rule in allow_deny_rules:
-        action = rule[0]
-        subject = rule[1]
-        logger.debug(f"@@@ action = {action}")
-        logger.debug(f"@@@ subject = {subject}")
-        if subject == "*" or subject == user:
-            logger.debug(f"@@@ HIT! {action}")
-            return "allowed" if action == "allow" else "denied"
-    logger.debug("@@@ EOR! allow")
-    return "allowed"
 
 
 def copy_minimal_env(oenv):
@@ -295,53 +290,6 @@ def copy_minimal_env(oenv):
     return {key: val for key, val in oenv.items() if key in keys}
 
 
-##def _outer_join(left, lkey, right, rkey, fn):
-##    left = sorted(left, key=lkey)
-##    right = sorted(right, key=rkey)
-##
-##    def compar_nonetype(a, b):
-##        if a is None and b is None:
-##            return 0
-##        if a is None:
-##            return 1
-##        if b is None:
-##            return -1
-##
-##    def compar(a, b):
-##        if a is None or b is None:
-##            return compar_nonetype(a, b)
-##
-##        ak = lkey(a)
-##        bk = rkey(b)
-##
-##        if ak < bk:
-##            return -1
-##        if bk < ak:
-##            return 1
-##        return 0
-##
-##    def car(lst):
-##        if lst == []:
-##            return None
-##        return lst[0]
-##
-##    while left != [] or right != []:
-##        le = car(left)
-##        ri = car(right)
-##
-##        e = compar(le, ri)
-##        if e < 0:
-##            fn(le, None)
-##            left.pop(0)
-##        elif e > 0:
-##            fn(None, ri)
-##            right.pop(0)
-##        else:
-##            fn(le, ri)
-##            left.pop(0)
-##            right.pop(0)
-
-
 def list_diff3(left, lkeyfn, right, rkeyfn):
     """Takes an intersection and residues, and returns a three-tuple of
     left-residues, intersection-pairs, and right-residues.  It does
@@ -357,6 +305,7 @@ def list_diff3(left, lkeyfn, right, rkeyfn):
             return 1
         else:
             return 0
+        pass
 
     ll = sorted(left, key=lkeyfn)
     rr = sorted(right, key=rkeyfn)
@@ -377,6 +326,8 @@ def list_diff3(left, lkeyfn, right, rkeyfn):
             px.append((l0, r0))
             ll.pop(0)
             rr.pop(0)
+            pass
+        pass
     lx.extend(ll)
     rx.extend(rr)
     return (lx, px, rx)
@@ -429,6 +380,8 @@ def dict_diff(e, z):
         zi = z[common_key]
         if ei != zi:
             r.append({"reason": "value changed", "key": common_key, "existing": ei, "new": zi})
+            pass
+        pass
     return r
 
 
@@ -459,17 +412,24 @@ def dump_object(obj, lv="", array_element=False, order=None):
                 r += [f"{lv}{ai}{k}:\n"] + dump_object(v, lv=lv, order=order)
             else:
                 r += [f"{lv}{ai}{k}:\n"] + dump_object(v, lv=lv+" "*4, order=order)
+                pass
             ai = "  " if array_element else ""
+            pass
+        pass
     elif isinstance(obj, list):
         if array_element:
             raise Exception("not implemented")
         for v in obj:
             r += dump_object(v, lv=lv, array_element=True, order=order)
+            pass
+        pass
     else:
         if array_element:
             r.append(f"{lv}- {obj}\n")
         else:
             r.append(f"{lv}{obj}\n")
+            pass
+        pass
     return r
 
 
@@ -479,12 +439,7 @@ def host_port(host, port):
         return f"[{host}]:{port}"
     else:
         return f"{host}:{port}"
-
-
-def _safe_json_loads(s, parse_int=None, default=None):
-    if s is None:
-        return default
-    return json.loads(s, parse_int=None)
+    pass
 
 
 def uniq_d(lis):
@@ -493,7 +448,9 @@ def uniq_d(lis):
     for item in lis:
         if item in seen:
             dups.append(item)
+            pass
         seen.add(item)
+        pass
     return dups
 
 
@@ -515,6 +472,7 @@ def make_typical_ip_address(ip):
         return ip[7:]
     else:
         return ip
+    pass
 
 
 def wait_one_line_on_stdout(p, timeout):
@@ -533,13 +491,18 @@ def wait_one_line_on_stdout(p, timeout):
             e0 = p.stderr.read1()
             if (e0 == b""):
                 ss = [s for s in ss if s != p.stderr]
+                pass
             errs += e0
+            pass
         if p.stdout in readable:
             o0 = p.stdout.read1()
             if (o0 == b""):
                 ss = [s for s in ss if s != p.stdout]
                 closed = True
+                pass
             outs += o0
+            pass
+        pass
     return (outs, errs, closed)
 
 

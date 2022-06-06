@@ -79,7 +79,10 @@ var pool_section_app = new Vue({
   el: "#pool_section",
   data: edit_pool_data,
   methods: {
-    kick_make_pool: run_make_pool,
+    kick_make_pool: () => {
+      edit_pool_data.make_pool_mode = false;
+      run_make_pool();
+    },
   },
 });
 
@@ -662,11 +665,11 @@ function render_pool_as_ul_entry(pooldesc) {
     //{text: {label: "Direct hostname", value: pooldesc["direct_hostnames"].join(" ")}},
     {text: {label: "MinIO state",
             value: (pooldesc["minio_state"]
-                    + " (" + pooldesc["minio_reason"] + ")")}},
+                    + " (reason: " + pooldesc["minio_reason"] + ")")}},
     {text: {label: "Expiration date", value: format_rfc3339_if_not_zero(pooldesc["expiration_date"])}},
     {text: {label: "User enabled", value: pooldesc["permit_status"]}},
     {text: {label: "Pool online", value: pooldesc["online_status"]}},
-    {text: {label: "Creation date", value: format_rfc3339_if_not_zero(pooldesc["modification_date"])}},
+    {text: {label: "Creation date", value: format_rfc3339_if_not_zero(pooldesc["modification_time"])}},
   ];
 }
 

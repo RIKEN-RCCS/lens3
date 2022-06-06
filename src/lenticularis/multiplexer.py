@@ -9,8 +9,6 @@ import errno
 import time
 import random
 import posixpath
-import json
-import http.client
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 import urllib.parse
@@ -31,20 +29,11 @@ _connection_errors = [errno.ETIMEDOUT, errno.ECONNREFUSED,
                       errno.EHOSTDOWN, errno.EHOSTUNREACH]
 
 
-def _uppercase_headers__(d):
-    assert isinstance(d, http.client.HTTPMessage)
-    return {k.upper(): d.get(k).upper() for k in d}
-
-
-def _uppercase_dict__(d):
-    assert isinstance(d, dict)
-    return {k.upper(): v.upper() for (k, v) in d.items()}
-
-
 def _no_buffering(headers):
+    ##AHO
     if any(True for (k, v) in headers if k.upper() == "X-ACCEL-BUFFERING" and v.upper() == "NO"):
         return True
-    if any(True for (k, v) in headers if k.upper() == "CONTENT-LENGTH"):
+    if any(True for (k, _) in headers if k.upper() == "CONTENT-LENGTH"):
         return False
     return True
 
@@ -79,13 +68,13 @@ class Multiplexer():
     """Mux.  It forwards requests to MinIO."""
 
     def __init__(self, mux_conf, tables, controller, host, port):
-        self._verbose = False
+        self._verbose = True
         ##self.node = host
         self._mux_host = host
-        self._mux_port = port
+        self._mux_port = int(port)
         self.tables = tables
         self.controller = controller
-        self.start = time.time()
+        self._start_time = int(time.time())
         ##gunicorn_conf = mux_conf["gunicorn"]
         ##lenticularis_conf = mux_conf["lenticularis"]
 
@@ -96,9 +85,8 @@ class Multiplexer():
                                  for addr in get_ip_addresses(h)}
         self._forwarding_timeout = int(mux_param["forwarding_timeout"])
         timer = int(mux_param["mux_ep_update_interval"])
-        self.periodic_work_interval = timer
-        self.probe_access_timeout = int(mux_param["probe_access_timeout"])
-
+        self._periodic_work_interval = timer
+        self._probe_access_timeout = int(mux_param["probe_access_timeout"])
         self._multiplexer_addrs = self._list_mux_ip_addresses()
 
         ctl_param = mux_conf["minio_manager"]
@@ -108,8 +96,8 @@ class Multiplexer():
         return
 
     def __del__(self):
-        logger.debug("@@@ MUX_MAIN: __DEL__")
-        self.tables.process_table.delete_mux(self._mux_host)
+        ep = host_port(self._mux_host, self._mux_port)
+        self.tables.process_table.delete_mux(ep)
         return
 
     def __call__(self, environ, start_response):
@@ -134,24 +122,24 @@ class Multiplexer():
         return []
 
     def periodic_work(self):
-        interval = self.periodic_work_interval
+        interval = self._periodic_work_interval
         logger.debug(f"Mux periodic_work started: interval={interval}.")
-        assert self.periodic_work_interval >= 10
-        time.sleep(random.random() * interval)
+        assert self._periodic_work_interval >= 10
+        time.sleep(10 * random.random())
         while True:
             try:
                 self._register_mux()
             except Exception as e:
                 logger.error(f"Mux periodic_work failed: exception={e}")
                 pass
-            jitter = (2 * random.random())
+            jitter = ((interval * random.random()) / 8)
             time.sleep(interval + jitter)
             pass
         return
 
     def _list_mux_ip_addresses(self):
         muxs = self.tables.process_table.list_mux_eps()
-        return {addr for (h, p) in muxs for addr in get_ip_addresses(h)}
+        return {addr for (h, _) in muxs for addr in get_ip_addresses(h)}
 
     def _register_mux(self):
         if self._verbose:
@@ -159,8 +147,8 @@ class Multiplexer():
             pass
         now = int(time.time())
         mux_desc = {"host": self._mux_host, "port": self._mux_port,
-                    "start_time": f"{self.start}",
-                    "last_interrupted_time": f"{now}"}
+                    "start_time": self._start_time,
+                    "modification_time": now}
         ep = host_port(self._mux_host, self._mux_port)
         self.tables.set_mux(ep, mux_desc)
         return
@@ -233,7 +221,6 @@ class Multiplexer():
         if ep is None:
             # Run MinIO on a local host.
             (code, ep0) = self.controller.start_service(traceid, pool_id, probe_key)
-            logger.debug(f"AHOAHO MUX start_service returned: code={code}, ep={ep0}")
             return (code, ep0)
         else:
             # Run MinIO on a remote host.
@@ -242,7 +229,7 @@ class Multiplexer():
             probe_key = pooldesc["probe_access"]
             facade_hostname = self._facade_hostname
             code = access_mux(traceid, ep, probe_key, facade_hostname,
-                              self.probe_access_timeout)
+                              self._probe_access_timeout)
             return (code, ep)
         pass
 
@@ -271,7 +258,7 @@ class Multiplexer():
         traceid = environ.get("HTTP_X_TRACEID")
         tracing.set(traceid)
 
-        server_name = environ.get("SERVER_NAME")
+        # server_name = environ.get("SERVER_NAME")
         server_port = environ.get("SERVER_PORT")
         request_method = environ.get("REQUEST_METHOD")
         peer_addr = environ.get("REMOTE_ADDR")
@@ -310,11 +297,11 @@ class Multiplexer():
             raise Api_Error(403, f"Bad access from remote={client_addr}")
 
         if path == "/":
-            # Access to "/" is only allowed for probing access from Adm.
+            # Access to "/" is only allowed for probe-access from Adm.
             probe_key = self.tables.pickone_table.get_id(access_key)
             pool_id = _get_pool_for_probe_key(probe_key, access_info)
             assert probe_key is not None
-            logger.debug(f"MUX probing-access for pool={pool_id}")
+            logger.debug(f"MUX probe-access for pool={pool_id}")
         else:
             probe_key = None
             pool_id = self._find_pool_for_bucket(path, access_key, access_info)
@@ -360,16 +347,16 @@ class Multiplexer():
         url = f"{proto}://{minio_ep}{path_and_query}"
         input = environ.get("wsgi.input")
 
-        logger.debug(f"AHO url={url}")
-
         sniff = False
 
         if input and sniff:
             input = Read1Reader(input.reader, sniff=True, sniff_marker=">", use_read=True)
-        else:
             pass
 
-        req = Request(url, data=input, headers=q_headers, method=request_method)
+        req = Request(url, data=input, headers=q_headers,
+                      method=request_method)
+        failure_message = (f"urlopen failure: url={url}"
+                           f" for {request_method} {request_url};")
         try:
             res = urlopen(req, timeout=self._forwarding_timeout)
             status = f"{res.status}"
@@ -377,38 +364,31 @@ class Multiplexer():
             respiter = self._wrap_res(res, environ, r_headers, sniff=sniff, sniff_marker="<")
 
         except HTTPError as e:
-            logger.error(f"urlopen error: url={url} for {request_method} {request_url}; exception={e}")
-            ## logger.exception(e)
+            logger.error(failure_message + f" exception={e}")
             status = f"{e.code}"
             r_headers = [(k, e.headers[k]) for k in e.headers]
             respiter = self._wrap_res(e, environ, r_headers, sniff=sniff, sniff_marker="<E")
 
         except URLError as e:
-            logger.error(f"urlopen error: url={url} for {request_method} {request_url}; exception={e}")
             if _check_url_error_is_connection_errors(e):
                 # "Connection refused" etc.
-                logger.debug(f"CLEAR TABLE AND RETRY")
+                logger.warning(failure_message + f" exception={e}")
             else:
+                logger.error(failure_message + f" exception={e}")
                 pass
             status = "503"
             r_headers = []
             respiter = []
 
         except Exception as e:
-            logger.error(f"urlopen error: url={url} for {request_method} {request_url}; exception={e}")
-            logger.exception(e)
+            logger.error(failure_message + f" exception={e}",
+                         exc_info=True)
             status = "500"
             r_headers = []
             respiter = []
 
         if respiter != []:
-            # update atime
-            jitter = 0  # NOTE: fixed to 0
-            initial_idle_duration = self.heartbeat_interval + jitter + self.heartbeat_timeout
-            ##atime_timeout = initial_idle_duration + self.refresh_margin
-            ##atime = f"{int(time.time())}"
-            ##self.tables.routing_table.set_atime_by_addr_(dest_addr, atime, atime_timeout)
-            ##self.tables.routing_table.set_route_expiry(pool_id, atime_timeout)
+            pass
         else:
             pass
 
@@ -420,7 +400,6 @@ class Multiplexer():
                    upstream=content_length,
                    downstream=content_length_downstream)
 
-        logger.debug(f"(MUX) DONE")
         start_response(status, r_headers)
         return respiter
 

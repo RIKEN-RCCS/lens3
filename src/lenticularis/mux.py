@@ -6,9 +6,7 @@
 import atexit
 import os
 import platform
-import random
 import threading
-import time
 import sys
 from lenticularis.controller import Controller
 from lenticularis.multiplexer import Multiplexer

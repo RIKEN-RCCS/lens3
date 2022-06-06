@@ -4,9 +4,7 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 import argparse
-import math
 import os
-import platform
 from signal import signal, alarm, SIGTERM, SIGCHLD, SIGALRM, SIG_IGN
 from subprocess import Popen, DEVNULL, PIPE, TimeoutExpired
 import random
@@ -15,15 +13,14 @@ import sys
 import threading
 import time
 import contextlib
-from urllib.request import Request, urlopen
+from urllib.request import urlopen
 from urllib.error import HTTPError, URLError
 from lenticularis.mc import Mc, assert_mc_success
 from lenticularis.readconf import read_mux_conf
-from lenticularis.lockdb import LockDB
 from lenticularis.table import get_tables
 from lenticularis.poolutil import Pool_State
-from lenticularis.utility import ERROR_EXIT_READCONF, ERROR_EXIT_FORK, ERROR_EXIT_START_MINIO
-from lenticularis.utility import decrypt_secret, list_diff3
+from lenticularis.poolutil import gather_buckets, gather_keys
+from lenticularis.utility import ERROR_EXIT_READCONF, ERROR_EXIT_FORK
 from lenticularis.utility import generate_access_key
 from lenticularis.utility import generate_secret_key
 from lenticularis.utility import copy_minimal_env, host_port
@@ -108,7 +105,7 @@ class Manager():
         pass
 
     def _sigalrm(self, n, stackframe):
-        logger.debug(f"@@@ raise Alarmed [{self._alarm_section}]")
+        logger.debug("Manager got a sigalrm.")
         raise Alarmed(self._alarm_section)
 
     def _sigterm(self, n, stackframe):
@@ -194,31 +191,32 @@ class Manager():
 
         pooldesc = self.tables.get_pool(pool_id)
         if pooldesc is None:
-            logger.error(f"Manager failed: no pool found for pool={pool_id}")
+            logger.error(f"Manager failed: no pool for pool={pool_id}")
             return False
 
         # Register a manager entry and exclude others.
 
         now = int(time.time())
-        manager = {
+        ma = {
             "mux_host": self._mux_host,
             "mux_port": self._mux_port,
             "manager_pid": os.getpid(),
-            "modification_date": now
+            "modification_time": now
         }
-        self._minio_manager = manager
-        (ok, holder) = self.tables.set_ex_minio_manager(pool_id, manager)
+        self._minio_manager = ma
+        (ok, holder) = self.tables.set_ex_minio_manager(pool_id, ma)
         if not ok:
-            muxep = host_port(holder["host"], holder["port"])
+            muxep = host_port(holder["mux_host"], holder["mux_port"])
             logger.info(f"Manager yields its work to another:"
                         f" pool={pool_id} to Mux={muxep}")
             return False
+
+        # This manager takes the role.
+
         ok = self.tables.set_minio_manager_expiry(pool_id, self._expiry)
         if not ok:
-            logger.error(f"A Manager entry expires instantly:"
-                         f" pool={pool_id} at Mux={self._mux_ep}")
-            return False
-
+            logger.warning(f"A Manager entry expiry not set: pool={pool_id}")
+            pass
         try:
             self._deregister_minio_process(clean_stale_entries=True)
             ok = self._manage_minio()
@@ -239,7 +237,6 @@ class Manager():
             logger.error(f"Manager failed: pool deleted: pool={self._pool_id}")
             return False
 
-        use_pool_id_for_minio_root_user = False
         self._minio_root_user = generate_access_key()
         self._minio_root_password = generate_secret_key()
 
@@ -397,7 +394,7 @@ class Manager():
                       self._pool_id)
         try:
             self._setup_minio(p, pooldesc)
-        except Exception as e:
+        except Exception:
             self._stop_minio(p)
             raise
         else:
@@ -415,12 +412,16 @@ class Manager():
         pass
 
     def _setup_minio(self, p, pooldesc):
+        pool_id = self._pool_id
         with self._mc.alias_set(self._minio_root_user,
                                 self._minio_root_password):
             try:
                 alarm(self._minio_setup_timeout)
                 self._alarm_section = "setup_minio"
-                self._mc.setup_minio(p, pooldesc)
+                bkts = gather_buckets(self.tables, pool_id)
+                self._mc.setup_minio_on_buckets(bkts)
+                keys = gather_keys(self.tables, pool_id)
+                self._mc.setup_minio_on_keys(keys)
                 alarm(0)
                 self._alarm_section = None
             except Alarmed as e:
@@ -446,7 +447,7 @@ class Manager():
            stdout/stderr, and this does a periodic work of
            heartbeating.
         """
-        logger.debug(f"Manager for {self._minio_ep} starts watching.")
+        logger.debug(f"Manager starts watching: MinIO-ep={self._minio_ep}.")
 
         signal(SIGTERM, self._sigterm)
         signal(SIGCHLD, SIG_IGN)
@@ -485,6 +486,8 @@ class Manager():
                 pass
 
         except Termination as e:
+            logger.debug(f"Manager terminating with=({e}):"
+                         f" MinIO-ep={self._minio_ep}")
             pass
 
         except Exception as e:
@@ -492,7 +495,7 @@ class Manager():
                          exc_info=True)
             pass
 
-        logger.debug(f"Manager for {self._minio_ep} exiting.")
+        logger.debug(f"Manager exiting: MinIO-ep={self._minio_ep}")
         pass
 
     def _register_minio_process(self, pid, pooldesc):
@@ -505,7 +508,7 @@ class Manager():
             "mux_host": self._mux_host,
             "mux_port": self._mux_port,
             "manager_pid": os.getpid(),
-            "modification_date": now
+            "modification_time": now
         }
         self.tables.set_minio_proc(self._pool_id, self._minio_proc)
         self.tables.set_route(self._pool_id, self._minio_ep)
@@ -513,12 +516,16 @@ class Manager():
         pass
 
     def _refresh_manager_expiry(self):
-        # It may extend expiry for other managers (as intended).
-        ok = self.tables.set_minio_manager_expiry(self._pool_id, self._expiry)
-        ma = self.tables.get_minio_manager(self._pool_id)
+        # It may happen to extend expiry for other managers (ignored).
+        pool_id = self._pool_id
+        ok = self.tables.set_minio_manager_expiry(pool_id, self._expiry)
+        if not ok:
+            logger.warning(f"A Manager entry expiry not set: pool={pool_id}")
+            pass
+        ma = self.tables.get_minio_manager(pool_id)
         if ma != self._minio_manager:
             logger.error(f"Manager exiting for a stale state:"
-                         f" pool={self._pool_id} at Mux={self._mux_ep}")
+                         f" pool={pool_id} at Mux={self._mux_ep}")
             raise Termination("Stale state")
         pass
 
@@ -527,16 +534,16 @@ class Manager():
         try:
             mn = self.tables.get_minio_proc(pool_id)
             if not clean_stale_entries and mn != self._minio_proc:
-                logger.error(f"Inconsistent mutex state of MinIO processes:"
+                logger.error(f"Inconsistent record of MinIO processes:"
                              f" pool={self._pool_id} at Mux={self._mux_ep}")
                 pass
             elif clean_stale_entries and mn is not None:
                 logger.info(f"A stale MinIO process entry:"
                             f" pool={pool_id} ep={mn['minio_ep']}")
                 pass
-            ep = self.tables.delete_route(pool_id)
+            ep = self.tables.get_route(pool_id)
             if not clean_stale_entries and ep != self._minio_ep:
-                logger.error(f"Inconsistent mutex state of MinIO processes:"
+                logger.error(f"Inconsistent record of MinIO processes:"
                              f" pool={self._pool_id} at Mux={self._mux_ep}")
                 pass
             elif clean_stale_entries and ep is not None:
@@ -546,8 +553,9 @@ class Manager():
             self.tables.delete_minio_proc(pool_id)
             self.tables.delete_route(pool_id)
         except Exception as e:
-            logger.exception(f"Exception in deleting Redis entries (ignored):"
-                             f" exception={e}")
+            logger.error(f"Exception in deleting Redis entries (ignored):"
+                         f" exception={e}",
+                         exc_info=True)
             pass
         pass
 
@@ -557,8 +565,7 @@ class Manager():
             try:
                 alarm(self._minio_stop_timeout)
                 self._alarm_section = "stop_minio"
-                (p_, r) = self._mc.admin_service_stop()
-                assert p_ is None
+                r = self._mc.admin_service_stop()
                 assert_mc_success(r, "mc.admin_service_stop")
                 p_status = p.wait()
             except Alarmed as e:
@@ -695,7 +702,7 @@ def main():
     pool_id = os.environ.get("LENTICULARIS_POOL_ID")
 
     try:
-        (mux_conf, configfile) = read_mux_conf(args.configfile)
+        (mux_conf, _) = read_mux_conf(args.configfile)
     except Exception as e:
         sys.stderr.write(f"Manager failed to read a config file: {e}\n")
         sys.exit(ERROR_EXIT_READCONF)

@@ -1681,7 +1681,7 @@ Figure 3 Credential
   * "online"
   * "offline"
 
-## Redis Database Keys (prefixes)
+### Redis Database Keys (prefixes)
 
 Note: Entries with "(\*)" are set atomically (by "setnx"), and entries
 with "(\*\*)" are with expiry, in the tables below.
@@ -1750,7 +1750,7 @@ key-description is a record {"use", "owner", "secret_key",
 fields are missing for an entry for use=pool.  A key-policy is one of
 {"readwrite", "readonly", "writeonly"}, which are borrowed from MinIO.
 
-## Bucket policy
+### Bucket policy
 
 Public r/w policy is given to a bucket by Lens3.  Lens3 invokes the mc
 command, one of the following.
@@ -1782,6 +1782,11 @@ Lens3.
 Operations by an administrator is NOT mutexed.  They include
 modifications on the user-list.
 
+### Adm/Mux systemd Services
+
+All states of services are stored in Redis.  systemd services can be
+stoped/started.
+
 ### Adm Processes
 
 Adm is not designed as load-balanced.  Adm may consist of some
@@ -1803,13 +1808,23 @@ Note that alias commands are local (not connect to a MinIO).
 A Manager becomes a session leader (by calling setsid), and a MinIO
 process will be terminated when a Manager exits.
 
-### Glossary
+## Service Up/Down Tests
+
+#### Forced Termination of Mux and MinIO
+
+#### Deletion of Redis Expiring Entries
+
+Forced removal of a __ma:pool-id__ entry should (1) start a new
+Mux+MinIO pair, and (2) stop an old Mux+MinIO pair.
+
+
+## Glossary
 
 * __Probe-key__: An access-key used by Adm to tell Mux about wake up
   of MinIO.  This is key has no corresponding secret.  It is
   distiguished by an empty secret.
 
-### RANDOM MEMO
+## RANDOM MEMO
 
 __Load balancing__: The "scheduler.py" file is not used in v1.2, which
 is for distributing the processes.  Lens3 now assumes accesses to Mux

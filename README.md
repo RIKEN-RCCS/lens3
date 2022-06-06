@@ -1,7 +1,9 @@
 # Lens3
 
-Lenticularis-S3, a hub of MinIO to service multiple MinIO services at
-a single access point.
+Lenticularis-S3 is a hub of MinIO to service multiple MinIO instances
+at a single access point.
+
+__Lenticularis-S3 comes with ABSOLUTELY NO WARRANTY.__
 
 ## Overview
 
@@ -12,10 +14,10 @@ user to confine unintended operations.
 Lens3 works as a reverse-proxy and a manager of MinIO instances.  It
 launches a MinIO instance on a request, redirects S3 file access
 requests to the instance, and manages the life-time of the instance.
-Lens3 also provides simple Web-UI, a pool manager, for registering S3
-buckets.  A pool is a management unit of buckets and is associated to
-a single directory in a filesystem.  A pool manager registers buckets
-to a pool.
+Lens3 also provides simple Web-UI, a pool-admin, for registering S3
+buckets.  A pool is a management unit and is associated to a single
+MinIO instance.  A pool-admin registers a directory in a filesystem to
+a pool.
 
 See [MinIO](https://min.io).
 
@@ -31,18 +33,21 @@ see [doc/user-guide.md](doc/user-guide.md).
 For administrators,
 see [doc/admin-guide.md](doc/admin-guide.md).
 
+For programmers,
+see [doc/design.md](doc/design.md).
+
 ## Manifestation
+
+This system is deleveloped by the [Authors](AUTHORS.txt).
+
+Files.
 
 ```
 doc              documents
 src/lenticularis source code
-unit-file/amd    configuration templates
+unit-file/adm    configuration templates
 unit-file/mux    configuration templates
 unit-file/redis  configuration templates
 nginx            templates for reverse-proxy configuration
 test             test code
-redis            (Redis related files)
-devel            for developer
-devel/lxc        lxc environment for developer
-devel/install    install script for lxc
 ```

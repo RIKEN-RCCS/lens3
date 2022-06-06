@@ -234,6 +234,11 @@ aws_secret_access_key = DzZv57R8wBIuVZdtAkE1uK1HoebLPMzKM6obA4IDqOhaLIBf
 $ aws --endpoint-url=http://lens3.example.com/ s3 ls s3://somebucket1/
 ```
 
+## No Control on File and Bucket Properties
+
+Lens3 does not provide control on properties of files and buckets.  A
+bucket can only have a public access policy.
+
 ## Bucket Naming Restrictions
 
 Bucket names must be in lowercase alphanums and "-".  Lens3 bans dots.

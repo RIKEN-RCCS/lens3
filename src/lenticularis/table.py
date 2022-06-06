@@ -8,7 +8,6 @@ import json
 from lenticularis.poolutil import Pool_State
 from lenticularis.dbase import DBase
 from lenticularis.utility import generate_access_key
-from lenticularis.utility import generate_secret_key
 from lenticularis.utility import logger
 
 # Redis DB number.
@@ -17,11 +16,6 @@ STORAGE_TABLE_ID = 1
 PROCESS_TABLE_ID = 2
 ROUTING_TABLE_ID = 3
 PICKONE_TABLE_ID = 4
-
-
-def _get_mux_host_port(desc):
-    ## (for pyright).
-    return (desc["host"], desc["port"])
 
 
 def get_tables(mux_conf):
@@ -275,21 +269,19 @@ class Storage_Table(Table_Common):
     pool_desc_stored_keys = {
         "pool_name", "owner_uid", "owner_gid",
         "buckets_directory", "probe_access",
-        "expiration_date", "online_status", "modification_date",}
+        "expiration_date", "online_status", "modification_time",}
     _pool_desc_keys = pool_desc_stored_keys
 
     _access_keys_keys = {
         "key_policy", "access_key", "secret_key"}
 
     _user_info_keys = {
-        "uid", "groups", "permitted"}
+        "uid", "groups", "permitted", "modification_time"}
 
     def set_pool(self, pool_id, pooldesc):
         assert set(pooldesc.keys()) == self._pool_desc_keys
         key = f"{self._pool_desc_prefix}{pool_id}"
-        ##self.dbase.hset_map(key, pooldesc, self.structured)
         v = json.dumps(pooldesc)
-        logger.debug(f"AHO set-pool {v}")
         self.dbase.set(key, v)
         pass
 
@@ -440,12 +432,12 @@ class Storage_Table(Table_Common):
         pass
 
     def list_users(self):
-        kk = _scan_table(self.dbase.r, self._user_info_prefix, None)
-        return [k for (k, _) in kk]
+        keyi = _scan_table(self.dbase.r, self._user_info_prefix, None)
+        return [k for (k, _) in keyi]
 
     def list_pools(self, pool_id):
-        kk = _scan_table(self.dbase.r, self._pool_desc_prefix, pool_id)
-        return [k for (k, _) in kk]
+        keyi = _scan_table(self.dbase.r, self._pool_desc_prefix, pool_id)
+        return [k for (k, _) in keyi]
 
     def set_ex_buckets_directory(self, path, pool_id):
         key = f"{self._buckets_directory_prefix}{path}"
@@ -508,14 +500,14 @@ class Process_Table(Table_Common):
     ## See _register_mux_info for the content of a Mux description.
 
     _minio_manager_desc_keys = {
-        "mux_host", "mux_port", "manager_pid", "modification_date"}
+        "mux_host", "mux_port", "manager_pid", "modification_time"}
 
     _minio_desc_keys = {
         "minio_ep", "minio_pid", "admin", "password",
-        "mux_host", "mux_port", "manager_pid", "modification_date"}
+        "mux_host", "mux_port", "manager_pid", "modification_time"}
 
     _mux_desc_keys = {
-        "host", "port", "start_time", "last_interrupted_time"}
+        "host", "port", "start_time", "modification_time"}
 
     def set_ex_minio_manager(self, pool_id, desc):
         assert set(desc.keys()) == self._minio_manager_desc_keys
@@ -564,46 +556,48 @@ class Process_Table(Table_Common):
         self.dbase.delete(key)
         pass
 
-    def set_minio_proc_expiry(self, pool_id, timeout):
-        key = f"{self._minio_process_prefix}{pool_id}"
-        self.dbase.r.expire(key, timeout)
-        pass
+    # def set_minio_proc_expiry(self, pool_id, timeout):
+    #    key = f"{self._minio_process_prefix}{pool_id}"
+    #    self.dbase.r.expire(key, timeout)
+    #    pass
 
     def list_minio_procs(self, pool_id):
-        return _scan_table(self.dbase.r, self._minio_process_prefix, pool_id, value=self.get_minio_proc)
+        vv = list(_scan_table(self.dbase.r, self._minio_process_prefix,
+                              pool_id, value=self.get_minio_proc))
+        return vv
 
     def set_mux(self, mux_ep, mux_desc):
         assert set(mux_desc.keys()) == self._mux_desc_keys
         key = f"{self._mux_desc_prefix}{mux_ep}"
-        self.dbase.hset_map(key, mux_desc, self.structured)
+        #self.dbase.hset_map(key, mux_desc, self.structured)
+        v = json.dumps(mux_desc)
+        self.dbase.set(key, v)
         pass
 
     def get_mux(self, mux_ep):
         key = f"{self._mux_desc_prefix}{mux_ep}"
-        return self.dbase.hget_map(key, self.structured)
+        #return self.dbase.hget_map(key, self.structured)
+        v = self.dbase.get(key)
+        return json.loads(v, parse_int=None) if v is not None else None
 
     def delete_mux(self, mux_ep):
         key = f"{self._mux_desc_prefix}{mux_ep}"
         self.dbase.delete(key)
         pass
 
-    def _set_mux_expiry(self, mux_ep, timeout):
-        key = f"{self._mux_desc_prefix}{mux_ep}"
-        self.dbase.r.expire(key, timeout)
-        return None
-
     def list_muxs(self):
-        vv = _scan_table(self.dbase.r, self._mux_desc_prefix, None,
-                         value=self.get_mux)
+        vv = list(_scan_table(self.dbase.r, self._mux_desc_prefix, None,
+                              value=self.get_mux))
         return vv
 
     def list_mux_eps(self):
         """Retruns a list of (host, port)."""
-        vv = _scan_table(self.dbase.r, self._mux_desc_prefix, None,
-                         value=self.get_mux)
-        ep0 = [_get_mux_host_port(desc) for (k, desc) in vv]
-        ep1 = sorted(list(set(ep0)))
-        return ep1
+        keyi = _scan_table(self.dbase.r, self._mux_desc_prefix, None)
+        eps = [(desc["host"], desc["port"])
+               for (_, desc) in [(ep, self.get_mux(ep)) for (ep, _) in keyi]
+               if desc is not None]
+        #return sorted(list(set(eps)))
+        return sorted(eps)
 
     def clear_all(self, everything):
         """Clears Redis DB.  It leaves entires for multiplexers unless
@@ -644,7 +638,7 @@ class Routing_Table(Table_Common):
     hashes_ = {}
     structured = {}
 
-    _bucket_desc_keys = {"pool", "bkt_policy", "modification_date"}
+    _bucket_desc_keys = {"pool", "bkt_policy", "modification_time"}
 
     def set_route(self, pool_id, ep):
         assert isinstance(ep, str)
@@ -667,7 +661,9 @@ class Routing_Table(Table_Common):
         return self.dbase.get(key)
 
     def list_routes(self):
-        return _scan_table(self.dbase.r, self._minio_ep_prefix, None, value="get")
+        vv = list(_scan_table(self.dbase.r, self._minio_ep_prefix, None,
+                              value="get"))
+        return vv
 
     def set_atime_expire_(self, addr, timeout):
         # logger.debug(f"+++ {addr} {timeout}")
@@ -773,13 +769,13 @@ class Pickone_Table(Table_Common):
     structured = {}
 
     _id_desc_keys = {"use", "owner", "secret_key", "key_policy",
-                     "modification_date"}
+                     "modification_time"}
 
     def make_unique_id(self, usage, owner, info={}):
         assert usage in {"pool", "access_key"}
         assert usage != "access_key" or info != {}
         now = int(time.time())
-        desc = {"use": usage, "owner": owner, **info, "modification_date": now}
+        desc = {"use": usage, "owner": owner, **info, "modification_time": now}
         v = json.dumps(desc)
         id_generation_loops = 0
         while True:

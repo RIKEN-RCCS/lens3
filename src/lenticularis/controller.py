@@ -32,9 +32,9 @@ class Controller():
 
     def start_service(self, traceid, pool_id, probe_key):
         ##if host:
-        ##    pool_id = self.tables.storage_table.get_pool_id_by_direct_hostname(host)
+        ##    pool_id = self.tables.get_pool_id_by_direct_hostname(host)
         ##elif access_key:
-        ##    pool_id = self.tables.storage_table.get_pool_by_access_key(access_key)
+        ##    pool_id = self.tables.get_pool_by_access_key(access_key)
         ##else:
         ##    pool_id = None
         ##    pass
@@ -60,7 +60,7 @@ class Controller():
         ok = self._start_manager(traceid, pool_id)
         if not ok:
             return (503, None)
-        ep = self.tables.routing_table.get_route(pool_id)
+        ep = self.tables.get_minio_ep(pool_id)
         if ep:
             return (200, ep)
         else:

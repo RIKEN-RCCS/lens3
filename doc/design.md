@@ -1697,29 +1697,31 @@ with "(\*\*)" are with expiry, in the tables below.
 
 A pool-description is a record: {}.
 
-A user-info is a record: {"groups", "permitted", "modification_date"}
+A user-info is a record: {"groups", "permitted", "modification_time"}
 where "groups" is a string list and "permitted" is a boolean.
 
 #### process-table
 
 | Key           | Value         | Description   |
 | ----          | ----          | ----          |
-| ma:pool-id    | MinIO-manager |(json) (\*,\*\*)|
-| mn:pool-id    | MinIO-description |(json)|
-| mx:mux-endpoint | Mux-description |(htable)|
+| ma:pool-id    | MinIO-manager |(json) (\*, \*\*)|
+| mn:pool-id    | MinIO-process |(json)|
+| mx:mux-endpoint | Mux-description |(json)|
 
-An __ma:pool-id__ entry is used as a mutex.  A MinIO-manager records a
-Mux under which a MinIO process runs: {"mux_host", "mux_port",
-"manager_pid", "modification_date"}.  An __ma:pool-id__ entry protects
-accesses to __mn:pool-id__ and __ep:pool-id__.
+An __ma:pool-id__ entry stores a MinIO-manager record of a Mux under
+which a MinIO process runs: {"mux_host", "mux_port", "manager_pid",
+"modification_time"}.  It is used as a mutex and protects accesses to
+mn:pool-id and ep:pool-id.
 
-A MinIO-description records a record of: {"minio_ep", "minio_pid",
-"admin", "password", "mux_host", "mux_port", "manager_pid",
-"modification_date"}.
+An __mn:pool-id__ entry stores a MinIO-process description:
+{"minio_ep", "minio_pid", "admin", "password", "mux_host", "mux_port",
+"manager_pid", "modification_time"}.
 
-A Mux-description is a htable record: {"host", "port", "start_time",
-"last_interrupted_time"}, where a host+port is an endpoint of a Mux.
-start-time ...  last-interrupted-time ...  This has no particular use.
+An __mx:mux-endpoint__ entry stores a Mux-description that is a
+record: {"host", "port", "start_time", "modification_time"}.  A key is
+an endpoint (host+port) of a Mux.  A start-time is a time the record
+is first created, and a modification-time is updated each time the
+record is refreshed.  The content has no particular use.
 
 #### routing-table
 
@@ -1729,13 +1731,12 @@ start-time ...  last-interrupted-time ...  This has no particular use.
 | bk:bucket-name | bucket-description | A mapping by a bucket-name (\*) |
 | ts:pool-id    | timestamp     | Timestamp on the last access |
 
-A MinIO-endpoint is an endpoint (a host+port string).  It is with
-expiry set and periodically refreshed.
+An __ep:pool-id__ entry stores a MinIO-endpoint (a host:port string).
 
-A bucket-description is a record of {"pool", "bkt_policy",
-"modification_date"}.  A bkt-policy indicates public R/W status of a
-bucket: {"none", "upload", "download", "public"}, which are borrowed
-from MinIO.
+A __bk:bucket-name__ entry stores a bucket-description that is a
+record: {"pool", "bkt_policy", "modification_time"}.  A bkt-policy
+indicates public R/W status of a bucket: {"none", "upload",
+"download", "public"}, which are borrowed from MinIO.
 
 #### pickone-table
 
@@ -1743,9 +1744,9 @@ from MinIO.
 | ----          | ----          | ----          |
 | id:random     | key-description | An entry to keep uniqueness (*) |
 
-It stores generated keys for pool-id's and access-keys.  A
-key-description is a record {"use", "owner", "secret_key",
-"key_policy", "modification_date"}.  A use/owner pair is either
+An id:random entry stores a generated key for pool-id or access-key.
+A key-description is a record: {"use", "owner", "secret_key",
+"key_policy", "modification_time"}.  A use/owner pair is either
 "pool"/user-id or "access_key"/pool-id.  A secret-key and a key-policy
 fields are missing for an entry for use=pool.  A key-policy is one of
 {"readwrite", "readonly", "writeonly"}, which are borrowed from MinIO.

@@ -11,7 +11,7 @@ import sys
 from lenticularis.controller import Controller
 from lenticularis.multiplexer import Multiplexer
 from lenticularis.readconf import read_mux_conf, node_envname
-from lenticularis.table import get_tables
+from lenticularis.table import get_table
 from lenticularis.utility import host_port
 from lenticularis.utility import logger, openlog
 
@@ -27,7 +27,7 @@ def app():
             **mux_conf["log_syslog"])
     logger.info("START MUX.")
 
-    tables = get_tables(mux_conf)
+    tables = get_table(mux_conf)
 
     mux_host = os.environ.get(node_envname)
     if not mux_host:

@@ -413,10 +413,7 @@ class Command():
         pass
 
     def _reset_database(self, everything=False):
-        self.pool_adm.tables.storage_table.clear_all(everything=everything)
-        self.pool_adm.tables.process_table.clear_all(everything=everything)
-        self.pool_adm.tables.routing_table.clear_routing(everything=everything)
-        self.pool_adm.tables.pickone_table.clear_all(everything=everything)
+        self.pool_adm.tables.clear_all(everything=everything)
         return
 
     def op_list_db(self):
@@ -425,15 +422,12 @@ class Command():
         pass
 
     def _print_database(self):
-        self.pool_adm.tables.storage_table.print_all()
-        self.pool_adm.tables.process_table.print_all()
-        self.pool_adm.tables.routing_table.print_all()
-        self.pool_adm.tables.pickone_table.print_all()
-        return
+        self.pool_adm.tables.print_all()
+        pass
 
     def op_show_muxs(self):
         """show-muxs"""
-        muxs = self.pool_adm.tables.process_table.list_muxs()
+        muxs = self.pool_adm.tables.list_muxs()
         muxs = sorted(list(muxs))
         outs = [format_mux(m, self.args.format) for m in muxs]
         print_json_plain("muxs", outs, self.args.format, order=_mux_key_order)
@@ -441,7 +435,7 @@ class Command():
 
     def op_show_server_processes(self):
         """show-minios"""
-        proc_list = self.pool_adm.tables.process_table.list_minio_procs(None)
+        proc_list = self.pool_adm.tables.list_minio_procs(None)
         process_list = sorted(list(proc_list))
         outs = [{pool: process} for (pool, process) in process_list]
         print_json_plain("servers", outs, self.args.format, order=proc_key_order)
@@ -450,14 +444,14 @@ class Command():
     def op_flush_server_processes(self):
         """flush-server-processes"""
         everything = self.args.everything
-        self.pool_adm.tables.process_table.clear_all(everything=everything)
+        ##self.pool_adm.tables.process_table.clear_all(everything=everything)
         pass
 
     def op_delete_server_processes(self, *pool_id):
         """delete-server-processes"""
         pool_list = pool_id
         for pool_id in pool_list:
-            self.pool_adm.tables.process_table.delete_minio_proc(pool_id)
+            self.pool_adm.tables.delete_minio_proc(pool_id)
             pass
         pass
 
@@ -468,7 +462,7 @@ class Command():
 
     def op_show_routing_table(self):
         """show-routing"""
-        pairs = self.pool_adm.tables.routing_table.list_routes()
+        pairs = self.pool_adm.tables.list_minio_ep()
         print_json_plain("routing table", pairs, self.args.format, order=route_key_order)
         pass
 
@@ -497,7 +491,7 @@ class Command():
     def op_flush_routing_table(self):
         """clear-routing"""
         everything = self.args.everything
-        self.pool_adm.tables.routing_table.clear_routing(everything=everything)
+        ##self.pool_adm.tables.routing_table.clear_routing(everything=everything)
         pass
 
     op_list = [

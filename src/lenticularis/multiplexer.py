@@ -68,7 +68,7 @@ class Multiplexer():
     """Mux.  It forwards requests to MinIO."""
 
     def __init__(self, mux_conf, tables, controller, host, port):
-        self._verbose = True
+        self._verbose = False
         ##self.node = host
         self._mux_host = host
         self._mux_port = int(port)
@@ -138,7 +138,7 @@ class Multiplexer():
         return
 
     def _list_mux_ip_addresses(self):
-        muxs = self.tables.process_table.list_mux_eps()
+        muxs = self.tables.list_mux_eps()
         return {addr for (h, _) in muxs for addr in get_ip_addresses(h)}
 
     def _register_mux(self):
@@ -188,7 +188,7 @@ class Multiplexer():
         if not check_bucket_naming(bucket):
             log_access("400", *access_info)
             raise Api_Error(400, f"Bad URL, bad bucket name: url={bucket}")
-        desc = self.tables.routing_table.get_bucket(bucket)
+        desc = self.tables.get_bucket(bucket)
         if desc is None:
             log_access("404", *access_info)
             raise Api_Error(404, f"No bucket: url={request_url}")
@@ -197,7 +197,7 @@ class Multiplexer():
         policy = desc["bkt_policy"]
         if policy != "none":
             return pool_id
-        key = self.tables.pickone_table.get_id(access_key)
+        key = self.tables.get_id(access_key)
         if (key is not None
             and key.get("use") == "access_key"
             and key.get("owner") == pool_id
@@ -225,7 +225,7 @@ class Multiplexer():
         else:
             # Run MinIO on a remote host.
             assert probe_key is None
-            pooldesc = self.tables.storage_table.get_pool(pool_id)
+            pooldesc = self.tables.get_pool(pool_id)
             probe_key = pooldesc["probe_access"]
             facade_hostname = self._facade_hostname
             code = access_mux(traceid, ep, probe_key, facade_hostname,
@@ -298,7 +298,7 @@ class Multiplexer():
 
         if path == "/":
             # Access to "/" is only allowed for probe-access from Adm.
-            probe_key = self.tables.pickone_table.get_id(access_key)
+            probe_key = self.tables.get_id(access_key)
             pool_id = _get_pool_for_probe_key(probe_key, access_info)
             assert probe_key is not None
             logger.debug(f"MUX probe-access for pool={pool_id}")
@@ -309,7 +309,7 @@ class Multiplexer():
             pass
 
         assert pool_id is not None
-        minio_ep = self.tables.routing_table.get_route(pool_id)
+        minio_ep = self.tables.get_minio_ep(pool_id)
 
         if minio_ep is None:
             (code, ep0) = self._start_service(traceid, pool_id, probe_key)

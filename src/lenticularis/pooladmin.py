@@ -11,7 +11,7 @@ import traceback
 from lenticularis.mc import Mc, assert_mc_success
 from lenticularis.mc import intern_mc_user_info
 from lenticularis.mc import intern_mc_list_entry
-from lenticularis.table import get_tables
+from lenticularis.table import get_table
 from lenticularis.poolutil import Api_Error
 from lenticularis.poolutil import Pool_State
 from lenticularis.poolutil import gather_pool_desc
@@ -52,7 +52,7 @@ class Pool_Admin():
         settings = adm_conf["system"]
         self._max_pool_expiry = int(settings["max_pool_expiry"])
 
-        self.tables = get_tables(adm_conf)
+        self.tables = get_table(adm_conf)
 
         minio_param = adm_conf["minio"]
         self._bin_mc = minio_param["mc"]
@@ -382,9 +382,9 @@ class Pool_Admin():
             pass
         # Delete a route.
         try:
-            self.tables.delete_route(pool_id)
+            self.tables.delete_minio_ep(pool_id)
         except Exception as e:
-            logger.info(f"Exception in delete_route: exception={e}")
+            logger.info(f"Exception in delete_minio_ep: exception={e}")
             pass
         try:
             self.tables.delete_access_timestamp(pool_id)
@@ -485,10 +485,10 @@ class Pool_Admin():
                 #self._lock_pool_entry(lock, pool_id)
                 try:
                     mc.make_bucket_with_policy(bucket, bkt_policy)
-                    #pooldesc = self.tables.storage_table.get_pool(pool_id)
+                    #pooldesc = self.tables.get_pool(pool_id)
                     #_add_bucket_to_pool(pooldesc, bucket, bkt_policy)
                     #check_pool_is_well_formed(pooldesc, None)
-                    #self.tables.storage_table.set_pool(pool_id, pooldesc)
+                    #self.tables.set_pool(pool_id, pooldesc)
                 finally:
                     #self._unlock_pool_entry(lock, pool_id)
                     pass

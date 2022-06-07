@@ -18,7 +18,7 @@ ROUTING_TABLE_ID = 3
 PICKONE_TABLE_ID = 4
 
 
-def get_tables(mux_conf):
+def get_table(mux_conf):
     redis_conf = mux_conf["redis"]
     redis_host = redis_conf["host"]
     redis_port = redis_conf["port"]
@@ -31,7 +31,7 @@ def get_tables(mux_conf):
                                   redis_password)
     pickone_table = Pickone_Table(redis_host, redis_port, PICKONE_TABLE_ID,
                                   redis_password)
-    return Tables(storage_table, process_table, routing_table, pickone_table)
+    return Table(storage_table, process_table, routing_table, pickone_table)
 
 
 def _print_table(r, name):
@@ -77,170 +77,187 @@ def _scan_table(r, prefix, target, *, value=None):
     return
 
 
-class Tables():
+class Table():
     def __init__(self, storage_table, process_table, routing_table, pickone_table):
-        self.storage_table = storage_table
-        self.process_table = process_table
-        self.routing_table = routing_table
-        self.pickone_table = pickone_table
+        self._storage_table = storage_table
+        self._process_table = process_table
+        self._routing_table = routing_table
+        self._pickone_table = pickone_table
         return
 
     ## Storage-table:
 
     def set_pool(self, pool_id, pooldesc):
-        self.storage_table.set_pool(pool_id, pooldesc)
+        self._storage_table.set_pool(pool_id, pooldesc)
         pass
 
     def get_pool(self, pool_id):
-        return self.storage_table.get_pool(pool_id)
+        return self._storage_table.get_pool(pool_id)
 
     def delete_pool(self, pool_id):
-        self.storage_table.delete_pool(pool_id)
+        self._storage_table.delete_pool(pool_id)
         pass
 
     def list_pools(self, pool_id):
         """Returns a ID list of pools if argument is None.  Or, it just checks
         existence of a pool.
         """
-        return self.storage_table.list_pools(pool_id)
+        return self._storage_table.list_pools(pool_id)
 
     def set_ex_buckets_directory(self, path, pool_id):
-        return self.storage_table.set_ex_buckets_directory(path, pool_id)
+        return self._storage_table.set_ex_buckets_directory(path, pool_id)
 
     def get_buckets_directory_of_pool(self, pool_id):
-        return self.storage_table.get_buckets_directory_of_pool(pool_id)
+        return self._storage_table.get_buckets_directory_of_pool(pool_id)
 
     def delete_buckets_directory(self, path):
-        self.storage_table.delete_buckets_directory(path)
+        self._storage_table.delete_buckets_directory(path)
         pass
 
     def set_user(self, id, info):
-        self.storage_table.set_user(id, info)
+        self._storage_table.set_user(id, info)
         pass
 
     def get_user(self, id):
-        return self.storage_table.get_user(id)
+        return self._storage_table.get_user(id)
 
     def delete_user(self, id):
-        self.storage_table.delete_user(id)
+        self._storage_table.delete_user(id)
         pass
 
     def list_users(self):
-        return self.storage_table.list_users()
+        return self._storage_table.list_users()
 
     def set_pool_state(self, pool_id, state, reason):
-        self.storage_table.set_pool_state(pool_id, state, reason)
+        self._storage_table.set_pool_state(pool_id, state, reason)
         pass
 
     def get_pool_state(self, pool_id):
-        return self.storage_table.get_pool_state(pool_id)
+        return self._storage_table.get_pool_state(pool_id)
 
     def delete_pool_state(self, pool_id):
-        self.storage_table.delete_pool_state(pool_id)
+        self._storage_table.delete_pool_state(pool_id)
         pass
 
     ## Process-table:
 
     def set_ex_minio_manager(self, pool_id, desc):
-        return self.process_table.set_ex_minio_manager(pool_id, desc)
+        return self._process_table.set_ex_minio_manager(pool_id, desc)
 
     def set_minio_manager_expiry(self, pool_id, timeout):
-        return self.process_table.set_minio_manager_expiry(pool_id, timeout)
+        return self._process_table.set_minio_manager_expiry(pool_id, timeout)
 
     def get_minio_manager(self, pool_id):
-        return self.process_table.get_minio_manager(pool_id)
+        return self._process_table.get_minio_manager(pool_id)
 
     def delete_minio_manager(self, pool_id):
-        self.process_table.delete_minio_manager(pool_id)
+        self._process_table.delete_minio_manager(pool_id)
         pass
 
     def set_minio_proc(self, pool_id, procdesc):
-        self.process_table.set_minio_proc(pool_id, procdesc)
+        self._process_table.set_minio_proc(pool_id, procdesc)
         pass
 
     def get_minio_proc(self, pool_id):
-        return self.process_table.get_minio_proc(pool_id)
+        return self._process_table.get_minio_proc(pool_id)
 
     def delete_minio_proc(self, pool_id):
-        self.process_table.delete_minio_proc(pool_id)
+        self._process_table.delete_minio_proc(pool_id)
         pass
 
+    def list_minio_procs(self, pool_id):
+        return self._process_table.list_minio_procs(pool_id)
+
     def set_mux(self, mux_ep, mux_desc):
-        self.process_table.set_mux(mux_ep, mux_desc)
+        self._process_table.set_mux(mux_ep, mux_desc)
         pass
 
     def get_mux(self, mux_ep):
-        return self.process_table.get_mux(mux_ep)
+        return self._process_table.get_mux(mux_ep)
 
     def delete_mux(self, mux_ep):
-        self.process_table.delete_mux(mux_ep)
+        self._process_table.delete_mux(mux_ep)
         pass
 
+    def list_muxs(self):
+        return self._process_table.list_muxs()
+
     def list_mux_eps(self):
-        return self.process_table.list_mux_eps()
+        return self._process_table.list_mux_eps()
 
     ## Routing-table:
 
     def set_ex_bucket(self, bucket, desc):
-        return self.routing_table.set_ex_bucket(bucket, desc)
+        return self._routing_table.set_ex_bucket(bucket, desc)
 
     def get_bucket(self, bucket):
-        return self.routing_table.get_bucket(bucket)
+        return self._routing_table.get_bucket(bucket)
 
     def delete_bucket(self, bucket):
-        self.routing_table.delete_bucket(bucket)
+        self._routing_table.delete_bucket(bucket)
         pass
 
     def list_buckets(self, pool_id):
-        return self.routing_table.list_buckets(pool_id)
+        return self._routing_table.list_buckets(pool_id)
 
-    def set_route(self, pool_id, ep):
-        self.routing_table.set_route(pool_id, ep)
+    def set_minio_ep(self, pool_id, ep):
+        self._routing_table.set_minio_ep(pool_id, ep)
         pass
 
-    def get_route(self, pool_id):
-        return self.routing_table.get_route(pool_id)
+    def get_minio_ep(self, pool_id):
+        return self._routing_table.get_minio_ep(pool_id)
 
-    def delete_route(self, pool_id):
-        self.routing_table.delete_route(pool_id)
+    def delete_minio_ep(self, pool_id):
+        self._routing_table.delete_minio_ep(pool_id)
         pass
 
-    def set_probe_key__(self, access_key, pool_id):
-        self.routing_table.set_probe_key__(access_key, pool_id)
-        pass
-
-    def delete_probe_key__(self, access_key):
-        self.routing_table.delete_probe_key__(access_key)
-        pass
+    def list_minio_ep(self):
+        return self._routing_table.list_minio_ep()
 
     def set_access_timestamp(self, pool_id):
-        self.routing_table.set_access_timestamp(pool_id)
+        self._routing_table.set_access_timestamp(pool_id)
         pass
 
     def get_access_timestamp(self, pool_id):
-        return self.routing_table.get_access_timestamp(pool_id)
+        return self._routing_table.get_access_timestamp(pool_id)
 
     def delete_access_timestamp(self, pool_id):
-        self.routing_table.delete_access_timestamp(pool_id)
+        self._routing_table.delete_access_timestamp(pool_id)
         pass
 
     ## Pickone-table:
 
     def make_unique_id(self, usage, owner, info={}):
-        return self.pickone_table.make_unique_id(usage, owner, info)
+        return self._pickone_table.make_unique_id(usage, owner, info)
 
     def set_ex_id(self, id, desc):
-        return self.pickone_table.set_ex_id(id, desc)
+        return self._pickone_table.set_ex_id(id, desc)
 
     def get_id(self, id):
-        return self.pickone_table.get_id(id)
+        return self._pickone_table.get_id(id)
 
     def delete_id_unconditionally(self, id):
-        self.pickone_table.delete_id_unconditionally(id)
+        self._pickone_table.delete_id_unconditionally(id)
         pass
 
     def list_access_keys_of_pool(self, pool_id):
-        return self.pickone_table.list_access_keys_of_pool(pool_id)
+        return self._pickone_table.list_access_keys_of_pool(pool_id)
+
+    # Clear tables.
+
+    def clear_all(self, everything=False):
+        self._storage_table.clear_all(everything=everything)
+        self._process_table.clear_all(everything=everything)
+        self._routing_table.clear_all(everything=everything)
+        self._pickone_table.clear_all(everything=everything)
+        pass
+
+    def print_all(self):
+        self._storage_table.print_all()
+        self._process_table.print_all()
+        self._routing_table.print_all()
+        self._pickone_table.print_all()
+        pass
 
     pass
 
@@ -475,7 +492,6 @@ class Storage_Table(Table_Common):
         delete_all(self.dbase.r, self.directHostnamePrefix)
         delete_all(self.dbase.r, self.atimePrefix)
         delete_all(self.dbase.r, self._pool_state_prefix)
-        delete_all(self.dbase.r, self.storage_table_lock_prefix)
         if everything:
             delete_all(self.dbase.r, self._user_info_prefix)
             pass
@@ -500,9 +516,10 @@ class Process_Table(Table_Common):
     ## See _register_mux_info for the content of a Mux description.
 
     _minio_manager_desc_keys = {
-        "mux_host", "mux_port", "manager_pid", "modification_time"}
+        "mux_host", "mux_port", "manager_pid",
+        "modification_time"}
 
-    _minio_desc_keys = {
+    _minio_process_desc_keys = {
         "minio_ep", "minio_pid", "admin", "password",
         "mux_host", "mux_port", "manager_pid", "modification_time"}
 
@@ -535,19 +552,14 @@ class Process_Table(Table_Common):
         pass
 
     def set_minio_proc(self, pool_id, procdesc):
-        assert set(procdesc.keys()) == self._minio_desc_keys
+        assert set(procdesc.keys()) == self._minio_process_desc_keys
         key = f"{self._minio_process_prefix}{pool_id}"
-        ##self.set_minio_proc_expiry(pool_id, timeout)
-        ##self.dbase.hset_map(key, procdesc, self.structured)
         v = json.dumps(procdesc)
         self.dbase.set(key, v)
         pass
 
     def get_minio_proc(self, pool_id):
         key = f"{self._minio_process_prefix}{pool_id}"
-        ##if not self.dbase.hexists(key, "minio_ep"):
-        ##    return None
-        ##procdesc = self.dbase.hget_map(key, self.structured)
         v = self.dbase.get(key)
         return json.loads(v, parse_int=None) if v is not None else None
 
@@ -555,11 +567,6 @@ class Process_Table(Table_Common):
         key = f"{self._minio_process_prefix}{pool_id}"
         self.dbase.delete(key)
         pass
-
-    # def set_minio_proc_expiry(self, pool_id, timeout):
-    #    key = f"{self._minio_process_prefix}{pool_id}"
-    #    self.dbase.r.expire(key, timeout)
-    #    pass
 
     def list_minio_procs(self, pool_id):
         vv = list(_scan_table(self.dbase.r, self._minio_process_prefix,
@@ -569,14 +576,12 @@ class Process_Table(Table_Common):
     def set_mux(self, mux_ep, mux_desc):
         assert set(mux_desc.keys()) == self._mux_desc_keys
         key = f"{self._mux_desc_prefix}{mux_ep}"
-        #self.dbase.hset_map(key, mux_desc, self.structured)
         v = json.dumps(mux_desc)
         self.dbase.set(key, v)
         pass
 
     def get_mux(self, mux_ep):
         key = f"{self._mux_desc_prefix}{mux_ep}"
-        #return self.dbase.hget_map(key, self.structured)
         v = self.dbase.get(key)
         return json.loads(v, parse_int=None) if v is not None else None
 
@@ -603,12 +608,10 @@ class Process_Table(Table_Common):
         """Clears Redis DB.  It leaves entires for multiplexers unless
         everything.
         """
-        # logger.debug(f"@@@ FLUSHALL: EVERYTHING = {everything}")
-        delete_all(self.dbase.r, self.process_table_lock_prefix)
+        delete_all(self.dbase.r, self._mux_desc_prefix)
+        delete_all(self.dbase.r, self._minio_manager_prefix)
         delete_all(self.dbase.r, self._minio_process_prefix)
-        if everything:
-            delete_all(self.dbase.r, self._mux_desc_prefix)
-            pass
+        delete_all(self.dbase.r, self.process_table_lock_prefix)
         pass
 
     def print_all(self):
@@ -631,57 +634,31 @@ def zone_to_route_(zone):
 class Routing_Table(Table_Common):
     _minio_ep_prefix = "ep:"
     _bucket_prefix = "bk:"
-    _probe_access_prefix__ = "wu:"
-    _timestamp_prefix = "ts:"
-    _host_style_prefix = "da:"
-    _atime_prefix = "at:"
+    _access_timestamp_prefix = "ts:"
     hashes_ = {}
     structured = {}
 
     _bucket_desc_keys = {"pool", "bkt_policy", "modification_time"}
 
-    def set_route(self, pool_id, ep):
+    def set_minio_ep(self, pool_id, ep):
         assert isinstance(ep, str)
         key = f"{self._minio_ep_prefix}{pool_id}"
         self.dbase.set(key, ep)
         pass
 
-    def get_route(self, pool_id):
+    def get_minio_ep(self, pool_id):
         key = f"{self._minio_ep_prefix}{pool_id}"
         return self.dbase.get(key)
 
-    def delete_route(self, pool_id):
+    def delete_minio_ep(self, pool_id):
         key = f"{self._minio_ep_prefix}{pool_id}"
         self.dbase.delete(key)
         pass
 
-    def get_route_by_direct_hostname_(self, directHostname):
-        # logger.debug(f"+++ {directHostname}")
-        key = f"{self._host_style_prefix}{directHostname}"
-        return self.dbase.get(key)
-
-    def list_routes(self):
+    def list_minio_ep(self):
         vv = list(_scan_table(self.dbase.r, self._minio_ep_prefix, None,
                               value="get"))
         return vv
-
-    def set_atime_expire_(self, addr, timeout):
-        # logger.debug(f"+++ {addr} {timeout}")
-        key = f"{self._atime_prefix}{addr}"
-        return self.dbase.r.expire(key, timeout)
-
-    def set_atime_by_addr_(self, addr, atime, default_ttl):
-        ## addr is an endpoint of a minio.
-        ## NOTE: keepttl is not used, because it is available in
-        ## Redis-6.0 and later.
-        key = f"{self._atime_prefix}{addr}"
-        ttl = self.dbase.r.ttl(key)
-        retval = self.dbase.set(key, atime)
-        if ttl > 0:
-            self.dbase.r.expire(key, ttl)
-        else:
-            self.dbase.r.expire(key, default_ttl)
-        return retval
 
     def set_ex_bucket(self, bucket, desc):
         assert set(desc.keys()) == self._bucket_desc_keys
@@ -705,33 +682,19 @@ class Routing_Table(Table_Common):
         pass
 
     def set_access_timestamp(self, pool_id):
-        key = f"{self._timestamp_prefix}{pool_id}"
+        key = f"{self._access_timestamp_prefix}{pool_id}"
         ts = int(time.time())
         self.dbase.set(key, f"{ts}")
         ##self.dbase.r.expire(key, timeout)
         pass
 
     def get_access_timestamp(self, pool_id):
-        key = f"{self._timestamp_prefix}{pool_id}"
+        key = f"{self._access_timestamp_prefix}{pool_id}"
         v = self.dbase.get(key)
         return int(v) if v is not None else None
 
     def delete_access_timestamp(self, pool_id):
-        key = f"{self._timestamp_prefix}{pool_id}"
-        self.dbase.delete(key)
-        pass
-
-    def set_probe_key__(self, access_key, pool_id):
-        key = f"{self._probe_access_prefix__}{access_key}"
-        self.dbase.set(key, pool_id)
-        pass
-
-    def get_probe_key__(self, access_key):
-        key = f"{self._probe_access_prefix__}{access_key}"
-        return self.dbase.get(key)
-
-    def delete_probe_key__(self, access_key):
-        key = f"{self._probe_access_prefix__}{access_key}"
+        key = f"{self._access_timestamp_prefix}{pool_id}"
         self.dbase.delete(key)
         pass
 
@@ -743,17 +706,10 @@ class Routing_Table(Table_Common):
               if (d is not None and d.get("pool") == pool_id)]
         return kk
 
-    def clear_routing(self, everything):
+    def clear_all(self, everything):
         delete_all(self.dbase.r, self._minio_ep_prefix)
         delete_all(self.dbase.r, self._bucket_prefix)
-        delete_all(self.dbase.r, self._probe_access_prefix__)
-        delete_all(self.dbase.r, self._timestamp_prefix)
-        delete_all(self.dbase.r, self._atime_prefix)
-        pass
-
-    def clear_all_(self, everything):
-        delete_all(self.dbase.r, self._host_style_prefix)
-        delete_all(self.dbase.r, self._atime_prefix)
+        delete_all(self.dbase.r, self._access_timestamp_prefix)
         pass
 
     def print_all(self):

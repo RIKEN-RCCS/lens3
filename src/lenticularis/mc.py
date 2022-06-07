@@ -117,6 +117,7 @@ class Mc():
         self._pool_id = pool_id
         self._alias = None
         self._config_dir = None
+        self._timeout = 10
         return
 
     def __enter__(self):
@@ -261,13 +262,19 @@ class Mc():
             if no_wait:
                 return (p, None)
             with p:
-                (outs, errs) = p.communicate()
-                status = p.wait()
+                (outs, errs) = p.communicate(timeout=self._timeout)
+                p_status = p.poll()
+                #p_status = p.wait()
                 if (self._verbose):
                     logger.debug(f"Running MC command: cmd={cmd};"
-                                 f" status={status},"
+                                 f" status={p_status},"
                                  f" outs=({outs}), errs=({errs})")
                     pass
+                if p_status is None:
+                    logger.debug(f"Running MC command failed: cmd={cmd};"
+                                 f" command does not finish.")
+                    r = [_make_mc_error(f"Unfinished MC: ({outs})")]
+                    return (None, r)
                 try:
                     ss = outs.split(b"\n")
                     ee = [json.loads(e, parse_int=None)
@@ -290,8 +297,7 @@ class Mc():
                     return (None, r)
                 pass
         except Exception as e:
-            logger.error(f"Popen failed: cmd={cmd}; exception={e}",
-                         exc_info=True)
+            logger.error(f"Popen failed: cmd={cmd}; exception={e}")
             r = [_make_mc_error(f"Executing MC command failed:"
                                 f" exception={e}")]
             return (None, r)
@@ -428,6 +434,11 @@ class Mc():
         """Updates the MinIO state to the current pool description at a start
         of MinIO every time.  It does nothing usually.
         """
+
+        # Comparison of keys in the pool and ones recorded in MinIO
+        # always unequal because secret_key part is missing in the
+        # MinIO side.
+
         keys = [self._drop_auxiliary_key_slots(k) for k in keys]
         recorded = self.admin_user_list()
         assert_mc_success(recorded, "mc.admin_user_list")

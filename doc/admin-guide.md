@@ -491,3 +491,9 @@ open to Adm, since Adm accesses both Muxes and MinIO's.
 
 __Increasing Logging verbosity__: Some classes has a `self._verbose`
 variable.  Setting it true makes debug logging more verbose.
+
+__Heartbeating Interval__: The duration of an expiration of of a MinIO
+manager record is set as the same as the duration of
+(heartbeat-interval * heartbeat-misses).  However, heartbeating would
+take longer time adding timeout of urlopen, and an expiration of a
+MinIO manager record may come earlier than a heartbeat failure.

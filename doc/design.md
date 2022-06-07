@@ -1809,7 +1809,12 @@ Note that alias commands are local (not connect to a MinIO).
 A Manager becomes a session leader (by calling setsid), and a MinIO
 process will be terminated when a Manager exits.
 
-## Service Up/Down Tests
+## Service Tests
+
+#### Forced Heartbeat Failure
+
+"kill -STOP" the MinIO process.  It causes heartbeat failure.  Note
+that, it leaves "minio" and "sudo" processes in STOP state.
 
 #### Forced Termination of Mux and MinIO
 

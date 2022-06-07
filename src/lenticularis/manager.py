@@ -109,11 +109,11 @@ class Manager():
         pass
 
     def _sigalrm(self, n, stackframe):
-        logger.debug("Manager (pool={self._pool_id}) got a sigalrm.")
+        logger.debug(f"Manager (pool={self._pool_id}) got a sigalrm.")
         raise Alarmed(self._alarm_section)
 
     def _sigterm(self, n, stackframe):
-        logger.debug("Manager (pool={self._pool_id}) got a sigterm.")
+        logger.debug(f"Manager (pool={self._pool_id}) got a sigterm.")
         signal(SIGTERM, SIG_IGN)
         raise Termination("Manager got a sigterm.")
 
@@ -190,7 +190,7 @@ class Manager():
         assert record_name in {"manager", "process", "endpoint"}
         pool_id = self._pool_id
         if stored is None:
-            logger.warning(f"Manager (pool={pool_id}): "
+            logger.warning(f"Manager (pool={pool_id}):"
                            f" A MinIO {record_name} record missing.")
         else:
             if record_name == "manager":
@@ -397,17 +397,15 @@ class Manager():
                         f" message on MinIO outs=({outs}) errs=({errs})")
             return (True, False)
         else:
-            # A closure of stdout is presumably an error.  Or,
-            # terminate the process on an unexpected message.
+            # A closure of stdout is presumably an error.  But, it
+            # does not try to terminate a child since it is "sudo".
             try:
                 (o_, e_) = p.communicate(timeout=15)
+                outs += o_
+                errs += e_
             except TimeoutExpired:
-                p.kill()
-                (o_, e_) = p.communicate()
                 pass
-            p_status = p.wait()
-            outs += o_
-            errs += e_
+            p_status = p.poll()
             m0 = f"Manager (pool={pool_id}) starting MinIO failed with"
             m1 = (f" exit={p_status}" f" outs=({outs}) errs=({errs})")
             if outs.find(_minio_error_response) != -1:
@@ -440,14 +438,14 @@ class Manager():
                       self._pool_id)
         try:
             self._setup_minio(p, pooldesc)
+            self._register_minio_process(p.pid, pooldesc)
         except Exception:
             self._stop_minio(p)
             raise
-        else:
-            self._register_minio_process(p.pid, pooldesc)
         finally:
             self._tell_controller_minio_starts()
             pass
+
         self._set_pool_state(Pool_State.READY, "-")
         try:
             self._watch_minio(p)
@@ -463,7 +461,7 @@ class Manager():
                                 self._minio_root_password):
             try:
                 alarm(self._minio_setup_timeout)
-                self._alarm_section = "setup_minio"
+                self._alarm_section = "alarm-set-in-setup-minio"
                 bkts = gather_buckets(self.tables, pool_id)
                 self._mc.setup_minio_on_buckets(bkts)
                 keys = gather_keys(self.tables, pool_id)
@@ -644,14 +642,15 @@ class Manager():
 
     def _stop_minio(self, p):
         pool_id = self._pool_id
+        ##logger.debug(f"Manager (pool={pool_id}) stopping MinIO {p}.")
         with self._mc.alias_set(self._minio_root_user,
                                 self._minio_root_password):
             try:
                 alarm(self._minio_stop_timeout)
-                self._alarm_section = "stop_minio"
+                self._alarm_section = "alarm-set-in-stop-minio"
                 r = self._mc.admin_service_stop()
                 assert_mc_success(r, "mc.admin_service_stop")
-                p_status = p.wait()
+                # p_status = p.wait()
             except Alarmed as e:
                 logger.error(f"Manager (pool={pool_id})"
                              f" stopping MinIO timed out:"
@@ -665,6 +664,16 @@ class Manager():
                 alarm(0)
                 self._alarm_section = None
                 pass
+            pass
+        logger.debug(f"Manager (pool={pool_id}) killing MinIO.")
+        ##(p_status, outs, errs) = _terminate_subprocess(p)
+        try:
+            (o_, e_) = p.communicate(timeout=10)
+        except TimeoutExpired:
+            pass
+        p_status = p.poll()
+        if p_status == None:
+            logger.warning(f"Manager (pool={pool_id}): MinIO does not stop.")
             pass
         pass
 
@@ -723,13 +732,13 @@ class Manager():
                 pass
             return res.status
         except HTTPError as e:
-            logger.error(failure_message + f" exception=({e})")
+            logger.warning(failure_message + f" exception=({e})")
             return e.code
         except URLError as e:
-            logger.error(failure_message + f" exception=({e})")
+            logger.warning(failure_message + f" exception=({e})")
             return 503
         except Exception as e:
-            logger.error(failure_message + f" exception=({e})")
+            logger.warning(failure_message + f" exception=({e})")
             return 500
         pass
 
@@ -743,7 +752,7 @@ class Manager():
             with self._mc.alias_set(self._minio_root_user,
                                     self._minio_root_password):
                 alarm(self._heartbeat_timeout)
-                self._alarm_section = "check_minio_info"
+                self._alarm_section = "alarm-set-in-heartbeat-minio"
                 (p_, r) = self._mc.admin_info()
                 assert p_ is None
                 assert_mc_success(r, "mc.admin_info")
@@ -771,6 +780,7 @@ def main():
     parser.add_argument("port")
     parser.add_argument("port_min")
     parser.add_argument("port_max")
+    parser.add_argument("pool_id")
     parser.add_argument("--configfile")
     parser.add_argument("--useTrueAccount", type=bool, default=False)
     ##action=argparse.BooleanOptionalAction  -- was introduced in Python3.9
@@ -779,12 +789,13 @@ def main():
     parser.add_argument("--traceid")
     args = parser.parse_args()
 
-    pool_id = os.environ.get("LENTICULARIS_POOL_ID")
-    if pool_id is None:
-        sys.stderr.write(f"Manager failed: No pool-ID.\n")
-        sys.exit(ERROR_EXIT_READCONF)
-        pass
+    # pool_id = os.environ.get("LENTICULARIS_POOL_ID")
+    # if pool_id is None:
+    #    sys.stderr.write(f"Manager failed: No pool-ID.\n")
+    #    sys.exit(ERROR_EXIT_READCONF)
+    #    pass
 
+    pool_id = args.pool_id
     try:
         (mux_conf, _) = read_mux_conf(args.configfile)
     except Exception as e:

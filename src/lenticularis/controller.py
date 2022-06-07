@@ -73,9 +73,9 @@ class Controller():
         """
         cmd = [self.executable, "-m", self.manager]
         args = [self._mux_host, self._mux_port, self.port_min, self.port_max,
-                "--configfile", self.configfile]
+                pool_id, "--configfile", self.configfile]
         env = copy_minimal_env(os.environ)
-        env["LENTICULARIS_POOL_ID"] = pool_id
+        ##env["LENTICULARIS_POOL_ID"] = pool_id
         ##if access_key_id == pool_id:
         ##    args.append("--accessByZoneID=True")
         ##    pass

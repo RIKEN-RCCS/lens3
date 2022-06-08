@@ -14,7 +14,7 @@ class Scheduler():
         #self.process_table = process_table
         self.tables = tables
 
-    def schedule(self, zoneID_):
+    def schedule(self, pool_id_):
         """Chooses a least used host for running MinIO."""
         multiplexers = self.tables.list_mux_eps()
 

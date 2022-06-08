@@ -14,14 +14,14 @@ to be writable) and click the "Create" button.
 
 ![Pool creation page](ug2.jpg)
 
-The pool edit page is to add buckets and acces keys.  Click "Add" or
+The pool edit page is to add buckets and access keys.  Click "Add" or
 "New" buttons.  Clicking "Show bucket pool" on the top moves to a pool
-list page which displays a summaries of pools created.
+list page which will display a summaries of pools created.
 
 ![Pool edit page](ug3.jpg)
 
 The pool list page shows a list of pools.  Clicking "Edit" moves back
-to the page for addtion of buckets and access keys.  Clicking "Delete"
+to the page for addition of buckets and access keys.  Clicking "Delete"
 removes the pool.
 
 ![Pool list page](ug4.jpg)

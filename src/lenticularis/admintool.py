@@ -39,7 +39,7 @@ def get_nparams_of_fn(fn):
     return (nparams - 1, varargs)
 
 
-def fix_date_format(d, keys):
+def make_date_readable(d, keys):
     for key in keys:
         d[key] = format_rfc3339_z(float(d[key]))
         pass
@@ -51,7 +51,7 @@ def print_json_csv(table_name, c, formatting):
         dump = json.dumps(c)
         print(f"{dump}")
     else:
-        print(f"----- {table_name}")
+        print(f"---- {table_name}")
         with io.StringIO() as out:
             writer = csv.writer(out)
             for r in c:
@@ -62,12 +62,12 @@ def print_json_csv(table_name, c, formatting):
     pass
 
 
-def print_json_plain(table_name, outs, formatting, order=None):
+def print_json_plain(title, outs, formatting, order=None):
     if formatting in {"json"}:
         dump = json.dumps(outs)
         print(f"{dump}")
     else:
-        print(f"----- {table_name}")
+        print(f"---- {title}")
         for d in outs:
             dump = objdump(d, order=order)
             print(f"{dump}")
@@ -87,7 +87,7 @@ def _read_user_list(path):
         assert all(r[0].upper() == "ADD" or r[0].upper() == "DELETE"
                    for r in rows)
         assert all(check_user_naming(e) for r in rows for e in r[1:])
-        return [{"add": r[0].upper() == "ADD", "uid": r[1], "groups": r[2:]}
+        return [{"ADD": r[0].upper() == "ADD", "uid": r[1], "groups": r[2:]}
                 for r in rows]
     pass
 
@@ -108,27 +108,42 @@ def _read_permit_list(path):
     pass
 
 
-def _load_user_list(pool_adm, user_list):
+def _load_user(pool_adm, u):
+    # It discards "permitted" and "modification_time" slots.
     now = int(time.time())
-    for e in user_list:
-        id = e["uid"]
-        oldu = pool_adm.tables.get_user(id)
-        if e["add"] and oldu is not None:
-            newu = {"uid": id, "groups": e["groups"],
-                    "permitted": oldu["permitted"],
-                    "modification_time": now}
-            pool_adm.tables.set_user(id, newu)
-        elif not e["add"] and oldu is not None:
-            pool_adm.tables.delete_user(id)
-        elif  e["add"] and oldu is None:
-            newu = {"uid": id, "groups": e["groups"],
-                    "permitted": True,
-                    "modification_time": now}
-            pool_adm.tables.set_user(id, newu)
-        else:
-            pass
+    uid = u["uid"]
+    oldu = pool_adm.tables.get_user(uid)
+    if oldu is not None:
+        newu = {"uid": uid, "groups": u["groups"],
+                "permitted": oldu["permitted"],
+                "modification_time": now}
+        pool_adm.tables.set_user(uid, newu)
+    else:
+        newu = {"uid": id, "groups": u["groups"],
+                "permitted": True,
+                "modification_time": now}
+        pool_adm.tables.set_user(uid, newu)
         pass
     pass
+
+
+def _enable_disable_user(pool_adm, uid, permitted):
+    u = pool_adm.tables.get_user(uid)
+    if u is None:
+        raise Api_Error(500, f"Bad user (unknown): {uid}")
+    u["permitted"] = permitted
+    pool_adm.tables.set_user(uid, u)
+    pass
+
+
+def _list_permit_list(pool_adm):
+    users = pool_adm.tables.list_users()
+    uu = [(uid, pool_adm.tables.get_user(uid)["permitted"])
+          for uid in users]
+    bid = [id for (id, permitted) in uu if permitted]
+    ban = [id for (id, permitted) in uu if not permitted]
+    rows = [["ENABLE", *bid], ["DISABLE", *ban]]
+    return rows
 
 
 def user_info_to_csv_row(id, ui):
@@ -140,7 +155,7 @@ def user_info_to_csv_row(id, ui):
 def format_mux(m, formatting):
     (ep, desc) = m
     if formatting not in {"json"}:
-        fix_date_format(desc, ["modification_time", "start_time"])
+        make_date_readable(desc, ["modification_time", "start_time"])
     return {ep: desc}
 
 
@@ -198,7 +213,7 @@ def route_key_order(e):
 
 
 class Command():
-    """Administration command support.  Status code to Api_Error is 500
+    """Administration commands.  Status code to Api_Error is 500
     always."""
 
     def __init__(self, adm_conf, traceid, args, rest):
@@ -213,7 +228,7 @@ class Command():
         """Print help."""
         prog = os.path.basename(sys.argv[0])
         print(f"USAGE")
-        for (_, v) in self.opdict.items():
+        for (_, v) in self._op_dict.items():
             (fn, args, _) = v
             help = inspect.getdoc(fn)
             print(f"{prog} {args}\n\t{help}")
@@ -221,55 +236,47 @@ class Command():
         sys.exit(ERROR_EXIT_ARGUMENT)
         pass
 
-    def op_load_user_list(self, csvfile):
-        """Loads a user list."""
-        user_info = _read_user_list(csvfile)
-        _load_user_list(self.pool_adm, user_info)
+    def op_load_users(self, csvfile):
+        """Load a user list from a file."""
+        desc_list = _read_user_list(csvfile)
+        adds = [{"uid": d["uid"], "groups": d["groups"]}
+                for d in desc_list if d["ADD"]]
+        dels = [{"uid": d["uid"], "groups": d["groups"]}
+                for d in desc_list if not d["ADD"]]
+        for u in dels:
+            self.pool_adm.tables.delete_user(u["uid"])
+            pass
+        for u in adds:
+            _load_user(self.pool_adm, u)
+            pass
         pass
 
-    def op_show_user_list(self):
-        """Prints a user list."""
+    def op_show_users(self):
+        """Print a user list."""
         users = self.pool_adm.tables.list_users()
         uu = [user_info_to_csv_row(id, self.pool_adm.tables.get_user(id))
               for id in users]
         print_json_csv("user info", uu, self.args.format)
         pass
 
-    def op_load_permit_list(self, csvfile):
-        """Loads a permit list."""
+    def op_load_permits(self, csvfile):
+        """Load a user permit list from a file."""
         rules = _read_permit_list(csvfile)
         for row in rules:
             assert (len(row) >= 1
                     and (row[0] == "ENABLE" or row[0] == "DISABLE"))
             permitted = (row[0] == "ENABLE")
-            for id in row[1:]:
-                self._enable_disable_user(id, permitted)
+            for uid in row[1:]:
+                _enable_disable_user(self.pool_adm, uid, permitted)
                 pass
             pass
         pass
 
-    def _enable_disable_user(self, id, permitted):
-        u = self.pool_adm.tables.get_user(id)
-        if u is None:
-            raise Api_Error(500, f"Bad user (unknown): {id}")
-        u["permitted"] = permitted
-        self.pool_adm.tables.set_user(id, u)
+    def op_show_permits(self):
+        """Print a user permit list."""
+        rows = _list_permit_list(self.pool_adm)
+        print_json_csv("user permit list", rows, self.args.format)
         pass
-
-    def op_show_permit_list(self):
-        """Shows a permit list."""
-        rows = self._list_permit_list()
-        print_json_csv("allow deny rules", rows, self.args.format)
-        pass
-
-    def _list_permit_list(self):
-        users = self.pool_adm.tables.list_users()
-        uu = [(id, self.pool_adm.tables.get_user(id)["permitted"])
-              for id in users]
-        bid = [id for (id, permitted) in uu if permitted]
-        ban = [id for (id, permitted) in uu if not permitted]
-        rows = [["ENABLE", *bid], ["DISABLE", *ban]]
-        return rows
 
     def op_show_pool(self, *pool_id):
         """Show pools."""
@@ -278,72 +285,93 @@ class Command():
             pool_list = self.pool_adm.tables.list_pools(None)
             pass
         pools = []
-        for pool_id in pool_list:
-            pooldesc = gather_pool_desc(self.pool_adm.tables, pool_id)
+        for pid in pool_list:
+            pooldesc = gather_pool_desc(self.pool_adm.tables, pid)
             if pooldesc is None:
+                print(f"No pool found for {pid}")
                 continue
             if self.args.format not in {"json"}:
-                fix_date_format(pooldesc, ["expiration_date"])
+                make_date_readable(pooldesc, ["expiration_date", "modification_time"])
                 pass
             pooldesc.pop("pool_name")
-            pools.append({pool_id: pooldesc})
+            pools.append({pid: pooldesc})
             pass
-        print_json_plain("pools", pools, self.args.format, order=pool_key_order)
+        print_json_plain("pools", pools, self.args.format,
+                         order=pool_key_order)
         pass
 
     def op_delete_pool(self, *pool_id):
-        """Delete pools by pool-id."""
+        """Delete pool by pool-id."""
         pool_list = pool_id
-        for pool_id in pool_list:
-            self.pool_adm.do_delete_pool(self._traceid, pool_id)
+        for pid in pool_list:
+            self.pool_adm.do_delete_pool(self._traceid, pid)
             pass
         pass
 
-    def op_insert_pool(self, pool_id, jsonfile):
-        """insert-pool."""
+    def op_add_pool(self, pool_id, jsonfile):
+        """Add a pool from a file."""
         try:
             with open(jsonfile, "r") as f:
-                r = f.read()
+                s = f.read()
         except OSError as e:
             sys.stderr.write(f"{jsonfile}: {os.strerror(e.errno)}\n")
-            traceback.print_exc()
             return
         except Exception as e:
             sys.stderr.write(f"{jsonfile}: {e}\n")
             traceback.print_exc()
             return
-        pooldesc = json.loads(r, parse_int=None)
-        ##user_id = pooldesc["owner_uid"]
-        self._restore_pool(self._traceid, pooldesc)
-        ##user_id, pool_id,
-        pass
-
-    def op_dump_pools(self):
-        """Dumps users and pools."""
-        user_list = self.pool_adm.tables.list_users()
-        users = [self.pool_adm.tables.get_user(id) for id in user_list]
-        pool_list = self.pool_adm.tables.list_pools(None)
-        pools = [gather_pool_desc(self.pool_adm.tables, id)
-                 for id in pool_list]
-        dump_data = json.dumps({"users": users, "pools": pools})
-        print(dump_data)
-        pass
-
-    def op_restore_pools(self, jsonfile):
-        """Restore users and pools from a file."""
-        with open(jsonfile) as f:
-            data = f.read()
+        pooldesc = json.loads(s, parse_int=None)
+        if not self.args.yes:
+            print("Need yes (-y) for action.")
+            pid = pooldesc.pop("pool_name")
+            print_json_plain("pools", [{pid: pooldesc}], self.args.format,
+                             order=pool_key_order)
             pass
-        jj = json.loads(data, parse_int=None)
-        users = jj["users"]
-        pools = jj["pools"]
-        _load_user_list(self.pool_adm, users)
-        pool_list = [d["pool_name"] for d in pools]
-        # Delete the pools if exist, first.
-        for pool_id in pool_list:
-            if self.pool_adm.tables.get_pool(pool_id) is not None:
-                self.pool_adm.do_delete_pool(self._traceid, pool_id)
+        else:
+            ##user_id = pooldesc["owner_uid"]
+            self._restore_pool(self._traceid, pooldesc)
+            pass
+        pass
+
+    def op_dump(self, users_or_pools):
+        """Dumps users or pools.  Specify users or pools."""
+        if users_or_pools.upper() == "USERS":
+            user_list = self.pool_adm.tables.list_users()
+            users = [self.pool_adm.tables.get_user(id) for id in user_list]
+            dump_data = json.dumps({"users": users})
+            print(dump_data)
+        elif users_or_pools.upper() == "POOLS":
+            pool_list = self.pool_adm.tables.list_pools(None)
+            pools = [gather_pool_desc(self.pool_adm.tables, id)
+                     for id in pool_list]
+            dump_data = json.dumps({"pools": pools})
+            print(dump_data)
+        else:
+            print(f"users_or_pools is users or pools")
+            pass
+        pass
+
+    def op_restore(self, jsonfile):
+        """Restore users and pools from a file.  Pools are given new names.
+        It is an error if some entries are aleeady occupied: a
+        buckets-directory, bucket names, and access-keys.
+        """
+        try:
+            with open(jsonfile) as f:
+                s = f.read()
                 pass
+        except OSError as e:
+            sys.stderr.write(f"{jsonfile}: {os.strerror(e.errno)}\n")
+            return
+        except Exception as e:
+            sys.stderr.write(f"{jsonfile}: {e}\n")
+            traceback.print_exc()
+            return
+        desc = json.loads(s, parse_int=None)
+        users = desc.get("users", [])
+        pools = desc.get("pools", [])
+        for u in users:
+            _load_user(self.pool_adm, u)
             pass
         # Insert new pools.
         for pooldesc in pools:
@@ -352,6 +380,7 @@ class Command():
         pass
 
     def _restore_pool(self, traceid, pooldesc):
+        now = int(time.time())
         user_id = pooldesc["owner_uid"]
         owner_gid = pooldesc["owner_gid"]
         path = pooldesc["buckets_directory"]
@@ -368,7 +397,6 @@ class Command():
             pooldesc["pool_name"] = pool_id
         except:
             raise
-        ##now = int(time.time())
         # Add buckets.
         try:
             bkts = pooldesc["buckets"]
@@ -384,61 +412,78 @@ class Command():
         try:
             keys = pooldesc["access_keys"]
             for k in keys:
-                id = k["access_key"]
+                kid = k["access_key"]
                 secret = k["secret_key"]
                 key_policy = k["key_policy"]
                 desc = k.copy()
                 desc.pop("access_key")
+                desc["use"]= "access_key"
                 desc["owner"]= pool_id
-                ok = self.pool_adm.tables.set_ex_id(id, desc)
+                desc["modification_time"] = now
+                ok = self.pool_adm.tables.set_ex_id(kid, desc)
                 if not ok:
-                    raise Api_Error(500, f"Duplicate access-key: {id}")
+                    raise Api_Error(500, f"Duplicate access-key: {kid}")
                 self.pool_adm.do_record_secret(traceid, pool_id,
-                                               id, secret, key_policy)
+                                               kid, secret, key_policy)
         except:
             self.pool_adm.do_delete_pool(traceid, pool_id)
             raise
         pass
 
-    def op_drop_pool(self):
-        """drop-pool"""
-        everything = self.args.everything
-        ##self.pool_adm.flush_storage_table(everything=everything)
-        pass
-
     def op_reset_db(self):
-        """reset-db"""
-        everything = self.args.everything
-        self._reset_database(everything=everything)
+        """Clear all records in the DB."""
+        if not self.args.yes:
+            print("Need yes (-y) for action.")
+        else:
+            everything = self.args.everything
+            self.pool_adm.tables.clear_all(everything=everything)
+            pass
         pass
-
-    def _reset_database(self, everything=False):
-        self.pool_adm.tables.clear_all(everything=everything)
-        return
 
     def op_list_db(self):
-        """list-db"""
-        self._print_database()
-        pass
-
-    def _print_database(self):
+        """List all DB keys."""
         self.pool_adm.tables.print_all()
         pass
 
-    def op_show_muxs(self):
-        """show-muxs"""
+    def op_show_manager(self, pool_id):
+        """Show a manager of a pool."""
+        ma = self.pool_adm.tables.get_minio_manager(pool_id)
+        outs = [{pool_id: ma}]
+        print_json_plain("manager", outs, self.args.format, order=proc_key_order)
+        pass
+
+    def op_show_minio(self, pool_id):
+        """Show a MinIO process of a pool."""
+        proc_list = self.pool_adm.tables.list_minio_procs(pool_id)
+        process_list = sorted(list(proc_list))
+        outs = [{pool: process} for (pool, process) in process_list]
+        print_json_plain("minio", outs, self.args.format, order=proc_key_order)
+        pass
+
+    def op_show_mux(self):
+        """Show MUXs."""
         muxs = self.pool_adm.tables.list_muxs()
         muxs = sorted(list(muxs))
         outs = [format_mux(m, self.args.format) for m in muxs]
         print_json_plain("muxs", outs, self.args.format, order=_mux_key_order)
         pass
 
-    def op_show_server_processes(self):
-        """show-minios"""
-        proc_list = self.pool_adm.tables.list_minio_procs(None)
-        process_list = sorted(list(proc_list))
-        outs = [{pool: process} for (pool, process) in process_list]
-        print_json_plain("servers", outs, self.args.format, order=proc_key_order)
+    def op_show_minio_ep(self):
+        """Show MinIO endpoints."""
+        eps = self.pool_adm.tables.list_minio_ep()
+        print_json_plain("endpoints", eps, self.args.format, order=route_key_order)
+        pass
+
+    def op_show_bucket(self, pool_id):
+        """Show buckets of a pool."""
+        bkts = self.pool_adm.tables.list_buckets(pool_id)
+        print_json_plain("buckets", bkts, self.args.format, order=route_key_order)
+        pass
+
+    def op_show_timestamp(self, pool_id):
+        ts = self.pool_adm.tables.get_access_timestamp(pool_id)
+        s = format_rfc3339_z(float(ts))
+        print(f"timestamp={s}")
         pass
 
     def op_flush_server_processes(self):
@@ -460,10 +505,10 @@ class Command():
         self.pool_adm.access_mux_for_pool(self._traceid, pool_id)
         pass
 
-    def op_show_routing_table(self):
-        """show-routing"""
-        pairs = self.pool_adm.tables.list_minio_ep()
-        print_json_plain("routing table", pairs, self.args.format, order=route_key_order)
+    def op_flush_routing_table(self):
+        """clear-routing"""
+        everything = self.args.everything
+        ##self.pool_adm.tables.routing_table.clear_routing(everything=everything)
         pass
 
     ##def op_show_routing_table(self):
@@ -482,48 +527,41 @@ class Command():
     ##        atime = next((atm for (srv, atm) in atime_list if srv == server), None)
     ##        routes = {"accessKey": accessKeys, "host": hosts, "atime": atime}
     ##        if self.args.format not in {"json"}:
-    ##            fix_date_format(routes, ["atime"])
+    ##            make_date_readable(routes, ["atime"])
     ##        return {server: routes}
     ##
     ##    outs = [collect_routes_of_server(server) for server in servers]
     ##    print_json_plain("routing table", outs, self.args.format, order=route_key_order)
 
-    def op_flush_routing_table(self):
-        """clear-routing"""
-        everything = self.args.everything
-        ##self.pool_adm.tables.routing_table.clear_routing(everything=everything)
-        pass
-
     op_list = [
         op_help,
 
-        op_load_user_list,
-        op_show_user_list,
-
-        op_load_permit_list,
-        op_show_permit_list,
+        op_load_users,
+        op_show_users,
+        op_load_permits,
+        op_show_permits,
 
         op_show_pool,
         op_delete_pool,
-        op_insert_pool,
+        op_add_pool,
 
-        op_dump_pools,
-        op_restore_pools,
-        op_drop_pool,
-
+        op_dump,
+        op_restore,
         op_reset_db,
         op_list_db,
 
-        op_show_muxs,
+        op_show_manager,
+        op_show_minio,
+        op_show_mux,
+        op_show_minio_ep,
+        op_show_bucket,
+        op_show_timestamp,
 
-        op_show_server_processes,
         op_flush_server_processes,
         op_delete_server_processes,
+        op_flush_routing_table,
 
         op_throw_decoy,
-
-        op_show_routing_table,
-        op_flush_routing_table,
     ]
 
     def make_op_entry(self, fn, _):
@@ -544,12 +582,12 @@ class Command():
              for (name, fn, args, _)
              in (self.make_op_entry(fn, None)
                  for fn in self.op_list)}
-        self.opdict = d
+        self._op_dict = d
         pass
 
     def execute_command(self):
         # fn = Command.optbl.get(self.args.operation)
-        ent = self.opdict.get(self.args.operation)
+        ent = self._op_dict.get(self.args.operation)
         # if fn is None:
         if ent is None:
             raise Exception(f"undefined operation: {self.args.operation}")
@@ -559,7 +597,12 @@ class Command():
             sys.stderr.write("Missing/excessive arguments for command.\n")
             self.op_help()
             pass
-        return fn(self, *self.rest)
+        try:
+            fn(self, *self.rest)
+        except Api_Error as e:
+            sys.stderr.write(f"{e}.\n")
+            pass
+        pass
 
     pass
 
@@ -568,13 +611,12 @@ def main():
     # _commands = Command.optbl.keys()
 
     parser = argparse.ArgumentParser()
-    #parser.add_argument("operation",
-    #choices=_commands)
+    # parser.add_argument("operation", choices=_commands)
     parser.add_argument("operation")
     parser.add_argument("--configfile", "-c")
     parser.add_argument("--format", "-f", choices=["text", "json"])
     parser.add_argument("--everything", type=bool, default=False)
-    parser.add_argument("--yes", "-y", type=bool, default=False)
+    parser.add_argument("--yes", "-y", default=False, action="store_true")
     #action=argparse.BooleanOptionalAction was introduced in Python3.9
 
     args, rest = parser.parse_known_args()
@@ -587,24 +629,19 @@ def main():
         pass
 
     traceid = random_str(12)
-    #threading.current_thread().name = traceid
     tracing.set(traceid)
     openlog(adm_conf["log_file"],
             **adm_conf["log_syslog"])
-    ##logger.info("**** START ADMIN ****")
-    logger.debug(f"traceid = {traceid}")
 
     try:
         ##pool_adm = Pool_Admin(adm_conf)
-        adm = Command(adm_conf, traceid, args, rest)
-
-        adm.make_op_dict()
-
-        adm.execute_command()
+        cmd = Command(adm_conf, traceid, args, rest)
+        cmd.make_op_dict()
+        cmd.execute_command()
     except Exception as e:
         sys.stderr.write(f"Executing admin command failed: {e}\n")
         print(traceback.format_exc())
-        ##adm.op_help()
+        ##cmd.op_help()
         sys.exit(ERROR_EXIT_EXCEPTION)
         pass
     pass

@@ -7,12 +7,12 @@ This briefly describes a design of Lenticularis-S3.
 ## Overview
 
   + Terminology
-    --Storage Zone:
+    --Storage Pool:
       UNIX userid, bucket storage, access key, expiration date, etc.
       A concept that summarizes a set of information. A concept similar to Endpoint, but
       Because the facade hostname function makes the endpoint-url common,
-      To avoid confusion, this system calls it the Storage Zone.
-      (Abbreviated as zone if it is not ambiguous in context)
+      To avoid confusion, this system calls it the Storage Pool.
+      (Abbreviated as pool if it is not ambiguous in context)
 
 ## System configuration
 
@@ -142,7 +142,7 @@ A Controller starts a MinIO instance and manages its life-time.
       --otherly goto 5;
         --MinIO corresponding to direct hostname in Routing Table (directHostname)
          Address is not registered.
-        --At this stage, the direct hostname is registered in the Storage Zone Table (main).
+        --At this stage, the direct hostname is registered in the Storage Pool Table (main).
           Do not check if it is done. After that, verify with the controller.
         --Even if `AWS4-HMAC-SHA256` used in Authorization is specified in the previous section
           If you reach this section, 3 will not be activated. This operation has priority.
@@ -266,40 +266,40 @@ A Controller starts a MinIO instance and manages its life-time.
 ## Scheduler
 
   + Basic functions
-    --Determine Zone ID
-    --Determine the node to start MinIO in charge of Zone ID
-    --Call manager and start MinIO in charge of Zone ID
+    --Determine Pool ID
+    --Determine the node to start MinIO in charge of Pool ID
+    --Call manager and start MinIO in charge of Pool ID
     --Retransfer of the session transferred from the multiplexer (* See implementation differences)
 
   + Start condition
     --Called from the multiplexer. There are two reasons:
       --Access with direct hostname could not be resolved.
       --Access with Access Key ID could not be resolved.
-    --Get Zone ID from Storage Zone Table (main)
+    --Get Pool ID from Storage Pool Table (main)
 
   + Basic operation
 
     1. If access with direct hostname cannot be resolved
-      --Look up the Storage Zone Table (directHostname) with Host as the key.
-        Get Zone ID.
-      --If you could not get the Zone ID:
+      --Look up the Storage Pool Table (directHostname) with Host as the key.
+        Get Pool ID.
+      --If you could not get the Pool ID:
         --The direct hostname is not registered. error 404 (via multiplexer)
-      --A Zone ID was obtained. goto 3;
+      --A Pool ID was obtained. goto 3;
       --1, 2 are exclusive
 
     2. If access with the Access Key ID cannot be resolved
-      --Look up the Storage Zone Table (accessKeyID) using the Access Key ID as the key.
-        Get Zone ID.
-      --If you could not get the Zone ID:
+      --Look up the Storage Pool Table (accessKeyID) using the Access Key ID as the key.
+        Get Pool ID.
+      --If you could not get the Pool ID:
         --The Access Key ID is not registered. error 404 (via multiplexer)
-      --A Zone ID was obtained. goto 3;
+      --A Pool ID was obtained. goto 3;
       --1, 2 are exclusive
 
-    3. The Zone ID is not registered in the route table.
+    3. The Pool ID is not registered in the route table.
       --Here, I don't check if it is still registered in the MinIO Address Table.
       --Determine the node to start MinIO. (see "Scheduling" below)
         --When running on your own node: Start manager.
-        --Pass the Zone ID, port range, and multiplexer address.
+        --Pass the Pool ID, port range, and multiplexer address.
         --The Routing Table should have been updated after the startup is completed.
         --goto 4;
 
@@ -318,8 +318,8 @@ A Controller starts a MinIO instance and manages its life-time.
   + Scheduling
     --Calculate the node that launches MinIO
 
-    --Look up the MinIO Address Table using the Zone ID as a key.
-      --The Zone ID has already been obtained in step 1 or 2.
+    --Look up the MinIO Address Table using the Pool ID as a key.
+      --The Pool ID has already been obtained in step 1 or 2.
       --If registered, that node. Absolute priority. (hard coded)
 
     --Criteria for selecting other nodes
@@ -378,8 +378,8 @@ A Controller starts a MinIO instance and manages its life-time.
     --Command: `python3 -m lenticularis.mux.manager args ...`
     --Implementation language: python
     -Parameters passed from scheduler
-      --Zone ID (mandatory)
-        --Passing environment variables LENTICULARIS_ZONE_ID
+      --Pool ID (mandatory)
+        --Passing environment variables LENTICULARIS_POOL_ID
       --multiplexer node name (1st positional parameter)
       --The range of ports assigned to MinIO (mandatory)
         --Passed by command line (2nd and 3rd positional parameters)
@@ -390,7 +390,7 @@ A Controller starts a MinIO instance and manages its life-time.
       --Configuration file: `--configfile /path/to/mux.conf` (mandatory)
       --Trace ID (for debugging): `--traceid id` (optional)
       --No use of masquerade: `--useTrueAccount` (optional)
-        --Registered in Storage Zone Table (main) when starting MinIO
+        --Registered in Storage Pool Table (main) when starting MinIO
           Use the access key
         --Usually, masquerade.
     --exit status:
@@ -401,13 +401,13 @@ A Controller starts a MinIO instance and manages its life-time.
       --If the startup is successful: MinIO's address. host: port.
     --Side effects:
       --If MinIO is successfully started, the MinIO Address Table will be displayed.
-        Using the Zone ID as a key, the address of the multiplexer in charge,
+        Using the Pool ID as a key, the address of the multiplexer in charge,
         Record MinIO's address, MinIO's pid, and its own pid. Moreover,
         Update the Routing Table according to the above information.
 
   + Basic operation
     + Start
-      --Look up the Storage Zone Table (main) using the Zone ID as a key and start MinIO.
+      --Look up the Storage Pool Table (main) using the Pool ID as a key and start MinIO.
         do.
       --Update MinIO Address Table (Insert)
       --Update the Routing Table
@@ -432,13 +432,13 @@ A Controller starts a MinIO instance and manages its life-time.
       --TIMEOUT = 120
       --When doing masquerade, `MINIO_ROOT_USER`,` MINIO_ROOT_PASSWORD`
         To generate. randomStr ()
-      --Otherwise, `MINIO_ROOT_USER = zoneID`,
+      --Otherwise, `MINIO_ROOT_USER = poolID`,
         Set `MINIO_ROOT_PASSWORD = rootSecret`.
 
     2. Lock the MinIO Address Table
 
       --try try
-        --lock ("lk:" MinIO Address Table, Zone ID, timeout = TIMEOUT)
+        --lock ("lk:" MinIO Address Table, Pool ID, timeout = TIMEOUT)
         --Start (or start / initialize / stop) MinIO within TIMEOUT seconds. goto 3;
         --If the startup cannot be completed within TIMEOUT seconds, the lock will be released.
           Even in that case, record it in the log and proceed first.
@@ -451,26 +451,26 @@ A Controller starts a MinIO instance and manages its life-time.
           Since it does not lock, there is no lock conflict.
         --goto 14;
 
-    3. Get parameters from Storage Zone Table (main)
+    3. Get parameters from Storage Pool Table (main)
       ――Atomicly, save everything.
       --Judgment of "not starting"
         --Check the status flag ⇒ If it is not "online", "Do not start"
         --Check the permission flag ⇒ If it is not "allowed", "Do not start"
         --Get expiration date (expDate) ⇒ If it expires, "Do not start"
-        --Confirm Authorization ⇒ If you access by zone ID, "Do not start"
+        --Confirm Authorization ⇒ If you access by pool ID, "Do not start"
           JUSTIFICATION: I don't want all MinIO to be running after batch registration.
         --Check mode ⇒ If it is not "ready", "do not start"
         --"Start" == ("online" and "allowed" and "during validity period"
-                           And "not zone ID" and "ready")
+                           And "not pool ID" and "ready")
 
       --Judgment that "initialization is required"
-        --Check the permission flag and mode flag in the Storage Zone Table (V)
+        --Check the permission flag and mode flag in the Storage Pool Table (V)
         --Do not initialize if permission is "denied" (regardless of mode flag)
         --When mode is "initial" ⇒ "Initialization required"
         --What if "ready"? ⇒ Do not initialize.
-        --What if "error: reason"? ⇒ If initialization is necessary, zoneadm will set initial
+        --What if "error: reason"? ⇒ If initialization is necessary, pooladm will set initial
           It is reset.
-        --What if "deprecated"? ⇒ This zone will be deleted. Do not initialize.
+        --What if "deprecated"? ⇒ This pool will be deleted. Do not initialize.
         --What if "suspended"? ⇒ Do not initialize.
         -What if (unset)? ⇒ Do not initialize.
 
@@ -487,7 +487,7 @@ A Controller starts a MinIO instance and manages its life-time.
         Only the own process can rewrite (the entry related to Access Key ID).
         Check again (MinIO Address Table only).
 
-      --Check if the Zone ID entry is registered in the MinIO Address Table.
+      --Check if the Pool ID entry is registered in the MinIO Address Table.
         --No problem if it is not registered in the MinIO Address Table.
         --MinIO is stopped.
         --If "does not start" and NOT "initialization is required", goto 13;
@@ -588,7 +588,7 @@ A Controller starts a MinIO instance and manages its life-time.
     14. waitUnlock (); return;
 
   + MinIO initialization
-    --If the Storage Zone Table (V) mode is set at startup
+    --If the Storage Pool Table (V) mode is set at startup
       Initialize MinIO when you start MinIO.
       --mode: "initial" / "ready" / "error: reason"
         --For "initial", proceed to the next section.
@@ -601,8 +601,8 @@ A Controller starts a MinIO instance and manages its life-time.
       --MinIO has already been started by "Starting MinIO, step 4".
       --The mc setting is completed in "Starting MinIO, step 4".
 
-      --For all users, refer to Storage Zone Table (main) and set policy
-        --Create user list from Storage Zone Table (main), sort
+      --For all users, refer to Storage Pool Table (main) and set policy
+        --Create user list from Storage Pool Table (main), sort
         --Get existing user list, sort
           `mc admin user list`
         --zip (user list, existing user list)
@@ -622,8 +622,8 @@ A Controller starts a MinIO instance and manages its life-time.
 
         --policy :: = writeonly / readonly / readwrite
 
-      --For all buckets, set the policy by referring to the Storage Zone Table (main).
-        --Create a bucket list from the Storage Zone Table (main), sort
+      --For all buckets, set the policy by referring to the Storage Pool Table (main).
+        --Create a bucket list from the Storage Pool Table (main), sort
         --Create an existing bucket list, sort
           `mc ls`
         --zip (bucket list, existing bucket list)
@@ -641,9 +641,9 @@ A Controller starts a MinIO instance and manages its life-time.
 
         --`policy :: = none / download / upload / public`
 
-      --Set "ready" to the mode of Storage Zone Table (V).
-        --Ignore the lock in the Storage Zone Table (V).
-        --The lock of Storage Zone Table (V) is used for exclusive control of the caller.
+      --Set "ready" to the mode of Storage Pool Table (V).
+        --Ignore the lock in the Storage Pool Table (V).
+        --The lock of Storage Pool Table (V) is used for exclusive control of the caller.
           The manager can ignore this lock.
         --If an error occurs on the way, set "error: reason".
       --There is a possibility that it will not come back from mc.
@@ -652,7 +652,7 @@ A Controller starts a MinIO instance and manages its life-time.
 
   + When the Manager process && MinIO ends
 
-    --I started it in my own process, but the Storage Zone Table (main) is "denied".
+    --I started it in my own process, but the Storage Pool Table (main) is "denied".
       Booting via multiplexer, initialization only, MinIO booting procedure 11.
       It is not registered in the MinIO Address Table and Routing Table.
 
@@ -663,7 +663,7 @@ A Controller starts a MinIO instance and manages its life-time.
       The entry for your process has been deleted from the MinIO Address Table.
       (It disappears as it is)
 
-    --Storage Zone Table (main) is set to "denied" when booting via a multiplexer
+    --Storage Pool Table (main) is set to "denied" when booting via a multiplexer
       Has become
       --Other processes on your node should be running MinIO. (MinIO startup procedure 11.)
       --If it is not on the local node, a fatal error occurs.
@@ -687,7 +687,7 @@ A Controller starts a MinIO instance and manages its life-time.
     --If you have your own entry in the MinIO Address Table, do the following:
       --There is an entry for your process in the MinIO Address Table, and the supervisor
         The pids match.
-      --Removed Zone ID dictionary from MinIO Address Table
+      --Removed Pool ID dictionary from MinIO Address Table
       --Read Routing Table (atime)
       --Update Routing Table (remove atime)
         ――It is important not to erase atime by mistake. It is safe to erase it here. I don't care if it remains.
@@ -695,7 +695,7 @@ A Controller starts a MinIO instance and manages its life-time.
         ――If you don't, you won't do anything. (Suffering from forced termination)
 
     --Execute "MinIO stop procedure". (stop_minio)
-    --Copy routing Table atime to Storage Zone Table (V)
+    --Copy routing Table atime to Storage Pool Table (V)
       ――If you don't, you won't do anything. (Suffering from forced termination)
 
     ――If you decide to turn off atime here, your own process will be started when it is started with a gap.
@@ -737,20 +737,20 @@ A Controller starts a MinIO instance and manages its life-time.
     --Do not lock.
     --Executed along with MinIO's life-and-death monitoring (polling)
 
-  + Confirmation of Zone expiration date
-    --Stop MinIO with expired Zone
+  + Confirmation of Pool expiration date
+    --Stop MinIO with expired Pool
       --Perform an apoptotic procedure.
         (In implementation, break the watch_minio loop)
-    --Zone expiration date can be specified in Storage Zone Table (main)
-      --You cannot specify the expiration date for each Access Key ID. For each zone.
-    --Crash MinIO using an expired Zone
+    --Pool expiration date can be specified in Storage Pool Table (main)
+      --You cannot specify the expiration date for each Access Key ID. For each pool.
+    --Crash MinIO using an expired Pool
       --By polling operation
       --Executed along with MinIO's life-and-death monitoring (polling)
     --If the expiration date is changed by the user, this function cannot handle it.
       --MinIO termination operation is performed from ADM.
 
-  + Update monitoring of Storage Zone Table (main)
-    --Do not monitor the update of Storage Zone Table (main).
+  + Update monitoring of Storage Pool Table (main)
+    --Do not monitor the update of Storage Pool Table (main).
     --For the following events, MinIO termination operation is performed from ADM.
       --The permission flag may be changed to "denied".
       --The expiration date is subject to change.
@@ -864,7 +864,7 @@ Figure 3 Credential
       --It is necessary to register all users separately from the allow / deny list.
 
   + Administrator command (CLI)
-    --Storage Zone Table (main) Display / Edit, dump / restore
+    --Storage Pool Table (main) Display / Edit, dump / restore
     --Operation monitoring / audit function
       --Display Routing Table
       --List of running MinIO
@@ -882,10 +882,10 @@ Figure 3 Credential
         --Do not lock.
         --In this situation, there is no option to stop MinIO. MinIO Address Table
           If you remove it from the polling interval at worst, it will undergo apoptosis after the polling interval time, so leave it alone.
-    --Reset Storage Zone Table (*)
+    --Reset Storage Pool Table (*)
       --It is possible for the administrator to forcibly reset.
       --It is also possible for the administrator to delete only specific entries.
-      --If you reset the Storage Zone Table (*), the data registered by the user will be lost.
+      --If you reset the Storage Pool Table (*), the data registered by the user will be lost.
 
     --Forced start of MinIO
     --MinIO forced stop (time consuming op.)
@@ -913,10 +913,10 @@ Figure 3 Credential
           ・ Multiple specifications are possible
       --Authorization is the same as the local user name
         --Do not implement the map function.
-    --Generation of Zone ID, Access Key ID, Secret Access Key
-      --Zone ID, Access Key ID, Secret Access Key From generation to registration,
+    --Generation of Pool ID, Access Key ID, Secret Access Key
+      --Pool ID, Access Key ID, Secret Access Key From generation to registration,
         Do not temporarily press the key.
-    --Zone registration
+    --Pool registration
     --View / edit / delete the list of entries belonging to your account
     --No administrator intervention required
     --Use syslog to save Apache combined equivalent logs.
@@ -950,16 +950,16 @@ Figure 3 Credential
 ## Management function (implementation)
 
   + What you can do
-    --Register / change / delete Zone
+    --Register / change / delete Pool
     --MinIO forced start / stop
     --Update allow / deny rules
 
-  + Zone registration / change (ZoneDict is passed)
+  + Pool registration / change (PoolDict is passed)
 
-    1. If the zoneID exists at the time of registration, "change"
+    1. If the poolID exists at the time of registration, "change"
       --MinIO will stop, initialize, and restart without any changes.
 
-      --Shaping the zone
+      --Shaping the pool
         --encrypt
         --verification
       --If changed, calculate the difference,
@@ -967,8 +967,8 @@ Figure 3 Credential
         --Error if access key has been changed
         --Error if buckets directory has changed
 
-      --try: lock Storage Zone Table ("zk: {zone_id}")
-        --If not "change", generate rootSecret and add it to storageZoneDict.
+      --try: lock Storage Pool Table ("zk: {pool_id}")
+        --If not "change", generate rootSecret and add it to storagePoolDict.
 
     2. Make MinIO unbootable.
       --Set to suspended
@@ -979,18 +979,18 @@ Figure 3 Credential
       ――If you can't stop it
         --Extract from MinIO Address Table, then from the route table.
 
-    4. Zone registration
-      --try: lock the entire Storage Zone Table ("zk:")
+    4. Pool registration
+      --try: lock the entire Storage Pool Table ("zk:")
       --Key, bucket collision check
-      --Register storageZoneDict in Storage Zone Table (main)
+      --Register storagePoolDict in Storage Pool Table (main)
       --finally: unlock
 
     5. If initialization is needed
-      --Additional zoneID is registered in the reverse lookup table
-      --Set the Storage Zone Table (main) to `mode:" initial "`
-      --Throw a decoy packet to zoneID
+      --Additional poolID is registered in the reverse lookup table
+      --Set the Storage Pool Table (main) to `mode:" initial "`
+      --Throw a decoy packet to poolID
         (manager starts MinIO and initializes it.)
-      --Delete the additionally registered zoneID from the reverse lookup table
+      --Delete the additionally registered poolID from the reverse lookup table
         (Even if decoy fails, it will be executed.)
 
     6. Register the Access Key ID and direct hostname in the reverse lookup table
@@ -1004,16 +1004,16 @@ Figure 3 Credential
 
     8. finally: unlock (corresponds to 1)
 
-  + Delete Zone
+  + Delete Pool
 
-    1. try: lock the Storage Zone Table ("zk:")
+    1. try: lock the Storage Pool Table ("zk:")
       -(I don't pay attention to shorten the lock period.)
       --Set to suspended
     2. Clear the routing table (if there is an entry)
       --At this point, you will not be able to access.
     3. Stop MinIO (throwing a decoy is enough, you don't have to wait.)
     4. Remove mode, atime, ptr
-    5. Delete zone
+    5. Delete pool
     6. finally: unlock
 
   + Forced start of MinIO
@@ -1021,13 +1021,13 @@ Figure 3 Credential
       --In case of operation without facade hostname, you can go to direct hostname.
 
   + Forced stop of MinIO (time consuming op.)
-    1. try: lock the Storage Zone Table ("zk:")
+    1. try: lock the Storage Pool Table ("zk:")
     2. If it is not registered in the MinIO Address Table, it is successful and finished.
         --If you know the node and pid, kill -TERM. Out of range of this operation.
         --Otherwise, MinIO cannot be stopped.
 
         --What if you can't lock?
-    3. Set the permission flag of Storage Zone Table (main) to "denied".
+    3. Set the permission flag of Storage Pool Table (main) to "denied".
     Four.
         --Pull out from the Routing Table.
           The same applies to the Routing Table (accessKeyID, directHostname).
@@ -1035,18 +1035,18 @@ Figure 3 Credential
         --To the multiplexer registered in MinIO Address Table
           Throw a decoy packet.
         --Confirm that it disappears from the MinIO Address Table.
-        -Restore the permission flag in the Storage Zone Table (main) (if necessary).
-    5. finally: unlock Storage Zone Table (*)
+        -Restore the permission flag in the Storage Pool Table (main) (if necessary).
+    5. finally: unlock Storage Pool Table (*)
 
   + allow / deny rule updates
     - register
-      --Check all Zones with new rules
-      --Update Zone when conditions change (with MinIO pause)
+      --Check all Pools with new rules
+      --Update Pool when conditions change (with MinIO pause)
 
 ## Web UI
 
   + WebUI
-    --The key of the resource is zoneID.
+    --The key of the resource is poolID.
 
 ## Public access function
 
@@ -1086,7 +1086,7 @@ Figure 3 Credential
   + lock is 4 types
     -"pk:", "zk: {id}", "zk:", "lk: {id}"
 
-    -"zk: {id}" also serves as suspend / resume for the zone
+    -"zk: {id}" also serves as suspend / resume for the pool
 
     --Table 1.1 lock list
       `` ```
@@ -1097,26 +1097,26 @@ Figure 3 Credential
                       Conflict prevention when double-launching management commands
                  Target: entire allow / deny table
 
-      rewriting zk: {id} Zone (suppressing MinIO startup)
+      rewriting zk: {id} Pool (suppressing MinIO startup)
                       Add, modify, delete
                       Modification / deletion involves clearing the route table + stopping MinIO
-                      Only the specified Zone ID
-                      While locked, the zone is suspended
+                      Only the specified Pool ID
+                      While locked, the pool is suspended
                       The manager blocks while suspending.
-                 Target: zone specified by id
+                 Target: pool specified by id
 
-      zk: Zone rewrite
-                      Exclusive lock for store_zone.
+      zk: Pool rewrite
+                      Exclusive lock for store_pool.
                       Access Key ID, Secret Access Key, hostname collision
                       Checks are done under this lock. (While acquiring this lock,
-                      Only I can rewrite the zone)
-                 Target: Entire Zone
+                      Only I can rewrite the pool)
+                 Target: Entire Pool
 
       lk: {id} MinIO started
                       Exclusive control of MinIO startup.
                       I stopped MinIO without locking and got this lock
                       The process also joins the stop target.
-                 Target: zone specified by id
+                 Target: pool specified by id
       ========= ======================================== ===============
       `` ```
 
@@ -1124,24 +1124,24 @@ Figure 3 Credential
     --Only processes with global lock in Allow / Deny Table
     --ADM only
 
-  + Right to rewrite Storage Zone Table ("zk: {id}" @ Storage Zone Table)
-    --Process (thread) with Zone ID lock in Storage Zone Table
-      Only have the right to rewrite the entry for the Zone ID.
+  + Right to rewrite Storage Pool Table ("zk: {id}" @ Storage Pool Table)
+    --Process (thread) with Pool ID lock in Storage Pool Table
+      Only have the right to rewrite the entry for the Pool ID.
     --Exclusive lock for MinIO configuration operations
     --Used by ADM and API.
     -(V) Part is out of scope.
     --The manager ignores this lock and rewrites it.
       -(V) Part only.
 
-  + Right to rewrite Storage Zone Table ("zk: {id}" @ Storage Zone Table)
+  + Right to rewrite Storage Pool Table ("zk: {id}" @ Storage Pool Table)
 
-  + Right to rewrite Storage Zone Table (accessKeyID, directHostname)
-    --Interlock with Storage Zone Table (main).
+  + Right to rewrite Storage Pool Table (accessKeyID, directHostname)
+    --Interlock with Storage Pool Table (main).
 
   + MinIO Address Table rewrite right ("lk:" @minioAddressTable)
-    --Process (thread) with Zone ID lock in MinIO Address Table
-      Only have the right to rewrite the entry for the Zone ID.
-       `try lock (MinIO Address Table, Zone ID, timeout = TIMEOUT)`
+    --Process (thread) with Pool ID lock in MinIO Address Table
+      Only have the right to rewrite the entry for the Pool ID.
+       `try lock (MinIO Address Table, Pool ID, timeout = TIMEOUT)`
       --Deletes are not interlocked.
     --Routing Table (atime) is not subject to interlock.
     --Only the manager locks.
@@ -1162,13 +1162,13 @@ Figure 3 Credential
       ==== ============================================== == === ===
       no. F / E MUX SCH MGR SRV ADM API
       ---- --------------------------------- --- --- --- --- --- ----- ---
-      0 Storage Zone Table
+      0 Storage Pool Table
             Allow / Deny Table rwx r
             Users Table rwx r
-            Storage Zone Table (main) rw rwx rwx
-            Storage Zone Table (V) rwx rwx rwx
-            Storage Zone Table (accessKeyID) r rwx rwx
-            Storage Zone Table (directHostname) r rwx rwx
+            Storage Pool Table (main) rw rwx rwx
+            Storage Pool Table (V) rwx rwx rwx
+            Storage Pool Table (accessKeyID) r rwx rwx
+            Storage Pool Table (directHostname) r rwx rwx
       2 Process Table
             Multiplexer Table rwx r rwx
             MinIO Address Table r rwx rx
@@ -1203,7 +1203,7 @@ Figure 3 Credential
       -------------- ------------------------------------ --------
       `` ```
 
-    --If this table changes, modify all entries in the Storage Zone Table (main)?
+    --If this table changes, modify all entries in the Storage Pool Table (main)?
 
 
   + Users Table
@@ -1219,8 +1219,8 @@ Figure 3 Credential
       `` ```
 
 
-  + Storage Zone Table (main):
-    --Zone ID (primary key)
+  + Storage Pool Table (main):
+    --Pool ID (primary key)
       --key & password
     --Access Key ID
       --Even in the case of operation that is accessed only by direct hostname
@@ -1243,16 +1243,16 @@ Figure 3 Credential
     --Activation flag (calculated from administrator's permission list)
 
     --MinIO Root User and Password can be designed not to be saved in this table.
-      (In this design, Zone ID is used for MinIO Root User)
+      (In this design, Pool ID is used for MinIO Root User)
       Administrators can access MinIO with MinIO Root privileges when troubleshooting
       Considering the merits, it is designed to be saved in this table.
 
-    --Table 3.1 Storage Zone Table (main)
+    --Table 3.1 Storage Pool Table (main)
       `` ```
       --------------- ----------------------- ------------ ---
       DB No. 0
       Type Hash
-      Key Zone ID ru:
+      Key Pool ID ru:
       persistent True
       --------------- ----------------------- ------------ ---
       user User V-
@@ -1266,12 +1266,12 @@ Figure 3 Credential
       status online / offline VM
       permission allowed / denied ----
       --------------- ----------------------- ------------ ---
-      var storage_zone_table
+      var storage_pool_table
       funcs
-                       ins_storage_zone
-                       get_storage_zone
-                       del_storage_zone
-                       get_zoneID_list
+                       ins_storage_pool
+                       get_storage_pool
+                       del_storage_pool
+                       get_poolID_list
                        set_permission
                        ins_allow_deny_rules
                        get_allow_deny_rules
@@ -1290,32 +1290,32 @@ Figure 3 Credential
       `` ```
 
 
-    --Table 3.2 Storage Zone Table (V)
+    --Table 3.2 Storage Pool Table (V)
       `` ```
       -------------- ----------------------------- ------- --------
-      common w / Storage Zone Table (main)
+      common w / Storage Pool Table (main)
       Type Strings
-      Key ac: zoneID mo: zoneID
+      Key ac: poolID mo: poolID
       persistent True
       -------------- ----------------------------- ------- --------
       atime valid while offline V --ac:
       mode initial / ready / error: reason /
                       / deprecated / suspended / V --mo:
       -------------- ----------------------------- ------- --------
-      var storage_zone_table
+      var storage_pool_table
       funcs set_atime, get_atime, del_atime
                       set_mode, get_mode, del_mode
       -------------- ----------------------------- ------- --------
       `` ```
 
 
-    --Table 3.3 Storage Zone Table (accessKeyID)
+    --Table 3.3 Storage Pool Table (accessKeyID)
       `` ```
       -------------- ----------------------- ------------- -
       DB No. 0
       Type Strings
       Key Access Key ID ar:
-      Value Zone ID
+      Value Pool ID
       persistent True
       -------------- ----------------------- ------------- -
       funcs: see Table 3.5
@@ -1323,13 +1323,13 @@ Figure 3 Credential
       `` ```
 
 
-    --Table 3.4 Storage Zone Table (directHostname)
+    --Table 3.4 Storage Pool Table (directHostname)
       `` ```
       -------------- ----------------------- ------------- -
       DB No. 0
       Type Strings
       Key Direct Hostname dr:
-      Value Zone ID
+      Value Pool ID
       persistent True
       -------------- ----------------------- ------------- -
       funcs: see Table 3.5
@@ -1337,12 +1337,12 @@ Figure 3 Credential
       `` ```
 
 
-    --Table 3.5 Storage Zone Functions (PTR OP.)
+    --Table 3.5 Storage Pool Functions (PTR OP.)
       `` ```
       -------------- ----------------------- ------------- -
       funcs ins_ptr, del_ptr
-                      get_zoneID_by_access_key_id
-                      get_zoneID_by_directHostname
+                      get_poolID_by_access_key_id
+                      get_poolID_by_directHostname
                       get_ptr_list
       -------------- ----------------------- ------------- -
       `` ```
@@ -1381,7 +1381,7 @@ Figure 3 Credential
          Because of the policy that it is not necessary to distinguish by port.
 
   + MinIO Address Table
-    --Zone ID → host: port: pid
+    --Pool ID → host: port: pid
     ――Can MinIO during shutdown be changed to orphan?
       ⇒ Also from the Routing Table, pull out from (R) to enable double startup.
       ⇒ The manager determines that MinIO is not running if it is not in (R).
@@ -1391,7 +1391,7 @@ Figure 3 Credential
       -------------- ----------------------- ------------- -
       DB No. 2
       Type Hash
-      Key Zone ID ma:
+      Key Pool ID ma:
       persistent No
       -------------- ----------------------- ------------- -
       muxAddr Multiplexer Address
@@ -1512,10 +1512,10 @@ Figure 3 Credential
 
 
   + Create limit
-     --zoneID, Access Key ID, Secret Access Key cannot be changed.
+     --poolID, Access Key ID, Secret Access Key cannot be changed.
 
   + Update restrictions
-     --zoneID, Access Key ID, Secret Access Key cannot be changed.
+     --poolID, Access Key ID, Secret Access Key cannot be changed.
      --BucketsDirectory cannot.
 
 ## mc
@@ -1541,7 +1541,7 @@ Figure 3 Credential
     --Created with `random_str ()`
 
   --config (`--config-dir`)
-    --Place in the following directory: `$ PrivateTmp / .mc / {zoneID}`
+    --Place in the following directory: `$ PrivateTmp / .mc / {poolID}`
 
 <!-- GOMI -->
 
@@ -1553,19 +1553,19 @@ Figure 3 Credential
         initialize           -- ditto.
         decrypt              -- ditto.
 
-        must_exist == how not in {None, "create_zone"}
-        delete_zone = how == "delete_zone"
+        must_exist == how not in {None, "create_pool"}
+        delete_pool = how == "delete_pool"
         create_bucket = how == "update_buckets"
         change_secret = how == "change_secret_key"
 
-        how :   create_zone {
-                    assert(zone_id is None)
+        how :   create_pool {
+                    assert(pool_id is None)
                     permission=None (default)
                 }
             |   None {
                     permission=None (default)
                 }
-            |   update_zone {
+            |   update_pool {
                     permission=None (default)
                 }
             |   update_buckets {
@@ -1574,42 +1574,42 @@ Figure 3 Credential
             |   change_secret_key {
                     permission=None (default)
                 }
-            |   delete_zone {
+            |   delete_pool {
                     permission=None (default)
                 }
-            |   disable_zone {
+            |   disable_pool {
                     permission="denied"
                 }
-            |   enable_zone {
+            |   enable_pool {
                     permission="allowed"
                 }
             ;
 
         """
         """
-            Update or insert zone.
+            Update or insert pool.
 
             traceid: debug use
 
-            user_id: user ID of zone to be upserted.
-                     if user_id is None, the value from zone["user"] is used.
-                     otherwize zone["user"] should match user_id if it exists.
+            user_id: user ID of pool to be upserted.
+                     if user_id is None, the value from pool["user"] is used.
+                     otherwize pool["user"] should match user_id if it exists.
 
-            zone_ID: zoneID to be updated.
-                     if zoneID is None, new zone is created.
-                     On the latter case, new zoneID is generated and
-                     set to zone["zoneID"]
-                     (if zoneID is not None and the zone does not exist, its error)
+            pool_ID: poolID to be updated.
+                     if poolID is None, new pool is created.
+                     On the latter case, new poolID is generated and
+                     set to pool["poolID"]
+                     (if poolID is not None and the pool does not exist, its error)
 
-            zone: zone values to be created or updated.
+            pool: pool values to be created or updated.
                   see below.
 
-            permission=None,       if supplied, set zone["permission"] to the given value,
+            permission=None,       if supplied, set pool["permission"] to the given value,
                                    otherwize calculate permission using allow-deny-rules.
             atime_from_arg=None,   if supplied, set atime on database to the given value.
 
-            Dictionary zone consists of following items:
-              zoneID:           not on db
+            Dictionary pool consists of following items:
+              poolID:           not on db
               rootSecret:
               user:
             * group:
@@ -1647,8 +1647,8 @@ Figure 3 Credential
            NOT IMPLEMENTED: When changing policy, "secretAccesKey" may be missing.
            When creating new access key, "accessKeyID" and/or "secretAccesKey" may be missing.
 
-        we must validate zone before inserting into dictionary.
-        values may be missing in user supplied zone are,
+        we must validate pool before inserting into dictionary.
+        values may be missing in user supplied pool are,
             "rootSecret", "user", "permission", "accessKeyID", and "secretAccessKey".
         "user" is set in early step.
         "rootSecret" and "secretAccessKey" may generated and set at any time.
@@ -1658,11 +1658,11 @@ Figure 3 Credential
         "accessKeyID" must generated and set while entire database is locked.
 
 
-        * when creating new zone, "zoneID" must generated while entire database is locked.
-          this means we cannot include "zoneID" in the error report (on error).
+        * when creating new pool, "poolID" must generated while entire database is locked.
+          this means we cannot include "poolID" in the error report (on error).
 
         SPECIAL CASE 1:
-            when deleing zone, following dict is used:
+            when deleing pool, following dict is used:
             {"permission": "denied"}
 
         SPECIAL CASE 2:

@@ -87,7 +87,7 @@
 
   + Backups:
     - Information that must backed up to restore from serious hazards:
-      - Storage Zone Table
+      - Storage Pool Table
         - This table is created by end users.
       - Permission Table -- stores allow/deny rules, written by the
         administrator.
@@ -98,7 +98,7 @@
 
     - As the following table (or entry) is dynamic, there are no need to
       back up.
-      - Mode flag of Storage Zone Table
+      - Mode flag of Storage Pool Table
       - Routing Table
       - MinIO Address Table
       - Multiplexer Address Table
@@ -115,7 +115,7 @@
 
   In this section describes databases stored on redis by Lenticularis.
 
-  + Storage Zone
+  + Storage Pool
     - A set of UNIX userid, buckets directory, Access Key, and expiration dates.
       corresponds to an Endpoint.
 
@@ -131,7 +131,7 @@
       ----  --------------------  ----------------------
       0     Allow/Deny Table      lists allowed or denied users
       0     Users Table           lists all users and their groups
-      0     Storage Zone Table    Storage Zone
+      0     Storage Pool Table    Storage Pool
       2     Multiplexer Table     all active multiplexers.  (autogen)
       2     MinIO Address Table   all active MinIO processes.  (autogen)
       4     Routing Table         (autogen)
@@ -145,10 +145,10 @@
         this table.
     - Users Table:
       - Lists all end users and their groups.
-      - A zone is disabled if the zone's owner is missing in this table.
-    - Storage Zone Table:
-      - Static part: set of zone settings
-      - Dynamic part: zone's mode (status), last access time
+      - A pool is disabled if the pool's owner is missing in this table.
+    - Storage Pool Table:
+      - Static part: set of pool settings
+      - Dynamic part: pool's mode (status), last access time
     - Multiplexer Table:
       - Lists all active multiplexers.  dynamic.
     - MinIO Address Table:
@@ -175,7 +175,7 @@
         - For notation, refer to `install.md`
       - Drop command that delete entire allow-deny-rules is not provided.
         To restore to default value, insert "[]"
-      - `deny`-ed end user's zone is disabled.  (not deleted)
+      - `deny`-ed end user's pool is disabled.  (not deleted)
 
     - Operations on Users Table
       ```
@@ -183,20 +183,20 @@
       $ lenticularis-admin show user-info
       ```
       - Drop command is not provided.  To restore to default value, insert empty file
-      - Removed end user's zone is disabled.  (not deleted)
-      - Zones that group is removed from this list is disabled.  (not deleted)
+      - Removed end user's pool is disabled.  (not deleted)
+      - Pools that group is removed from this list is disabled.  (not deleted)
 
-    - Operations on Storage Zone Table
+    - Operations on Storage Pool Table
       ```
-      $ lenticularis-admin insert zone Zone-ID zonefile
-      $ lenticularis-admin delete|disable zone Zone-ID...
-      $ lenticularis-admin enable zone Zone-ID...
-      $ lenticularis-admin show zone [Zone-ID...]
+      $ lenticularis-admin insert pool Pool-ID poolfile
+      $ lenticularis-admin delete|disable pool Pool-ID...
+      $ lenticularis-admin enable pool Pool-ID...
+      $ lenticularis-admin show pool [Pool-ID...]
       ```
       - Options: --skip-initialize
       - This command does not initialize MinIO.
         - (MinIO is initialized on the first access of end user)
-      - Zones can be created, which owned by end users who does not appear
+      - Pools can be created, which owned by end users who does not appear
         in the Users Table or owned by denied user.
 
     - Backup and Restore
@@ -206,7 +206,7 @@
       $ lenticularis-admin --reset-database
       $ lenticularis-admin drop
       ```
-      - Zone, user-info, allow-deny-rules are affected
+      - Pool, user-info, allow-deny-rules are affected
 
     - Show Multiplexer Table
       ```
@@ -229,10 +229,10 @@
 
     - Trigger MinIO to start
       ```
-      $ lenticularis-admin throw decoy Zone-ID
+      $ lenticularis-admin throw decoy Pool-ID
       ```
-      - This command throws forged S3 packet to specified zone.
-      - As a side effect, a MinIO of the zone start running.
+      - This command throws forged S3 packet to specified pool.
+      - As a side effect, a MinIO of the pool start running.
       - Because secret Access Key and payload is invalid, this operation
         will rejected by MinIO.
 
@@ -340,8 +340,8 @@
 
       - recorded `user` varies on access types or status:
         - API: the authorized user by reverse proxy
-        - S3/HTTP: zone resolved => zone owner (by authorization / by directhostname)
-        - S3/HTTP: zone not resolved => access_key_id (or None)
+        - S3/HTTP: pool resolved => pool owner (by authorization / by directhostname)
+        - S3/HTTP: pool not resolved => access_key_id (or None)
         - NOTE: Access Key ID is not logged.
 
 

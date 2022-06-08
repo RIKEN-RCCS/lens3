@@ -392,8 +392,6 @@ class Multiplexer():
         else:
             pass
 
-        ##user_id = self._zone_to_user(pool_id)
-
         content_length_downstream = next((v for (k, v) in r_headers if k.lower() == "content-length"), None)
 
         log_access(status, *access_info,

@@ -665,7 +665,7 @@ class Manager():
                 self._alarm_section = None
                 pass
             pass
-        logger.debug(f"Manager (pool={pool_id}) killing MinIO.")
+        ##logger.debug(f"Manager (pool={pool_id}) killing MinIO.")
         ##(p_status, outs, errs) = _terminate_subprocess(p)
         try:
             (o_, e_) = p.communicate(timeout=10)

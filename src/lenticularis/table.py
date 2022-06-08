@@ -12,10 +12,13 @@ from lenticularis.utility import logger
 
 # Redis DB number.
 
-STORAGE_TABLE_ID = 1
-PROCESS_TABLE_ID = 2
-ROUTING_TABLE_ID = 3
-PICKONE_TABLE_ID = 4
+_STORAGE_TABLE = 1
+_PROCESS_TABLE = 2
+_ROUTING_TABLE = 3
+_PICKONE_TABLE = 4
+
+
+_limit_of_id_generation_loop = 30
 
 
 def get_table(mux_conf):
@@ -23,18 +26,18 @@ def get_table(mux_conf):
     redis_host = redis_conf["host"]
     redis_port = redis_conf["port"]
     redis_password = redis_conf["password"]
-    storage_table = Storage_Table(redis_host, redis_port, STORAGE_TABLE_ID,
+    storage_table = Storage_Table(redis_host, redis_port, _STORAGE_TABLE,
                                   redis_password)
-    process_table = Process_Table(redis_host, redis_port, PROCESS_TABLE_ID,
+    process_table = Process_Table(redis_host, redis_port, _PROCESS_TABLE,
                                   redis_password)
-    routing_table = Routing_Table(redis_host, redis_port, ROUTING_TABLE_ID,
+    routing_table = Routing_Table(redis_host, redis_port, _ROUTING_TABLE,
                                   redis_password)
-    pickone_table = Pickone_Table(redis_host, redis_port, PICKONE_TABLE_ID,
+    pickone_table = Pickone_Table(redis_host, redis_port, _PICKONE_TABLE,
                                   redis_password)
     return Table(storage_table, process_table, routing_table, pickone_table)
 
 
-def _print_table(r, name):
+def _print_all(r, name):
     print(f"---- {name}")
     for key in r.scan_iter("*"):
         print(f"{key}")
@@ -42,18 +45,19 @@ def _print_table(r, name):
     pass
 
 
-def delete_all(r, match):
+def _delete_all(r, match):
     for key in r.scan_iter(f"{match}*"):
         r.delete(key)
         pass
     pass
 
 
-def _scan_table(r, prefix, target, *, value=None):
-    """Returns an iterator to scan a table for a prefix+target pattern,
-    where target is * if it is None.  It drops the prefix from the
-    returned key.  It returns a pair of key+value, where value is None
-    if value= option is not specified.
+def _scan_table(r, prefix, target):
+    """Returns an iterator to scan keys in the table for a prefix+target
+    pattern, where target is * if it is None.  It drops the prefix
+    from the returned key.  Note it is always necessary a null-ness
+    check when getting a value, because a deletion can intervene
+    scanning a key and getting a value.
     """
     target = target if target else "*"
     pattern = f"{prefix}{target}"
@@ -63,18 +67,10 @@ def _scan_table(r, prefix, target, *, value=None):
         (cursor, data) = r.scan(cursor=cursor, match=pattern)
         for rawkey in data:
             key = rawkey[striplen:]
-            if value == "get":
-                val = r.get(rawkey)
-                yield (key, val)
-            elif value is not None:
-                val = value(key)
-                yield (key, val)
-            else:
-                yield (key, None)
-                pass
+            yield key
             pass
         pass
-    return
+    pass
 
 
 class Table():
@@ -85,7 +81,7 @@ class Table():
         self._pickone_table = pickone_table
         return
 
-    ## Storage-table:
+    # Storage-table:
 
     def set_pool(self, pool_id, pooldesc):
         self._storage_table.set_pool(pool_id, pooldesc)
@@ -139,7 +135,7 @@ class Table():
         self._storage_table.delete_pool_state(pool_id)
         pass
 
-    ## Process-table:
+    # Process-table:
 
     def set_ex_minio_manager(self, pool_id, desc):
         return self._process_table.set_ex_minio_manager(pool_id, desc)
@@ -185,7 +181,7 @@ class Table():
     def list_mux_eps(self):
         return self._process_table.list_mux_eps()
 
-    ## Routing-table:
+    # Routing-table:
 
     def set_ex_bucket(self, bucket, desc):
         return self._routing_table.set_ex_bucket(bucket, desc)
@@ -225,7 +221,7 @@ class Table():
         self._routing_table.delete_access_timestamp(pool_id)
         pass
 
-    ## Pickone-table:
+    # Pickone-table:
 
     def make_unique_id(self, usage, owner, info={}):
         return self._pickone_table.make_unique_id(usage, owner, info)
@@ -270,27 +266,19 @@ class Table_Common():
 
 class Storage_Table(Table_Common):
     _pool_desc_prefix = "po:"
+    _buckets_directory_prefix = "bd:"
     _pool_state_prefix = "ps:"
     _user_info_prefix = "uu:"
     storage_table_lock_prefix = "zk:"
-    _access_key_id_prefix = "ar:"
-    _buckets_directory_prefix = "bd:"
-    allowDenyRuleKey__ = "pr::"
-    directHostnamePrefix = "dr:"
-    atimePrefix = "ac:"
     hashes_ = {_pool_desc_prefix}
-    structured = {"buckets", "access_keys", "direct_hostnames"}
 
-    ## Pool data is partial entries of the json schema.
+    # Pool data is partial entries of the json schema.
 
     pool_desc_stored_keys = {
         "pool_name", "owner_uid", "owner_gid",
         "buckets_directory", "probe_access",
         "expiration_date", "online_status", "modification_time",}
     _pool_desc_keys = pool_desc_stored_keys
-
-    _access_keys_keys = {
-        "key_policy", "access_key", "secret_key"}
 
     _user_info_keys = {
         "uid", "groups", "permitted", "modification_time"}
@@ -304,9 +292,6 @@ class Storage_Table(Table_Common):
 
     def get_pool(self, pool_id):
         key = f"{self._pool_desc_prefix}{pool_id}"
-        ##if not self.dbase.hexists(key, "owner_uid"):
-        ##    return None
-        ##return self.dbase.hget_map(key, self.structured)
         v = self.dbase.get(key)
         pooldesc = (json.loads(v, parse_int=None)
                     if v is not None else None)
@@ -314,79 +299,6 @@ class Storage_Table(Table_Common):
 
     def delete_pool(self, pool_id):
         self.dbase.delete(f"{self._pool_desc_prefix}{pool_id}")
-        pass
-
-    def ins_ptr(self, zoneID, dict):
-        # logger.debug(f"+++ {zoneID} {dict}")
-        ## accessKeys must exist.
-        for a in dict.get("access_keys"):
-            access_key_id = a.get("access_key")
-            if access_key_id:
-                key = f"{self._access_key_id_prefix}{access_key_id}"
-                self.dbase.set(key, zoneID)
-                pass
-            pass
-        ## directHostnames must exist.
-        for directHostname in dict.get("direct_hostnames"):
-            key = f"{self.directHostnamePrefix}{directHostname}"
-            self.dbase.set(key, zoneID)
-            pass
-        return None
-
-    def del_zone(self, zoneID):
-        # logger.debug(f"+++ {zoneID}")
-        self.dbase.delete(f"{self._pool_desc_prefix}{zoneID}")
-        pass
-
-    def del_ptr(self, zoneID, dict):
-        # logger.debug(f"+++ {zoneID} {dict}")
-        # logger.debug(f"@@@ del_ptr zoneID {zoneID} dict {dict}")
-        for a in dict.get("access_keys", []):  # access_keys may be absent
-            access_key_id = a.get("access_key")
-            if access_key_id:
-                # logger.debug(f"@@@ del_ptr access_key_id {access_key_id}")
-                key = f"{self._access_key_id_prefix}{access_key_id}"
-                self.dbase.delete(key)
-                pass
-            pass
-        for directHostname in dict.get("direct_hostnames", []):  # directHostname may be absent
-            # logger.debug(f"@@@ del_ptr directHostname {directHostname}")
-            key = f"{self.directHostnamePrefix}{directHostname}"
-            self.dbase.delete(key)
-            pass
-        pass
-
-    def get_ptr_list(self):
-        # logger.debug(f"+++ ")
-        access_key_ptr = _scan_table(self.dbase.r, self._access_key_id_prefix, None, value="get")
-        direct_host_ptr = _scan_table(self.dbase.r, self.directHostnamePrefix, None, value="get")
-        return (list(access_key_ptr), list(direct_host_ptr))
-
-    def get_pool_by_access_key(self, access_key_id):
-        key = f"{self._access_key_id_prefix}{access_key_id}"
-        return self.dbase.get(key)
-
-    def get_pool_id_by_direct_hostname__(self, directHostname):
-        key = f"{self.directHostnamePrefix}{directHostname}"
-        return self.dbase.get(key)
-
-    def set_permission__(self, zoneID, permission):
-        key = f"{self._pool_desc_prefix}{zoneID}"
-        self.dbase.hset(key, "permit_status", permission, self.structured)
-        pass
-
-    def set_atime(self, zoneID, atime):
-        key = f"{self.atimePrefix}{zoneID}"
-        self.dbase.set(key, atime)
-        pass
-
-    def get_atime(self, zoneID):
-        key = f"{self.atimePrefix}{zoneID}"
-        return self.dbase.get(key)
-
-    def del_atime__(self, zoneID):
-        key = f"{self.atimePrefix}{zoneID}"
-        self.dbase.delete(key)
         pass
 
     def set_pool_state(self, pool_id, state : Pool_State, reason):
@@ -410,27 +322,6 @@ class Storage_Table(Table_Common):
         self.dbase.delete(key)
         pass
 
-    def set_mode__(self, zoneID, mode):
-        # logger.debug(f"+++ {zoneID} {mode}")
-        key = f"{self._pool_state_prefix}{zoneID}"
-        v = json.dumps((mode, None))
-        self.dbase.set(key, v)
-        pass
-
-    def get_mode__(self, zoneID):
-        # logger.debug(f"+++ {zoneID}")
-        key = f"{self._pool_state_prefix}{zoneID}"
-        ee = self.dbase.get(key)
-        (state, _) = (json.loads(ee, parse_int=None)
-                      if ee is not None else (None, None))
-        return state
-
-    def del_mode(self, zoneID):
-        # logger.debug(f"+++ {zoneID}")
-        key = f"{self._pool_state_prefix}{zoneID}"
-        self.dbase.delete(key)
-        pass
-
     def set_user(self, id, userinfo):
         assert set(userinfo.keys()) == self._user_info_keys
         key = f"{self._user_info_prefix}{id}"
@@ -450,13 +341,14 @@ class Storage_Table(Table_Common):
 
     def list_users(self):
         keyi = _scan_table(self.dbase.r, self._user_info_prefix, None)
-        return [k for (k, _) in keyi]
+        return list(keyi)
 
     def list_pools(self, pool_id):
         keyi = _scan_table(self.dbase.r, self._pool_desc_prefix, pool_id)
-        return [k for (k, _) in keyi]
+        return list(keyi)
 
     def set_ex_buckets_directory(self, path, pool_id):
+        assert isinstance(pool_id, str)
         key = f"{self._buckets_directory_prefix}{path}"
         ok = self.dbase.r.setnx(key, pool_id)
         if ok:
@@ -480,25 +372,25 @@ class Storage_Table(Table_Common):
         pass
 
     def get_buckets_directory_of_pool(self, pool_id):
-        bb = _scan_table(self.dbase.r, self._buckets_directory_prefix,
-                         None, value="get")
-        path = next((path for (path, id) in bb if id == pool_id), None)
+        # path = next((path for (path, id) in bb if id == pool_id), None)
+        keyi = _scan_table(self.dbase.r, self._buckets_directory_prefix, None)
+        path = next((i for (i, v)
+                     in ((i, self.get_buckets_directory(i)) for i in keyi)
+                     if v == pool_id), None)
         return path
 
     def clear_all(self, everything):
-        delete_all(self.dbase.r, self._pool_desc_prefix)
-        delete_all(self.dbase.r, self._buckets_directory_prefix)
-        delete_all(self.dbase.r, self._access_key_id_prefix)
-        delete_all(self.dbase.r, self.directHostnamePrefix)
-        delete_all(self.dbase.r, self.atimePrefix)
-        delete_all(self.dbase.r, self._pool_state_prefix)
+        _delete_all(self.dbase.r, self._pool_desc_prefix)
+        _delete_all(self.dbase.r, self._buckets_directory_prefix)
+        _delete_all(self.dbase.r, self._pool_state_prefix)
         if everything:
-            delete_all(self.dbase.r, self._user_info_prefix)
+            _delete_all(self.dbase.r, self._user_info_prefix)
             pass
+        _delete_all(self.dbase.r, self.storage_table_lock_prefix)
         pass
 
     def print_all(self):
-        _print_table(self.dbase.r, "storage")
+        _print_all(self.dbase.r, "storage")
         pass
 
     pass
@@ -509,11 +401,7 @@ class Process_Table(Table_Common):
     _minio_process_prefix = "mn:"
     _mux_desc_prefix = "mx:"
     process_table_lock_prefix = "lk:"
-    hashes_ = {_minio_process_prefix, _mux_desc_prefix}
-    structured = {}
-
-    ## See _record_minio_process for the content of a MinIO process.
-    ## See _register_mux_info for the content of a Mux description.
+    hashes_ = {}
 
     _minio_manager_desc_keys = {
         "mux_host", "mux_port", "manager_pid",
@@ -569,8 +457,9 @@ class Process_Table(Table_Common):
         pass
 
     def list_minio_procs(self, pool_id):
-        vv = list(_scan_table(self.dbase.r, self._minio_process_prefix,
-                              pool_id, value=self.get_minio_proc))
+        keyi = _scan_table(self.dbase.r, self._minio_process_prefix, pool_id)
+        vv = [(i, v) for (i, v) in ((i, self.get_minio_proc(i)) for i in keyi)
+              if v is not None]
         return vv
 
     def set_mux(self, mux_ep, mux_desc):
@@ -591,15 +480,16 @@ class Process_Table(Table_Common):
         pass
 
     def list_muxs(self):
-        vv = list(_scan_table(self.dbase.r, self._mux_desc_prefix, None,
-                              value=self.get_mux))
+        keyi = _scan_table(self.dbase.r, self._mux_desc_prefix, None)
+        vv = [(i, v) for (i, v) in ((i, self.get_mux(i)) for i in keyi)
+              if v is not None]
         return vv
 
     def list_mux_eps(self):
         """Retruns a list of (host, port)."""
         keyi = _scan_table(self.dbase.r, self._mux_desc_prefix, None)
         eps = [(desc["host"], desc["port"])
-               for (_, desc) in [(ep, self.get_mux(ep)) for (ep, _) in keyi]
+               for (_, desc) in ((ep, self.get_mux(ep)) for ep in keyi)
                if desc is not None]
         #return sorted(list(set(eps)))
         return sorted(eps)
@@ -608,27 +498,17 @@ class Process_Table(Table_Common):
         """Clears Redis DB.  It leaves entires for multiplexers unless
         everything.
         """
-        delete_all(self.dbase.r, self._mux_desc_prefix)
-        delete_all(self.dbase.r, self._minio_manager_prefix)
-        delete_all(self.dbase.r, self._minio_process_prefix)
-        delete_all(self.dbase.r, self.process_table_lock_prefix)
+        _delete_all(self.dbase.r, self._minio_manager_prefix)
+        _delete_all(self.dbase.r, self._minio_process_prefix)
+        _delete_all(self.dbase.r, self._mux_desc_prefix)
+        _delete_all(self.dbase.r, self.process_table_lock_prefix)
         pass
 
     def print_all(self):
-        _print_table(self.dbase.r, "process")
+        _print_all(self.dbase.r, "process")
         pass
 
     pass
-
-
-def zone_to_route_(zone):
-    ##logger.debug(f"zone = {zone}")
-    access_keys = [i["access_key"] for i in zone.get("access_keys", [])]
-    directHostnames = zone["direct_hostnames"]
-    return {
-        "access_keys": access_keys,
-        "direct_hostnames": directHostnames,
-    }
 
 
 class Routing_Table(Table_Common):
@@ -636,7 +516,6 @@ class Routing_Table(Table_Common):
     _bucket_prefix = "bk:"
     _access_timestamp_prefix = "ts:"
     hashes_ = {}
-    structured = {}
 
     _bucket_desc_keys = {"pool", "bkt_policy", "modification_time"}
 
@@ -656,8 +535,9 @@ class Routing_Table(Table_Common):
         pass
 
     def list_minio_ep(self):
-        vv = list(_scan_table(self.dbase.r, self._minio_ep_prefix, None,
-                              value="get"))
+        keyi = _scan_table(self.dbase.r, self._minio_ep_prefix, None)
+        vv = [(i, v) for (i, v) in ((i, self.get_minio_ep(i)) for i in keyi)
+              if v is not None]
         return vv
 
     def set_ex_bucket(self, bucket, desc):
@@ -685,7 +565,6 @@ class Routing_Table(Table_Common):
         key = f"{self._access_timestamp_prefix}{pool_id}"
         ts = int(time.time())
         self.dbase.set(key, f"{ts}")
-        ##self.dbase.r.expire(key, timeout)
         pass
 
     def get_access_timestamp(self, pool_id):
@@ -702,18 +581,18 @@ class Routing_Table(Table_Common):
         keyi = _scan_table(self.dbase.r, self._bucket_prefix, None)
         kk = [{"name": name, "bkt_policy": d.get("bkt_policy")}
               for (name, d)
-              in [(name, self.get_bucket(name)) for (name, _) in keyi]
+              in [(name, self.get_bucket(name)) for name in keyi]
               if (d is not None and d.get("pool") == pool_id)]
         return kk
 
     def clear_all(self, everything):
-        delete_all(self.dbase.r, self._minio_ep_prefix)
-        delete_all(self.dbase.r, self._bucket_prefix)
-        delete_all(self.dbase.r, self._access_timestamp_prefix)
+        _delete_all(self.dbase.r, self._minio_ep_prefix)
+        _delete_all(self.dbase.r, self._bucket_prefix)
+        _delete_all(self.dbase.r, self._access_timestamp_prefix)
         pass
 
     def print_all(self):
-        _print_table(self.dbase.r, "routing")
+        _print_all(self.dbase.r, "routing")
         pass
 
     pass
@@ -722,7 +601,6 @@ class Routing_Table(Table_Common):
 class Pickone_Table(Table_Common):
     _id_prefix = "id:"
     hashes_ = {}
-    structured = {}
 
     _id_desc_keys = {"use", "owner", "secret_key", "key_policy",
                      "modification_time"}
@@ -741,7 +619,7 @@ class Pickone_Table(Table_Common):
             if ok:
                 return id
             id_generation_loops += 1
-            assert id_generation_loops < 30
+            assert id_generation_loops < _limit_of_id_generation_loop
             pass
         assert False
         pass
@@ -765,25 +643,22 @@ class Pickone_Table(Table_Common):
 
     def list_access_keys_of_pool(self, pool_id):
         """Lists access-keys of a pool.  It includes an probe-key.  A
-        probe-key is an access-key but has no corresponding secret-key
-        and it is used only to wake up MinIO from Adm.
+        probe-key is an access-key but has no corresponding secret-key.
         """
         keyi = _scan_table(self.dbase.r, self._id_prefix, None)
-        ##"secret_key": d.get("secret_key"),
-        ##"key_policy": d.get("key_policy")
-        keys = [{"access_key": id, **d}
-                for (id, d) in [(id, self.get_id(id)) for (id, _) in keyi]
+        keys = [{"access_key": i, **d}
+                for (i, d) in [(i, self.get_id(i)) for i in keyi]
                 if (d is not None
                     and d["use"] == "access_key"
                     and d["owner"] == pool_id)]
         return keys
 
     def clear_all(self, everything):
-        delete_all(self.dbase.r, self._id_prefix)
+        _delete_all(self.dbase.r, self._id_prefix)
         pass
 
     def print_all(self):
-        _print_table(self.dbase.r, "pickone")
+        _print_all(self.dbase.r, "pickone")
         pass
 
     pass

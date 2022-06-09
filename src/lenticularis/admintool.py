@@ -13,7 +13,7 @@ import json
 #import threading
 import sys
 import traceback
-from lenticularis.pooladmin import Pool_Admin
+from lenticularis.adminapi import Pool_Admin
 from lenticularis.readconf import read_adm_conf
 from lenticularis.poolutil import Api_Error
 from lenticularis.poolutil import gather_pool_desc

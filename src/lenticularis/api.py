@@ -3,8 +3,8 @@
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
-from lenticularis.pooladmin import Pool_Admin
-from lenticularis.pooladmin import rephrase_exception_message
+from lenticularis.adminapi import Pool_Admin
+from lenticularis.adminapi import rephrase_exception_message
 from lenticularis.poolutil import Api_Error
 from lenticularis.poolutil import check_pool_naming
 from lenticularis.poolutil import check_bucket_naming

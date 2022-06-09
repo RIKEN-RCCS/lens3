@@ -40,7 +40,7 @@ except Exception as e:
 
 openlog(_adm_conf["log_file"],
         **_adm_conf["log_syslog"])
-logger.info("START ADM.")
+logger.info("START Adm.")
 
 _pkgdir = os.path.dirname(inspect.getfile(lenticularis))
 _webui_dir = os.path.join(_pkgdir, "webui")

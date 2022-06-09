@@ -38,7 +38,12 @@ see [doc/design.md](doc/design.md).
 
 ## Manifestation
 
-This system is deleveloped by the [Authors](AUTHORS.txt).
+The source code is copyrighted by RIKEN R-CCS.  Part of the results is
+obtained by using Fugaku at RIKEN R-CCS.
+
+This system is developed by the [Authors](AUTHORS.txt).  But, the
+code was reviewed by zzmatu and all remaining bugs are his
+responsibility.
 
 Files.
 

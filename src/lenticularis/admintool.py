@@ -93,7 +93,7 @@ def _read_user_list(path):
 
 
 def _read_permit_list(path):
-    """Reads a CSV file with rows: "enable"/"disable", "uid", "uid",
+    """Reads a CSV file with rows: "ENABLE"/"DISABLE", "uid", "uid",
     "uid", ..., to load a permit-list.  Returns a list by changing the
     first column in uppercase.
     """
@@ -119,7 +119,7 @@ def _load_user(pool_adm, u):
                 "modification_time": now}
         pool_adm.tables.set_user(uid, newu)
     else:
-        newu = {"uid": id, "groups": u["groups"],
+        newu = {"uid": uid, "groups": u["groups"],
                 "permitted": True,
                 "modification_time": now}
         pool_adm.tables.set_user(uid, newu)
@@ -152,7 +152,7 @@ def user_info_to_csv_row(id, ui):
     return ["ADD", id] + ui["groups"]
 
 
-def format_mux(m, formatting):
+def _format_mux(m, formatting):
     (ep, desc) = m
     if formatting not in {"json"}:
         make_date_readable(desc, ["modification_time", "start_time"])
@@ -171,7 +171,7 @@ def pool_key_order(e):
         "expiration_date",
         "permit_status",
         "online_status",
-        "probe_access",
+        "probe_key",
         "modification_time",
         "name",
         "bkt_policy",
@@ -204,11 +204,18 @@ def proc_key_order(e):
     return order.index(e) if e in order else len(order)
 
 
-def route_key_order(e):
+def bucket_key_order(e):
     order = [
         "pool",
         "bkt_policy",
         "modification_time"]
+    return order.index(e) if e in order else len(order)
+
+
+def timestamp_key_order(e):
+    order = [
+        "pool",
+        "timestamp"]
     return order.index(e) if e in order else len(order)
 
 
@@ -231,6 +238,7 @@ class Command():
         for (_, v) in self._op_dict.items():
             (fn, args, _) = v
             help = inspect.getdoc(fn)
+            help = help.replace("\n", "\n\t") if help is not None else None
             print(f"{prog} {args}\n\t{help}")
             pass
         sys.exit(ERROR_EXIT_ARGUMENT)
@@ -244,9 +252,11 @@ class Command():
         dels = [{"uid": d["uid"], "groups": d["groups"]}
                 for d in desc_list if not d["ADD"]]
         for u in dels:
+            print(f"deleting a user: {u}")
             self.pool_adm.tables.delete_user(u["uid"])
             pass
         for u in adds:
+            print(f"adding a user: {u}")
             _load_user(self.pool_adm, u)
             pass
         pass
@@ -353,7 +363,7 @@ class Command():
 
     def op_restore(self, jsonfile):
         """Restore users and pools from a file.  Pools are given new names.
-        It is an error if some entries are aleeady occupied: a
+        It is an error if some entries are already occupied: a
         buckets-directory, bucket names, and access-keys.
         """
         try:
@@ -460,30 +470,40 @@ class Command():
         print_json_plain("minio", outs, self.args.format, order=proc_key_order)
         pass
 
-    def op_show_mux(self):
-        """Show MUXs."""
+    def op_list_ep(self):
+        """List endpoints of Mux and MinIO."""
+        # Mux.
         muxs = self.pool_adm.tables.list_muxs()
         muxs = sorted(list(muxs))
-        outs = [format_mux(m, self.args.format) for m in muxs]
-        print_json_plain("muxs", outs, self.args.format, order=_mux_key_order)
+        outs = [_format_mux(m, self.args.format) for m in muxs]
+        print_json_plain("mux", outs, self.args.format, order=_mux_key_order)
+        # MinIO.
+        eps = self.pool_adm.tables.list_minio_ep()
+        eps = [{ep: {"pool": pid}} for (pid, ep) in eps]
+        print_json_plain("minio", eps, self.args.format, order=bucket_key_order)
         pass
 
-    def op_show_minio_ep(self):
-        """Show MinIO endpoints."""
-        eps = self.pool_adm.tables.list_minio_ep()
-        print_json_plain("endpoints", eps, self.args.format, order=route_key_order)
+    def op_list_bucket(self):
+        """List buckets."""
+        bkts = self.pool_adm.tables.list_buckets(None)
+        bkts = [{d["name"]: {"pool": d["pool"], "bkt_policy": d["bkt_policy"]}}
+                for d in bkts]
+        print_json_plain("buckets", bkts, self.args.format, order=bucket_key_order)
         pass
 
     def op_show_bucket(self, pool_id):
         """Show buckets of a pool."""
         bkts = self.pool_adm.tables.list_buckets(pool_id)
-        print_json_plain("buckets", bkts, self.args.format, order=route_key_order)
+        print_json_plain("buckets", bkts, self.args.format, order=bucket_key_order)
         pass
 
-    def op_show_timestamp(self, pool_id):
-        ts = self.pool_adm.tables.get_access_timestamp(pool_id)
-        s = format_rfc3339_z(float(ts))
-        print(f"timestamp={s}")
+    def op_list_timestamp(self):
+        """Show timestamps."""
+        stamps = self.pool_adm.tables.list_access_timestamps()
+        stamps = [{d["pool"]:
+                   {"timestamp": format_rfc3339_z(float(d["timestamp"]))}}
+                  for d in stamps]
+        print_json_plain("timestamps", stamps, self.args.format, order=timestamp_key_order)
         pass
 
     def op_flush_server_processes(self):
@@ -498,11 +518,6 @@ class Command():
         for pool_id in pool_list:
             self.pool_adm.tables.delete_minio_proc(pool_id)
             pass
-        pass
-
-    def op_throw_decoy(self, pool_id):
-        """throw-decoy"""
-        self.pool_adm.access_mux_for_pool(self._traceid, pool_id)
         pass
 
     def op_flush_routing_table(self):
@@ -531,7 +546,7 @@ class Command():
     ##        return {server: routes}
     ##
     ##    outs = [collect_routes_of_server(server) for server in servers]
-    ##    print_json_plain("routing table", outs, self.args.format, order=route_key_order)
+    ##    print_json_plain("routing table", outs, self.args.format, order=bucket_key_order)
 
     op_list = [
         op_help,
@@ -552,16 +567,14 @@ class Command():
 
         op_show_manager,
         op_show_minio,
-        op_show_mux,
-        op_show_minio_ep,
         op_show_bucket,
-        op_show_timestamp,
+        op_list_ep,
+        op_list_bucket,
+        op_list_timestamp,
 
-        op_flush_server_processes,
-        op_delete_server_processes,
-        op_flush_routing_table,
-
-        op_throw_decoy,
+        #op_flush_server_processes,
+        #op_delete_server_processes,
+        #op_flush_routing_table,
     ]
 
     def make_op_entry(self, fn, _):

@@ -1,5 +1,6 @@
-"""Multiplexer.  It forwards a request/response from/to MinIO.  It is
-a Gunicorn app.
+"""Multiplexer.  It is a reverse-proxy and forwards a request/response
+from/to MinIO.  It is a Gunicorn app.
+
 """
 
 # Copyright (c) 2022 RIKEN R-CCS
@@ -14,9 +15,19 @@ from urllib.error import HTTPError, URLError
 import urllib.parse
 from lenticularis.scheduler import Scheduler
 from lenticularis.poolutil import Api_Error
+from lenticularis.poolutil import Bkt_Policy
 from lenticularis.poolutil import check_bucket_naming
-from lenticularis.utility import access_mux, host_port
-from lenticularis.utility import Read1Reader, parse_s3_auth
+from lenticularis.poolutil import parse_s3_auth
+from lenticularis.poolutil import access_mux
+from lenticularis.poolutil import ensure_bucket_policy
+from lenticularis.poolutil import ensure_user_is_authorized
+from lenticularis.poolutil import ensure_mux_is_running
+from lenticularis.poolutil import ensure_pool_state
+from lenticularis.poolutil import ensure_pool_owner
+from lenticularis.poolutil import ensure_bucket_owner
+from lenticularis.poolutil import ensure_secret_owner
+from lenticularis.utility import host_port
+from lenticularis.utility import Read1Reader
 from lenticularis.utility import get_ip_addresses
 from lenticularis.utility import make_typical_ip_address
 from lenticularis.utility import host_port
@@ -39,8 +50,12 @@ def _no_buffering(headers):
 
 
 def _fake_user_id(access_key):
-    """Returns an access-key as a substitute of user-id for logging."""
-    return f"access-key={access_key}"
+    """Returns a substitute of a user-id for logging."""
+    if access_key is None:
+        return f"pubic-access-user"
+    else:
+        return f"user-with-{access_key}"
+    pass
 
 
 def _check_url_error_is_connection_errors(x):
@@ -53,15 +68,32 @@ def _check_url_error_is_connection_errors(x):
         return 0
 
 
-def _get_pool_for_probe_key(probe_key, access_info):
+def _get_pool_of_probe_key(probe_key, access_info):
     """Checks a key is a probe-key, and returns a pool-id for which it is
     created."""
     if (probe_key is not None
         and probe_key.get("use") == "access_key"
         and probe_key.get("secret_key") == ""):
         return probe_key.get("owner")
-    log_access("401", *access_info)
-    raise Api_Error(403, f"Bad access to the root path")
+    else:
+        return None
+    pass
+
+
+def _pick_bucket_in_path(path, access_info):
+    request_url = access_info[3]
+    assert path.startswith("/")
+    pathc = path.split("/")
+    pathc.pop(0)
+    bucket = pathc[0]
+    # Check a bucket name.
+    if bucket == "":
+        log_access("404", *access_info)
+        raise Api_Error(404, f"Bad URL, accessing the root: url={request_url}")
+    if not check_bucket_naming(bucket):
+        log_access("400", *access_info)
+        raise Api_Error(400, f"Bad URL, bad bucket: url={request_url}")
+    return bucket
 
 
 class Multiplexer():
@@ -69,11 +101,11 @@ class Multiplexer():
 
     def __init__(self, mux_conf, tables, controller, host, port):
         self._verbose = False
-        ##self.node = host
         self._mux_host = host
         self._mux_port = int(port)
         self.tables = tables
-        self.controller = controller
+        self._controller = controller
+        self._bad_response_delay = 1
         self._start_time = int(time.time())
         ##gunicorn_conf = mux_conf["gunicorn"]
         ##lenticularis_conf = mux_conf["lenticularis"]
@@ -101,21 +133,21 @@ class Multiplexer():
         return
 
     def __call__(self, environ, start_response):
+        # (MEMO: environ is a dict, and start_response is a method).
         try:
             return self._process_request(environ, start_response)
         except Api_Error as e:
-            port = environ.get("SERVER_PORT")
-            logger.error(f"Unhandled exception in MUX(port={port}) processing:"
-                         f" exception={e}",
-                         exc_info=True)
+            logger.error(f"Access in Mux (port={self._mux_port}) errs:"
+                         f" exception=({e})",
+                         exc_info=False)
+            # Delay returning a response for a while.
+            time.sleep(self._bad_response_delay)
             status = f"{e.code}"
             start_response(status, [])
             return []
-
         except Exception as e:
-            port = environ.get("SERVER_PORT")
-            logger.error(f"Unhandled exception in MUX(port={port}) processing:"
-                         f" exception={e}",
+            logger.error(f"Unhandled exception in Mux (port={self._mux_port}):"
+                         f" exception=({e})",
                          exc_info=True)
             pass
         start_response("500", [])
@@ -171,41 +203,6 @@ class Multiplexer():
             return True
         return False
 
-    def _find_pool_for_bucket(self, path, access_key, access_info):
-        """Returns a pool-id for a bucket in a path.  It just checks
-        bucket-policy is not none, but does not check the access-key
-        is read/write.
-        """
-        request_url = access_info[3]
-        assert path.startswith("/")
-        pathc = path.split("/")
-        pathc.pop(0)
-        bucket = pathc[0]
-        # Check a bucket name.
-        if bucket == "":
-            log_access("404", *access_info)
-            raise Api_Error(404, f"Bad URL, no bucket name: url={request_url}")
-        if not check_bucket_naming(bucket):
-            log_access("400", *access_info)
-            raise Api_Error(400, f"Bad URL, bad bucket name: url={bucket}")
-        desc = self.tables.get_bucket(bucket)
-        if desc is None:
-            log_access("404", *access_info)
-            raise Api_Error(404, f"No bucket: url={request_url}")
-        # Check the policy in desc["bkt_policy"].
-        pool_id = desc["pool"]
-        policy = desc["bkt_policy"]
-        if policy != "none":
-            return pool_id
-        key = self.tables.get_id(access_key)
-        if (key is not None
-            and key.get("use") == "access_key"
-            and key.get("owner") == pool_id
-            and key.get("secret_key") is not None):
-            return pool_id
-        log_access("401", *access_info)
-        raise Api_Error(401, f"Bad bucket policy: url={request_url}")
-
     def _start_service(self, traceid, pool_id, probe_key):
         # CURRENTLY, IT STARTS A SERVICE ON A LOCAL HOST.
         """Runs MinIO on a local or remote host.  Use of probe_key forces to
@@ -220,13 +217,13 @@ class Multiplexer():
             pass
         if ep is None:
             # Run MinIO on a local host.
-            (code, ep0) = self.controller.start_service(traceid, pool_id, probe_key)
+            (code, ep0) = self._controller.start_service(traceid, pool_id, probe_key)
             return (code, ep0)
         else:
             # Run MinIO on a remote host.
             assert probe_key is None
             pooldesc = self.tables.get_pool(pool_id)
-            probe_key = pooldesc["probe_access"]
+            probe_key = pooldesc["probe_key"]
             facade_hostname = self._facade_hostname
             code = access_mux(traceid, ep, probe_key, facade_hostname,
                               self._probe_access_timeout)
@@ -259,7 +256,7 @@ class Multiplexer():
         tracing.set(traceid)
 
         # server_name = environ.get("SERVER_NAME")
-        server_port = environ.get("SERVER_PORT")
+        # server_port = environ.get("SERVER_PORT")
         request_method = environ.get("REQUEST_METHOD")
         peer_addr = environ.get("REMOTE_ADDR")
         path_and_query = environ.get("RAW_URI")
@@ -277,16 +274,17 @@ class Multiplexer():
 
         authorization = environ.get("HTTP_AUTHORIZATION")
         access_key = parse_s3_auth(authorization)
-        user_id = _fake_user_id(access_key)
+        fake_user = _fake_user_id(access_key)
 
         ep = host_port(self._mux_host, self._mux_port)
         request_url = f"{request_proto}://{ep}{path_and_query}"
         u = urllib.parse.urlparse(request_url)
         path = posixpath.normpath(u.path)
 
-        access_info = [client_addr, user_id, request_method, request_url]
+        access_info = [client_addr, fake_user, request_method, request_url]
+        failure_message = f"Bad URL, bad bucket: url={request_url}"
 
-        logger.debug(f"MUX(port={server_port}) got a request:"
+        logger.debug(f"Mux (port={self._mux_port}) got a request:"
                      f" {request_method} {request_url};"
                      f" remote=({client_addr}), auth=({authorization})")
 
@@ -297,20 +295,48 @@ class Multiplexer():
             raise Api_Error(403, f"Bad access from remote={client_addr}")
 
         if path == "/":
-            # Access to "/" is only allowed for probe-access from Adm.
+            # Access to "/" is prohibited but for a probe-access from Adm.
+            if access_key is None:
+                log_access("401", *access_info)
+                raise Api_Error(401, f"Bad access to the root path")
             probe_key = self.tables.get_id(access_key)
-            pool_id = _get_pool_for_probe_key(probe_key, access_info)
+            pool_id = _get_pool_of_probe_key(probe_key, access_info)
+            if pool_id is None:
+                log_access("401", *access_info)
+                raise Api_Error(401, f"Bad access to the root path")
             assert probe_key is not None
-            logger.debug(f"MUX probe-access for pool={pool_id}")
+            logger.debug(f"Mux (port={self._mux_port}) probe-access"
+                         f" for pool={pool_id}")
         else:
-            probe_key = None
-            pool_id = self._find_pool_for_bucket(path, access_key, access_info)
-            logger.debug(f"MUX access for bucket={path} in pool={pool_id}")
+            try:
+                probe_key = None
+                bucket = _pick_bucket_in_path(path, access_info)
+                desc = self.tables.get_bucket(bucket)
+                if desc is None:
+                    log_access("404", *access_info)
+                    raise Api_Error(404, f"Bad URL, no bucket: {bucket}")
+                pool_id = desc["pool"]
+                pooldesc = self.tables.get_pool(pool_id)
+                assert pooldesc is not None
+                user_id = pooldesc.get("owner_uid")
+                # ensure_mux_is_running(self.tables)
+                ensure_user_is_authorized(self.tables, user_id)
+                ensure_pool_state(self.tables, pool_id)
+                # ensure_bucket_owner(self.tables, bucket, pool_id)
+                ensure_secret_owner(self.tables, access_key, pool_id)
+                ensure_bucket_policy(bucket, desc, access_key)
+            except Api_Error as e:
+                # Reraise an error with a less-informative message.
+                logger.debug(f"Mux (port={self._mux_port}) access check"
+                             f" failed: exception=({e})")
+                log_access("401", *access_info)
+                raise Api_Error(e.code, failure_message)
+            logger.debug(f"Mux (port={self._mux_port}) access"
+                         f" for bucket={path} for pool={pool_id}")
             pass
 
         assert pool_id is not None
         minio_ep = self.tables.get_minio_ep(pool_id)
-
         if minio_ep is None:
             (code, ep0) = self._start_service(traceid, pool_id, probe_key)
             if code == 200:
@@ -324,9 +350,14 @@ class Multiplexer():
 
         if minio_ep is None:
             log_access("404", *access_info)
-            raise Api_Error(404, f"Bucket inaccessible: url={request_url}")
+            raise Api_Error(404, failure_message)
 
         self.tables.set_access_timestamp(pool_id)
+
+        if probe_key is not None:
+            # A probe-access does not access MinIO.
+            start_response("200", [])
+            return []
 
         # Copy request headers.
 

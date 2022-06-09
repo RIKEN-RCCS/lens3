@@ -110,15 +110,15 @@ class Table():
         self._storage_table.delete_buckets_directory(path)
         pass
 
-    def set_user(self, id, info):
-        self._storage_table.set_user(id, info)
+    def set_user(self, uid, info):
+        self._storage_table.set_user(uid, info)
         pass
 
-    def get_user(self, id):
-        return self._storage_table.get_user(id)
+    def get_user(self, uid):
+        return self._storage_table.get_user(uid)
 
-    def delete_user(self, id):
-        self._storage_table.delete_user(id)
+    def delete_user(self, uid):
+        self._storage_table.delete_user(uid)
         pass
 
     def list_users(self):
@@ -221,19 +221,22 @@ class Table():
         self._routing_table.delete_access_timestamp(pool_id)
         pass
 
+    def list_access_timestamps(self):
+        return self._routing_table.list_access_timestamps()
+
     # Pickone-table:
 
     def make_unique_id(self, usage, owner, info={}):
         return self._pickone_table.make_unique_id(usage, owner, info)
 
-    def set_ex_id(self, id, desc):
-        return self._pickone_table.set_ex_id(id, desc)
+    def set_ex_id(self, uid, desc):
+        return self._pickone_table.set_ex_id(uid, desc)
 
-    def get_id(self, id):
-        return self._pickone_table.get_id(id)
+    def get_id(self, uid):
+        return self._pickone_table.get_id(uid)
 
-    def delete_id_unconditionally(self, id):
-        self._pickone_table.delete_id_unconditionally(id)
+    def delete_id_unconditionally(self, uid):
+        self._pickone_table.delete_id_unconditionally(uid)
         pass
 
     def list_access_keys_of_pool(self, pool_id):
@@ -276,7 +279,7 @@ class Storage_Table(Table_Common):
 
     pool_desc_stored_keys = {
         "pool_name", "owner_uid", "owner_gid",
-        "buckets_directory", "probe_access",
+        "buckets_directory", "probe_key",
         "expiration_date", "online_status", "modification_time",}
     _pool_desc_keys = pool_desc_stored_keys
 
@@ -322,20 +325,20 @@ class Storage_Table(Table_Common):
         self.dbase.delete(key)
         pass
 
-    def set_user(self, id, userinfo):
+    def set_user(self, uid, userinfo):
         assert set(userinfo.keys()) == self._user_info_keys
-        key = f"{self._user_info_prefix}{id}"
+        key = f"{self._user_info_prefix}{uid}"
         v = json.dumps(userinfo)
         self.dbase.set(key, v)
         pass
 
-    def get_user(self, id):
-        key = f"{self._user_info_prefix}{id}"
+    def get_user(self, uid):
+        key = f"{self._user_info_prefix}{uid}"
         v = self.dbase.get(key)
         return json.loads(v, parse_int=None) if v is not None else None
 
-    def delete_user(self, id):
-        key = f"{self._user_info_prefix}{id}"
+    def delete_user(self, uid):
+        key = f"{self._user_info_prefix}{uid}"
         self.dbase.delete(key)
         pass
 
@@ -372,7 +375,6 @@ class Storage_Table(Table_Common):
         pass
 
     def get_buckets_directory_of_pool(self, pool_id):
-        # path = next((path for (path, id) in bb if id == pool_id), None)
         keyi = _scan_table(self.dbase.r, self._buckets_directory_prefix, None)
         path = next((i for (i, v)
                      in ((i, self.get_buckets_directory(i)) for i in keyi)
@@ -561,6 +563,16 @@ class Routing_Table(Table_Common):
         self.dbase.delete(key)
         pass
 
+    def list_buckets(self, pool_id):
+        keyi = _scan_table(self.dbase.r, self._bucket_prefix, None)
+        bkts = [{"name": name, **d}
+                for (name, d)
+                in [(name, self.get_bucket(name)) for name in keyi]
+                if (d is not None and
+                    (pool_id is None or d.get("pool") == pool_id))]
+        return bkts
+        pass
+
     def set_access_timestamp(self, pool_id):
         key = f"{self._access_timestamp_prefix}{pool_id}"
         ts = int(time.time())
@@ -577,13 +589,13 @@ class Routing_Table(Table_Common):
         self.dbase.delete(key)
         pass
 
-    def list_buckets(self, pool_id):
-        keyi = _scan_table(self.dbase.r, self._bucket_prefix, None)
-        kk = [{"name": name, "bkt_policy": d.get("bkt_policy")}
-              for (name, d)
-              in [(name, self.get_bucket(name)) for name in keyi]
-              if (d is not None and d.get("pool") == pool_id)]
-        return kk
+    def list_access_timestamps(self):
+        keyi = _scan_table(self.dbase.r, self._access_timestamp_prefix, None)
+        stamps = [{"pool": pid, "timestamp": ts}
+                  for (pid, ts)
+                  in [(pid, self.get_access_timestamp(pid)) for pid in keyi]
+                  if ts is not None]
+        return stamps
 
     def clear_all(self, everything):
         _delete_all(self.dbase.r, self._minio_ep_prefix)
@@ -613,31 +625,31 @@ class Pickone_Table(Table_Common):
         v = json.dumps(desc)
         id_generation_loops = 0
         while True:
-            id = generate_access_key()
-            key = f"{self._id_prefix}{id}"
+            xid = generate_access_key()
+            key = f"{self._id_prefix}{xid}"
             ok = self.dbase.r.setnx(key, v)
             if ok:
-                return id
+                return xid
             id_generation_loops += 1
             assert id_generation_loops < _limit_of_id_generation_loop
             pass
         assert False
         pass
 
-    def set_ex_id(self, id, desc):
+    def set_ex_id(self, xid, desc):
         assert set(desc.keys()) == self._id_desc_keys
-        key = f"{self._id_prefix}{id}"
+        key = f"{self._id_prefix}{xid}"
         v = json.dumps(desc)
         ok = self.dbase.r.setnx(key, v)
         return ok
 
-    def get_id(self, id):
-        key = f"{self._id_prefix}{id}"
+    def get_id(self, xid):
+        key = f"{self._id_prefix}{xid}"
         v = self.dbase.get(key)
         return json.loads(v, parse_int=None) if v is not None else None
 
-    def delete_id_unconditionally(self, id):
-        key = f"{self._id_prefix}{id}"
+    def delete_id_unconditionally(self, xid):
+        key = f"{self._id_prefix}{xid}"
         self.dbase.delete(key)
         pass
 

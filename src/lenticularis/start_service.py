@@ -13,7 +13,7 @@ from lenticularis.utility import logger, openlog
 from lenticularis.utility import copy_minimal_env
 
 
-def start_mux():
+def _run_mux():
     try:
         (mux_conf, configfile) = read_mux_conf()
     except Exception as e:
@@ -22,7 +22,8 @@ def start_mux():
 
     openlog(mux_conf["log_file"],
             **mux_conf["log_syslog"])
-    logger.info("Start Lenticularis-S3 MUX service")
+    servicename = "lenticularis-mux"
+    logger.info("Start {servicename} service.")
 
     gunicorn_conf = mux_conf["gunicorn"]
     _port = gunicorn_conf["port"]
@@ -31,14 +32,14 @@ def start_mux():
     env["LENTICULARIS_MUX_CONFIG"] = configfile
     cmd = [sys.executable, "-m", "gunicorn"]
     args = ["--bind", bind]
-    options = list_gunicorn_command_options(gunicorn_conf)
+    options = _list_gunicorn_command_options(gunicorn_conf)
     args += options
     args += ["lenticularis.mux:app()"]
-    run("lenticularis-mux", env, cmd, args)
-    return
+    _run(servicename, env, cmd, args)
+    pass
 
 
-def start_adm():
+def _run_adm():
     try:
         (adm_conf, configfile) = read_adm_conf()
     except Exception as e:
@@ -47,7 +48,8 @@ def start_adm():
 
     openlog(adm_conf["log_file"],
             **adm_conf["log_syslog"])
-    logger.info("Start Lenticularis-S3 Adm service")
+    servicename = "lenticularis-adm"
+    logger.info(f"Start {servicename} service.")
 
     gunicorn_conf = adm_conf["gunicorn"]
     _port = gunicorn_conf["port"]
@@ -56,13 +58,14 @@ def start_adm():
     env["LENTICULARIS_ADM_CONFIG"] = configfile
     cmd = [sys.executable, "-m", "gunicorn"]
     args = ["--worker-class", "uvicorn.workers.UvicornWorker", "--bind", bind]
-    options = list_gunicorn_command_options(gunicorn_conf)
+    options = _list_gunicorn_command_options(gunicorn_conf)
     args += options
     args += ["lenticularis.adm:app"]
-    run("lenticularis-adm", env, cmd, args)
-    return
+    _run(servicename, env, cmd, args)
+    pass
 
-def list_gunicorn_command_options(gunicorn_conf):
+
+def _list_gunicorn_command_options(gunicorn_conf):
     workers = gunicorn_conf.get("workers")
     threads = gunicorn_conf.get("threads")
     timeout = gunicorn_conf.get("timeout")
@@ -101,7 +104,8 @@ def list_gunicorn_command_options(gunicorn_conf):
         pass
     return args
 
-def run(servicename, env, cmd, args):
+
+def _run(servicename, env, cmd, args):
     """Starts Gunicorn as a systemd service.  It will not return unless it
     a subprocess exits.  Note the stdout/stderr messages from Gunicorn
     is usually not helpful.  Examine the log file.
@@ -122,6 +126,7 @@ def run(servicename, env, cmd, args):
                      exc_info=True)
         sys.exit(1)
         pass
+
     if p_status == 0:
         logger.debug(f"{servicename} exited: status={p_status}")
         sys.exit(p_status)
@@ -135,25 +140,31 @@ def run(servicename, env, cmd, args):
             sys.exit(p_status)
             pass
         pass
-    return
+    pass
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("target")
-    args = parser.parse_args()
-
-    if args.target == "mux":
-        start_mux()
+    try:
+        parser = argparse.ArgumentParser()
+        parser.add_argument("target")
+        args = parser.parse_args()
+        if args.target == "mux":
+            _run_mux()
+            assert False
+            pass
+        elif args.target == "adm":
+            _run_adm()
+            assert False
+            pass
+        else:
+            assert False
+            pass
+    except Exception as e:
+        logger.error(f"Starting a lenticularis service failed:"
+                     f" exception=({e})")
+        sys.exit(1)
         pass
-    elif args.target == "adm":
-        start_adm()
-        pass
-    else:
-        assert False
-        pass
-    sys.exit(1)
-    return
+    pass
 
 
 if __name__ == "__main__":

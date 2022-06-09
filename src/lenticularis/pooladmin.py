@@ -16,11 +16,18 @@ from lenticularis.poolutil import Api_Error
 from lenticularis.poolutil import Pool_State
 from lenticularis.poolutil import gather_pool_desc
 from lenticularis.poolutil import check_user_naming
+from lenticularis.poolutil import access_mux
+from lenticularis.poolutil import ensure_user_is_authorized
+from lenticularis.poolutil import ensure_mux_is_running
+from lenticularis.poolutil import ensure_pool_state
+from lenticularis.poolutil import ensure_pool_owner
+from lenticularis.poolutil import ensure_bucket_owner
+from lenticularis.poolutil import ensure_secret_owner
 from lenticularis.utility import copy_minimal_env
 from lenticularis.utility import generate_secret_key
 from lenticularis.utility import logger
 from lenticularis.utility import pick_one
-from lenticularis.utility import access_mux, host_port
+from lenticularis.utility import host_port
 from lenticularis.poolutil import check_pool_is_well_formed
 
 
@@ -70,57 +77,6 @@ class Pool_Admin():
         if pooldesc is None:
             return "unknown-user"
         return pooldesc.get("owner_uid")
-
-    def _ensure_user_is_authorized(self, user_id):
-        u = self.tables.get_user(user_id)
-        assert u is not None
-        if not u.get("permitted"):
-            raise Api_Error(403, (f"A user disabled: {user_id}"))
-        pass
-
-    def _ensure_mux_is_running(self):
-        muxs = self.tables.list_mux_eps()
-        if len(muxs) == 0:
-            raise Api_Error(500, (f"No Mux services in Lens3"))
-        pass
-
-    def _ensure_pool_state(self, pool_id):
-        (poolstate, _) = self.tables.get_pool_state(pool_id)
-        if poolstate != Pool_State.READY:
-            if poolstate == Pool_State.DISABLED:
-                raise Api_Error(403, f"Pool is disabled")
-            elif poolstate == Pool_State.INOPERABLE:
-                raise Api_Error(500, f"Pool is inoperable")
-            else:
-                raise Api_Error(500, f"Pool is in {poolstate}")
-            pass
-        pass
-
-    def _ensure_pool_owner(self, pool_id, user_id):
-        # owner = self._get_pool_owner_for_messages(pool_id)
-        pooldesc = self.tables.get_pool(pool_id)
-        if pooldesc is None:
-            raise Api_Error(403, (f"Non-existing pool: {pool_id}"))
-        if pooldesc.get("owner_uid") != user_id:
-            raise Api_Error(403, (f"Not an owner of the pool: {pool_id}"))
-        pass
-
-    def _ensure_bucket_owner(self, bucket, pool_id):
-        desc = self.tables.get_bucket(bucket)
-        if desc is None:
-            raise Api_Error(403, f"Non-exisiting bucket: {bucket}")
-        if desc.get("pool") != pool_id:
-            raise Api_Error(403, (f"A bucket for a wrong pool: {bucket}"))
-        pass
-
-    def _ensure_secret_owner(self, access_key, pool_id):
-        desc = self.tables.get_id(access_key)
-        if desc is None:
-            raise Api_Error(403, f"Non-existing access-key: {access_key}")
-        if not (desc.get("use") == "access_key"
-                and desc.get("owner") == pool_id):
-            raise Api_Error(403, f"A wrong access-key: {access_key}")
-        pass
 
     def _ensure_make_pool_arguments(self, user_id, pooldesc):
         """It normalizes the bucket-directory path."""
@@ -225,7 +181,7 @@ class Pool_Admin():
             pass
         assert ep is not None
         # Use probe-access key.
-        access_key = pooldesc["probe_access"]
+        access_key = pooldesc["probe_key"]
         assert access_key is not None
         facade_hostname = self._facade_hostname
         status = access_mux(traceid, ep, access_key, facade_hostname,
@@ -237,7 +193,7 @@ class Pool_Admin():
 
     def return_user_template(self, user_id):
         """Returns basic information on the user needed by Web-UI."""
-        self._ensure_user_is_authorized(user_id)
+        ensure_user_is_authorized(self.tables, user_id)
         u = self.tables.get_user(user_id)
         assert u is not None
         groups = u.get("groups")
@@ -261,8 +217,8 @@ class Pool_Admin():
     # POOLS.
 
     def make_pool_ui(self, traceid, user_id, makepool):
-        self._ensure_mux_is_running()
-        self._ensure_user_is_authorized(user_id)
+        ensure_mux_is_running(self.tables)
+        ensure_user_is_authorized(self.tables, user_id)
         self._ensure_make_pool_arguments(user_id, makepool)
         path = makepool["buckets_directory"]
         owner_gid = makepool["owner_gid"]
@@ -287,7 +243,7 @@ class Pool_Admin():
             "owner_uid": user_id,
             "owner_gid": owner_gid,
             "buckets_directory": path,
-            "probe_access": "(* given-later *)",
+            "probe_key": "(* given-later *)",
             "expiration_date": self._determine_expiration_date(),
             "online_status": True,
             "modification_time": now,
@@ -299,7 +255,7 @@ class Pool_Admin():
             newpool["pool_name"] = pool_id
             info = {"secret_key": "", "key_policy": "readwrite"}
             probe_key = self.tables.make_unique_id("access_key", pool_id, info)
-            newpool["probe_access"] = probe_key
+            newpool["probe_key"] = probe_key
             (ok, holder) = self.tables.set_ex_buckets_directory(path, pool_id)
             if not ok:
                 owner = self._get_pool_owner_for_messages(holder)
@@ -354,10 +310,10 @@ class Pool_Admin():
     def delete_pool_ui(self, traceid, user_id, pool_id):
         """Deletes a pool.  It clears buckets and access-keys set in MinIO.
         """
-        self._ensure_mux_is_running()
-        self._ensure_user_is_authorized(user_id)
-        self._ensure_pool_owner(pool_id, user_id)
-        self._ensure_pool_state(pool_id)
+        ensure_mux_is_running(self.tables)
+        ensure_user_is_authorized(self.tables, user_id)
+        ensure_pool_owner(self.tables, pool_id, user_id)
+        ensure_pool_state(self.tables, pool_id)
         ok = self.do_delete_pool(traceid, pool_id)
         return (200, None, {})
 
@@ -442,8 +398,8 @@ class Pool_Admin():
 
     def list_pools_ui(self, traceid, user_id, pool_id):
         """It lists all pools of the user when pool-id is None."""
-        self._ensure_mux_is_running()
-        self._ensure_user_is_authorized(user_id)
+        ensure_mux_is_running(self.tables)
+        ensure_user_is_authorized(self.tables, user_id)
         pool_list = []
         for id in self.tables.list_pools(pool_id):
             pooldesc = gather_pool_desc(self.tables, id)
@@ -461,10 +417,10 @@ class Pool_Admin():
     # BUCKETS.
 
     def make_bucket_ui(self, traceid, user_id, pool_id, bucket, policy):
-        self._ensure_mux_is_running()
-        self._ensure_user_is_authorized(user_id)
-        self._ensure_pool_owner(pool_id, user_id)
-        self._ensure_pool_state(pool_id)
+        ensure_mux_is_running(self.tables)
+        ensure_user_is_authorized(self.tables, user_id)
+        ensure_pool_owner(self.tables, pool_id, user_id)
+        ensure_pool_state(self.tables, pool_id)
         self.do_make_bucket(traceid, pool_id, bucket, policy)
         pooldesc1 = gather_pool_desc(self.tables, pool_id)
         return (200, None, {"pool_list": [pooldesc1]})
@@ -503,11 +459,11 @@ class Pool_Admin():
         """Deletes a bucket.  Deleting ignores errors occur in MC commands in
         favor of disabling accesses to buckets.
         """
-        self._ensure_mux_is_running()
-        self._ensure_user_is_authorized(user_id)
-        self._ensure_pool_owner(pool_id, user_id)
-        self._ensure_pool_state(pool_id)
-        self._ensure_bucket_owner(bucket, pool_id)
+        ensure_mux_is_running(self.tables)
+        ensure_user_is_authorized(self.tables, user_id)
+        ensure_pool_owner(self.tables, pool_id, user_id)
+        ensure_pool_state(self.tables, pool_id)
+        ensure_bucket_owner(self.tables, bucket, pool_id)
         pooldesc1 = self.do_delete_bucket(traceid, pool_id, bucket)
         return (200, None, {"pool_list": [pooldesc1]})
 
@@ -541,10 +497,10 @@ class Pool_Admin():
     # SECRETS.
 
     def make_secret_ui(self, traceid, user_id, pool_id, key_policy):
-        self._ensure_mux_is_running()
-        self._ensure_user_is_authorized(user_id)
-        self._ensure_pool_owner(pool_id, user_id)
-        self._ensure_pool_state(pool_id)
+        ensure_mux_is_running(self.tables)
+        ensure_user_is_authorized(self.tables, user_id)
+        ensure_pool_owner(self.tables, pool_id, user_id)
+        ensure_pool_state(self.tables, pool_id)
         secret = generate_secret_key()
         info = {"secret_key": secret, "key_policy": key_policy}
         key = self.tables.make_unique_id("access_key", pool_id, info)
@@ -574,11 +530,11 @@ class Pool_Admin():
         """Deletes a secret.  Deleting will fail when errors occur in MC
         commands.
         """
-        self._ensure_mux_is_running()
-        self._ensure_user_is_authorized(user_id)
-        self._ensure_pool_owner(pool_id, user_id)
-        self._ensure_pool_state(pool_id)
-        self._ensure_secret_owner(access_key, pool_id)
+        ensure_mux_is_running(self.tables)
+        ensure_user_is_authorized(self.tables, user_id)
+        ensure_pool_owner(self.tables, pool_id, user_id)
+        ensure_pool_state(self.tables, pool_id)
+        ensure_secret_owner(self.tables, access_key, pool_id)
         pooldesc1 = self.do_delete_secret(traceid, pool_id, access_key)
         return (200, None, {"pool_list": [pooldesc1]})
 

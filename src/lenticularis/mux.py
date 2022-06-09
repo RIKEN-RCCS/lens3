@@ -25,7 +25,7 @@ def app():
 
     openlog(mux_conf["log_file"],
             **mux_conf["log_syslog"])
-    logger.info("START MUX.")
+    logger.info("START Mux.")
 
     tables = get_table(mux_conf)
 

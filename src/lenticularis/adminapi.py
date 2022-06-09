@@ -45,7 +45,7 @@ def rephrase_exception_message(e):
     pass
 
 
-class Pool_Admin():
+class Admin_Api():
 
     def __init__(self, adm_conf):
         self.adm_conf = adm_conf
@@ -309,11 +309,12 @@ class Pool_Admin():
 
     def delete_pool_ui(self, traceid, user_id, pool_id):
         """Deletes a pool.  It clears buckets and access-keys set in MinIO.
+        It can delete despite of the ensure_pool_state() state.
         """
         ensure_mux_is_running(self.tables)
         ensure_user_is_authorized(self.tables, user_id)
         ensure_pool_owner(self.tables, pool_id, user_id)
-        ensure_pool_state(self.tables, pool_id)
+        # ensure_pool_state(self.tables, pool_id)
         ok = self.do_delete_pool(traceid, pool_id)
         return (200, None, {})
 

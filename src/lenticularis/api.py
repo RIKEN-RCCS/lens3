@@ -3,7 +3,7 @@
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
-from lenticularis.adminapi import Pool_Admin
+from lenticularis.adminapi import Admin_Api
 from lenticularis.adminapi import rephrase_exception_message
 from lenticularis.poolutil import Api_Error
 from lenticularis.poolutil import check_pool_naming
@@ -15,7 +15,7 @@ from lenticularis.utility import logger
 class Api():
 
     def __init__(self, adm_conf):
-        self.pool_adm = Pool_Admin(adm_conf)
+        self.pool_adm = Admin_Api(adm_conf)
         trusted_proxies = adm_conf["webui"]["trusted_proxies"]
         self.trusted_proxies = set([addr for h in trusted_proxies
                                     for addr in get_ip_addresses(h)])

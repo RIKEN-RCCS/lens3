@@ -13,7 +13,7 @@ import json
 #import threading
 import sys
 import traceback
-from lenticularis.adminapi import Pool_Admin
+from lenticularis.adminapi import Admin_Api
 from lenticularis.readconf import read_adm_conf
 from lenticularis.poolutil import Api_Error
 from lenticularis.poolutil import gather_pool_desc
@@ -225,7 +225,7 @@ class Command():
 
     def __init__(self, adm_conf, traceid, args, rest):
         self.adm_conf = adm_conf
-        self.pool_adm = Pool_Admin(adm_conf)
+        self.pool_adm = Admin_Api(adm_conf)
         self._traceid = traceid
         self.args = args
         self.rest = rest
@@ -647,7 +647,7 @@ def main():
             **adm_conf["log_syslog"])
 
     try:
-        ##pool_adm = Pool_Admin(adm_conf)
+        ##pool_adm = Admin_Api(adm_conf)
         cmd = Command(adm_conf, traceid, args, rest)
         cmd.make_op_dict()
         cmd.execute_command()

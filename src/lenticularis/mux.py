@@ -8,7 +8,7 @@ import os
 import platform
 import threading
 import sys
-from lenticularis.controller import Controller
+from lenticularis.spawner import Controller
 from lenticularis.multiplexer import Multiplexer
 from lenticularis.readconf import read_mux_conf, node_envname
 from lenticularis.table import get_table

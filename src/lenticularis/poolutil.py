@@ -304,7 +304,7 @@ def _pool_desc_schema(type_number):
             "permit_status": {"type": "boolean"},
             "online_status": {"type": "boolean"},
             "modification_time": {"type": "integer"},
-       },
+        },
         "required": [
             # "pool_name",
             "owner_uid",

@@ -17,9 +17,9 @@ class Api():
     def __init__(self, adm_conf):
         self.pool_adm = Admin_Api(adm_conf)
         trusted_proxies = adm_conf["webui"]["trusted_proxies"]
-        self.trusted_proxies = set([addr for h in trusted_proxies
-                                    for addr in get_ip_addresses(h)])
-        return
+        self.trusted_proxies = {addr for h in trusted_proxies
+                                for addr in get_ip_addresses(h)}
+        pass
 
     def return_user_template_ui(self, traceid, user_id):
         try:
@@ -96,7 +96,7 @@ class Api():
             policy = d.get("bkt_policy")
             if not check_bucket_naming(bucket):
                 return (403, f"Bad bucket name={bucket}", [])
-            if not policy in ["none", "public", "upload", "download"]:
+            if policy not in ["none", "public", "upload", "download"]:
                 return (403, f"Bad bucket policy={policy}", [])
             # assert name == bucket
         except Exception as e:
@@ -150,7 +150,7 @@ class Api():
             if not check_pool_naming(pool_id):
                 return (403, f"Bad pool-id={pool_id}", [])
             rw = body.get("key_policy")
-            if not rw in ["readwrite", "readonly", "writeonly"]:
+            if rw not in ["readwrite", "readonly", "writeonly"]:
                 return (403, f"Bad access policy={rw}", [])
         except Exception as e:
             m = rephrase_exception_message(e)

@@ -125,12 +125,12 @@ class Multiplexer():
         self.heartbeat_interval = int(ctl_param["heartbeat_interval"])
         self.heartbeat_timeout = int(ctl_param["heartbeat_timeout"])
         self.scheduler = Scheduler(tables)
-        return
+        pass
 
     def __del__(self):
         ep = host_port(self._mux_host, self._mux_port)
         self.tables.process_table.delete_mux(ep)
-        return
+        pass
 
     def __call__(self, environ, start_response):
         # (MEMO: environ is a dict, and start_response is a method).
@@ -167,7 +167,7 @@ class Multiplexer():
             jitter = ((interval * random.random()) / 8)
             time.sleep(interval + jitter)
             pass
-        return
+        pass
 
     def _list_mux_ip_addresses(self):
         muxs = self.tables.list_mux_eps()
@@ -183,7 +183,7 @@ class Multiplexer():
                     "modification_time": now}
         ep = host_port(self._mux_host, self._mux_port)
         self.tables.set_mux(ep, mux_desc)
-        return
+        pass
 
     def _wrap_res(self, res, environ, headers, sniff=False, sniff_marker=""):
         if _no_buffering(headers) or sniff:
@@ -376,15 +376,15 @@ class Multiplexer():
 
         proto = "http"
         url = f"{proto}://{minio_ep}{path_and_query}"
-        input = environ.get("wsgi.input")
+        winput = environ.get("wsgi.input")
 
         sniff = False
 
-        if input and sniff:
-            input = Read1Reader(input.reader, sniff=True, sniff_marker=">", use_read=True)
+        if winput and sniff:
+            winput = Read1Reader(winput.reader, sniff=True, sniff_marker=">", use_read=True)
             pass
 
-        req = Request(url, data=input, headers=q_headers,
+        req = Request(url, data=winput, headers=q_headers,
                       method=request_method)
         failure_message = (f"urlopen failure: url={url}"
                            f" for {request_method} {request_url};")

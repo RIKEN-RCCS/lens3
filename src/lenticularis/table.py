@@ -79,7 +79,7 @@ class Table():
         self._process_table = process_table
         self._routing_table = routing_table
         self._pickone_table = pickone_table
-        return
+        pass
 
     # Storage-table:
 
@@ -264,7 +264,9 @@ class Table():
 class Table_Common():
     def __init__(self, host, port, db, password):
         self.dbase = DBase(host, port, db, password)
-        return
+        pass
+
+    pass
 
 
 class Storage_Table(Table_Common):
@@ -280,7 +282,7 @@ class Storage_Table(Table_Common):
     pool_desc_stored_keys = {
         "pool_name", "owner_uid", "owner_gid",
         "buckets_directory", "probe_key",
-        "expiration_date", "online_status", "modification_time",}
+        "expiration_date", "online_status", "modification_time"}
     _pool_desc_keys = pool_desc_stored_keys
 
     _user_info_keys = {

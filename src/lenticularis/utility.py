@@ -81,21 +81,21 @@ def openlog(file, facility, priority):
         pass
 
     if file is not None:
-        format = ("%(asctime)s %(levelname)s: "
-                  "%(filename)s:%(lineno)s:%(funcName)s: %(message)s")
+        fmt = ("%(asctime)s %(levelname)s:"
+               " %(filename)s:%(lineno)s:%(funcName)s: %(message)s")
     else:
         if pr == logging.DEBUG:
-            format = ("lenticularis: %(levelname)s:[%(hostname)s:%(threadName)s.%(thread)d]:"
-                      "%(filename)s:%(lineno)s:%(funcName)s: %(message)s")
+            fmt = ("lenticularis: %(levelname)s:[%(hostname)s:%(threadName)s.%(thread)d]:"
+                   "%(filename)s:%(lineno)s:%(funcName)s: %(message)s")
         else:
-            format = ("lenticularis: %(levelname)s: "
-                      "%(filename)s:%(lineno)s:%(funcName)s: %(message)s")
+            fmt = ("lenticularis: %(levelname)s:"
+                   " %(filename)s:%(lineno)s:%(funcName)s: %(message)s")
             pass
         pass
 
     handler.addFilter(HostnameFilter())
     handler.addFilter(MicrosecondFilter())
-    handler.setFormatter(logging.Formatter(format))
+    handler.setFormatter(logging.Formatter(fmt))
     logger.addHandler(handler)
     logger.setLevel(pr)
 
@@ -304,7 +304,7 @@ def dict_diff(e, z):
     e_keys = set(e.keys())
     z_keys = set(z.keys())
     r = [{"reason": "key deleted", "existing": only_in_e}
-          for only_in_e in e_keys - z_keys]
+         for only_in_e in e_keys - z_keys]
     r += [{"reason": "key appeared", "new": only_in_z}
           for only_in_z in z_keys - e_keys]
     for common_key in e_keys.intersection(z_keys):
@@ -387,13 +387,13 @@ def uniq_d(lis):
 
 
 def log_access(status_, client_, user_, method_, url_, *,
-                  upstream=None, downstream=None):
+               upstream=None, downstream=None):
     access_time = format_rfc3339_z(time.time())
     user_ = user_ if user_ else "-"
     upstream = upstream if upstream else "-"
     downstream = downstream if downstream else "-"
     logger.info(f"{access_time} {status_} {client_} {user_} {method_} {url_} {upstream} {downstream}")
-    return
+    pass
 
 
 def make_typical_ip_address(ip):
@@ -415,7 +415,7 @@ def wait_one_line_on_stdout(p, timeout):
     """
     (outs, errs, closed) = (b"", b"", False)
     ss = [p.stdout, p.stderr]
-    while ss != [] and not b"\n" in outs and not closed:
+    while ss != [] and b"\n" not in outs and not closed:
         (readable, _, _) = select.select(ss, [], [], timeout)
         if readable == []:
             break

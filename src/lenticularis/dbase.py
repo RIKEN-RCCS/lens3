@@ -5,7 +5,7 @@
 
 import time
 import json
-from redis import ConnectionError
+import redis
 from redis import Redis
 from lenticularis.utility import logger
 
@@ -16,7 +16,7 @@ def _wait_for_redis(r):
             r.ping()
             logger.debug("Connected to Redis.")
             return
-        except ConnectionError:
+        except redis.ConnectionError:
             logger.debug("Connection to Redis failed (sleeping).")
             time.sleep(30)
             pass
@@ -27,7 +27,7 @@ def _wait_for_redis(r):
 class DBase():
     def __init__(self, host, port, db, password):
         self.r = Redis(host=host, port=port, db=db, password=password,
-                             charset="utf-8", decode_responses=True)
+                       charset="utf-8", decode_responses=True)
         _wait_for_redis(self.r)
         pass
 
@@ -42,10 +42,10 @@ class DBase():
     def hexists(self, name, key):
         return self.r.hexists(name, key)
 
-    def hset_map(self, name, dict, structured):
+    def hset_map(self, name, data, structured):
         # hset returns the number of added fields, but ignored.
-        dict = _marshal(dict, structured)
-        self.r.hset(name, mapping=dict)
+        data = _marshal(data, structured)
+        self.r.hset(name, mapping=data)
         pass
 
     def hget_map(self, name, structured, default=None):
@@ -81,27 +81,27 @@ class DBase():
     pass
 
 
-def _marshal(dict, keys):
+def _marshal(data, keys):
     if keys is None:
-        return dict
+        return data
     else:
-        dict = dict.copy()
+        data = data.copy()
         for key in keys:
-            val = dict.get(key)
+            val = data.get(key)
             if val is not None:
-                dict[key] = json.dumps(val)
-        return dict
+                data[key] = json.dumps(val)
+        return data
     pass
 
 
-def _unmarshal(dict, keys):
-    ### It destructively modifies a dict.
+def _unmarshal(data, keys):
+    # It destructively modifies a data.
     if keys is None:
-        return dict
+        return data
     else:
         for key in keys:
-            val = dict.get(key)
+            val = data.get(key)
             if val is not None:
-                dict[key] = json.loads(val, parse_int=None)
-        return dict
+                data[key] = json.loads(val, parse_int=None)
+        return data
     pass

@@ -28,7 +28,7 @@ suminio: suminio.o
 	$(CC) -o $@ suminio.o
 
 pycodestyle::
-	-(pycodestyle --max-line-length=120 *.py) > pycodestyle-output.txt
+	-(pycodestyle --config=pycodestyle *.py) > pycodestyle-output.txt
 
 pylint::
 	-(pylint --rcfile=pylintrc *.py) > pylint-output.txt

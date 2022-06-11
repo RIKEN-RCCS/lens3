@@ -293,7 +293,7 @@ class Manager():
         (ok, reason) = self._check_pool_is_enabled()
         if not ok:
             logger.debug(f"Manager (pool={pool_id})"
-                         f"Pool is not enabled: ({reason})");
+                         f"Pool is not enabled: ({reason})")
             return False
 
         self._minio_root_user = generate_access_key()
@@ -672,14 +672,14 @@ class Manager():
         except TimeoutExpired:
             pass
         p_status = p.poll()
-        if p_status == None:
+        if p_status is None:
             logger.warning(f"Manager (pool={pool_id}): MinIO does not stop.")
             pass
         pass
 
     def _check_pool_status(self):
         """Checks the status and shutdown the work when inappropriate.  Some
-	logging output is done at deregistering.
+        logging output is done at deregistering.
         """
         pool_id = self._pool_id
         now = int(time.time())

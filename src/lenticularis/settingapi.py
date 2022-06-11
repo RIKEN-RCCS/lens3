@@ -65,7 +65,7 @@ class Admin_Api():
         self._bin_mc = minio_param["mc"]
         env = copy_minimal_env(os.environ)
         self._env_mc = env
-        return
+        pass
 
     def _get_pool_owner_for_messages(self, pool_id):
         """Finds an owner of a pool for printing a error message.  It returns
@@ -263,11 +263,11 @@ class Admin_Api():
                                       f" path=({path}), holder={owner}"))
             try:
                 self._store_pool(traceid, user_id, newpool)
-            except:
+            except Exception:
                 self.tables.delete_buckets_directory(path)
                 raise
             pass
-        except:
+        except Exception:
             if pool_id is not None:
                 self.tables.delete_id_unconditionally(pool_id)
                 pass
@@ -284,14 +284,14 @@ class Admin_Api():
             self.tables.set_pool(pool_id, pooldesc0)
             self._set_pool_state(pool_id, Pool_State.INITIAL, "-")
             self.tables.set_access_timestamp(pool_id)
-        except:
+        except Exception:
             self.tables.delete_pool(pool_id)
             self.tables.delete_pool_state(pool_id)
             self.tables.delete_access_timestamp(pool_id)
             raise
         try:
             status = self.access_mux_for_pool(traceid, pool_id)
-        except:
+        except Exception:
             self.tables.delete_pool_state(pool_id)
             self.tables.delete_pool(pool_id)
             self.tables.delete_access_timestamp(pool_id)
@@ -402,11 +402,11 @@ class Admin_Api():
         ensure_mux_is_running(self.tables)
         ensure_user_is_authorized(self.tables, user_id)
         pool_list = []
-        for id in self.tables.list_pools(pool_id):
-            pooldesc = gather_pool_desc(self.tables, id)
+        for pid in self.tables.list_pools(pool_id):
+            pooldesc = gather_pool_desc(self.tables, pid)
             if pooldesc is None:
                 logger.debug(f"Pool removed in race; list-pools runs"
-                             f" without a lock (ignored): {id}")
+                             f" without a lock (ignored): {pid}")
                 continue
             if pooldesc["owner_uid"] != user_id:
                 continue
@@ -451,7 +451,7 @@ class Admin_Api():
                     pass
                 pass
             pass
-        except:
+        except Exception:
             self.tables.delete_bucket(bucket)
             raise
         pass
@@ -521,7 +521,7 @@ class Admin_Api():
                 r = mc.admin_user_enable(key)
                 assert_mc_success(r, "mc.admin_user_enable")
             pass
-        except:
+        except Exception:
             self.tables.delete_id_unconditionally(key)
             raise
         pooldesc1 = gather_pool_desc(self.tables, pool_id)
@@ -559,7 +559,7 @@ class Admin_Api():
                     pass
                 pass
             self.tables.delete_id_unconditionally(access_key)
-        except:
+        except Exception:
             raise
         pooldesc1 = gather_pool_desc(self.tables, pool_id)
         return pooldesc1

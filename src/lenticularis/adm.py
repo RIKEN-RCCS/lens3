@@ -300,6 +300,7 @@ async def app_put_make_secret(
                                    client_addr, user_id, request)
     return response
 
+
 @app.delete("/pool/{pool_id}/secret/{access_key}")
 async def app_delete_delete_secret(
         request: Request,

@@ -10,7 +10,6 @@ import io
 import os
 import time
 import json
-#import threading
 import sys
 import traceback
 from lenticularis.settingapi import Admin_Api
@@ -146,10 +145,10 @@ def _list_permit_list(pool_adm):
     return rows
 
 
-def user_info_to_csv_row(id, ui):
+def user_info_to_csv_row(uid, ui):
     # "permitted" entry is ignored.
     assert ui is not None
-    return ["ADD", id] + ui["groups"]
+    return ["ADD", uid] + ui["groups"]
 
 
 def _format_mux(m, formatting):
@@ -220,13 +219,13 @@ def timestamp_key_order(e):
 
 
 class Command():
-    """Administration commands.  Status code to Api_Error is 500
-    always."""
+    """Administration commands.  Api_Error is used as a placeholder and
+    its status code is 500 always.
+    """
 
-    def __init__(self, adm_conf, traceid, args, rest):
-        self.adm_conf = adm_conf
-        self.pool_adm = Admin_Api(adm_conf)
+    def __init__(self, traceid, pool_adm, args, rest):
         self._traceid = traceid
+        self.pool_adm = pool_adm
         self.args = args
         self.rest = rest
         pass
@@ -237,9 +236,9 @@ class Command():
         print(f"USAGE")
         for (_, v) in self._op_dict.items():
             (fn, args, _) = v
-            help = inspect.getdoc(fn)
-            help = help.replace("\n", "\n\t") if help is not None else None
-            print(f"{prog} {args}\n\t{help}")
+            msg = inspect.getdoc(fn)
+            msg = msg.replace("\n", "\n\t") if msg is not None else None
+            print(f"{prog} {args}\n\t{msg}")
             pass
         sys.exit(ERROR_EXIT_ARGUMENT)
         pass
@@ -310,36 +309,11 @@ class Command():
                          order=pool_key_order)
         pass
 
-    def op_delete_pool(self, *pool_id):
-        """Delete pool by pool-id."""
+    def op_destruct_pool(self, *pool_id):
+        """Delete pools by pool-id."""
         pool_list = pool_id
         for pid in pool_list:
             self.pool_adm.do_delete_pool(self._traceid, pid)
-            pass
-        pass
-
-    def op_add_pool(self, pool_id, jsonfile):
-        """Add a pool from a file."""
-        try:
-            with open(jsonfile, "r") as f:
-                s = f.read()
-        except OSError as e:
-            sys.stderr.write(f"{jsonfile}: {os.strerror(e.errno)}\n")
-            return
-        except Exception as e:
-            sys.stderr.write(f"{jsonfile}: {e}\n")
-            traceback.print_exc()
-            return
-        pooldesc = json.loads(s, parse_int=None)
-        if not self.args.yes:
-            print("Need yes (-y) for action.")
-            pid = pooldesc.pop("pool_name")
-            print_json_plain("pools", [{pid: pooldesc}], self.args.format,
-                             order=pool_key_order)
-            pass
-        else:
-            ##user_id = pooldesc["owner_uid"]
-            self._restore_pool(self._traceid, pooldesc)
             pass
         pass
 
@@ -348,23 +322,24 @@ class Command():
         if users_or_pools.upper() == "USERS":
             user_list = self.pool_adm.tables.list_users()
             users = [self.pool_adm.tables.get_user(id) for id in user_list]
-            dump_data = json.dumps({"users": users})
-            print(dump_data)
+            data = json.dumps({"users": users})
+            print(data)
         elif users_or_pools.upper() == "POOLS":
             pool_list = self.pool_adm.tables.list_pools(None)
             pools = [gather_pool_desc(self.pool_adm.tables, id)
                      for id in pool_list]
-            dump_data = json.dumps({"pools": pools})
-            print(dump_data)
+            data = json.dumps({"pools": pools})
+            print(data)
         else:
-            print(f"users_or_pools is users or pools")
+            print(f"users-or_pools is either users or pools")
             pass
         pass
 
     def op_restore(self, jsonfile):
-        """Restore users and pools from a file.  Pools are given new names.
+        """Restore users and pools from a file.  Pools are given new pool-ids.
         It is an error if some entries are already occupied: a
-        buckets-directory, bucket names, and access-keys.
+        buckets-directory, bucket names, and access-keys, (or etc.).
+        Records of a file is {users: [...], pools: [...]}.
         """
         try:
             with open(jsonfile) as f:
@@ -405,17 +380,17 @@ class Command():
                                                  owner_gid, path)
             assert pool_id is not None
             pooldesc["pool_name"] = pool_id
-        except:
+        except Exception:
             raise
         # Add buckets.
         try:
             bkts = pooldesc["buckets"]
             for desc in bkts:
-                bucket= desc["name"]
+                bucket = desc["name"]
                 bkt_policy = desc["bkt_policy"]
                 self.pool_adm.do_make_bucket(traceid, pool_id,
                                              bucket, bkt_policy)
-        except:
+        except Exception:
             self.pool_adm.do_delete_pool(traceid, pool_id)
             raise
         # Add access-keys.
@@ -427,15 +402,15 @@ class Command():
                 key_policy = k["key_policy"]
                 desc = k.copy()
                 desc.pop("access_key")
-                desc["use"]= "access_key"
-                desc["owner"]= pool_id
+                desc["use"] = "access_key"
+                desc["owner"] = pool_id
                 desc["modification_time"] = now
                 ok = self.pool_adm.tables.set_ex_id(kid, desc)
                 if not ok:
                     raise Api_Error(500, f"Duplicate access-key: {kid}")
                 self.pool_adm.do_record_secret(traceid, pool_id,
                                                kid, secret, key_policy)
-        except:
+        except Exception:
             self.pool_adm.do_delete_pool(traceid, pool_id)
             raise
         pass
@@ -506,47 +481,18 @@ class Command():
         print_json_plain("timestamps", stamps, self.args.format, order=timestamp_key_order)
         pass
 
-    def op_flush_server_processes(self):
-        """flush-server-processes"""
-        everything = self.args.everything
-        ##self.pool_adm.tables.process_table.clear_all(everything=everything)
-        pass
-
-    def op_delete_server_processes(self, *pool_id):
-        """delete-server-processes"""
+    def op_delete_ep(self, *pool_id):
+        """Deletes endpoint entires from a database.  Entries of
+        MinIO-managers (ma:pool-id), MinIO-processes (mn:pool-id), and
+        MinIO-eps (ep:pool-id) are deleted.
+        """
         pool_list = pool_id
-        for pool_id in pool_list:
-            self.pool_adm.tables.delete_minio_proc(pool_id)
+        for pid in pool_list:
+            self.pool_adm.tables.delete_minio_manager(pid)
+            self.pool_adm.tables.delete_minio_proc(pid)
+            self.pool_adm.tables.delete_minio_ep(pid)
             pass
         pass
-
-    def op_flush_routing_table(self):
-        """clear-routing"""
-        everything = self.args.everything
-        ##self.pool_adm.tables.routing_table.clear_routing(everything=everything)
-        pass
-
-    ##def op_show_routing_table(self):
-    ##    (akey_list, host_list, atime_list) = self.pool_adm.fetch_route_list()
-    ##    akey_list = [(v, e) for (e, v) in akey_list]
-    ##    host_list = [(v, e) for (e, v) in host_list]
-    ##    atime_list = list(atime_list)
-    ##    servers = [e for (e, v) in akey_list] + [e for (e, v) in host_list] + [e for (e, v) in atime_list]
-    ##    servers = sorted(list(set(servers)))
-    ##    logger.debug(f"HOST_LIST = {host_list}")
-    ##    logger.debug(f"SERVERS = {servers}")
-    ##
-    ##    def collect_routes_of_server(server):
-    ##        accessKeys = [akey for (srv, akey) in akey_list if srv == server]
-    ##        hosts = [host for (srv, host) in host_list if srv == server]
-    ##        atime = next((atm for (srv, atm) in atime_list if srv == server), None)
-    ##        routes = {"accessKey": accessKeys, "host": hosts, "atime": atime}
-    ##        if self.args.format not in {"json"}:
-    ##            make_date_readable(routes, ["atime"])
-    ##        return {server: routes}
-    ##
-    ##    outs = [collect_routes_of_server(server) for server in servers]
-    ##    print_json_plain("routing table", outs, self.args.format, order=bucket_key_order)
 
     op_list = [
         op_help,
@@ -557,14 +503,6 @@ class Command():
         op_show_permits,
 
         op_show_pool,
-        op_delete_pool,
-        op_add_pool,
-
-        op_dump,
-        op_restore,
-        op_reset_db,
-        op_list_db,
-
         op_show_manager,
         op_show_minio,
         op_show_bucket,
@@ -572,9 +510,13 @@ class Command():
         op_list_bucket,
         op_list_timestamp,
 
-        #op_flush_server_processes,
-        #op_delete_server_processes,
-        #op_flush_routing_table,
+        op_destruct_pool,
+        op_dump,
+        op_restore,
+
+        op_list_db,
+        op_reset_db,
+        op_delete_ep,
     ]
 
     def make_op_entry(self, fn, _):
@@ -629,10 +571,9 @@ def main():
     parser.add_argument("--configfile", "-c")
     parser.add_argument("--format", "-f", choices=["text", "json"])
     parser.add_argument("--everything", type=bool, default=False)
-    parser.add_argument("--yes", "-y", default=False, action="store_true")
-    #action=argparse.BooleanOptionalAction was introduced in Python3.9
-
-    args, rest = parser.parse_known_args()
+    parser.add_argument("--yes", "-y", default=False,
+                        action=argparse.BooleanOptionalAction)
+    (args, rest) = parser.parse_known_args()
 
     try:
         (adm_conf, _) = read_adm_conf(args.configfile)
@@ -647,14 +588,13 @@ def main():
             **adm_conf["log_syslog"])
 
     try:
-        ##pool_adm = Admin_Api(adm_conf)
-        cmd = Command(adm_conf, traceid, args, rest)
+        pool_adm = Admin_Api(adm_conf)
+        cmd = Command(traceid, pool_adm, args, rest)
         cmd.make_op_dict()
         cmd.execute_command()
     except Exception as e:
         sys.stderr.write(f"Executing admin command failed: {e}\n")
-        print(traceback.format_exc())
-        ##cmd.op_help()
+        # print(traceback.format_exc())
         sys.exit(ERROR_EXIT_EXCEPTION)
         pass
     pass

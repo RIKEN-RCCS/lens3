@@ -47,15 +47,15 @@ _mc_list_entry_json_keys = {
 
 def intern_mc_user_info(json):
     """Maps key strings returned from MC to ones in Lens3."""
-    map = _mc_user_info_json_keys
-    return {map.get(k, k): v for (k, v) in json.items()}
+    mapping = _mc_user_info_json_keys
+    return {mapping.get(k, k): v for (k, v) in json.items()}
 
 
 def intern_mc_list_entry(json):
     """Maps key strings returned from MC to ones in Lens3.  It also drops
     a trailing slash in a bucket name."""
-    map = _mc_list_entry_json_keys
-    return {map.get(k, k): (remove_trailing_slash(v) if k == "key" else v)
+    mapping = _mc_list_entry_json_keys
+    return {mapping.get(k, k): (remove_trailing_slash(v) if k == "key" else v)
             for (k, v) in json.items()}
 
 
@@ -89,12 +89,12 @@ def _simplify_messages_in_mc_error(ee):
             try:
                 m0 = s["error"]["cause"]["error"]["Code"]
                 return (False, [_make_mc_error(m0)])
-            except:
+            except Exception:
                 pass
             try:
                 _ = s["error"]["message"]
                 return (False, [s])
-            except:
+            except Exception:
                 pass
             return (False, [_make_mc_error("Unknown error")])
         else:
@@ -118,7 +118,7 @@ class Mc():
         self._alias = None
         self._config_dir = None
         self._timeout = 10
-        return
+        pass
 
     def __enter__(self):
         pass
@@ -144,7 +144,7 @@ class Mc():
         finally:
             self._config_dir = None
             pass
-        return
+        pass
 
     # MC COMMAND PRIMITIVES.
 
@@ -170,7 +170,7 @@ class Mc():
         self._alias = None
         if r[0]["status"] != "success":
             raise Exception(r[0]["error"]["message"])
-        return
+        pass
 
     def admin_info(self):
         return self._execute_cmd("admin_info", False,
@@ -264,7 +264,6 @@ class Mc():
             with p:
                 (outs, errs) = p.communicate(timeout=self._timeout)
                 p_status = p.poll()
-                #p_status = p.wait()
                 if (self._verbose):
                     logger.debug(f"Running MC command: cmd={cmd};"
                                  f" status={p_status},"
@@ -316,7 +315,7 @@ class Mc():
             pass
         r = self.policy_set(name, policy)
         assert_mc_success(r, "mc.policy_set")
-        return
+        pass
 
     def clean_minio_setting(self, pool_id):
         """Tries to delete all access-keys and set the "none"-policy to all

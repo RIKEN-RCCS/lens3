@@ -282,12 +282,12 @@ def validate_adm_conf(conf):
 
 def check_type_number(conf, schema):
     if schema["type"] == "object":
-        for (property, sub_schema) in schema["properties"].items():
-            val = conf.get(property)
+        for (prop, sub_schema) in schema["properties"].items():
+            val = conf.get(prop)
             if val:
                 check_type_number(val, sub_schema)
-            elif property in schema["required"]:
-                raise Exception(f"missing required {property}")
+            elif prop in schema["required"]:
+                raise Exception(f"missing required {prop}")
             pass
     elif schema["type"] == "array":
         sub_schema = schema["items"]

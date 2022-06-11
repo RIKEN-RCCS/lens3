@@ -30,7 +30,7 @@ class LockDB():
         return True
 
     def lock(self, key, timeout):
-        ## NOTE: FIX VALUE.
+        # NOTE: FIX VALUE.
         delay = 0.2
         while not self.trylock(key, timeout):
             self.wait_for_lock(key, delay)

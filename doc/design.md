@@ -1675,25 +1675,23 @@ Figure 3 Credential
 
 ## Design Notes
 
-### Bucket-pools
-
-* Bucket-pool state (status)
-  * "online"
-  * "offline"
-
 ### Redis Database Keys (prefixes)
 
-Note: Entries with "(\*)" are set atomically (by "setnx"), and entries
-with "(\*\*)" are with expiry, in the tables below.
+Lens3 uses a couple of databases (by a database number), but the
+division is arbitrary because the distinct prefixes are used.  Most of
+the entries are records in json, and the others are simple strings.
+
+Note: In the tables below, entries with "(\*)" are set atomically (by
+"setnx"), and entries with "(\*\*)" are with expiry.
 
 #### storage-table
 
 | Key           | Value         | Description   |
 | ----          | ----          | ----          |
-| po:pool-id    | pool-description |(json)|
-| uu:user       | user-info     |(json)|
-| ps:pool-id    | pool-state    |(json)|
-| bd:directory  | pool-id       | A bucket-directory (\*) |
+| po:pool-id    | pool-description | |
+| uu:user       | user-info     | |
+| ps:pool-id    | pool-state    | |
+| bd:directory  | pool-id       | A bucket-directory (string) (\*) |
 
 A pool-description is a record: {}.
 
@@ -1704,24 +1702,24 @@ where "groups" is a string list and "permitted" is a boolean.
 
 | Key           | Value         | Description   |
 | ----          | ----          | ----          |
-| ma:pool-id    | MinIO-manager |(json) (\*, \*\*)|
-| mn:pool-id    | MinIO-process |(json)|
-| mx:mux-endpoint | Mux-description |(json)|
+| ma:pool-id    | MinIO-manager | (\*, \*\*)|
+| mn:pool-id    | MinIO-process | |
+| mx:mux-endpoint | Mux-description | |
 
-An __ma:pool-id__ entry stores a MinIO-manager record of a Mux under
-which a MinIO process runs: {"mux_host", "mux_port", "manager_pid",
+An __ma:pool-id__ entry is a MinIO-manager under which a MinIO process
+runs.  It is a record: {"mux_host", "mux_port", "manager_pid",
 "modification_time"}.  It is used as a mutex and protects accesses to
 mn:pool-id and ep:pool-id.
 
-An __mn:pool-id__ entry stores a MinIO-process description:
-{"minio_ep", "minio_pid", "admin", "password", "mux_host", "mux_port",
+An __mn:pool-id__ entry is a MinIO-process description: {"minio_ep",
+"minio_pid", "admin", "password", "mux_host", "mux_port",
 "manager_pid", "modification_time"}.
 
-An __mx:mux-endpoint__ entry stores a Mux-description that is a
-record: {"host", "port", "start_time", "modification_time"}.  A key is
-an endpoint (host+port) of a Mux.  A start-time is a time the record
-is first created, and a modification-time is updated each time the
-record is refreshed.  The content has no particular use.
+An __mx:mux-endpoint__ entry is a Mux description that is a record:
+{"host", "port", "start_time", "modification_time"}.  A key is an
+endpoint (host+port) of a Mux.  A start-time is a time the record is
+first created, and a modification-time is updated each time the record
+is refreshed.  The content has no particular use.
 
 #### routing-table
 
@@ -1729,11 +1727,11 @@ record is refreshed.  The content has no particular use.
 | ----          | ----          | ----          |
 | ep:pool-id    | MinIO-endpoint | |
 | bk:bucket-name | bucket-description | A mapping by a bucket-name (\*) |
-| ts:pool-id    | timestamp     | Timestamp on the last access |
+| ts:pool-id    | timestamp     | Timestamp on the last access (string) |
 
-An __ep:pool-id__ entry stores a MinIO-endpoint (a host:port string).
+An __ep:pool-id__ entry is a MinIO-endpoint (a host:port string).
 
-A __bk:bucket-name__ entry stores a bucket-description that is a
+A __bk:bucket-name__ entry is a bucket-description that is a
 record: {"pool", "bkt_policy", "modification_time"}.  A bkt-policy
 indicates public R/W status of a bucket: {"none", "upload",
 "download", "public"}, which are borrowed from MinIO.

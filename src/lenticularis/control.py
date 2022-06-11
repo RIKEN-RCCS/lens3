@@ -1,4 +1,4 @@
-"""Pool mangement.  This implements operations of Adm."""
+"""Pool mangement.  This implements operations of Wui."""
 
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
@@ -45,23 +45,24 @@ def rephrase_exception_message(e):
     pass
 
 
-class Admin_Api():
+class Control_Api():
+    """Setting Web-UI."""
 
-    def __init__(self, adm_conf):
-        self.adm_conf = adm_conf
+    def __init__(self, wui_conf):
+        self._wui_conf = wui_conf
 
-        mux_param = adm_conf["multiplexer"]
+        mux_param = wui_conf["multiplexer"]
         self._facade_hostname = mux_param["facade_hostname"]
         self._probe_access_timeout = int(mux_param["probe_access_timeout"])
 
-        # ctl_param = adm_conf["minio_manager"]
+        # ctl_param = wui_conf["minio_manager"]
 
-        settings = adm_conf["system"]
+        settings = wui_conf["system"]
         self._max_pool_expiry = int(settings["max_pool_expiry"])
 
-        self.tables = get_table(adm_conf)
+        self.tables = get_table(wui_conf)
 
-        minio_param = adm_conf["minio"]
+        minio_param = wui_conf["minio"]
         self._bin_mc = minio_param["mc"]
         env = copy_minimal_env(os.environ)
         self._env_mc = env
@@ -106,7 +107,7 @@ class Admin_Api():
         logger.debug(f"Access a Mux to start Minio for pool={pool_id}.")
         status = self.access_mux_for_pool(traceid, pool_id)
         if status != 200:
-            logger.error(f"Access a Mux by Adm failed for pool={pool_id}:"
+            logger.error(f"Access a Mux by Wui failed for pool={pool_id}:"
                          f" status={status}")
         else:
             pass
@@ -438,7 +439,7 @@ class Admin_Api():
             mc = self._make_mc_for_pool(traceid, pool_id)
             assert mc is not None
             with mc:
-                #lock = LockDB(self.tables.storage_table, "Adm")
+                #lock = LockDB(self.tables.storage_table, "Wui")
                 #self._lock_pool_entry(lock, pool_id)
                 try:
                     mc.make_bucket_with_policy(bucket, bkt_policy)

@@ -32,19 +32,19 @@ from lenticularis.utility import tracing
 
 
 try:
-    (_adm_conf, _) = read_wui_conf()
+    (_wui_conf, _) = read_wui_conf()
 except Exception as e:
     sys.stderr.write(f"Lens3 reading config file failed: {e}\n")
     sys.exit(ERROR_EXIT_READCONF)
     pass
 
-openlog(_adm_conf["log_file"],
-        **_adm_conf["log_syslog"])
+openlog(_wui_conf["log_file"],
+        **_wui_conf["log_syslog"])
 logger.info("START Wui.")
 
 _pkgdir = os.path.dirname(inspect.getfile(lenticularis))
 _webui_dir = os.path.join(_pkgdir, "webui")
-api = Api(_adm_conf)
+api = Api(_wui_conf)
 app = FastAPI()
 app.mount("/scripts/",
           StaticFiles(directory=os.path.join(_webui_dir, "scripts")),
@@ -84,7 +84,7 @@ async def _get_request_body(request):
 
 
 class CsrfSettings(BaseModel):
-    secret_key: str = _adm_conf["webui"]["CSRF_secret_key"]
+    secret_key: str = _wui_conf["webui"]["CSRF_secret_key"]
     pass
 
 

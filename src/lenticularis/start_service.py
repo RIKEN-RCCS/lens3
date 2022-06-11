@@ -41,17 +41,17 @@ def _run_mux():
 
 def _run_wui():
     try:
-        (adm_conf, configfile) = read_wui_conf()
+        (wui_conf, configfile) = read_wui_conf()
     except Exception as e:
         sys.stderr.write(f"Lens3 reading config file failed: {e}\n")
         return
 
-    openlog(adm_conf["log_file"],
-            **adm_conf["log_syslog"])
+    openlog(wui_conf["log_file"],
+            **wui_conf["log_syslog"])
     servicename = "lenticularis-wui"
     logger.info(f"Start {servicename} service.")
 
-    gunicorn_conf = adm_conf["gunicorn"]
+    gunicorn_conf = wui_conf["gunicorn"]
     _port = gunicorn_conf["port"]
     bind = f"[::]:{_port}"
     env = copy_minimal_env(os.environ)

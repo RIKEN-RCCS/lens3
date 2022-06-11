@@ -12,7 +12,7 @@ import time
 import json
 import sys
 import traceback
-from lenticularis.settingapi import Admin_Api
+from lenticularis.controllerapi import Admin_Api
 from lenticularis.readconf import read_adm_conf
 from lenticularis.poolutil import Api_Error
 from lenticularis.poolutil import gather_pool_desc

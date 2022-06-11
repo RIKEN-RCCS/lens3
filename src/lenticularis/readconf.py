@@ -10,8 +10,8 @@ import yaml
 ##default_mux_conf = "/etc/lenticularis/mux-config.yaml"
 mux_conf_envname = "LENTICULARIS_MUX_CONFIG"
 
-##default_adm_conf = "/etc/lenticularis/adm-config.yaml"
-adm_conf_envname = "LENTICULARIS_ADM_CONFIG"
+##default_wui_conf = "/etc/lenticularis/wui-config.yaml"
+wui_conf_envname = "LENTICULARIS_WUI_CONFIG"
 
 node_envname = "LENTICULARIS_MUX_NODE"
 
@@ -21,9 +21,9 @@ def read_mux_conf(configfile=None):
                     mux_conf_envname)
 
 
-def read_adm_conf(configfile=None):
-    return readconf(configfile, fix_adm_conf, validate_adm_conf,
-                    adm_conf_envname)
+def read_wui_conf(configfile=None):
+    return readconf(configfile, fix_wui_conf, validate_wui_conf,
+                    wui_conf_envname)
 
 
 def readconf(configfile, fixfn, valfn, envname):
@@ -183,7 +183,7 @@ def mux_schema(number_type):
     return sc
 
 
-def adm_schema(number_type):
+def wui_schema(number_type):
     multiplexer = {
         "type": "object",
         "properties": {
@@ -274,9 +274,9 @@ def validate_mux_conf(conf):
     pass
 
 
-def validate_adm_conf(conf):
-    jsonschema.validate(instance=conf, schema=adm_schema({"type": "string"}))
-    check_type_number(conf, adm_schema({"type": "number"}))
+def validate_wui_conf(conf):
+    jsonschema.validate(instance=conf, schema=wui_schema({"type": "string"}))
+    check_type_number(conf, wui_schema({"type": "number"}))
     pass
 
 
@@ -309,7 +309,7 @@ def check_type_number(conf, schema):
     pass
 
 
-def fix_adm_conf(conf):
+def fix_wui_conf(conf):
     return conf
 
 

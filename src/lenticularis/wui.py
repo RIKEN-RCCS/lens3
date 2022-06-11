@@ -1,4 +1,4 @@
-"""Adm service by Gunicorn + Uvicorn + FastAPI."""
+"""Wui service by Gunicorn + Uvicorn + FastAPI."""
 
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
@@ -23,7 +23,7 @@ from fastapi_csrf_protect import CsrfProtect
 from fastapi_csrf_protect.exceptions import CsrfProtectError
 import lenticularis
 from lenticularis.api import Api
-from lenticularis.readconf import read_adm_conf
+from lenticularis.readconf import read_wui_conf
 from lenticularis.utility import ERROR_EXIT_READCONF
 from lenticularis.utility import make_typical_ip_address
 from lenticularis.utility import log_access
@@ -32,7 +32,7 @@ from lenticularis.utility import tracing
 
 
 try:
-    (_adm_conf, _) = read_adm_conf()
+    (_adm_conf, _) = read_wui_conf()
 except Exception as e:
     sys.stderr.write(f"Lens3 reading config file failed: {e}\n")
     sys.exit(ERROR_EXIT_READCONF)
@@ -40,7 +40,7 @@ except Exception as e:
 
 openlog(_adm_conf["log_file"],
         **_adm_conf["log_syslog"])
-logger.info("START Adm.")
+logger.info("START Wui.")
 
 _pkgdir = os.path.dirname(inspect.getfile(lenticularis))
 _webui_dir = os.path.join(_pkgdir, "webui")
@@ -71,7 +71,7 @@ def _make_json_response(status_code, reason, values, csrf_protect,
         pass
     log_access(f"{status_code}", client_addr, user_id, request.method, request.url)
     response = JSONResponse(status_code=status_code, content=content)
-    # logger.debug(f"Adm RESPONSE.CONTENT={content}")
+    # logger.debug(f"Wui RESPONSE.CONTENT={content}")
     return response
 
 
@@ -122,7 +122,7 @@ async def validate_session(request: Request, call_next):
         log_access(f"{status_code}", client_addr, user_id, request.method, request.url)
         return JSONResponse(status_code=status_code, content=content)
     if (not api.pool_adm.check_user_is_registered(user_id)):
-        logger.info(f"Accessing Adm by a bad user: ({user_id})")
+        logger.info(f"Accessing Wui by a bad user: ({user_id})")
         content = {"status": "error", "reason": f"Bad user: ({user_id})",
                    "time": str(now)}
         status_code = status.HTTP_401_UNAUTHORIZED

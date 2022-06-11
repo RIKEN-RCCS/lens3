@@ -1,4 +1,4 @@
-"""An object used in Adm Web-API"""
+"""An object used in Wui Web-API"""
 
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause

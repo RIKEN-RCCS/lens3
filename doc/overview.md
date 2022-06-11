@@ -6,15 +6,15 @@
 reverse-proxy <+-->︎ Mux <+--> MinIO
                |         +--> MinIO
                |         +--> MinIO
-               +--> Adm
+               +--> Wui
                     Redis
 ```
 
 A reverse-proxy is not a part of Lens3 but it is required for
-operation.  Mux is a multiplexer and Adm is the administration Web-UI.
-Mux's can be multiple instances in a load-balanced configuration.  Adm
-may access Mux to start a MinIO.  Also, Mux's mutually access each
-other to start a MinIO in multiple Mux configurations.
+operation.  Mux is a multiplexer and Wui is the setting Web-UI.  Mux's
+can be multiple instances in a load-balanced configuration.  Wui may
+access Mux to start a MinIO.  Also, Mux's mutually access each other
+to start a MinIO in multiple Mux configurations.
 
 Mux is in charge of starting a MinIO process (via class Controller).
 Mux starts a Manager process as a daemon, and then, a Manager starts a

@@ -1781,14 +1781,14 @@ Lens3.
 Operations by an administrator is NOT mutexed.  They include
 modifications on the user-list.
 
-### Adm/Mux systemd Services
+### Wui/Mux systemd Services
 
 All states of services are stored in Redis.  systemd services can be
 stoped/started.
 
-### Adm Processes
+### Wui Processes
 
-Adm is not designed as load-balanced.  Adm may consist of some
+Wui is not designed as load-balanced.  Wui may consist of some
 processes (started by Gunicorn), but they need to run on a single node
 in order to share the configuration directory of the "mc" command.
 
@@ -1824,7 +1824,7 @@ Mux+MinIO pair, and (2) stop an old Mux+MinIO pair.
 
 ## Glossary
 
-* __Probe-key__: An access-key used by Adm to tell Mux about wake up
+* __Probe-key__: An access-key used by Wui to tell Mux about wake up
   of MinIO.  This is key has no corresponding secret.  It is
   distiguished by an empty secret.
 

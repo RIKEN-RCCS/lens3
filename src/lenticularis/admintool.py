@@ -13,7 +13,7 @@ import json
 import sys
 import traceback
 from lenticularis.control import Admin_Api
-from lenticularis.readconf import read_adm_conf
+from lenticularis.readconf import read_wui_conf
 from lenticularis.poolutil import Api_Error
 from lenticularis.poolutil import gather_pool_desc
 from lenticularis.poolutil import check_user_naming
@@ -576,7 +576,7 @@ def main():
     (args, rest) = parser.parse_known_args()
 
     try:
-        (adm_conf, _) = read_adm_conf(args.configfile)
+        (adm_conf, _) = read_wui_conf(args.configfile)
     except Exception as e:
         sys.stderr.write(f"Reading conf failed: {e}\n")
         sys.exit(ERROR_EXIT_READCONF)

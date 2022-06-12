@@ -20,7 +20,7 @@ pool" is a management unit in Lens3 which is associated to each MinIO
 instance.  A Web-UI is used to register S3 buckets to a pool.  This
 service, called "Wui", is started as a systemd serivce.
 
-See [MinIO](https://min.io).
+Refer to [MinIO](https://min.io) about MinIO.
 
 ## Installation
 
@@ -39,12 +39,14 @@ see [doc/design.md](doc/design.md).
 
 ## Manifestation
 
-This product is copyrighted by RIKEN R-CCS.  Part of the results is
+Lens3 is copyrighted by RIKEN R-CCS.  Part of the results is
 obtained by using Fugaku at RIKEN R-CCS.
 
-This system is developed by the [Authors](AUTHORS.txt).  But, the
-code was reviewed by zzmatu and all remaining bugs are his
-responsibility.
+Lens3 is developed by the [Authors](AUTHORS.txt).  But, the code was
+reviewed by zzmatu and all remaining bugs are his responsibility.
+
+Lens3 utilizes third-party open source software, which is listed in
+[Acknowledgement](ACKNOWLEDGEMENT.txt).
 
 Files.
 

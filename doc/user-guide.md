@@ -35,7 +35,7 @@ removes the pool.
 
 ![Pool list page](ug4.jpg)
 
-## S3 Client Setting
+## S3 Client Access Example
 
 The followng example shows an access to an endpoint using the AWS CLI.
 An access-key pair is provided by Lens3 Web-UI.
@@ -49,18 +49,45 @@ aws_secret_access_key = DzZv57R8wBIuVZdtAkE1uK1HoebLPMzKM6obA4IDqOhaLIBf
 $ aws --endpoint-url=http://lens3.example.com/ s3 ls s3://somebucket1/
 ```
 
-## Restrictions of Lenticularis-S3
+## Overview of Lens3
 
-### No Control on File and Bucket Properties
+```
+(reverse-proxy) <+-->︎ Mux <+--> MinIO (per user)
+                 |         +--> MinIO (per user)
+                 |         +--> MinIO (per user)
+                 +--> Wui
+                      Redis
+```
 
-Lens3 does not provide control on properties of files and buckets.  A
-bucket can only have a public access policy.
+Lens3 consists of Mux and Wui -- Mux is a multiplexer and Wui is a
+setting Web-UI.  Others are by third party.  MinIO is an open-source
+but commercially supported S3 server.  Redis is an open-source
+database system.  A reverse-proxy is not a part of Lens3 but it is
+required for operation.  Mux works as a reverse-proxy which forwards
+file access requests to an MinIO instance by looking at a bucket name.
+Mux determines the target MinIO instance using an association of a
+bucket and a user.  This association is stored in a Redis database.
+Wui provides management of buckets.  Wui manages buckets by a bucket
+pool, which is a unit of management in Lens3 and corresponds to a
+single MinIO instance.  A user first creates a bucket pool, and then
+registers buckets to the pool.  Mux is also in charge of starting and
+stopping a MinIO instance.  Mux starts a MinIO instance on receiving
+an access request, and after a while, Mux stops the instance when
+accesses become idle.  Mux starts a MinIO as a non-root user process
+using "sudo".
+
+## Restrictions of Lens3
 
 ### Bucket Naming Restrictions
 
 Bucket names must be in lowercase alphanums and "-".  Lens3 bans dots.
 Also, Lens3 bans names "aws", "amazon", "minio", and the names that
 begin with "goog" and "g00g".
+
+### No Control on File and Bucket Properties
+
+Lens3 does not provide control on properties of files and buckets.  A
+bucket can only have a public access policy.
 
 ### Residue Files
 
@@ -83,9 +110,9 @@ It does not include the process status of a MinIO instance.
     an administrator.  The causes of a transition include an
     expiry of a pool, disabling a user account, or making a pool
     offline.
-  * __INOPERABLE__ indicates an error state and a pool is
-    permanently unusable.  It has failed to run a MinIO.  This pool
-    cannot be used and should be removed.
+  * __INOPERABLE__ indicates an error state and a pool is permanently
+    unusable.  Mainly, it has failed to run a MinIO.  This pool cannot
+    be used and should be removed.
 
 ### Other Limitations
 
@@ -100,14 +127,17 @@ processes).
 
 ## Glossary
 
-* __Pool__: A management unit of S3 buckets.  It corresponds to a
-  single MinIO instance.
+* __bucket pool__: A management unit of S3 buckets.  It corresponds to
+  a single MinIO instance.
 
 ## Changes from v1.1 to v1.2
 
 * Host-style naming of buckets is dropped.
 * Some rich features are dropped.
-* Bucket name space is shared by all users.  Bucket names must be
-  exclusive.
-* Some locking in accessing Redis are omitted.  Operations by an
-  administrator might be sloppy.
+* Bucket name space become shared by all users.  Bucket names must be
+  distinct.
+* Some locking in accessing Redis are omitted.  Operations by the
+  administrator tool might be sloppy.
+* A MC command is directly invoked at Wui host to change a setting of
+  a MinIO instance.  A MC command was only invoked at Mux (by way of
+  Manager) in v1.1.

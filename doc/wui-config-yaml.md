@@ -1,88 +1,72 @@
-  * Set `default_zone_lifetime` to -1 for forever.
-      otherwise, when an end user create a zone, the "current time plus
-      this value" is set to new zone's default expiration date time.
-      if `allowed_maximum_zone_exp_date` is also set, use earlier one.
+# wui-config.yaml
 
-    - `reserved_hostnames`:
-      list reserved hostnames.
-      - In this example, we show 2. below.
-        1. In case facade-hostname is a subdomain of`direct_hostname_domain`,
-            facade-hostname(FQDN)
-        2. In case WebUI hostname is a subdomain of `direct_hostname_domain`
-            WebUI hostname(FQDN)
-        3. Other hostnames that administrator disallows end users to use.(FQDN)
+## Redis Part
 
-    - `direct_hostname_validator`:
-      - This validate restricts label name of direct hostname.
-      - `flat`: disallow including `.` in the label.
-        label length must shorter than 64 characters.
+```
+redis:
+    host: localhost
+    port: 6378
+    password: ZXjmrOLwQ8Ri51pb5FI79z51gAHfIQ4oMvtWrG8q
+```
 
+## Gunicorn Part
 
-    - Edit configuration file
-      ```
-      gunicorn:
-      # designate awaiting port.  we use [::]:8001 to listen both IPv4 and IPv6.
-          bind: "[::]:8001"
-      # numbers of gunicorn workers
-          workers: 24
-      # gunicorn timeout
-          timeout: 120
-      # syslog facility (default: user) of gunicorn
-          log_syslog_facility: LOCAL7
-          reload: yes
+```
+gunicorn:
+    port: 8003
+    workers: 2
+    timeout: 120
+    access_logfile: "/var/tmp/lenticularis/lens3-gunicorn-wui-access-log"
+    log_file: "/var/tmp/lenticularis/lens3-gunicorn-wui-log"
+    log_level: debug
+    #log_syslog_facility: LOCAL8
+    reload: yes
+```
 
+## AWS-Signature Part
 
-      redis:
-      # hostname of Redis-Host
-          host: localhost
-      # port of Redis (see redis.conf's port above)
-          port: 6379
-      # password of Redis (see redis.conf's requirepass above)
-          password: deadbeef
+```
+aws_signature: "AWS4-HMAC-SHA256"
+```
 
-      multiplexer:
-          # set facade hostname
-          facade_hostname: lens3.example.com
+## Mux Part
 
-      controller:
-              # maximum allowed time during initializing a zone
-              max_lock_duration: 60
+```
+multiplexer:
+    facade_hostname: fgkvm-010-128-008-026.fdcs.r-ccs.riken.jp
+    probe_access_timeout: 60
+```
 
-          system_settings:
-      # maximum number of zones per end user
-              max_zone_per_user: 3
-      # maximum number of direct hostname per end user
-              max_direct_hostnames_per_user: 2
-              default_zone_lifetime: 630720000
-              allowed_maximum_zone_exp_date: 2279404800
-      # endpoint_url is used to display Endpoint URL to user in WebUI
-              endpoint_url: https://{hostname}/
-      # function name that validate direct hostname
-              direct_hostname_validator: flat
-      # Direct Hostname Domain
-              direct_hostname_domain: lens3.example.com
-      # reserved domain names, preventing end users to accidentally use webui hostname.
-              reserved_hostnames:
-                  - webui.lens3.example.com
-      # time limit of connecting to multiplexer (for sending decoy)
-              probe_access_timeout: 60
+## MinIO-Manager Part
 
-          syslog:
-      # logging facility (case sensitive)
-      # facility: KERN, USER, MAIL, DAEMON, AUTH, LPR, NEWS, UUCP, CRON,
-      #           SYSLOG, LOCAL0 to LOCAL7(, AUTHPRIV)
-              facility: LOCAL7
-      # logging priority (case sensitive)
-      # priority: EMERG, ALERT, CRIT, ERR, WARNING, NOTICE, INFO, DEBUG
-      # WARNING: setting priority to DEBUG, sensitive information may be
-      #          recorded in syslog.
-              priority: INFO
+```
+minio_manager:
+    minio_mc_timeout: 10
+```
 
+## MinIO Part
 
-      webui:
-          trusted_proxies:
-      # trust reverse-proxy
-              - localhost
-      # secret key for CSRF protector. (DO NOT USE REDIS'S PASSWORD HERE)
-          CSRF_secret_key: xyzzy
-      ```
+```
+minio:
+    minio: /home/lens3/bin/minio
+    mc: /home/lens3/bin/mc
+```
+
+## Web-UI Part
+
+```
+system:
+    trusted_proxies:
+        - localhost
+    max_pool_expiry: 630720000
+    CSRF_secret_key: xyzzy
+```
+
+## Logging Part
+
+```
+log_file: "/var/tmp/lenticularis/lens3-wui-log"
+log_syslog:
+    facility: LOCAL7
+    priority: DEBUG
+```

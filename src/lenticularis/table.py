@@ -495,7 +495,6 @@ class Process_Table(Table_Common):
         eps = [(desc["host"], desc["port"])
                for (_, desc) in ((ep, self.get_mux(ep)) for ep in keyi)
                if desc is not None]
-        #return sorted(list(set(eps)))
         return sorted(eps)
 
     def clear_all(self, everything):
@@ -570,8 +569,8 @@ class Routing_Table(Table_Common):
         bkts = [{"name": name, **d}
                 for (name, d)
                 in [(name, self.get_bucket(name)) for name in keyi]
-                if (d is not None and
-                    (pool_id is None or d.get("pool") == pool_id))]
+                if (d is not None
+                    and (pool_id is None or d.get("pool") == pool_id))]
         return bkts
         pass
 

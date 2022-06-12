@@ -10,8 +10,10 @@ import platform
 import random
 import string
 import time
+import sys
 import socket
 import select
+import traceback
 from urllib.request import Request, urlopen
 import urllib.error
 import logging
@@ -38,7 +40,7 @@ class HostnameFilter(logging.Filter):
         super().__init__()
 
     def filter(self, record):
-        ##record.hostname = self.hostname
+        # record.hostname = self.hostname
         setattr(record, "hostname", self.hostname)
         return True
 
@@ -47,7 +49,7 @@ class HostnameFilter(logging.Filter):
 
 class MicrosecondFilter(logging.Filter):
     def filter(self, record):
-        ##record.microsecond = format_rfc3339_z(time.time())
+        # record.microsecond = format_rfc3339_z(time.time())
         setattr(record, "microsecond", format_rfc3339_z(time.time()))
         return True
 
@@ -273,20 +275,17 @@ def remove_trailing_slash(s):
     pass
 
 
-#def format_8601_us(t=None):
-#    """
-#    ISO 8601
-#    """
-#    if t is None:
-#        t = time.time()
-#    i = time.strftime("%Y%m%dT%H%M%S", time.gmtime(t))
-#    f = (int)((t % 1) * 1000000)
-#    return f"{i}.{f:06d}Z"
+# def format_8601_us(t=None):
+#     """ISO 8601"""
+#     if t is None:
+#         t = time.time()
+#     i = time.strftime("%Y%m%dT%H%M%S", time.gmtime(t))
+#     f = (int)((t % 1) * 1000000)
+#     return f"{i}.{f:06d}Z"
 
 
 def format_rfc3339_z(t):
-    """RFC 3339
-    """
+    """RFC 3339"""
     i = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(t))
     f = (int)((t % 1) * 1000000)
     return f"{i}.{f:06d}Z"
@@ -318,7 +317,7 @@ def dict_diff(e, z):
 
 
 def uniform_distribution_jitter():
-    ## NOTE: FIX VALUE.
+    # NOTE: FIX VALUE.
     return random.random() * 2
 
 
@@ -472,3 +471,17 @@ def _is_subdomain(host_fqdn, domain):
 def _strip_domain(host_fqdn, domain):
     domain_len = 1 + len(domain)
     return host_fqdn[:-domain_len]
+
+
+def rephrase_exception_message(e):
+    """Returns an error message of an AssertionError.  It is needed
+    because simply printing an AssertionError returns an empty string.
+    """
+    if not isinstance(e, AssertionError):
+        return f"{e}"
+    else:
+        (_, _, tb) = sys.exc_info()
+        tr = traceback.extract_tb(tb)
+        (filename, line, func, text) = tr[-1]
+        return f"AssertionError: {text}; File {filename}, Line {line}"
+    pass

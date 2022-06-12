@@ -20,17 +20,16 @@ multiplexer:
     probe_access_timeout: 60
 
 minio_manager:
+    minio_mc_timeout: 10
 
 minio:
     minio: /home/lens3/bin/minio
     mc: /home/lens3/bin/mc
 
 system:
-    max_pool_expiry: 630720000
-
-webui:
     trusted_proxies:
         - localhost
+    max_pool_expiry: 630720000
     CSRF_secret_key: xyzzy
 
 log_file: "/var/tmp/lenticularis/lens3-wui-log"

@@ -9,7 +9,6 @@
 import tempfile
 import json
 from subprocess import Popen, DEVNULL, PIPE
-# from signal import signal, alarm, SIGTERM, SIGCHLD, SIGALRM, SIG_IGN
 from lenticularis.poolutil import Api_Error
 from lenticularis.utility import remove_trailing_slash
 from lenticularis.utility import list_diff3
@@ -109,15 +108,15 @@ class Mc():
     alias name.
     """
 
-    def __init__(self, bin_mc, env_mc, minio_ep, pool_id):
+    def __init__(self, bin_mc, env_mc, minio_ep, pool_id, mc_timeout):
         self._verbose = False
         self.mc = bin_mc
         self.env = env_mc
         self._minio_ep = minio_ep
         self._pool_id = pool_id
+        self._mc_timeout = mc_timeout
         self._alias = None
         self._config_dir = None
-        self._timeout = 10
         pass
 
     def __enter__(self):
@@ -256,13 +255,14 @@ class Mc():
         assert self._alias is not None and self._config_dir is not None
         cmd = ([self.mc, "--json", f"--config-dir={self._config_dir.name}"]
                + list(args))
+        assert all(isinstance(i, str) for i in cmd)
         try:
             p = Popen(cmd, stdin=DEVNULL, stdout=PIPE, stderr=PIPE,
                       env=self.env)
             if no_wait:
                 return (p, None)
             with p:
-                (outs, errs) = p.communicate(timeout=self._timeout)
+                (outs, errs) = p.communicate(timeout=self._mc_timeout)
                 p_status = p.poll()
                 if (self._verbose):
                     logger.debug(f"Running MC command: cmd={cmd};"

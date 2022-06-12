@@ -3,27 +3,25 @@
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
-import jsonschema
 import os
+import sys
+import jsonschema
 import yaml
+from lenticularis.utility import rephrase_exception_message
 
-##default_mux_conf = "/etc/lenticularis/mux-config.yaml"
-mux_conf_envname = "LENTICULARIS_MUX_CONFIG"
 
-##default_wui_conf = "/etc/lenticularis/wui-config.yaml"
-wui_conf_envname = "LENTICULARIS_WUI_CONFIG"
-
-node_envname = "LENTICULARIS_MUX_NODE"
+_mux_conf_envname = "LENTICULARIS_MUX_CONFIG"
+_wui_conf_envname = "LENTICULARIS_WUI_CONFIG"
 
 
 def read_mux_conf(configfile=None):
-    return readconf(configfile, fix_mux_conf, validate_mux_conf,
-                    mux_conf_envname)
+    return readconf(configfile, _fix_mux_conf, _validate_mux_conf,
+                    _mux_conf_envname)
 
 
 def read_wui_conf(configfile=None):
-    return readconf(configfile, fix_wui_conf, validate_wui_conf,
-                    wui_conf_envname)
+    return readconf(configfile, _fix_wui_conf, _validate_wui_conf,
+                    _wui_conf_envname)
 
 
 def readconf(configfile, fixfn, valfn, envname):
@@ -35,15 +33,18 @@ def readconf(configfile, fixfn, valfn, envname):
         with open(configfile, "r") as f:
             yamlconf = yaml.load(f, Loader=yaml.BaseLoader)
     except yaml.YAMLError as e:
-        raise Exception(f"Read config file failed: {configfile}; exception={e}")
+        raise Exception(f"Reading a config file failed: {configfile}:"
+                        f" exception=({e})")
     except Exception as e:
-        raise Exception(f"Read config file failed: {configfile} exception={e}")
+        m = rephrase_exception_message(e)
+        raise Exception(f"Reading a config file failed: {configfile}:"
+                        f" exception=({m})")
     conf = fixfn(yamlconf)
     valfn(conf)
     return (conf, configfile)
 
 
-def gunicorn_schema(number_type):
+def _gunicorn_schema(number_type):
     sc = {
         "type": "object",
         "properties": {
@@ -65,7 +66,7 @@ def gunicorn_schema(number_type):
     return sc
 
 
-def redis_schema(number_type):
+def _redis_schema(number_type):
     sc = {
         "type": "object",
         "properties": {
@@ -83,7 +84,7 @@ def redis_schema(number_type):
     return sc
 
 
-def syslog_schema():
+def _syslog_schema(number_type):
     sc = {
         "type": "object",
         "properties": {
@@ -99,7 +100,7 @@ def syslog_schema():
     return sc
 
 
-def mux_schema(number_type):
+def _mux_schema(number_type):
     multiplexer = {
         "type": "object",
         "properties": {
@@ -108,6 +109,7 @@ def mux_schema(number_type):
             "mux_ep_update_interval": number_type,
             "forwarding_timeout": number_type,
             "probe_access_timeout": number_type,
+            "bad_response_delay": number_type,
         },
         "required": [
             "facade_hostname",
@@ -115,34 +117,39 @@ def mux_schema(number_type):
             "mux_ep_update_interval",
             "forwarding_timeout",
             "probe_access_timeout",
+            "bad_response_delay",
         ],
         "additionalProperties": False,
     }
     minio_manager = {
         "type": "object",
         "properties": {
+            "sudo": {"type": "string"},
             "port_min": number_type,
             "port_max": number_type,
-            "sudo": {"type": "string"},
             "minio_awake_duration": number_type,
+            "minio_setup_at_restart": {"type": "boolean"},
             "heartbeat_interval": number_type,
             "heartbeat_miss_tolerance": number_type,
             "heartbeat_timeout": number_type,
             "minio_start_timeout": number_type,
             "minio_setup_timeout": number_type,
             "minio_stop_timeout": number_type,
+            "minio_mc_timeout": number_type,
         },
         "required": [
+            "sudo",
             "port_min",
             "port_max",
-            "sudo",
             "minio_awake_duration",
+            "minio_setup_at_restart",
             "heartbeat_interval",
             "heartbeat_miss_tolerance",
             "heartbeat_timeout",
             "minio_start_timeout",
             "minio_setup_timeout",
             "minio_stop_timeout",
+            "minio_mc_timeout",
         ],
         "additionalProperties": False,
     }
@@ -161,14 +168,14 @@ def mux_schema(number_type):
     sc = {
         "type": "object",
         "properties": {
-            "redis": redis_schema(number_type),
-            "gunicorn": gunicorn_schema(number_type),
+            "redis": _redis_schema(number_type),
+            "gunicorn": _gunicorn_schema(number_type),
             "aws_signature": {"type": "string"},
             "multiplexer": multiplexer,
             "minio_manager": minio_manager,
             "minio": minio,
             "log_file": {"type": "string"},
-            "log_syslog": syslog_schema(),
+            "log_syslog": _syslog_schema(number_type),
         },
         "required": [
             "redis",
@@ -183,7 +190,7 @@ def mux_schema(number_type):
     return sc
 
 
-def wui_schema(number_type):
+def _wui_schema(number_type):
     multiplexer = {
         "type": "object",
         "properties": {
@@ -196,15 +203,15 @@ def wui_schema(number_type):
         ],
         "additionalProperties": False,
     }
-    minio_manager = {"type": "string"}
-    ##{
-    ##    "type": "object",
-    ##    "properties": {
-    ##    },
-    ##    "required": [
-    ##    ],
-    ##    "additionalProperties": False,
-    ##}
+    minio_manager = {
+        "type": "object",
+        "properties": {
+            "minio_mc_timeout": number_type,
+        },
+        "required": [
+        ],
+        "additionalProperties": False,
+    }
     minio = {
         "type": "object",
         "properties": {
@@ -220,21 +227,13 @@ def wui_schema(number_type):
     system = {
         "type": "object",
         "properties": {
-            "max_pool_expiry": number_type,
-        },
-        "required": [
-            "max_pool_expiry",
-        ],
-        "additionalProperties": False,
-    }
-    webui = {
-        "type": "object",
-        "properties": {
             "trusted_proxies": {"type": "array", "items": {"type": "string"}},
+            "max_pool_expiry": number_type,
             "CSRF_secret_key": {"type": "string"},
         },
         "required": [
             "trusted_proxies",
+            "max_pool_expiry",
             "CSRF_secret_key",
         ],
         "additionalProperties": False,
@@ -242,25 +241,23 @@ def wui_schema(number_type):
     sc = {
         "type": "object",
         "properties": {
-            "gunicorn": gunicorn_schema(number_type),
-            "redis": redis_schema(number_type),
+            "redis": _redis_schema(number_type),
+            "gunicorn": _gunicorn_schema(number_type),
             "aws_signature": {"type": "string"},
             "multiplexer": multiplexer,
             "minio_manager": minio_manager,
-            "system": system,
-            "webui": webui,
             "minio": minio,
+            "system": system,
             "log_file": {"type": "string"},
-            "log_syslog": syslog_schema(),
+            "log_syslog": _syslog_schema(number_type),
         },
         "required": [
             "gunicorn",
             "redis",
             "multiplexer",
-            #"minio_manager",
-            "system",
-            "webui",
+            "minio_manager",
             "minio",
+            "system",
             "log_syslog",
         ],
         "additionalProperties": False,
@@ -268,50 +265,59 @@ def wui_schema(number_type):
     return sc
 
 
-def validate_mux_conf(conf):
-    jsonschema.validate(instance=conf, schema=mux_schema({"type": "string"}))
-    check_type_number(conf, mux_schema({"type": "number"}))
+def _validate_mux_conf(conf):
+    jsonschema.validate(instance=conf, schema=_mux_schema({"type": "number"}))
     pass
 
 
-def validate_wui_conf(conf):
-    jsonschema.validate(instance=conf, schema=wui_schema({"type": "string"}))
-    check_type_number(conf, wui_schema({"type": "number"}))
+def _validate_wui_conf(conf):
+    jsonschema.validate(instance=conf, schema=_wui_schema({"type": "number"}))
     pass
 
 
-def check_type_number(conf, schema):
+def _fix_type(data, schema):
+    """Rereads tokens as for schema.  It fixes yaml data.  It passes
+    missing/additional properties, which are checked by json
+    validation.
+    """
     if schema["type"] == "object":
-        for (prop, sub_schema) in schema["properties"].items():
-            val = conf.get(prop)
-            if val:
-                check_type_number(val, sub_schema)
-            elif prop in schema["required"]:
-                raise Exception(f"missing required {prop}")
+        newdata = data.copy()
+        for (prop, subschema) in schema["properties"].items():
+            subdata = data.get(prop)
+            # assert prop not in schema["required"] or subdata is not None
+            if subdata is not None:
+                newdata[prop] = _fix_type(subdata, subschema)
+                pass
             pass
+        return newdata
     elif schema["type"] == "array":
-        sub_schema = schema["items"]
-        if not isinstance(conf, list):
-            raise Exception(f"not an array: {conf}")
-        for e in conf:
-            check_type_number(e, sub_schema)
-            pass
+        subschema = schema["items"]
+        assert isinstance(data, list)
+        return [_fix_type(subdata, subschema) for subdata in data]
     elif schema["type"] == "string":
-        if not isinstance(conf, str):
-            raise Exception(f"not a string: {conf}")
-        pass
+        assert isinstance(data, str)
+        return data
     elif schema["type"] == "number":
-        if not isinstance(conf, str) or not conf.isdigit():
-            raise Exception(f"not a number: {conf}")
-        pass
+        assert isinstance(data, str)
+        try:
+            return int(data)
+        except ValueError:
+            return float(data)
+    elif schema["type"] == "boolean":
+        assert isinstance(data, str)
+        return bool(data)
     else:
-        raise Exception("INTERNAL ERROR: NOT IMPLEMENTED")
+        raise Exception("_fix_type: Other types are not implemented")
     pass
 
 
-def fix_wui_conf(conf):
+def _fix_mux_conf(conf):
+    schema = _mux_schema({"type": "number"})
+    conf = _fix_type(conf, schema)
     return conf
 
 
-def fix_mux_conf(conf):
+def _fix_wui_conf(conf):
+    schema = _wui_schema({"type": "number"})
+    conf = _fix_type(conf, schema)
     return conf

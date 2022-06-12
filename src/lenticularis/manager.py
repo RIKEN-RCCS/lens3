@@ -1,4 +1,5 @@
-"""A sentinel process for a MinIO process."""
+"""A sentinel process for a MinIO process.  It is also responsible to
+transition of the pool state."""
 
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
@@ -92,14 +93,17 @@ class Manager():
         ctl_param = mux_conf["minio_manager"]
         self._bin_sudo = ctl_param["sudo"]
         self._minio_awake_duration = int(ctl_param["minio_awake_duration"])
+        self._minio_setup_at_restart = ctl_param["minio_setup_at_restart"]
         self._heartbeat_interval = int(ctl_param["heartbeat_interval"])
         self._heartbeat_tolerance = int(ctl_param["heartbeat_miss_tolerance"])
         self._heartbeat_timeout = int(ctl_param["heartbeat_timeout"])
         self._minio_start_timeout = int(ctl_param["minio_start_timeout"])
         self._minio_setup_timeout = int(ctl_param["minio_setup_timeout"])
         self._minio_stop_timeout = int(ctl_param["minio_stop_timeout"])
+        self._mc_timeout = int(ctl_param["minio_mc_timeout"])
         self._watch_gap_minimal = (self._heartbeat_interval / 8)
-        self._expiry = (self._heartbeat_tolerance * self._heartbeat_interval)
+        self._expiry = ((self._heartbeat_tolerance + 1 + 2)
+                        * (self._heartbeat_interval + self._heartbeat_timeout))
 
         minio_param = mux_conf["minio"]
         self._bin_minio = minio_param["minio"]
@@ -117,7 +121,7 @@ class Manager():
         signal(SIGTERM, SIG_IGN)
         raise Termination("Manager got a sigterm.")
 
-    def _tell_controller_minio_starts(self):
+    def _tell_spawner_minio_starts(self):
         # Note that a closure of stdout is not detected at the reader side.
         sys.stdout.write(f"{self._minio_ep}\n")
         sys.stdout.flush()
@@ -131,7 +135,7 @@ class Manager():
         pool_id = self._pool_id
         (o, _) = self.tables.get_pool_state(pool_id)
         logger.debug(f"Manager (pool={pool_id}):"
-                     f" pool-state change: {o} to {poolstate}")
+                     f" Pool-state change: {o} to {poolstate}")
         self.tables.set_pool_state(self._pool_id, poolstate, reason)
         pass
 
@@ -146,24 +150,24 @@ class Manager():
         if pooldesc is None:
             reason = "Pool removed"
             return (False, reason)
-        (poolstate, reason) = self.tables.get_pool_state(pool_id)
+        (poolstate, currentreason) = self.tables.get_pool_state(pool_id)
         if poolstate is None:
             logger.error(f"Manager (pool={pool_id}): Pool-state not found.")
             reason = "No pool state"
             return (False, reason)
         if poolstate in {Pool_State.INOPERABLE}:
-            return (False, reason)
+            return (False, currentreason)
         user_id = pooldesc["owner_uid"]
         unexpired = now < pooldesc["expiration_date"]
         u = self.tables.get_user(user_id)
         permitted = u["permitted"]
         online = pooldesc["online_status"]
         ok = (unexpired and permitted and online)
-        if not ok and poolstate in {Pool_State.INITIAL}:
-            reason = "Pool disabled initially"
-            self._set_pool_state(Pool_State.INOPERABLE, reason)
-            return (False, reason)
-        elif not ok and poolstate in {Pool_State.READY}:
+        # if not ok and poolstate in {}:
+        #     reason = "Pool disabled initially"
+        #     self._set_pool_state(Pool_State.INOPERABLE, reason)
+        #     return (False, reason)
+        if not ok and poolstate in {Pool_State.INITIAL, Pool_State.READY}:
             if not unexpired:
                 reason = "Pool expired"
                 self._set_pool_state(Pool_State.DISABLED, reason)
@@ -178,12 +182,13 @@ class Manager():
                 return (False, reason)
             return (False, "Pool in error")
         elif ok and poolstate in {Pool_State.DISABLED}:
-            self._set_pool_state(Pool_State.READY, "-")
-            return (True, "")
+            # Force to setup, without regard to minio_setup_at_restart.
+            self._set_pool_state(Pool_State.INITIAL, "-")
+            return (True, "-")
         else:
             # State unchanged.
             ok = poolstate in {Pool_State.INITIAL, Pool_State.READY}
-            return (ok, reason)
+            return (ok, currentreason)
         pass
 
     def _warn_inconsistent_record(self, record_name, active, stored):
@@ -304,14 +309,13 @@ class Manager():
         self._env_minio["MINIO_ROOT_USER"] = self._minio_root_user
         self._env_minio["MINIO_ROOT_PASSWORD"] = self._minio_root_password
         self._env_minio["MINIO_BROWSER"] = "off"
-        ##if self.minio_http_trace != "":
-        ##    self._env_minio["MINIO_HTTP_TRACE"] = self.minio_http_trace
-        ## self._env_minio["MINIO_CACHE_DRIVES"] = f"/tmp/{self._pool_id}"
-        ## self._env_minio["MINIO_CACHE_EXCLUDE"] = ""
-        ## self._env_minio["MINIO_CACHE_QUOTA"] = "80"
-        ## self._env_minio["MINIO_CACHE_AFTER"] = "3"
-        ## self._env_minio["MINIO_CACHE_WATERMARK_LOW"] = "70"
-        ## self._env_minio["MINIO_CACHE_WATERMARK_HIGH"] = "90"
+
+        #  self._env_minio["MINIO_CACHE_DRIVES"] = f"/tmp/{self._pool_id}"
+        #  self._env_minio["MINIO_CACHE_EXCLUDE"] = ""
+        #  self._env_minio["MINIO_CACHE_QUOTA"] = "80"
+        #  self._env_minio["MINIO_CACHE_AFTER"] = "3"
+        #  self._env_minio["MINIO_CACHE_WATERMARK_LOW"] = "70"
+        #  self._env_minio["MINIO_CACHE_WATERMARK_HIGH"] = "90"
 
         # (poolstate, _) = self.tables.get_pool_state(self._pool_id)
         # assert poolstate in {Pool_State.INITIAL, Pool_State.READY}
@@ -347,8 +351,10 @@ class Manager():
     def _try_start_minio(self, port, user, group, directory):
         pool_id = self._pool_id
         address = f":{port}"
-        cmd = [self._bin_sudo, "-u", user, "-g", group, self._bin_minio,
-               "server", "--anonymous", "--address", address, directory]
+        cmd = [self._bin_sudo, "-n", "-u", user, "-g", group,
+               self._bin_minio, "server", "--anonymous",
+               "--address", address, directory]
+        assert all(isinstance(i, str) for i in cmd)
         p = None
         try:
             alarm(self._minio_start_timeout)
@@ -434,16 +440,22 @@ class Manager():
 
     def _setup_and_watch_minio(self, p, pooldesc):
         assert self._minio_ep is not None
+        pool_id = self._pool_id
         self._mc = Mc(self._bin_mc, self._env_mc, self._minio_ep,
-                      self._pool_id)
+                      self._pool_id, self._mc_timeout)
+        (poolstate, _) = self.tables.get_pool_state(pool_id)
+        assert poolstate in {Pool_State.INITIAL, Pool_State.READY}
         try:
-            self._setup_minio(p, pooldesc)
+            if (poolstate in {Pool_State.INITIAL}
+                or self._minio_setup_at_restart):
+                self._setup_minio(p, pooldesc)
+                pass
             self._register_minio_process(p.pid, pooldesc)
         except Exception:
             self._stop_minio(p)
             raise
         finally:
-            self._tell_controller_minio_starts()
+            self._tell_spawner_minio_starts()
             pass
 
         self._set_pool_state(Pool_State.READY, "-")
@@ -641,8 +653,12 @@ class Manager():
         pass
 
     def _stop_minio(self, p):
+        # Note raising an exception at a signal does not wake-up the
+        # Python waiting for a MC command.  Instead, a timeout of MC
+        # command will be in effect.  Note also it is impossible to
+        # kill the subprocess here because it is run via sudo.
         pool_id = self._pool_id
-        ##logger.debug(f"Manager (pool={pool_id}) stopping MinIO {p}.")
+        # logger.debug(f"Manager (pool={pool_id}) stopping MinIO: {p}.")
         with self._mc.alias_set(self._minio_root_user,
                                 self._minio_root_password):
             try:
@@ -665,10 +681,16 @@ class Manager():
                 self._alarm_section = None
                 pass
             pass
-        ##logger.debug(f"Manager (pool={pool_id}) killing MinIO.")
-        ##(p_status, outs, errs) = _terminate_subprocess(p)
         try:
-            (o_, e_) = p.communicate(timeout=10)
+            (outs, errs) = p.communicate(timeout=self._minio_stop_timeout)
+            if errs != b"":
+                logger.info(f"Manager (pool={pool_id}):"
+                            f" Message on MinIO stderr=({errs})")
+                pass
+            if outs != b"":
+                logger.info(f"Manager (pool={pool_id}):"
+                            f" Message on MinIO stdout=({outs})")
+                pass
         except TimeoutExpired:
             pass
         p_status = p.poll()
@@ -782,10 +804,10 @@ def main():
     parser.add_argument("port_max")
     parser.add_argument("pool_id")
     parser.add_argument("--configfile")
-    parser.add_argument("--useTrueAccount", type=bool, default=False)
-    ##action=argparse.BooleanOptionalAction  -- was introduced in Python3.9
-    parser.add_argument("--accessByZoneID", type=bool, default=False)
-    ##action=argparse.BooleanOptionalAction  -- was introduced in Python3.9
+    # parser.add_argument("--useTrueAccount", type=bool, default=False,
+    #                     action=argparse.BooleanOptionalAction)
+    # parser.add_argument("--accessByZoneID", type=bool, default=False,
+    #                     action=argparse.BooleanOptionalAction)
     parser.add_argument("--traceid")
     args = parser.parse_args()
 

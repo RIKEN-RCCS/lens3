@@ -497,3 +497,8 @@ manager record is set as the same as the duration of
 (heartbeat-interval * heartbeat-misses).  However, heartbeating would
 take longer time adding timeout of urlopen, and an expiration of a
 MinIO manager record may come earlier than a heartbeat failure.
+
+__Mux Node Name__: Mux registers its endpoint obtained by
+platform.node() to the database, but it should be explicitly given
+when it is inappropriate.  Set the environment variable
+"LENTICULARIS_MUX_NODE" in "lenticularis-mux.service".

@@ -99,37 +99,37 @@ def _pick_bucket_in_path(path, access_info):
 class Multiplexer():
     """Mux.  It forwards requests to MinIO."""
 
-    def __init__(self, mux_conf, tables, controller, host, port):
+    def __init__(self, mux_conf, tables, spawner, host, port):
         self._verbose = False
+        self.tables = tables
+        self._spawner = spawner
         self._mux_host = host
         self._mux_port = int(port)
-        self.tables = tables
-        self._controller = controller
-        self._bad_response_delay = 1
         self._start_time = int(time.time())
-        ##gunicorn_conf = mux_conf["gunicorn"]
-        ##lenticularis_conf = mux_conf["lenticularis"]
 
         mux_param = mux_conf["multiplexer"]
         self._facade_hostname = mux_param["facade_hostname"].lower()
+        self._facade_host_ip = get_ip_addresses(self._facade_hostname)[0]
         proxies = mux_param["trusted_proxies"]
         self._trusted_proxies = {addr for h in proxies
                                  for addr in get_ip_addresses(h)}
-        self._forwarding_timeout = int(mux_param["forwarding_timeout"])
         timer = int(mux_param["mux_ep_update_interval"])
         self._periodic_work_interval = timer
+        self._forwarding_timeout = int(mux_param["forwarding_timeout"])
         self._probe_access_timeout = int(mux_param["probe_access_timeout"])
-        self._multiplexer_addrs = self._list_mux_ip_addresses()
+        self._bad_response_delay = int(mux_param["bad_response_delay"])
 
-        ctl_param = mux_conf["minio_manager"]
-        self.heartbeat_interval = int(ctl_param["heartbeat_interval"])
-        self.heartbeat_timeout = int(ctl_param["heartbeat_timeout"])
+        # ctl_param = mux_conf["minio_manager"]
+        # self.heartbeat_interval = int(ctl_param["heartbeat_interval"])
+        # self.heartbeat_timeout = int(ctl_param["heartbeat_timeout"])
+
+        self._multiplexer_addrs = self._list_mux_ip_addresses()
         self.scheduler = Scheduler(tables)
         pass
 
     def __del__(self):
         ep = host_port(self._mux_host, self._mux_port)
-        self.tables.process_table.delete_mux(ep)
+        self.tables.delete_mux(ep)
         pass
 
     def __call__(self, environ, start_response):
@@ -217,15 +217,16 @@ class Multiplexer():
             pass
         if ep is None:
             # Run MinIO on a local host.
-            (code, ep0) = self._controller.start_service(traceid, pool_id, probe_key)
+            (code, ep0) = self._spawner.start(traceid, pool_id, probe_key)
             return (code, ep0)
         else:
             # Run MinIO on a remote host.
+            # THIS IS NOT USED NOW.
             assert probe_key is None
             pooldesc = self.tables.get_pool(pool_id)
             probe_key = pooldesc["probe_key"]
-            facade_hostname = self._facade_hostname
-            code = access_mux(traceid, ep, probe_key, facade_hostname,
+            code = access_mux(traceid, ep, probe_key,
+                              self._facade_hostname, self._facade_host_ip,
                               self._probe_access_timeout)
             return (code, ep)
         pass
@@ -257,20 +258,23 @@ class Multiplexer():
 
         # server_name = environ.get("SERVER_NAME")
         # server_port = environ.get("SERVER_PORT")
-        request_method = environ.get("REQUEST_METHOD")
-        peer_addr = environ.get("REMOTE_ADDR")
-        path_and_query = environ.get("RAW_URI")
-        ##x_forwarded_for = environ.get("HTTP_X_FORWARDED_FOR")
-        ##x_forwarded_host = environ.get("HTTP_X_FORWARDED_HOST")
-
-        client_addr = environ.get("HTTP_X_REAL_IP")
-        #client_addr = x_real_ip if x_real_ip else peer_addr
-
         request_proto = environ.get("HTTP_X_FORWARDED_PROTO")
-        request_proto = request_proto if request_proto else "?"
+        # ?request_proto = request_proto if request_proto else "?"
+        request_method = environ.get("REQUEST_METHOD")
+        path_and_query = environ.get("RAW_URI")
+        peer_addr = environ.get("REMOTE_ADDR")
+        client_addr = environ.get("HTTP_X_REAL_IP")
+        # ?client_addr = x_real_ip if x_real_ip else peer_addr
+        # x_forwarded_for = environ.get("HTTP_X_FORWARDED_FOR")
+        # x_forwarded_host = environ.get("HTTP_X_FORWARDED_HOST")
+        host_ = environ.get("HTTP_HOST")
+        host_ = host_ if host_ else "-"
 
-        host = environ.get("HTTP_HOST")
-        host = host if host else "-"
+        assert request_proto is not None
+        assert request_method is not None
+        assert path_and_query is not None
+        assert peer_addr is not None
+        assert client_addr is not None
 
         authorization = environ.get("HTTP_AUTHORIZATION")
         access_key = parse_s3_auth(authorization)
@@ -374,8 +378,7 @@ class Multiplexer():
         else:
             pass
 
-        proto = "http"
-        url = f"{proto}://{minio_ep}{path_and_query}"
+        url = f"http://{minio_ep}{path_and_query}"
         winput = environ.get("wsgi.input")
 
         sniff = False

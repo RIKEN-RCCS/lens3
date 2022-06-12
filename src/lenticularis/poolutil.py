@@ -215,10 +215,10 @@ def check_bucket_naming(name):
     """Checks restrictions.  Names are all lowercase.  IT BANS DOTS.  It
     bans "aws", "amazon", "minio", "goog.*", and "g00g.*".
     """
-    ## [Bucket naming rules]
-    ## https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucketnamingrules.html
-    ## [Bucket naming guidelines]
-    ## https://cloud.google.com/storage/docs/naming-buckets
+    # [Bucket naming rules]
+    # https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucketnamingrules.html
+    # [Bucket naming guidelines]
+    # https://cloud.google.com/storage/docs/naming-buckets
     return (re.fullmatch("[a-z0-9-]{3,63}", name) is not None
             and
             re.fullmatch(
@@ -334,21 +334,21 @@ def check_pool_is_well_formed(pooldesc, user_):
     pass
 
 
-def access_mux(traceid, ep, access_key, facade_hostname, timeout):
-    # It dose not set "X-REAL-IP"; Mux uses a peer-address if
-    # X-REAL-IP is missing.
+def access_mux(traceid, ep, access_key, facade_hostname, facade_host_ip,
+               timeout):
+    # Mux requires several http-headers, especially including
+    # "X-REAL-IP".  See the code of Mux.
     proto = "http"
     url = f"{proto}://{ep}/"
     headers = {}
     headers["HOST"] = facade_hostname
+    headers["X-REAL-IP"] = facade_host_ip
     authorization = forge_s3_auth(access_key)
     headers["AUTHORIZATION"] = authorization
     headers["X-FORWARDED-PROTO"] = proto
     if traceid is not None:
         headers["X-TRACEID"] = traceid
-    else:
         pass
-    # headers["X-REAL-IP"] = (unset)
     req = Request(url, headers=headers)
     logger.debug(f"urlopen with url={url}, timeout={timeout},"
                  f" headers={headers}")

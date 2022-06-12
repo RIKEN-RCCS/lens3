@@ -10,8 +10,6 @@ class Scheduler():
     """A part of a Controller."""
 
     def __init__(self, tables):
-        #self.mux_conf = mux_conf
-        #self.process_table = process_table
         self.tables = tables
 
     def schedule(self, pool_id_):
@@ -19,7 +17,7 @@ class Scheduler():
         multiplexers = self.tables.list_mux_eps()
 
         if len(multiplexers) == 0:
-            ## Choose the localhost.
+            # Choose the localhost.
             return (None, None)
 
         servers = self.tables.list_minio_procs(None)

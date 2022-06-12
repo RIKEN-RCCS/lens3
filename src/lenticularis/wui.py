@@ -26,6 +26,7 @@ from lenticularis.api import Api
 from lenticularis.readconf import read_wui_conf
 from lenticularis.utility import ERROR_EXIT_READCONF
 from lenticularis.utility import make_typical_ip_address
+from lenticularis.utility import rephrase_exception_message
 from lenticularis.utility import log_access
 from lenticularis.utility import logger, openlog
 from lenticularis.utility import tracing
@@ -34,7 +35,8 @@ from lenticularis.utility import tracing
 try:
     (_wui_conf, _) = read_wui_conf()
 except Exception as e:
-    sys.stderr.write(f"Lens3 reading config file failed: {e}\n")
+    m = rephrase_exception_message(e)
+    sys.stderr.write(f"Lens3 reading a config file failed: ({m})\n")
     sys.exit(ERROR_EXIT_READCONF)
     pass
 
@@ -84,7 +86,7 @@ async def _get_request_body(request):
 
 
 class CsrfSettings(BaseModel):
-    secret_key: str = _wui_conf["webui"]["CSRF_secret_key"]
+    secret_key: str = _wui_conf["system"]["CSRF_secret_key"]
     pass
 
 

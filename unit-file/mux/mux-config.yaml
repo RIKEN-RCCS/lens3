@@ -23,18 +23,21 @@ multiplexer:
     mux_ep_update_interval: 307
     forwarding_timeout: 60
     probe_access_timeout: 60
+    bad_response_delay: 1
 
 minio_manager:
     sudo: /usr/bin/sudo
     port_min: 9000
     port_max: 9999
     minio_awake_duration: 1800
+    minio_setup_at_restart: true
     heartbeat_interval: 61
     heartbeat_miss_tolerance: 3
     heartbeat_timeout: 30
     minio_start_timeout: 60
     minio_setup_timeout: 60
     minio_stop_timeout: 30
+    minio_mc_timeout: 10
 
 minio:
     minio: /home/lens3/bin/minio

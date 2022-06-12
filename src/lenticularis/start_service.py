@@ -9,6 +9,7 @@ from subprocess import Popen, PIPE, DEVNULL
 import sys
 from lenticularis.readconf import read_mux_conf
 from lenticularis.readconf import read_wui_conf
+from lenticularis.utility import rephrase_exception_message
 from lenticularis.utility import logger, openlog
 from lenticularis.utility import copy_minimal_env
 
@@ -17,7 +18,8 @@ def _run_mux():
     try:
         (mux_conf, configfile) = read_mux_conf()
     except Exception as e:
-        sys.stderr.write(f"Lens3 reading config file failed: {e}\n")
+        m = rephrase_exception_message(e)
+        sys.stderr.write(f"Lens3 reading a config file failed: ({m})\n")
         return
 
     openlog(mux_conf["log_file"],
@@ -43,7 +45,8 @@ def _run_wui():
     try:
         (wui_conf, configfile) = read_wui_conf()
     except Exception as e:
-        sys.stderr.write(f"Lens3 reading config file failed: {e}\n")
+        m = rephrase_exception_message(e)
+        sys.stderr.write(f"Lens3 reading a config file failed: ({m})\n")
         return
 
     openlog(wui_conf["log_file"],
@@ -76,13 +79,13 @@ def _list_gunicorn_command_options(gunicorn_conf):
     reload = gunicorn_conf.get("reload")
     args = []
     if workers:
-        args += ["--workers", workers]
+        args += ["--workers", str(workers)]
         pass
     if threads:
-        args += ["--threads", threads]
+        args += ["--threads", str(threads)]
         pass
     if timeout:
-        args += ["--timeout", timeout]
+        args += ["--timeout", str(timeout)]
         pass
     if access_logfile:
         args += ["--access-logfile", access_logfile]
@@ -102,6 +105,7 @@ def _list_gunicorn_command_options(gunicorn_conf):
     if reload == "yes":
         args += ["--reload"]
         pass
+    assert all(isinstance(i, str) for i in args)
     return args
 
 
@@ -116,6 +120,7 @@ def _run(servicename, env, cmd, args):
                  f" args=({args}),"
                  f" env=({env})")
 
+    assert all(isinstance(i, str) for i in (cmd + args))
     (outs, errs) = (b"", b"")
     try:
         with Popen(cmd + args, stdin=DEVNULL, stdout=PIPE, stderr=PIPE, env=env) as p:
@@ -160,8 +165,9 @@ def main():
             assert False
             pass
     except Exception as e:
+        m = rephrase_exception_message(e)
         logger.error(f"Starting a lenticularis service failed:"
-                     f" exception=({e})")
+                     f" exception=({m})")
         sys.exit(1)
         pass
     pass

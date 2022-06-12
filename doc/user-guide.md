@@ -8,15 +8,24 @@ bucket pool" and "Show bucket pools".  Click "New bucket pool".
 ![Landing page](ug1.jpg)
 
 The pool creation page is to create a _bucket pool_.  A bucket pool is
-a management unit and it is associated to a directory in the
+a management unit in Lens3 and it is associated to a directory in the
 filesystem in which a MinIO will run.  Enter a directory (which needs
 to be writable) and click the "Create" button.
 
 ![Pool creation page](ug2.jpg)
 
 The pool edit page is to add buckets and access keys.  Click "Add" or
-"New" buttons.  Clicking "Show bucket pool" on the top moves to a pool
-list page which will display a summaries of pools created.
+"New" buttons.  A bucket has a bucket-policy that specifies a
+permission to public accesses: "none", "upload", "download", or
+"public".  A bucket with the "none"-policy is accessible only with
+access-keys.  These policy names are from MinIO.
+
+Each access-key has a key-policy: "readwrite", "readonly", or
+"writeonly".  Accesses to buckets/files are restricted by these
+policies.  These policy names are from MinIO.
+
+Clicking "Show bucket pool" on the top moves to a pool list page which
+will display a summaries of pools created.
 
 ![Pool edit page](ug3.jpg)
 
@@ -55,8 +64,8 @@ begin with "goog" and "g00g".
 
 ### Residue Files
 
-Running MinIO leaves files in a directory ".minio.sys" in the pool
-directory.
+Running MinIO leaves a directory ".minio.sys" in the pool (in the
+buckets-directory).
 
 ### Bucket-Pool State
 
@@ -70,9 +79,9 @@ It does not include the process status of a MinIO instance.
   * __READY__ indicates a service is ready, a setup for servicing is
     done.  It does not mean a MinIO instance is running.
   * __DISABLED__ indicates a pool is temporarily unusable.  It may
-    transition between "READY" and "DISABLED" by actions of a owner of
-    a pool or an administrator.  The causes of a transition include an
-    expiration of a pool, disabling an owner account, or making a pool
+    transition between "READY" and "DISABLED" by actions of a user or
+    an administrator.  The causes of a transition include an
+    expiry of a pool, disabling a user account, or making a pool
     offline.
   * __INOPERABLE__ indicates an error state and a pool is
     permanently unusable.  It has failed to run a MinIO.  This pool
@@ -92,4 +101,9 @@ processes).
 
 ## Changes from v1.1 to v1.2
 
-* A support for buckets by host-style naming is dropped.
+* Host-style naming of buckets is dropped.
+* Some rich features are dropped.
+* Bucket name space is shared by all users.  Bucket names must be
+  exclusive.
+* Some locking in accessing Redis are omitted.  Operations by an
+  administrator might be sloppy.

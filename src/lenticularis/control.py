@@ -23,26 +23,13 @@ from lenticularis.poolutil import ensure_pool_state
 from lenticularis.poolutil import ensure_pool_owner
 from lenticularis.poolutil import ensure_bucket_owner
 from lenticularis.poolutil import ensure_secret_owner
+from lenticularis.utility import get_ip_addresses
 from lenticularis.utility import copy_minimal_env
 from lenticularis.utility import generate_secret_key
 from lenticularis.utility import logger
 from lenticularis.utility import pick_one
 from lenticularis.utility import host_port
 from lenticularis.poolutil import check_pool_is_well_formed
-
-
-def rephrase_exception_message(e):
-    """Returns an error message of an AssertionError.  It is needed
-    because simply printing an AssertionError returns an empty string.
-    """
-    if not isinstance(e, AssertionError):
-        return f"{e}"
-    else:
-        (_, _, tb) = sys.exc_info()
-        tr = traceback.extract_tb(tb)
-        (_, _, _, text) = tr[-1]
-        return f"AssertionError: {text}"
-    pass
 
 
 class Control_Api():
@@ -52,20 +39,22 @@ class Control_Api():
         self._wui_conf = wui_conf
 
         mux_param = wui_conf["multiplexer"]
-        self._facade_hostname = mux_param["facade_hostname"]
         self._probe_access_timeout = int(mux_param["probe_access_timeout"])
-
-        # ctl_param = wui_conf["minio_manager"]
+        self._facade_hostname = mux_param["facade_hostname"]
+        self._facade_host_ip = get_ip_addresses(self._facade_hostname)[0]
 
         settings = wui_conf["system"]
         self._max_pool_expiry = int(settings["max_pool_expiry"])
 
-        self.tables = get_table(wui_conf)
+        ctl_param = wui_conf["minio_manager"]
+        self._mc_timeout = int(ctl_param["minio_mc_timeout"])
 
         minio_param = wui_conf["minio"]
         self._bin_mc = minio_param["mc"]
         env = copy_minimal_env(os.environ)
         self._env_mc = env
+
+        self.tables = get_table(wui_conf)
         pass
 
     def _get_pool_owner_for_messages(self, pool_id):
@@ -120,7 +109,7 @@ class Control_Api():
         ep = minioproc["minio_ep"]
         admin = minioproc["admin"]
         password = minioproc["password"]
-        mc = Mc(self._bin_mc, self._env_mc, ep, pool_id)
+        mc = Mc(self._bin_mc, self._env_mc, ep, pool_id, self._mc_timeout)
         try:
             mc.alias_set(admin, password)
             return mc
@@ -145,7 +134,7 @@ class Control_Api():
 
     def _set_pool_state(self, pool_id, state, reason):
         (o, _) = self.tables.get_pool_state(pool_id)
-        logger.debug(f"pool-state change pool={pool_id}: {o} to {state}")
+        logger.debug(f"Pool-state change pool={pool_id}: {o} to {state}")
         self.tables.set_pool_state(pool_id, state, reason)
         pass
 
@@ -184,8 +173,8 @@ class Control_Api():
         # Use probe-access key.
         access_key = pooldesc["probe_key"]
         assert access_key is not None
-        facade_hostname = self._facade_hostname
-        status = access_mux(traceid, ep, access_key, facade_hostname,
+        status = access_mux(traceid, ep, access_key,
+                            self._facade_hostname, self._facade_host_ip,
                             self._probe_access_timeout)
         logger.debug(f"Access Mux for pool={pool_id}: status={status}")
         return status
@@ -439,19 +428,8 @@ class Control_Api():
             mc = self._make_mc_for_pool(traceid, pool_id)
             assert mc is not None
             with mc:
-                #lock = LockDB(self.tables.storage_table, "Wui")
-                #self._lock_pool_entry(lock, pool_id)
-                try:
-                    mc.make_bucket_with_policy(bucket, bkt_policy)
-                    #pooldesc = self.tables.get_pool(pool_id)
-                    #_add_bucket_to_pool(pooldesc, bucket, bkt_policy)
-                    #check_pool_is_well_formed(pooldesc, None)
-                    #self.tables.set_pool(pool_id, pooldesc)
-                finally:
-                    #self._unlock_pool_entry(lock, pool_id)
-                    pass
+                mc.make_bucket_with_policy(bucket, bkt_policy)
                 pass
-            pass
         except Exception:
             self.tables.delete_bucket(bucket)
             raise

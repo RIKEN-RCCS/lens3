@@ -78,16 +78,3 @@ syslog:
     #         recorded in syslog.
     #         priority: INFO
 ```
-
-## NOTE
-
-Multiplexer's own hostname is not stored in configuration file and, it
-is obtained by platform.node().  This value is used by other
-multiplexers to access this multiplexer.  In case the value returned
-by platform.node() is inappropriate for this purpose, administrator
-should explicitly set hostname.  To set hostname, set environment
-viable `LENTICULARIS_MUX_NODE` in the unit file (1.) or environment
-file (2.).
-
-1. /usr/lib/systemd/system/lenticularis-mux.service
-1. /etc/systemd/lenticularis-mux.service

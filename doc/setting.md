@@ -46,12 +46,12 @@ also assume RedHat8.5 and Python3.9 at this writing (in March 2022).
   * `lens3-admin:lens3` -- a pseudo user for administration
 
 * Used files and directories
-  * /usr/lib/systemd/system/lenticularis-wui.service
   * /usr/lib/systemd/system/lenticularis-mux.service
   * /usr/lib/systemd/system/lenticularis-redis.service
-  * /etc/lenticularis/wui-config.yaml
+  * /usr/lib/systemd/system/lenticularis-wui.service
   * /etc/lenticularis/mux-config.yaml
   * /etc/lenticularis/redis.conf
+  * /etc/lenticularis/wui-config.yaml
   * /etc/nginx/conf.d/lens3proxy.conf
   * /etc/nginx/private
   * /etc/nginx/private/htpasswd
@@ -81,7 +81,7 @@ hosts.  httpd-tools is only required if you use basic authentication.
 
 Install Python packages.
 
-* Do as "lens3"
+* Do as the user "lens3"
 
 ```
 # su - lens3
@@ -93,7 +93,7 @@ $ pip3 install --user -r requirements.txt
 
 Install MinIO binaries minio and mc from min.io.
 
-* Download files as "lens3"
+* Download files as the user "lens3"
 
 ```
 $ cd ~
@@ -235,8 +235,8 @@ Note: Starting Redis will fail when the file owner of
 ## Setup sudoers for Mux
 
 Lens3 runs MinIO as a usual user process, and thus, it uses sudo to
-start MinIO.  The setting in the provided file is that only the user
-"lens3" is able to run "/home/lens3/bin/minio".
+start MinIO.  The provided example setting is that the user "lens3" is
+only allowed to run "/home/lens3/bin/minio".
 
 * Copy a sudoers entry in /etc/sudoers.d
   * Modify it if necessary
@@ -307,8 +307,8 @@ ADD,user2,group2a,group2b,group2c, ...
 * Register users to Lens3 by `lenticularis-admin` command
 
 ```
-lens3-admin$ lenticularis-admin -c wui-config.yaml load-user-list {csv-file}
-lens3-admin$ lenticularis-admin -c wui-config.yaml show-user-list
+lens3-admin$ lenticularis-admin -c wui-config.yaml load-users {csv-file}
+lens3-admin$ lenticularis-admin -c wui-config.yaml show-users
 ```
 
 * (Optionally) Prepare a list of users enabled to access
@@ -321,8 +321,8 @@ ENABLE,user1,user2,user3, ...
 * Register permit-list to Lens3 by `lenticularis-admin` command.
 
 ```
-lens3-admin$ lenticularis-admin -c wui-config.yaml load-permit-list {csv-file}
-lens3-admin$ lenticularis-admin -c wui-config.yaml show-permit-list --format=json
+lens3-admin$ lenticularis-admin -c wui-config.yaml load-permits {csv-file}
+lens3-admin$ lenticularis-admin -c wui-config.yaml show-permits
 ```
 
 ## Check the Status

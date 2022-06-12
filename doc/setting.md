@@ -171,10 +171,10 @@ It is highly site dependent.
       # firewall-cmd --reload
       ```
 
-## Start Redis
+## Setup  Redis
 
 * Copy the Redis configuration file
-  * Configuration file: `/etc/lenticularis/redis.conf`
+  * Configuration file is: `/etc/lenticularis/redis.conf`
 * Change the fields of redis.conf.
   * bind: Network interfaces; localhost by default
   * port: A port for Redis
@@ -204,7 +204,10 @@ Note: Starting Redis will fail when the file owner of
 ## Setup Wui (Web-UI)
 
 * Copy the Wui configuration file
-  * Configuration file: `/etc/lenticularis/wui-config.yaml`
+  * Configuration file is: `/etc/lenticularis/wui-config.yaml`
+  * Modify it
+  * See [wui-config-yaml.md](wui-config-yaml.md) for the fields
+  * (Use a random for CSRF_secret_key)
 
 ```
 # mkdir -p /etc/lenticularis
@@ -214,14 +217,6 @@ Note: Starting Redis will fail when the file owner of
 # chmod o-rwx /etc/lenticularis/wui-config.yaml
 ```
 
-* Modify it
-  * See [wui-config-yaml.md](wui-config-yaml.md) for the fields
-  * Replace placeholders: @REDIS_HOST@, @REDIS_PORT@, @REDIS_PASSWORD@
-  * Replace placeholders: @DELEGATE_HOSTNAME@, @DIRECT_HOSTNAME_DOMAIN@, @RESERVED_HOSTNAME@
-  * Replace placeholders: @FACILITY@, @PRIORITY@
-  * Replace placeholders: @REVERSE_PROXY_ADDRESS@, @CSRF_SECRET_KEY@
-  * (Use a random for CSRF_secret_key)
-
 * Copy the systemd unit file for Wui
 
 ```
@@ -229,8 +224,6 @@ Note: Starting Redis will fail when the file owner of
 ```
 
 * Modify it if necessary
-  * See the template `$TOP/unit-file/mux/lenticularis-wui.service.in`
-  * Replace placeholders: @API_USER@, @WUI_CONFIG@
 
 ## Setup sudoers for Mux
 
@@ -249,33 +242,25 @@ only allowed to run "/home/lens3/bin/minio".
 
 ## Setup Mux (Multiplexer)
 
-* Copy the Multiplexer configuration file
-  * Configuration file: `/etc/lenticularis/mux-config.yaml`
+* Copy the Mux configuration file
+  * Configuration file is: `/etc/lenticularis/mux-config.yaml`
+  * Modify it
+  * See [mux-config-yaml.md](mux-config-yaml.md) for the fields
 
 ```
 # mkdir -p /etc/lenticularis/
-# cp $TOP/multiplexer/mux-config.yaml.in /etc/lenticularis/mux-config.yaml
+# cp $TOP/unit-file/mux/mux-config.yaml.in /etc/lenticularis/mux-config.yaml
 # vi /etc/lenticularis/mux-config.yaml
 # chown lens3:lens3 /etc/lenticularis/mux-config.yaml
 # chmod o-rwx /etc/lenticularis/mux-config.yaml
 ```
 
-* Modify it
-  * See [mux-config-yaml.md](mux-config-yaml.md) for the fields
-  * Replace placeholders: @REDIS_HOST@, @REDIS_PORT@, @REDIS_PASSWORD@
-  * Replace placeholders: @SERVER_PORT@, @DELEGATE_HOSTNAME@, @REVERSE_PROXY_ADDRESS@, @API_ADDRESS@
-  * Replace placeholders: @PORT_MIN@, @PORT_MAX@, @MINIO@, @MINIO_HTTP_TRACE@, @MC@
-  * Replace placeholders: @FACILITY@, @PRIORITY@
-
-* Copy the systemd unit file for Multiplexer
+* Copy the systemd unit file for Mux
+  * Modify it if necessary
 
 ```
 # cp $TOP/unit-file/mux/lenticularis-mux.service /usr/lib/systemd/system/
 ```
-
-* Modify it if necessary
-  * See the template `$TOP/unit-file/mux/lenticularis-mux.service.in`
-  * Replace placeholders: @MUX_USER@, @MUX_CONFIG@
 
 ## Start Services (Wui and Mux)
 

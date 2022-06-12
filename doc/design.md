@@ -853,7 +853,7 @@ interval (heartbeat_interval).
 * ? → __DISABLED__: It is by some disabling condition, including an
   expiry of a pool, disabling a user account, or making a pool
   offline.
-*__DISABLED__ → __INITIAL__: It is at a cease of a disabling condition.
+* __DISABLED__ → __INITIAL__: It is at a cease of a disabling condition.
 
 ### Wui/Mux systemd Services
 

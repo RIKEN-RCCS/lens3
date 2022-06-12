@@ -25,7 +25,7 @@ Each access-key has a key-policy: "readwrite", "readonly", or
 policies.  These policy names are from MinIO.
 
 Clicking "Show bucket pool" on the top moves to a pool list page which
-will display a summaries of pools created.
+will display summaries of pools created.
 
 ![Pool edit page](ug3.jpg)
 
@@ -93,6 +93,10 @@ It does not include the process status of a MinIO instance.
 Lens3 prohibits accesses to the "/" of the bucket namespace, because
 the bucket namespace is shared by multiple users (and MinIO
 processes).
+
+* No STS support.
+
+* No event notifications support.
 
 ## Glossary
 

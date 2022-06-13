@@ -78,6 +78,16 @@ using "sudo".
 
 ## Restrictions of Lens3
 
+### No Bucket Operations
+
+Lens3 does not accept any bucket operations: creation, deletion, and
+listing.  Buckets can only be created via Wui.  Specifically, a bucket
+creation request will fail because the request (applying to the root
+path) is not forwarded to a MinIO instance.  A bucket deletion will
+succeed, but it makes the states of Lens3 and a MinIO instance
+inconsistent.  Bucket listing also fails because a request is not
+forwarded.
+
 ### Bucket Naming Restrictions
 
 Bucket names must be in lowercase alphanums and "-".  Lens3 bans dots.

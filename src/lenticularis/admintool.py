@@ -1,4 +1,6 @@
-"""lenticularis-admin command."""
+"""lenticularis-admin command.  It provides a way to directly modify
+databases.
+"""
 
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
@@ -17,6 +19,7 @@ from lenticularis.readconf import read_wui_conf
 from lenticularis.poolutil import Api_Error
 from lenticularis.poolutil import gather_pool_desc
 from lenticularis.poolutil import check_user_naming
+from lenticularis.poolutil import get_pool_owner_for_messages
 from lenticularis.utility import ERROR_EXIT_READCONF, ERROR_EXIT_EXCEPTION, ERROR_EXIT_ARGUMENT
 from lenticularis.utility import format_rfc3339_z
 from lenticularis.utility import objdump
@@ -25,7 +28,7 @@ from lenticularis.utility import logger, openlog
 from lenticularis.utility import tracing
 
 
-def get_nparams_of_fn(fn):
+def _get_nparams_of_fn(fn):
     sig = inspect.signature(fn)
     params = list(sig.parameters)
     nparams = len(params)
@@ -38,14 +41,14 @@ def get_nparams_of_fn(fn):
     return (nparams - 1, varargs)
 
 
-def make_date_readable(d, keys):
+def _make_date_readable(d, keys):
     for key in keys:
         d[key] = format_rfc3339_z(float(d[key]))
         pass
     pass
 
 
-def print_json_csv(table_name, c, formatting):
+def _print_json_csv(table_name, c, formatting):
     if formatting in {"json"}:
         dump = json.dumps(c)
         print(f"{dump}")
@@ -55,13 +58,15 @@ def print_json_csv(table_name, c, formatting):
             writer = csv.writer(out)
             for r in c:
                 writer.writerow(r)
+                pass
             v = out.getvalue()
+            pass
         print(f"{v}")
         pass
     pass
 
 
-def print_json_plain(title, outs, formatting, order=None):
+def _print_json_plain(title, outs, formatting, order=None):
     if formatting in {"json"}:
         dump = json.dumps(outs)
         print(f"{dump}")
@@ -145,20 +150,20 @@ def _list_permit_list(pool_adm):
     return rows
 
 
-def user_info_to_csv_row(uid, ui):
+def _user_info_to_csv_row(uid, u):
     # "permitted" entry is ignored.
-    assert ui is not None
-    return ["ADD", uid] + ui["groups"]
+    assert u is not None
+    return ["ADD", uid] + u["groups"]
 
 
 def _format_mux(m, formatting):
     (ep, desc) = m
     if formatting not in {"json"}:
-        make_date_readable(desc, ["modification_time", "start_time"])
+        _make_date_readable(desc, ["modification_time", "start_time"])
     return {ep: desc}
 
 
-def pool_key_order(e):
+def _pool_key_order(e):
     order = [
         "owner_uid",
         "owner_gid",
@@ -193,7 +198,7 @@ def _mux_key_order(e):
     return order.index(e) if e in order else len(order)
 
 
-def proc_key_order(e):
+def _proc_key_order(e):
     order = [
         "minio_ep",
         "minio_pid",
@@ -203,7 +208,14 @@ def proc_key_order(e):
     return order.index(e) if e in order else len(order)
 
 
-def bucket_key_order(e):
+def _directory_key_order(e):
+    order = [
+        "directory",
+        "pool"]
+    return order.index(e) if e in order else len(order)
+
+
+def _bucket_key_order(e):
     order = [
         "pool",
         "bkt_policy",
@@ -211,7 +223,7 @@ def bucket_key_order(e):
     return order.index(e) if e in order else len(order)
 
 
-def timestamp_key_order(e):
+def _timestamp_key_order(e):
     order = [
         "pool",
         "timestamp"]
@@ -243,7 +255,7 @@ class Command():
         sys.exit(ERROR_EXIT_ARGUMENT)
         pass
 
-    def op_load_users(self, csvfile):
+    def op_load_user(self, csvfile):
         """Load a user list from a file."""
         desc_list = _read_user_list(csvfile)
         adds = [{"uid": d["uid"], "groups": d["groups"]}
@@ -260,15 +272,15 @@ class Command():
             pass
         pass
 
-    def op_show_users(self):
+    def op_list_user(self):
         """Print a user list."""
         users = self.pool_adm.tables.list_users()
-        uu = [user_info_to_csv_row(id, self.pool_adm.tables.get_user(id))
+        uu = [_user_info_to_csv_row(id, self.pool_adm.tables.get_user(id))
               for id in users]
-        print_json_csv("user info", uu, self.args.format)
+        _print_json_csv("user info", uu, self.args.format)
         pass
 
-    def op_load_permits(self, csvfile):
+    def op_load_permit(self, csvfile):
         """Load a user permit list from a file."""
         rules = _read_permit_list(csvfile)
         for row in rules:
@@ -281,16 +293,16 @@ class Command():
             pass
         pass
 
-    def op_show_permits(self):
+    def op_list_permit(self):
         """Print a user permit list."""
         rows = _list_permit_list(self.pool_adm)
-        print_json_csv("user permit list", rows, self.args.format)
+        _print_json_csv("user permit list", rows, self.args.format)
         pass
 
     def op_show_pool(self, *pool_id):
         """Show pools."""
-        pool_list = set(pool_id)
-        if pool_list == set():
+        pool_list = list(pool_id)
+        if pool_list == []:
             pool_list = self.pool_adm.tables.list_pools(None)
             pass
         pools = []
@@ -300,20 +312,40 @@ class Command():
                 print(f"No pool found for {pid}")
                 continue
             if self.args.format not in {"json"}:
-                make_date_readable(pooldesc, ["expiration_date", "modification_time"])
+                _make_date_readable(pooldesc, ["expiration_date", "modification_time"])
                 pass
             pooldesc.pop("pool_name")
             pools.append({pid: pooldesc})
             pass
-        print_json_plain("pools", pools, self.args.format,
-                         order=pool_key_order)
+        _print_json_plain("pools", pools, self.args.format,
+                          order=_pool_key_order)
         pass
 
-    def op_destruct_pool(self, *pool_id):
+    def op_show_minio(self, pool_id):
+        """Show a MinIO process and a Manager of a pool."""
+        proc_list = self.pool_adm.tables.list_minio_procs(pool_id)
+        proc_list = sorted(list(proc_list))
+        outs = [{pool: process} for (pool, process) in proc_list]
+        _print_json_plain("minio", outs, self.args.format,
+                          order=_proc_key_order)
+        ma = self.pool_adm.tables.get_minio_manager(pool_id)
+        outs = [{pool_id: ma}] if ma is not None else []
+        _print_json_plain("manager", outs, self.args.format,
+                          order=_proc_key_order)
+        pass
+
+    def op_delete_pool(self, *pool_id):
         """Delete pools by pool-id."""
-        pool_list = pool_id
-        for pid in pool_list:
-            self.pool_adm.do_delete_pool(self._traceid, pid)
+        if not self.args.yes:
+            print("Need yes (-y) for action.")
+        else:
+            pool_list = list(pool_id)
+            traceid = self._traceid
+            for pid in pool_list:
+                # self.pool_adm.do_delete_pool(traceid, pid)
+                self.pool_adm.erase_minio_ep(traceid, pid)
+                self.pool_adm.erase_pool_data(traceid, pid)
+                pass
             pass
         pass
 
@@ -355,6 +387,7 @@ class Command():
         desc = json.loads(s, parse_int=None)
         users = desc.get("users", [])
         pools = desc.get("pools", [])
+        # Insert users.
         for u in users:
             _load_user(self.pool_adm, u)
             pass
@@ -376,8 +409,10 @@ class Command():
             raise Api_Error(500, f"Bad group for a user: {owner_gid}")
         # Add a new pool.
         try:
-            pool_id = self.pool_adm.do_make_pool(traceid, user_id,
-                                                 owner_gid, path)
+            # pool_id = self.pool_adm.do_make_pool(traceid, user_id,
+            #                                      owner_gid, path)
+            pool_id = self.pool_adm.make_new_pool(traceid, user_id,
+                                                  owner_gid, path)
             assert pool_id is not None
             pooldesc["pool_name"] = pool_id
         except Exception:
@@ -388,16 +423,20 @@ class Command():
             for desc in bkts:
                 bucket = desc["name"]
                 bkt_policy = desc["bkt_policy"]
-                self.pool_adm.do_make_bucket(traceid, pool_id,
-                                             bucket, bkt_policy)
+                # self.pool_adm.do_make_bucket(traceid, pool_id,
+                #                              bucket, bkt_policy)
+                self._make_bucket(traceid, pool_id, bucket, bkt_policy)
         except Exception:
-            self.pool_adm.do_delete_pool(traceid, pool_id)
+            # self.pool_adm.do_delete_pool(traceid, pool_id)
+            self.pool_adm.erase_minio_ep(traceid, pool_id)
+            self.pool_adm.erase_pool_data(traceid, pool_id)
             raise
         # Add access-keys.
+        added = []
         try:
             keys = pooldesc["access_keys"]
             for k in keys:
-                kid = k["access_key"]
+                key = k["access_key"]
                 secret = k["secret_key"]
                 key_policy = k["key_policy"]
                 desc = k.copy()
@@ -405,44 +444,52 @@ class Command():
                 desc["use"] = "access_key"
                 desc["owner"] = pool_id
                 desc["modification_time"] = now
-                ok = self.pool_adm.tables.set_ex_id(kid, desc)
+                ok = self.pool_adm.tables.set_ex_id(key, desc)
                 if not ok:
-                    raise Api_Error(500, f"Duplicate access-key: {kid}")
-                self.pool_adm.do_record_secret(traceid, pool_id,
-                                               kid, secret, key_policy)
+                    raise Api_Error(500, "Duplicate access-key: {key}")
+                added.append(key)
+                # self.pool_adm.do_record_secret(traceid, pool_id,
+                #                                key, secret, key_policy)
         except Exception:
-            self.pool_adm.do_delete_pool(traceid, pool_id)
+            for key in added:
+                self.pool_adm.tables.delete_id_unconditionally(key)
+                pass
+            # self.pool_adm.do_delete_pool(traceid, pool_id)
+            self.pool_adm.erase_minio_ep(traceid, pool_id)
+            self.pool_adm.erase_pool_data(traceid, pool_id)
             raise
         pass
 
-    def op_reset_db(self):
-        """Clear all records in the DB."""
-        if not self.args.yes:
-            print("Need yes (-y) for action.")
+    def _make_bucket(self, traceid, pool_id, bucket, bkt_policy):
+        now = int(time.time())
+        desc = {"pool": pool_id, "bkt_policy": bkt_policy,
+                "modification_time": now}
+        (ok, holder) = self.pool_adm.tables.set_ex_bucket(bucket, desc)
+        if not ok:
+            owner = get_pool_owner_for_messages(self.pool_adm.tables, holder)
+            raise Api_Error(403, f"Bucket name taken: owner={owner}")
+        pass
+
+    def op_list_bucket(self, *pool_id):
+        """Show buckets of pools."""
+        pool_list = list(pool_id)
+        if pool_list == []:
+            bkts = self.pool_adm.tables.list_buckets(None)
         else:
-            everything = self.args.everything
-            self.pool_adm.tables.clear_all(everything=everything)
+            bkts = [b for pid in pool_list
+                    for b in self.pool_adm.tables.list_buckets(pid)]
             pass
+        bkts = [{d["name"]: {"pool": d["pool"], "bkt_policy": d["bkt_policy"]}}
+                for d in bkts]
+        _print_json_plain("buckets", bkts, self.args.format, order=_bucket_key_order)
         pass
 
-    def op_list_db(self):
-        """List all DB keys."""
-        self.pool_adm.tables.print_all()
-        pass
-
-    def op_show_manager(self, pool_id):
-        """Show a manager of a pool."""
-        ma = self.pool_adm.tables.get_minio_manager(pool_id)
-        outs = [{pool_id: ma}]
-        print_json_plain("manager", outs, self.args.format, order=proc_key_order)
-        pass
-
-    def op_show_minio(self, pool_id):
-        """Show a MinIO process of a pool."""
-        proc_list = self.pool_adm.tables.list_minio_procs(pool_id)
-        process_list = sorted(list(proc_list))
-        outs = [{pool: process} for (pool, process) in process_list]
-        print_json_plain("minio", outs, self.args.format, order=proc_key_order)
+    def op_list_dir(self):
+        """List buckets-directories of pools."""
+        dirs = self.pool_adm.tables.list_buckets_directories()
+        dirs = [{d["pool"]: d} for d in dirs]
+        _print_json_plain("directories", dirs, self.args.format,
+                          order=_directory_key_order)
         pass
 
     def op_list_ep(self):
@@ -451,25 +498,11 @@ class Command():
         muxs = self.pool_adm.tables.list_muxs()
         muxs = sorted(list(muxs))
         outs = [_format_mux(m, self.args.format) for m in muxs]
-        print_json_plain("mux", outs, self.args.format, order=_mux_key_order)
+        _print_json_plain("mux", outs, self.args.format, order=_mux_key_order)
         # MinIO.
         eps = self.pool_adm.tables.list_minio_ep()
         eps = [{ep: {"pool": pid}} for (pid, ep) in eps]
-        print_json_plain("minio", eps, self.args.format, order=bucket_key_order)
-        pass
-
-    def op_list_bucket(self):
-        """List buckets."""
-        bkts = self.pool_adm.tables.list_buckets(None)
-        bkts = [{d["name"]: {"pool": d["pool"], "bkt_policy": d["bkt_policy"]}}
-                for d in bkts]
-        print_json_plain("buckets", bkts, self.args.format, order=bucket_key_order)
-        pass
-
-    def op_show_bucket(self, pool_id):
-        """Show buckets of a pool."""
-        bkts = self.pool_adm.tables.list_buckets(pool_id)
-        print_json_plain("buckets", bkts, self.args.format, order=bucket_key_order)
+        _print_json_plain("minio", eps, self.args.format, order=_bucket_key_order)
         pass
 
     def op_list_timestamp(self):
@@ -478,15 +511,15 @@ class Command():
         stamps = [{d["pool"]:
                    {"timestamp": format_rfc3339_z(float(d["timestamp"]))}}
                   for d in stamps]
-        print_json_plain("timestamps", stamps, self.args.format, order=timestamp_key_order)
+        _print_json_plain("timestamps", stamps, self.args.format, order=_timestamp_key_order)
         pass
 
     def op_delete_ep(self, *pool_id):
-        """Deletes endpoint entires from a database.  Entries of
+        """Delete endpoint entires from a database.  Entries of
         MinIO-managers (ma:pool-id), MinIO-processes (mn:pool-id), and
         MinIO-eps (ep:pool-id) are deleted.
         """
-        pool_list = pool_id
+        pool_list = list(pool_id)
         for pid in pool_list:
             self.pool_adm.tables.delete_minio_manager(pid)
             self.pool_adm.tables.delete_minio_proc(pid)
@@ -494,34 +527,55 @@ class Command():
             pass
         pass
 
+    def op_access_mux(self, pool_id):
+        """Access Mux for a pool.  It may wake up or stop MinIO."""
+        traceid = self._traceid
+        self.pool_adm.access_mux_for_pool(traceid, pool_id)
+        pass
+
+    def op_list_db(self):
+        """List all database keys."""
+        self.pool_adm.tables.print_all()
+        pass
+
+    def op_reset_db(self):
+        """Clear all records in the database."""
+        if not self.args.yes:
+            print("Need yes (-y) for action.")
+        else:
+            everything = self.args.everything
+            self.pool_adm.tables.clear_all(everything=everything)
+            pass
+        pass
+
     op_list = [
         op_help,
 
-        op_load_users,
-        op_show_users,
-        op_load_permits,
-        op_show_permits,
+        op_load_user,
+        op_list_user,
+        op_load_permit,
+        op_list_permit,
 
         op_show_pool,
-        op_show_manager,
         op_show_minio,
-        op_show_bucket,
-        op_list_ep,
         op_list_bucket,
+        op_list_dir,
+        op_list_ep,
         op_list_timestamp,
 
-        op_destruct_pool,
+        op_delete_pool,
+        # op_delete_ep,
         op_dump,
         op_restore,
+        op_access_mux,
 
         op_list_db,
         op_reset_db,
-        op_delete_ep,
     ]
 
     def make_op_entry(self, fn, _):
         # sig.parameters=['self', 'csvfile']
-        (_, varargs) = get_nparams_of_fn(fn)
+        (_, varargs) = _get_nparams_of_fn(fn)
         name = fn.__name__.removeprefix("op_").replace("_", "-")
         sig = inspect.signature(fn)
         pars = list(sig.parameters)
@@ -547,7 +601,7 @@ class Command():
         if ent is None:
             raise Exception(f"undefined operation: {self.args.operation}")
         (fn, _, _) = ent
-        (nparams, varargs) = get_nparams_of_fn(fn)
+        (nparams, varargs) = _get_nparams_of_fn(fn)
         if not varargs and len(self.rest) != nparams:
             sys.stderr.write("Missing/excessive arguments for command.\n")
             self.op_help()

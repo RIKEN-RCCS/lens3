@@ -454,6 +454,13 @@
 
 <!-- NEW -->
 
+## An Administration Command (lenticularis-admin)
+
+Lens3 provides lenticularis-admin command for direct database
+modifications.  Note that it does not change the status of a MinIO
+instance, and the modifications will be reflected at the next start of
+a MinIO instance.  Moreover, modifications could be inconsistent.
+
 ## Design Assumptions
 
 * Lens3 assumes an http front-end terminates SSL connections and

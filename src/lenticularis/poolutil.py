@@ -21,10 +21,24 @@ class Api_Error(Exception):
 
 
 class Pool_State(enum.Enum):
+    """A pool state."""
     INITIAL = "initial"
     READY = "ready"
     DISABLED = "disabled"
     INOPERABLE = "inoperable"
+
+    def __str__(self):
+        return self.value
+
+    pass
+
+
+class ID_Use(enum.Enum):
+    """A usage of an ID entry in the table.  The "id:" entries are either
+    pool-ids or access-keys.
+    """
+    POOL = "pool"
+    KEY = "access_key"
 
     def __str__(self):
         return self.value
@@ -185,6 +199,18 @@ def gather_pool_desc(tables, pool_id):
     pooldesc["permit_status"] = u["permitted"]
     check_pool_is_well_formed(pooldesc, None)
     return pooldesc
+
+
+def get_pool_owner_for_messages(tables, pool_id):
+    """Finds an owner of a pool for printing error messages.  It returns
+    unknown-user, when an owner is not found.
+    """
+    if pool_id is None:
+        return "unknown-user"
+    pooldesc = tables.get_pool(pool_id)
+    if pooldesc is None:
+        return "unknown-user"
+    return pooldesc.get("owner_uid")
 
 
 def _check_bkt_policy(bkt_policy):

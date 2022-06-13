@@ -110,6 +110,9 @@ class Table():
         self._storage_table.delete_buckets_directory(path)
         pass
 
+    def list_buckets_directories(self):
+        return self._storage_table.list_buckets_directories()
+
     def set_user(self, uid, info):
         self._storage_table.set_user(uid, info)
         pass
@@ -371,17 +374,25 @@ class Storage_Table(Table_Common):
         v = self.dbase.get(key)
         return v
 
-    def delete_buckets_directory(self, path):
-        key = f"{self._buckets_directory_prefix}{path}"
-        self.dbase.delete(key)
-        pass
-
     def get_buckets_directory_of_pool(self, pool_id):
         keyi = _scan_table(self.dbase.r, self._buckets_directory_prefix, None)
         path = next((i for (i, v)
                      in ((i, self.get_buckets_directory(i)) for i in keyi)
                      if v == pool_id), None)
         return path
+
+    def delete_buckets_directory(self, path):
+        key = f"{self._buckets_directory_prefix}{path}"
+        self.dbase.delete(key)
+        pass
+
+    def list_buckets_directories(self):
+        keyi = _scan_table(self.dbase.r, self._buckets_directory_prefix, None)
+        bkts = [{"directory": i, "pool": v}
+                for (i, v) in ((i, self.get_buckets_directory(i))
+                               for i in keyi)
+                if v is not None]
+        return bkts
 
     def clear_all(self, everything):
         _delete_all(self.dbase.r, self._pool_desc_prefix)

@@ -23,6 +23,7 @@ from lenticularis.poolutil import ensure_pool_state
 from lenticularis.poolutil import ensure_pool_owner
 from lenticularis.poolutil import ensure_bucket_owner
 from lenticularis.poolutil import ensure_secret_owner
+from lenticularis.poolutil import get_pool_owner_for_messages
 from lenticularis.utility import get_ip_addresses
 from lenticularis.utility import copy_minimal_env
 from lenticularis.utility import generate_secret_key
@@ -56,17 +57,6 @@ class Control_Api():
 
         self.tables = get_table(wui_conf)
         pass
-
-    def _get_pool_owner_for_messages(self, pool_id):
-        """Finds an owner of a pool for printing a error message.  It returns
-        unknown-user, when not owner is found.
-        """
-        if pool_id is None:
-            return "unknown-user"
-        pooldesc = self.tables.get_pool(pool_id)
-        if pooldesc is None:
-            return "unknown-user"
-        return pooldesc.get("owner_uid")
 
     def _ensure_make_pool_arguments(self, user_id, pooldesc):
         """It normalizes the bucket-directory path."""
@@ -227,8 +217,13 @@ class Control_Api():
         pass
 
     def do_make_pool(self, traceid, user_id, owner_gid, path):
+        pool_id = self.make_new_pool(traceid, user_id, owner_gid, path)
+        self._activate_pool(traceid, pool_id)
+        return pool_id
+
+    def make_new_pool(self, traceid, user_id, owner_gid, path):
         now = int(time.time())
-        newpool = {
+        pooldesc = {
             "pool_name": "(* given-later *)",
             "owner_uid": user_id,
             "owner_gid": owner_gid,
@@ -242,17 +237,17 @@ class Control_Api():
         probe_key = None
         try:
             pool_id = self.tables.make_unique_id("pool", user_id)
-            newpool["pool_name"] = pool_id
+            pooldesc["pool_name"] = pool_id
             info = {"secret_key": "", "key_policy": "readwrite"}
             probe_key = self.tables.make_unique_id("access_key", pool_id, info)
-            newpool["probe_key"] = probe_key
+            pooldesc["probe_key"] = probe_key
             (ok, holder) = self.tables.set_ex_buckets_directory(path, pool_id)
             if not ok:
-                owner = self._get_pool_owner_for_messages(holder)
+                owner = get_pool_owner_for_messages(self.tables, holder)
                 raise Api_Error(400, (f"Buckets-directory is already used:"
                                       f" path=({path}), holder={owner}"))
             try:
-                self._store_pool(traceid, user_id, newpool)
+                self.tables.set_pool(pool_id, pooldesc)
             except Exception:
                 self.tables.delete_buckets_directory(path)
                 raise
@@ -267,11 +262,9 @@ class Control_Api():
             raise
         return pool_id
 
-    def _store_pool(self, traceid, user_id, pooldesc0):
-        pool_id = pooldesc0["pool_name"]
+    def _activate_pool(self, traceid, pool_id):
         assert pool_id is not None
         try:
-            self.tables.set_pool(pool_id, pooldesc0)
             self._set_pool_state(pool_id, Pool_State.INITIAL, "-")
             self.tables.set_access_timestamp(pool_id)
         except Exception:
@@ -310,11 +303,12 @@ class Control_Api():
 
     def do_delete_pool(self, traceid, pool_id):
         self._clean_minio(traceid, pool_id)
-        self._clean_database(traceid, pool_id)
+        self.erase_minio_ep(traceid, pool_id)
+        self.erase_pool_data(traceid, pool_id)
         return True
 
     def _clean_minio(self, traceid, pool_id):
-        # Clean MinIO and stop.
+        # Cleans MinIO status.
         try:
             mc = self._make_mc_for_pool(traceid, pool_id)
             assert mc is not None
@@ -324,66 +318,70 @@ class Control_Api():
                 # assert p_ is None
                 # assert_mc_success(r, "mc.admin_service_stop")
         except Exception as e:
-            logger.error(f"Exception in delete_pool: exception={e}",
+            logger.error(f"Exception in delete_pool: exception=({e})",
                          exc_info=True)
             pass
-        # Delete a route.
+        pass
+
+    def erase_minio_ep(self, traceid, pool_id):
+        # Clears a MinIO endpoint.
         try:
             self.tables.delete_minio_ep(pool_id)
         except Exception as e:
-            logger.info(f"Exception in delete_minio_ep: exception={e}")
+            logger.info(f"Exception in delete_minio_ep: exception=({e})")
             pass
         try:
             self.tables.delete_access_timestamp(pool_id)
         except Exception as e:
-            logger.info(f"Exception in delete_access_timestamp: exception={e}")
+            logger.info(f"Exception in delete_access_timestamp:"
+                        f" exception=({e})")
             pass
         pass
 
-    def _clean_database(self, traceid, pool_id):
-        # Clean database.
+    def erase_pool_data(self, traceid, pool_id):
+        # Clears database about the pool.
         path = self.tables.get_buckets_directory_of_pool(pool_id)
         bkts = self.tables.list_buckets(pool_id)
         keys = self.tables.list_access_keys_of_pool(pool_id)
-        logger.debug(f"Deleting buckets-directory: {path}")
+        logger.debug(f"Deleting buckets-directory (pool={pool_id}): {path}")
         try:
             self.tables.delete_buckets_directory(path)
         except Exception as e:
-            logger.info(f"Exception in delete_buckets_directory: {e}")
+            logger.info(f"Exception in delete_buckets_directory: ({e})")
             pass
         bktnames = [b["name"] for b in bkts]
-        logger.debug(f"Deleting buckets: {bktnames}")
+        logger.debug(f"Deleting buckets (pool={pool_id}): {bktnames}")
         for b in bktnames:
             try:
                 self.tables.delete_bucket(b)
             except Exception as e:
-                logger.info(f"Exception in delete_bucket: {e}")
+                logger.info(f"Exception in delete_bucket: ({e})")
                 pass
             pass
         keynames = [k["access_key"] for k in keys]
-        logger.debug(f"Deleting access-keys: {keynames}")
+        logger.debug(f"Deleting access-keys pool={pool_id}: {keynames}")
         for k in keynames:
             try:
                 self.tables.delete_id_unconditionally(k)
             except Exception as e:
-                logger.info(f"Exception in delete_id_unconditionally: {e}")
+                logger.info(f"Exception in delete_id_unconditionally: ({e})")
                 pass
             pass
-        logger.debug(f"Deleting pool states")
+        logger.debug(f"Deleting pool states (pool={pool_id})")
         try:
             self.tables.delete_pool(pool_id)
         except Exception as e:
-            logger.info(f"Exception in delete_pool: {e}")
+            logger.info(f"Exception in delete_pool: ({e})")
             pass
         try:
             self.tables.delete_pool_state(pool_id)
         except Exception as e:
-            logger.info(f"Exception in delete_pool_state: {e}")
+            logger.info(f"Exception in delete_pool_state: ({e})")
             pass
         try:
             self.tables.delete_id_unconditionally(pool_id)
         except Exception as e:
-            logger.info(f"Exception in delete_id_unconditionally: {e}")
+            logger.info(f"Exception in delete_id_unconditionally: ({e})")
             pass
         pass
 
@@ -422,7 +420,7 @@ class Control_Api():
                 "modification_time": now}
         (ok, holder) = self.tables.set_ex_bucket(bucket, desc)
         if not ok:
-            owner = self._get_pool_owner_for_messages(holder)
+            owner = get_pool_owner_for_messages(self.tables, holder)
             raise Api_Error(403, f"Bucket name taken: owner={owner}")
         try:
             mc = self._make_mc_for_pool(traceid, pool_id)
@@ -467,7 +465,7 @@ class Control_Api():
                     pass
                 pass
         except Exception as e:
-            logger.error(f"Exception in delete_bucket: exception={e}",
+            logger.error(f"Exception in delete_bucket: exception=({e})",
                          exc_info=True)
             pass
         self.tables.delete_bucket(bucket)

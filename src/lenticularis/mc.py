@@ -341,7 +341,7 @@ class Mc():
                             + f" failed (ignored): exception={e}")
                 pass
             pass
-        # Delete buckets.
+        # Set none-policy to buckets.
         try:
             bkts0 = self.list_buckets()
             assert_mc_success(bkts0, "mc.list_buckets")

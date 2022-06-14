@@ -129,7 +129,7 @@ It is expected ls will show ... "system_u:object_r:tmp_t:s0".
 # setsebool -P httpd_can_network_connect 1
 ```
 
-## Start a Reverse-proxy
+## Start a Reverse-proxy (Nginx)
 
 It is highly site dependent.
 
@@ -164,12 +164,39 @@ It is highly site dependent.
 # systemctl start nginx
 ```
 
-    - Make firewall to pass HTTP connections
-      ```
-      # apt-get install apache2-utils
-      # firewall-cmd --permanent --add-service=https
-      # firewall-cmd --reload
-      ```
+* Let the firewall pass HTTP connections
+
+<!--
+```
+# apt-get install apache2-utils
+# firewall-cmd --permanent --add-service=https
+# firewall-cmd --reload
+```
+-->
+
+### A Note about Nginx parameters
+
+Nginx has a parameter of the limits: "client_max_body_size"
+(default=1MB).  On the other hand, AWS S3 CLI has parameters for file
+transfers, "multipart_threshold" (default=8MB) and
+"multipart_chunksize" (default=8MB).  Especially,
+"multipart_chunksize" has the minimum 5MB.  The default value of Nginx
+is too small for the values of AWS S3 CLI.  The Nginx parameter is
+increased in the server section (or in the http section) in
+"/etc/nginx/conf.d/lens3proxy80.conf".
+
+```
+server {
+    client_max_body_size 10M;
+}
+```
+
+The "client_max_body_size" is defined in ngx_http_core_module.  See
+for Nginx ngx_http_core_module parameters:
+[https://nginx.org/en/docs/http/ngx_http_core_module.html](https://nginx.org/en/docs/http/ngx_http_core_module.html#client_max_body_size)
+
+See for AWS S3 CLI parameters:
+[https://docs.aws.amazon.com/cli/latest/topic/s3-config.html](https://docs.aws.amazon.com/cli/latest/topic/s3-config.html).
 
 ## Setup  Redis
 

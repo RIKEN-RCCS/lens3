@@ -139,12 +139,12 @@ modifications on the user-list.
 ### Pool State Transition
 
 A bucket-pool has a state in: (None), __INITIAL__, __READY__,
-__DISABLED__, and __INOPERABLE__.  Mux (A Manager) governs a
+__DISABLED__, and __INOPERABLE__.  Mux (a Manager) governs a
 transition of states.  A Manager checks conditions of a transition at
 some interval (by heartbeat_interval).
 
 * __None__ → __INITIAL__: It is a quick transition.
-* __INITIAL__ → _READY__: It is at a start of MinIO.
+* __INITIAL__ → __READY__: It is at a start of MinIO.
 * ? → __DISABLED__: It is by some disabling condition, including an
   expiry of a pool, disabling a user account, or making a pool
   offline.
@@ -160,8 +160,7 @@ stoped/started.
 ### Wui Processes
 
 Wui is not designed as load-balanced.  Wui may consist of some
-processes (started by Gunicorn), but they need to run on a single node
-in order to share the configuration directory of the "mc" command.
+processes started by Gunicorn, but they are not distributed.
 
 ### Mux Processes
 

@@ -155,7 +155,7 @@ It is highly site dependent.
 # chmod og-rwx /etc/nginx/private/htpasswd
 ```
 
-* Start Nginx during configuration changes
+* Stop/start Nginx during configuration changes
 
 ```
 # systemctl stop nginx
@@ -190,6 +190,9 @@ server {
     client_max_body_size 10M;
 }
 ```
+
+It is recommended to check the limits of the reverse-proxy, when
+encountering the 413 (Request Entity Too Large) error in simple tests.
 
 The "client_max_body_size" is defined in ngx_http_core_module.  See
 for Nginx ngx_http_core_module parameters:

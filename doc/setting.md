@@ -182,8 +182,8 @@ transfers, "multipart_threshold" (default=8MB) and
 "multipart_chunksize" (default=8MB).  Especially,
 "multipart_chunksize" has the minimum 5MB.  The default value of Nginx
 is too small for the values of AWS S3 CLI.  The Nginx parameter is
-increased in the server section (or in the http section) in
-"/etc/nginx/conf.d/lens3proxy80.conf".
+specified in the server section (or in the http section).  Refer to
+"lens3proxy.conf".  The size "0" can be used which means unlimited.
 
 ```
 server {

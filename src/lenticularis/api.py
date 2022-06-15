@@ -1,197 +1,324 @@
-"""An object used in Wui Web-API"""
+"""Api service by Gunicorn + Uvicorn + FastAPI."""
 
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
+# NOTE: Maybe, consider adding a "Retry-After" header for 503 error.
+
+import inspect
+import os
+import sys
+import time
+import json
+from typing import Union
+from pydantic import BaseModel
+import starlette
+from fastapi import Request
+from fastapi import Header
+from fastapi import Depends, FastAPI, status
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
+from fastapi.responses import JSONResponse
+from fastapi_csrf_protect import CsrfProtect
+from fastapi_csrf_protect.exceptions import CsrfProtectError
+import lenticularis
 from lenticularis.control import Control_Api
-from lenticularis.poolutil import Api_Error
-from lenticularis.poolutil import check_pool_naming
-from lenticularis.poolutil import check_bucket_naming
+from lenticularis.readconf import read_api_conf
+from lenticularis.utility import ERROR_EXIT_READCONF
+from lenticularis.utility import make_typical_ip_address
 from lenticularis.utility import rephrase_exception_message
-from lenticularis.utility import get_ip_addresses
-from lenticularis.utility import logger
+from lenticularis.utility import log_access
+from lenticularis.utility import logger, openlog
+from lenticularis.utility import tracing
 
 
-class Api():
-
-    def __init__(self, wui_conf):
-        self.pool_adm = Control_Api(wui_conf)
-        trusted_proxies = wui_conf["system"]["trusted_proxies"]
-        self.trusted_proxies = {addr for h in trusted_proxies
-                                for addr in get_ip_addresses(h)}
-        pass
-
-    def return_user_template_ui(self, traceid, user_id):
-        try:
-            t = self.pool_adm.return_user_template(user_id)
-            return (200, None, {"pool_list": [t]})
-        except Api_Error as e:
-            return (e.code, f"{e}", [])
-        except Exception as e:
-            m = rephrase_exception_message(e)
-            logger.error((f"get_template failed: user={user_id};"
-                          f" exception=({m})"),
-                         exc_info=True)
-            return (500, m, [])
-        pass
-
-    # POOLS.
-
-    def make_pool_ui(self, traceid, user_id, pooldesc0):
-        try:
-            triple = self.pool_adm.make_pool_ui(traceid, user_id, pooldesc0)
-            return triple
-        except Api_Error as e:
-            return (e.code, f"{e}", [])
-        except Exception as e:
-            m = rephrase_exception_message(e)
-            logger.error((f"make_pool failed: user={user_id};"
-                          f" exception=({m}); pool=({pooldesc0})"),
-                         exc_info=True)
-            return (500, m, None)
-        pass
-
-    def delete_pool_ui(self, traceid, user_id, pool_id):
-        try:
-            if not check_pool_naming(pool_id):
-                return (403, f"Bad pool={pool_id}", [])
-            self.pool_adm.delete_pool_ui(traceid, user_id, pool_id)
-            return (200, None, [])
-        except Api_Error as e:
-            return (e.code, f"{e}", [])
-        except Exception as e:
-            m = rephrase_exception_message(e)
-            logger.error((f"delete_pool failed: user={user_id},"
-                          f" pool={pool_id}; exception=({m})"),
-                         exc_info=True)
-            return (500, m, [])
-        pass
-
-    def list_pools_ui(self, traceid, user_id, pool_id):
-        try:
-            if pool_id is None:
-                pass
-            elif not check_pool_naming(pool_id):
-                return (403, f"Bad pool-id={pool_id}", [])
-            triple = self.pool_adm.list_pools_ui(traceid, user_id, pool_id)
-            return triple
-        except Api_Error as e:
-            return (e.code, f"{e}", [])
-        except Exception as e:
-            m = rephrase_exception_message(e)
-            logger.error((f"list_pools failed: user={user_id}, pool={pool_id};"
-                          f" exception=({m})"),
-                         exc_info=True)
-            return (500, m, [])
-        pass
-
-    # BUCKETS.
-
-    def make_bucket_ui(self, traceid, user_id, pool_id, body):
-        try:
-            if not check_pool_naming(pool_id):
-                return (403, f"Bad pool-id={pool_id}", [])
-            d = body.get("bucket")
-            bucket = d.get("name")
-            policy = d.get("bkt_policy")
-            if not check_bucket_naming(bucket):
-                return (403, f"Bad bucket name={bucket}", [])
-            if policy not in ["none", "public", "upload", "download"]:
-                return (403, f"Bad bucket policy={policy}", [])
-            # assert name == bucket
-        except Exception as e:
-            m = rephrase_exception_message(e)
-            return (400, m, None)
-        try:
-            logger.debug(f"Adding a bucket to pool={pool_id}"
-                         f": name={bucket}, policy={policy}")
-            triple = self.pool_adm.make_bucket_ui(traceid, user_id, pool_id,
-                                                  bucket, policy)
-            return triple
-        except Api_Error as e:
-            return (e.code, f"{e}", [])
-        except Exception as e:
-            m = rephrase_exception_message(e)
-            logger.error((f"make_bucket failed: user={user_id},"
-                          f" pool={pool_id}, name={bucket},"
-                          f" policy={policy}; exception=({m})"),
-                         exc_info=True)
-            return (500, m, None)
-        pass
-
-    def delete_bucket_ui(self, traceid, user_id, pool_id, bucket):
-        try:
-            if not check_pool_naming(pool_id):
-                return (403, f"Bad pool={pool_id}", [])
-            if not check_bucket_naming(bucket):
-                return (403, f"Bad bucket name={bucket}", [])
-        except Exception as e:
-            m = rephrase_exception_message(e)
-            return (400, m, None)
-        try:
-            logger.debug(f"Deleting a bucket: {bucket}")
-            triple = self.pool_adm.delete_bucket_ui(traceid, user_id, pool_id, bucket)
-            return triple
-        except Api_Error as e:
-            return (e.code, f"{e}", [])
-        except Exception as e:
-            m = rephrase_exception_message(e)
-            logger.error((f"delete_bucket failed: user={user_id}"
-                          f" pool={pool_id} bucket={bucket};"
-                          f" exception=({m})"),
-                         exc_info=True)
-            return (500, m, None)
-        pass
-
-    # SECRETS.
-
-    def make_secret_ui(self, traceid, user_id, pool_id, body):
-        try:
-            if not check_pool_naming(pool_id):
-                return (403, f"Bad pool-id={pool_id}", [])
-            rw = body.get("key_policy")
-            if rw not in ["readwrite", "readonly", "writeonly"]:
-                return (403, f"Bad access policy={rw}", [])
-        except Exception as e:
-            m = rephrase_exception_message(e)
-            return (400, m, None)
-        try:
-            logger.debug(f"Adding a new secret: {rw}")
-            triple = self.pool_adm.make_secret_ui(traceid, user_id, pool_id, rw)
-            return triple
-        except Api_Error as e:
-            return (e.code, f"{e}", [])
-        except Exception as e:
-            m = rephrase_exception_message(e)
-            logger.error((f"make_secret failed: user={user_id} pool={pool_id}"
-                          f" policy={rw}; exception=({m})"),
-                         exc_info=True)
-            return (500, m, None)
-        pass
-
-    def delete_secret_ui(self, traceid, user_id, pool_id, access_key):
-        try:
-            if not check_pool_naming(pool_id):
-                return (403, f"Bad pool-id={pool_id}", [])
-            if not check_pool_naming(access_key):
-                return (403, f"Bad access-key={access_key}", [])
-        except Exception as e:
-            m = rephrase_exception_message(e)
-            return (400, m, None)
-        try:
-            logger.debug(f"Deleting a secret: {access_key}")
-            triple = self.pool_adm.delete_secret_ui(traceid, user_id, pool_id,
-                                                    access_key)
-            return triple
-        except Api_Error as e:
-            return (e.code, f"{e}", [])
-        except Exception as e:
-            m = rephrase_exception_message(e)
-            logger.error((f"delete_secret failed: user={user_id}"
-                          f" pool={pool_id} access-key={access_key};"
-                          f" exception=({m})"),
-                         exc_info=True)
-            return (500, m, None)
-        pass
-
+try:
+    (_api_conf, _) = read_api_conf()
+except Exception as e:
+    m = rephrase_exception_message(e)
+    sys.stderr.write(f"Lens3 reading a config file failed: ({m})\n")
+    sys.exit(ERROR_EXIT_READCONF)
     pass
+
+openlog(_api_conf["log_file"],
+        **_api_conf["log_syslog"])
+logger.info("START Api.")
+
+_pkgdir = os.path.dirname(inspect.getfile(lenticularis))
+_webui_dir = os.path.join(_pkgdir, "webui")
+api = Control_Api(_api_conf)
+app = FastAPI()
+app.mount("/scripts/",
+          StaticFiles(directory=os.path.join(_webui_dir, "scripts")),
+          name="scripts")
+with open(os.path.join(_webui_dir, "setting.html")) as f:
+    _setting_html = f.read()
+    pass
+
+
+def _make_json_response(status_code, reason, values, csrf_protect,
+                        client_addr, user_id, request):
+    if reason is not None:
+        content = {"status": "error", "reason": reason}
+    else:
+        content = {"status": "success"}
+        pass
+    if values is not None:
+        # Append values to content.
+        content.update(values)
+        pass
+    content["time"] = str(int(time.time()))
+    if csrf_protect:
+        content["CSRF-Token"] = csrf_protect.generate_csrf()
+        pass
+    log_access(f"{status_code}", client_addr, user_id, request.method, request.url)
+    response = JSONResponse(status_code=status_code, content=content)
+    # logger.debug(f"Api RESPONSE.CONTENT={content}")
+    return response
+
+
+async def _get_request_body(request):
+    body = b""
+    async for chunk in request.stream():
+        body += chunk
+        pass
+    return json.loads(body, parse_int=None)
+
+
+class CsrfSettings(BaseModel):
+    secret_key: str = _api_conf["system"]["CSRF_secret_key"]
+    pass
+
+
+@CsrfProtect.load_config
+def get_csrf_config():
+    return CsrfSettings()
+
+
+@app.exception_handler(CsrfProtectError)
+def csrf_protect_exception_handler(request: Request, exc: CsrfProtectError):
+    logger.error(f"CSRF error detected: {exc.message}")
+    content = {"detail": exc.message}
+    user_id = request.headers.get("X-REMOTE-USER")
+    client_addr = request.headers.get("X-REAL-IP")
+    log_access(f"{exc.status_code}", client_addr, user_id, request.method, request.url)
+    response = JSONResponse(status_code=exc.status_code, content=content)
+    return response
+
+
+@app.middleware("http")
+async def validate_session(request: Request, call_next):
+    peer_addr = make_typical_ip_address(str(request.client.host))
+    user_id = request.headers.get("X-REMOTE-USER")
+    client_addr = request.headers.get("X-REAL-IP")
+    now = int(time.time())
+
+    if peer_addr not in api.trusted_proxies:
+        logger.error(f"Untrusted proxy: {peer_addr};"
+                     f" Check configuration")
+        content = {"status": "error",
+                   "reason": f"Configuration error (check trusted_proxies)",
+                   "time": str(now)}
+        status_code = status.HTTP_403_FORBIDDEN
+        # Access log contains client_addr but peer_addr.
+        log_access(f"{status_code}", client_addr, user_id, request.method, request.url)
+        return JSONResponse(status_code=status_code, content=content)
+    if (not api.check_user_is_registered(user_id)):
+        logger.info(f"Accessing Api by a bad user: ({user_id})")
+        content = {"status": "error", "reason": f"Bad user: ({user_id})",
+                   "time": str(now)}
+        status_code = status.HTTP_401_UNAUTHORIZED
+        log_access(f"{status_code}", client_addr, user_id, request.method, request.url)
+        return JSONResponse(status_code=status_code, content=content)
+    response = await call_next(request)
+    return response
+
+
+@app.get("/")
+async def app_get_show_ui(
+        request: Request,
+        x_remote_user: Union[str, None] = Header(default=None),
+        x_real_ip: Union[str, None] = Header(default=None),
+        x_traceid: Union[str, None] = Header(default=None)):
+    logger.debug(f"APP.GET /")
+    (user_id, client_addr, traceid) = (x_remote_user, x_real_ip, x_traceid)
+    tracing.set(traceid)
+    code = status.HTTP_200_OK
+    log_access(f"{code}", client_addr, user_id, request.method, request.url)
+    with open(os.path.join(_webui_dir, "setting.html")) as f:
+        _setting_html_nocache = f.read()
+        pass
+    response = HTMLResponse(status_code=code, content=_setting_html_nocache)
+    return response
+
+
+@app.get("/template")
+async def app_get_get_template(
+        request: Request,
+        x_remote_user: Union[str, None] = Header(default=None),
+        x_real_ip: Union[str, None] = Header(default=None),
+        x_traceid: Union[str, None] = Header(default=None),
+        csrf_protect: CsrfProtect = Depends()):
+    """Returns a user information for Web-UI."""
+    logger.debug(f"APP.GET /template")
+    (user_id, client_addr, traceid) = (x_remote_user, x_real_ip, x_traceid)
+    tracing.set(traceid)
+    (code, reason, values) = api.api_return_user_template(traceid, user_id)
+    response = _make_json_response(code, reason, values, csrf_protect,
+                                   client_addr, user_id, request)
+    return response
+
+
+@app.get("/pool")
+async def app_get_list_pools(
+        request: Request,
+        x_remote_user: Union[str, None] = Header(default=None),
+        x_real_ip: Union[str, None] = Header(default=None),
+        x_traceid: Union[str, None] = Header(default=None),
+        csrf_protect: CsrfProtect = Depends()):
+    logger.debug(f"APP.GET /pool")
+    (user_id, client_addr, traceid) = (x_remote_user, x_real_ip, x_traceid)
+    tracing.set(traceid)
+    (code, reason, values) = api.api_list_pools(traceid, user_id, None)
+    response = _make_json_response(code, reason, values, csrf_protect,
+                                   client_addr, user_id, request)
+    return response
+
+
+@app.get("/pool/{pool_id}")
+async def app_get_get_pool(
+        request: Request,
+        pool_id: str,
+        x_remote_user: Union[str, None] = Header(default=None),
+        x_real_ip: Union[str, None] = Header(default=None),
+        x_traceid: Union[str, None] = Header(default=None),
+        csrf_protect: CsrfProtect = Depends()):
+    logger.debug(f"APP.GET /pool/{pool_id}")
+    (user_id, client_addr, traceid) = (x_remote_user, x_real_ip, x_traceid)
+    tracing.set(traceid)
+    (code, reason, values) = api.api_list_pools(traceid, user_id, pool_id)
+    response = _make_json_response(code, reason, values, csrf_protect,
+                                   client_addr, user_id, request)
+    return response
+
+
+@app.post("/pool")
+async def app_post_make_pool(
+        request: Request,
+        x_remote_user: Union[str, None] = Header(default=None),
+        x_real_ip: Union[str, None] = Header(default=None),
+        x_traceid: Union[str, None] = Header(default=None),
+        csrf_protect: CsrfProtect = Depends()):
+    logger.debug(f"APP.POST /pool")
+    (user_id, client_addr, traceid) = (x_remote_user, x_real_ip, x_traceid)
+    tracing.set(traceid)
+    body = await _get_request_body(request)
+    token = body.get("CSRF-Token")
+    csrf_protect.validate_csrf(token)
+    pooldesc = body.get("pool")
+    (code, reason, values) = api.api_make_pool(traceid, user_id, pooldesc)
+    response = _make_json_response(code, reason, values, csrf_protect,
+                                   client_addr, user_id, request)
+    return response
+
+
+@app.delete("/pool/{pool_id}")
+async def app_delete_delete_pool(
+        request: Request,
+        pool_id: str,
+        x_remote_user: Union[str, None] = Header(default=None),
+        x_real_ip: Union[str, None] = Header(default=None),
+        x_traceid: Union[str, None] = Header(default=None),
+        csrf_protect: CsrfProtect = Depends()):
+    logger.debug(f"APP.DELETE /pool/{pool_id}")
+    (user_id, client_addr, traceid) = (x_remote_user, x_real_ip, x_traceid)
+    tracing.set(traceid)
+    body = await _get_request_body(request)
+    csrf_token = body.get("CSRF-Token")
+    csrf_protect.validate_csrf(csrf_token)
+    (code, reason, values) = api.api_delete_pool(traceid, user_id, pool_id)
+    response = _make_json_response(code, reason, values, csrf_protect,
+                                   client_addr, user_id, request)
+    return response
+
+
+@app.put("/pool/{pool_id}/bucket")
+async def app_put_make_bucket(
+        request: Request,
+        pool_id: str,
+        x_remote_user: Union[str, None] = Header(default=None),
+        x_real_ip: Union[str, None] = Header(default=None),
+        x_traceid: Union[str, None] = Header(default=None),
+        csrf_protect: CsrfProtect = Depends()):
+    logger.debug(f"APP.PUT /pool/{pool_id}/bucket")
+    (user_id, client_addr, traceid) = (x_remote_user, x_real_ip, x_traceid)
+    tracing.set(traceid)
+    body = await _get_request_body(request)
+    token = body.get("CSRF-Token")
+    csrf_protect.validate_csrf(token)
+    (code, reason, values) = api.api_make_bucket(traceid, user_id, pool_id, body)
+    response = _make_json_response(code, reason, values, csrf_protect,
+                                   client_addr, user_id, request)
+    return response
+
+
+@app.delete("/pool/{pool_id}/bucket/{bucket}")
+async def app_delete_delete_bucket(
+        request: Request,
+        pool_id: str,
+        bucket: str,
+        x_remote_user: Union[str, None] = Header(default=None),
+        x_real_ip: Union[str, None] = Header(default=None),
+        x_traceid: Union[str, None] = Header(default=None),
+        csrf_protect: CsrfProtect = Depends()):
+    logger.debug(f"APP.DELETE /pool/{pool_id}/bucket/{bucket}")
+    (user_id, client_addr, traceid) = (x_remote_user, x_real_ip, x_traceid)
+    tracing.set(traceid)
+    body = await _get_request_body(request)
+    token = body.get("CSRF-Token")
+    csrf_protect.validate_csrf(token)
+    (code, reason, values) = api.api_delete_bucket(traceid, user_id, pool_id, bucket)
+    response = _make_json_response(code, reason, values, csrf_protect,
+                                   client_addr, user_id, request)
+    return response
+
+
+@app.put("/pool/{pool_id}/secret")
+async def app_put_make_secret(
+        request: Request,
+        pool_id: str,
+        x_remote_user: Union[str, None] = Header(default=None),
+        x_real_ip: Union[str, None] = Header(default=None),
+        x_traceid: Union[str, None] = Header(default=None),
+        csrf_protect: CsrfProtect = Depends()):
+    logger.debug(f"APP.PUT /pool/{pool_id}/secret")
+    (user_id, client_addr, traceid) = (x_remote_user, x_real_ip, x_traceid)
+    tracing.set(traceid)
+    body = await _get_request_body(request)
+    token = body.get("CSRF-Token")
+    csrf_protect.validate_csrf(token)
+    (code, reason, values) = api.api_make_secret(traceid, user_id, pool_id, body)
+    response = _make_json_response(code, reason, values, csrf_protect,
+                                   client_addr, user_id, request)
+    return response
+
+
+@app.delete("/pool/{pool_id}/secret/{access_key}")
+async def app_delete_delete_secret(
+        request: Request,
+        pool_id: str,
+        access_key: str,
+        x_remote_user: Union[str, None] = Header(default=None),
+        x_real_ip: Union[str, None] = Header(default=None),
+        x_traceid: Union[str, None] = Header(default=None),
+        csrf_protect: CsrfProtect = Depends()):
+    logger.debug(f"APP.DELETE /pool/{pool_id}/secret/{access_key}")
+    (user_id, client_addr, traceid) = (x_remote_user, x_real_ip, x_traceid)
+    tracing.set(traceid)
+    body = await _get_request_body(request)
+    token = body.get("CSRF-Token")
+    csrf_protect.validate_csrf(token)
+    (code, reason, values) = api.api_delete_secret(traceid, user_id, pool_id, access_key)
+    response = _make_json_response(code, reason, values, csrf_protect,
+                                   client_addr, user_id, request)
+    return response

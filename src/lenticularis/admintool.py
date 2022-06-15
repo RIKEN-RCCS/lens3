@@ -15,7 +15,7 @@ import json
 import sys
 import traceback
 from lenticularis.control import Control_Api
-from lenticularis.readconf import read_wui_conf
+from lenticularis.readconf import read_api_conf
 from lenticularis.poolutil import Api_Error
 from lenticularis.poolutil import gather_pool_desc
 from lenticularis.poolutil import check_user_naming
@@ -631,7 +631,7 @@ def main():
     (args, rest) = parser.parse_known_args()
 
     try:
-        (wui_conf, _) = read_wui_conf(args.configfile)
+        (api_conf, _) = read_api_conf(args.configfile)
     except Exception as e:
         sys.stderr.write(f"Reading conf failed: {e}\n")
         sys.exit(ERROR_EXIT_READCONF)
@@ -639,11 +639,11 @@ def main():
 
     traceid = random_str(12)
     tracing.set(traceid)
-    openlog(wui_conf["log_file"],
-            **wui_conf["log_syslog"])
+    openlog(api_conf["log_file"],
+            **api_conf["log_syslog"])
 
     try:
-        pool_adm = Control_Api(wui_conf)
+        pool_adm = Control_Api(api_conf)
         cmd = Command(traceid, pool_adm, args, rest)
         cmd.make_op_dict()
         cmd.execute_command()

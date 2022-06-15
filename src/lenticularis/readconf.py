@@ -11,7 +11,7 @@ from lenticularis.utility import rephrase_exception_message
 
 
 _mux_conf_envname = "LENTICULARIS_MUX_CONFIG"
-_wui_conf_envname = "LENTICULARIS_WUI_CONFIG"
+_api_conf_envname = "LENTICULARIS_API_CONFIG"
 
 
 def read_mux_conf(configfile=None):
@@ -19,9 +19,9 @@ def read_mux_conf(configfile=None):
                     _mux_conf_envname)
 
 
-def read_wui_conf(configfile=None):
-    return readconf(configfile, _fix_wui_conf, _validate_wui_conf,
-                    _wui_conf_envname)
+def read_api_conf(configfile=None):
+    return readconf(configfile, _fix_api_conf, _validate_api_conf,
+                    _api_conf_envname)
 
 
 def readconf(configfile, fixfn, valfn, envname):
@@ -190,7 +190,7 @@ def _mux_schema(number_type):
     return sc
 
 
-def _wui_schema(number_type):
+def _api_schema(number_type):
     multiplexer = {
         "type": "object",
         "properties": {
@@ -270,8 +270,8 @@ def _validate_mux_conf(conf):
     pass
 
 
-def _validate_wui_conf(conf):
-    jsonschema.validate(instance=conf, schema=_wui_schema({"type": "number"}))
+def _validate_api_conf(conf):
+    jsonschema.validate(instance=conf, schema=_api_schema({"type": "number"}))
     pass
 
 
@@ -317,7 +317,7 @@ def _fix_mux_conf(conf):
     return conf
 
 
-def _fix_wui_conf(conf):
-    schema = _wui_schema({"type": "number"})
+def _fix_api_conf(conf):
+    schema = _api_schema({"type": "number"})
     conf = _fix_type(conf, schema)
     return conf

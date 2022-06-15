@@ -1,4 +1,4 @@
-"""Pool mangement.  This implements operations of Wui."""
+"""Pool mangement.  This implements operations of Api."""
 
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
@@ -24,38 +24,45 @@ from lenticularis.poolutil import ensure_pool_owner
 from lenticularis.poolutil import ensure_bucket_owner
 from lenticularis.poolutil import ensure_secret_owner
 from lenticularis.poolutil import get_pool_owner_for_messages
+from lenticularis.poolutil import check_pool_naming
+from lenticularis.poolutil import check_bucket_naming
+from lenticularis.poolutil import check_pool_is_well_formed
 from lenticularis.utility import get_ip_addresses
 from lenticularis.utility import copy_minimal_env
 from lenticularis.utility import generate_secret_key
-from lenticularis.utility import logger
 from lenticularis.utility import pick_one
 from lenticularis.utility import host_port
-from lenticularis.poolutil import check_pool_is_well_formed
+from lenticularis.utility import rephrase_exception_message
+from lenticularis.utility import logger
 
 
 class Control_Api():
     """Setting Web-UI."""
 
-    def __init__(self, wui_conf):
-        self._wui_conf = wui_conf
+    def __init__(self, api_conf):
+        self._api_conf = api_conf
 
-        mux_param = wui_conf["multiplexer"]
+        mux_param = api_conf["multiplexer"]
         self._probe_access_timeout = int(mux_param["probe_access_timeout"])
         self._facade_hostname = mux_param["facade_hostname"]
         self._facade_host_ip = get_ip_addresses(self._facade_hostname)[0]
 
-        settings = wui_conf["system"]
+        settings = api_conf["system"]
         self._max_pool_expiry = int(settings["max_pool_expiry"])
 
-        ctl_param = wui_conf["minio_manager"]
+        ctl_param = api_conf["minio_manager"]
         self._mc_timeout = int(ctl_param["minio_mc_timeout"])
 
-        minio_param = wui_conf["minio"]
+        minio_param = api_conf["minio"]
         self._bin_mc = minio_param["mc"]
         env = copy_minimal_env(os.environ)
         self._env_mc = env
 
-        self.tables = get_table(wui_conf)
+        trusted_proxies = api_conf["system"]["trusted_proxies"]
+        self.trusted_proxies = {addr for h in trusted_proxies
+                                for addr in get_ip_addresses(h)}
+
+        self.tables = get_table(api_conf)
         pass
 
     def _ensure_make_pool_arguments(self, user_id, pooldesc):
@@ -86,7 +93,7 @@ class Control_Api():
         logger.debug(f"Access a Mux to start Minio for pool={pool_id}.")
         status = self.access_mux_for_pool(traceid, pool_id)
         if status != 200:
-            logger.error(f"Access a Mux by Wui failed for pool={pool_id}:"
+            logger.error(f"Access a Mux by Api failed for pool={pool_id}:"
                          f" status={status}")
         else:
             pass
@@ -169,9 +176,184 @@ class Control_Api():
         logger.debug(f"Access Mux for pool={pool_id}: status={status}")
         return status
 
-    # Web-UI Interface.
+    # API interfaces.
 
-    def return_user_template(self, user_id):
+    def api_return_user_template(self, traceid, user_id):
+        try:
+            t = self._return_user_template(user_id)
+            return (200, None, {"pool_list": [t]})
+        except Api_Error as e:
+            return (e.code, f"{e}", [])
+        except Exception as e:
+            m = rephrase_exception_message(e)
+            logger.error((f"get_template failed: user={user_id};"
+                          f" exception=({m})"),
+                         exc_info=True)
+            return (500, m, [])
+        pass
+
+    # API:POOLS.
+
+    def api_make_pool(self, traceid, user_id, pooldesc0):
+        try:
+            triple = self._api_make_pool(traceid, user_id, pooldesc0)
+            return triple
+        except Api_Error as e:
+            return (e.code, f"{e}", [])
+        except Exception as e:
+            m = rephrase_exception_message(e)
+            logger.error((f"make_pool failed: user={user_id};"
+                          f" exception=({m}); pool=({pooldesc0})"),
+                         exc_info=True)
+            return (500, m, None)
+        pass
+
+    def api_delete_pool(self, traceid, user_id, pool_id):
+        try:
+            if not check_pool_naming(pool_id):
+                return (403, f"Bad pool={pool_id}", [])
+            self._api_delete_pool(traceid, user_id, pool_id)
+            return (200, None, [])
+        except Api_Error as e:
+            return (e.code, f"{e}", [])
+        except Exception as e:
+            m = rephrase_exception_message(e)
+            logger.error((f"delete_pool failed: user={user_id},"
+                          f" pool={pool_id}; exception=({m})"),
+                         exc_info=True)
+            return (500, m, [])
+        pass
+
+    def api_list_pools(self, traceid, user_id, pool_id):
+        try:
+            if pool_id is None:
+                pass
+            elif not check_pool_naming(pool_id):
+                return (403, f"Bad pool-id={pool_id}", [])
+            triple = self._api_list_pools(traceid, user_id, pool_id)
+            return triple
+        except Api_Error as e:
+            return (e.code, f"{e}", [])
+        except Exception as e:
+            m = rephrase_exception_message(e)
+            logger.error((f"list_pools failed: user={user_id}, pool={pool_id};"
+                          f" exception=({m})"),
+                         exc_info=True)
+            return (500, m, [])
+        pass
+
+    # API:BUCKETS.
+
+    def api_make_bucket(self, traceid, user_id, pool_id, body):
+        try:
+            if not check_pool_naming(pool_id):
+                return (403, f"Bad pool-id={pool_id}", [])
+            d = body.get("bucket")
+            bucket = d.get("name")
+            policy = d.get("bkt_policy")
+            if not check_bucket_naming(bucket):
+                return (403, f"Bad bucket name={bucket}", [])
+            if policy not in ["none", "public", "upload", "download"]:
+                return (403, f"Bad bucket policy={policy}", [])
+            # assert name == bucket
+        except Exception as e:
+            m = rephrase_exception_message(e)
+            return (400, m, None)
+        try:
+            logger.debug(f"Adding a bucket to pool={pool_id}"
+                         f": name={bucket}, policy={policy}")
+            triple = self._api_make_bucket(traceid, user_id, pool_id,
+                                           bucket, policy)
+            return triple
+        except Api_Error as e:
+            return (e.code, f"{e}", [])
+        except Exception as e:
+            m = rephrase_exception_message(e)
+            logger.error((f"make_bucket failed: user={user_id},"
+                          f" pool={pool_id}, name={bucket},"
+                          f" policy={policy}; exception=({m})"),
+                         exc_info=True)
+            return (500, m, None)
+        pass
+
+    def api_delete_bucket(self, traceid, user_id, pool_id, bucket):
+        try:
+            if not check_pool_naming(pool_id):
+                return (403, f"Bad pool={pool_id}", [])
+            if not check_bucket_naming(bucket):
+                return (403, f"Bad bucket name={bucket}", [])
+        except Exception as e:
+            m = rephrase_exception_message(e)
+            return (400, m, None)
+        try:
+            logger.debug(f"Deleting a bucket: {bucket}")
+            triple = self._api_delete_bucket(traceid, user_id, pool_id, bucket)
+            return triple
+        except Api_Error as e:
+            return (e.code, f"{e}", [])
+        except Exception as e:
+            m = rephrase_exception_message(e)
+            logger.error((f"delete_bucket failed: user={user_id}"
+                          f" pool={pool_id} bucket={bucket};"
+                          f" exception=({m})"),
+                         exc_info=True)
+            return (500, m, None)
+        pass
+
+    # API:SECRETS.
+
+    def api_make_secret(self, traceid, user_id, pool_id, body):
+        try:
+            if not check_pool_naming(pool_id):
+                return (403, f"Bad pool-id={pool_id}", [])
+            rw = body.get("key_policy")
+            if rw not in ["readwrite", "readonly", "writeonly"]:
+                return (403, f"Bad access policy={rw}", [])
+        except Exception as e:
+            m = rephrase_exception_message(e)
+            return (400, m, None)
+        try:
+            logger.debug(f"Adding a new secret: {rw}")
+            triple = self._api_make_secret(traceid, user_id, pool_id, rw)
+            return triple
+        except Api_Error as e:
+            return (e.code, f"{e}", [])
+        except Exception as e:
+            m = rephrase_exception_message(e)
+            logger.error((f"make_secret failed: user={user_id} pool={pool_id}"
+                          f" policy={rw}; exception=({m})"),
+                         exc_info=True)
+            return (500, m, None)
+        pass
+
+    def api_delete_secret(self, traceid, user_id, pool_id, access_key):
+        try:
+            if not check_pool_naming(pool_id):
+                return (403, f"Bad pool-id={pool_id}", [])
+            if not check_pool_naming(access_key):
+                return (403, f"Bad access-key={access_key}", [])
+        except Exception as e:
+            m = rephrase_exception_message(e)
+            return (400, m, None)
+        try:
+            logger.debug(f"Deleting a secret: {access_key}")
+            triple = self._api_delete_secret(traceid, user_id, pool_id,
+                                                    access_key)
+            return triple
+        except Api_Error as e:
+            return (e.code, f"{e}", [])
+        except Exception as e:
+            m = rephrase_exception_message(e)
+            logger.error((f"delete_secret failed: user={user_id}"
+                          f" pool={pool_id} access-key={access_key};"
+                          f" exception=({m})"),
+                         exc_info=True)
+            return (500, m, None)
+        pass
+
+    # API implementation.
+
+    def _return_user_template(self, user_id):
         """Returns basic information on the user needed by Web-UI."""
         ensure_user_is_authorized(self.tables, user_id)
         u = self.tables.get_user(user_id)
@@ -194,9 +376,9 @@ class Control_Api():
         }
         return template
 
-    # POOLS.
+    # IMPL:POOLS.
 
-    def make_pool_ui(self, traceid, user_id, makepool):
+    def _api_make_pool(self, traceid, user_id, makepool):
         ensure_mux_is_running(self.tables)
         ensure_user_is_authorized(self.tables, user_id)
         self._ensure_make_pool_arguments(user_id, makepool)
@@ -290,7 +472,7 @@ class Control_Api():
                             f" {poolstate}")
         pass
 
-    def delete_pool_ui(self, traceid, user_id, pool_id):
+    def _api_delete_pool(self, traceid, user_id, pool_id):
         """Deletes a pool.  It clears buckets and access-keys set in MinIO.
         It can delete despite of the ensure_pool_state() state.
         """
@@ -385,7 +567,7 @@ class Control_Api():
             pass
         pass
 
-    def list_pools_ui(self, traceid, user_id, pool_id):
+    def _api_list_pools(self, traceid, user_id, pool_id):
         """It lists all pools of the user when pool-id is None."""
         ensure_mux_is_running(self.tables)
         ensure_user_is_authorized(self.tables, user_id)
@@ -403,9 +585,9 @@ class Control_Api():
         pool_list = sorted(pool_list, key=lambda k: k["buckets_directory"])
         return (200, None, {"pool_list": pool_list})
 
-    # BUCKETS.
+    # IMPL:BUCKETS.
 
-    def make_bucket_ui(self, traceid, user_id, pool_id, bucket, policy):
+    def _api_make_bucket(self, traceid, user_id, pool_id, bucket, policy):
         ensure_mux_is_running(self.tables)
         ensure_user_is_authorized(self.tables, user_id)
         ensure_pool_owner(self.tables, pool_id, user_id)
@@ -433,7 +615,7 @@ class Control_Api():
             raise
         pass
 
-    def delete_bucket_ui(self, traceid, user_id, pool_id, bucket):
+    def _api_delete_bucket(self, traceid, user_id, pool_id, bucket):
         """Deletes a bucket.  Deleting ignores errors occur in MC commands in
         favor of disabling accesses to buckets.
         """
@@ -472,9 +654,9 @@ class Control_Api():
         pooldesc1 = gather_pool_desc(self.tables, pool_id)
         return pooldesc1
 
-    # SECRETS.
+    # IMPL:SECRETS.
 
-    def make_secret_ui(self, traceid, user_id, pool_id, key_policy):
+    def _api_make_secret(self, traceid, user_id, pool_id, key_policy):
         ensure_mux_is_running(self.tables)
         ensure_user_is_authorized(self.tables, user_id)
         ensure_pool_owner(self.tables, pool_id, user_id)
@@ -504,7 +686,7 @@ class Control_Api():
         pooldesc1 = gather_pool_desc(self.tables, pool_id)
         return pooldesc1
 
-    def delete_secret_ui(self, traceid, user_id, pool_id, access_key):
+    def _api_delete_secret(self, traceid, user_id, pool_id, access_key):
         """Deletes a secret.  Deleting will fail when errors occur in MC
         commands.
         """

@@ -9,7 +9,7 @@ reverse-proxy <-->︎ Mux (Multiplexer) <--> MinIO
                                      <--> MinIO
                                      <--> ...
                                      <--> MinIO
-              <--> Wui (Setting Web-UI)
+              <--> Api (Setting Web-UI)
                    Redis
 ```
 
@@ -18,15 +18,15 @@ The steps are:
 * Setup a reverse-proxy
 * Start Redis
 * Start Mux (a Multiplexer service)
-* Start Wui (a Web-UI service)
+* Start Api (a Web-UI service)
 * Register users
 
 ## Assumptions
 
 Some services are needed to use Lens3 as shown in the configuration
 figure above.  In this setup, we assume Nginx as a reverse-proxy.  Mux
-and Wui are Gunicorn services, and we assume Mux runs at port=8004 and
-Wui at port=8003.  A reverse-proxy should be setup for Mux and Wui
+and Api are Gunicorn services, and we assume Mux runs at port=8004 and
+Api at port=8003.  A reverse-proxy should be setup for Mux and Api
 ports.  In addition, Redis is needed and Redis runs at port=6378.  A
 pseudo user "lens3" is used for the owner of the daemons/services.  We
 also assume RedHat8.5 and Python3.9 at this writing (in March 2022).
@@ -36,7 +36,7 @@ also assume RedHat8.5 and Python3.9 at this writing (in March 2022).
 
 * Services used
   * Lenticularis Mux
-  * Lenticularis Wui
+  * Lenticularis Api
   * Redis (port=6378)
   * Reverse-proxy
 
@@ -46,14 +46,13 @@ also assume RedHat8.5 and Python3.9 at this writing (in March 2022).
   * `lens3-admin:lens3` -- a pseudo user for administration
 
 * Used files and directories
+  * /usr/lib/systemd/system/lenticularis-api.service
   * /usr/lib/systemd/system/lenticularis-mux.service
   * /usr/lib/systemd/system/lenticularis-redis.service
-  * /usr/lib/systemd/system/lenticularis-wui.service
+  * /etc/lenticularis/api-config.yaml
   * /etc/lenticularis/mux-config.yaml
   * /etc/lenticularis/redis.conf
-  * /etc/lenticularis/wui-config.yaml
   * /etc/nginx/conf.d/lens3proxy.conf
-  * /etc/nginx/private
   * /etc/nginx/private/htpasswd
   * /run/lenticularis-redis (temporary)
 
@@ -231,26 +230,26 @@ Note: Starting Redis will fail when the file owner of
 # systemctl start lenticularis-redis
 ```
 
-## Setup Wui (Web-UI)
+## Setup Api (Web-UI)
 
-* Copy the Wui configuration file
-  * Configuration file is: `/etc/lenticularis/wui-config.yaml`
+* Copy the Api configuration file
+  * Configuration file is: `/etc/lenticularis/api-config.yaml`
   * Modify it
-  * See [wui-config-yaml.md](wui-config-yaml.md) for the fields
+  * See [api-config-yaml.md](api-config-yaml.md) for the fields
   * (Use a random for CSRF_secret_key)
 
 ```
 # mkdir -p /etc/lenticularis
-# cp $TOP/unit-file/wui/wui-config.yaml.in /etc/lenticularis/wui-config.yaml
-# vi /etc/lenticularis/wui-config.yaml
-# chown lens3:lens3 /etc/lenticularis/wui-config.yaml
-# chmod o-rwx /etc/lenticularis/wui-config.yaml
+# cp $TOP/unit-file/api/api-config.yaml.in /etc/lenticularis/api-config.yaml
+# vi /etc/lenticularis/api-config.yaml
+# chown lens3:lens3 /etc/lenticularis/api-config.yaml
+# chmod o-rwx /etc/lenticularis/api-config.yaml
 ```
 
-* Copy the systemd unit file for Wui
+* Copy the systemd unit file for Api
 
 ```
-# cp $TOP/unit-file/wui/lenticularis-wui.service /usr/lib/systemd/system/
+# cp $TOP/unit-file/api/lenticularis-api.service /usr/lib/systemd/system/
 ```
 
 * Modify it if necessary
@@ -292,14 +291,14 @@ only allowed to run "/home/lens3/bin/minio".
 # cp $TOP/unit-file/mux/lenticularis-mux.service /usr/lib/systemd/system/
 ```
 
-## Start Services (Wui and Mux)
+## Start Services (Mux and Api)
 
 ```
 # systemctl daemon-reload
-# systemctl enable lenticularis-wui
-# systemctl start lenticularis-wui
 # systemctl enable lenticularis-mux
 # systemctl start lenticularis-mux
+# systemctl enable lenticularis-api
+# systemctl start lenticularis-api
 ```
 
 ## Register Users
@@ -322,8 +321,8 @@ ADD,user2,group2a,group2b,group2c, ...
 * Register users to Lens3 by `lenticularis-admin` command
 
 ```
-lens3-admin$ lenticularis-admin -c wui-config.yaml load-users {csv-file}
-lens3-admin$ lenticularis-admin -c wui-config.yaml show-users
+lens3-admin$ lenticularis-admin -c api-config.yaml load-user {csv-file}
+lens3-admin$ lenticularis-admin -c api-config.yaml list-user
 ```
 
 * (Optionally) Prepare a list of users enabled to access
@@ -336,8 +335,8 @@ ENABLE,user1,user2,user3, ...
 * Register permit-list to Lens3 by `lenticularis-admin` command.
 
 ```
-lens3-admin$ lenticularis-admin -c wui-config.yaml load-permits {csv-file}
-lens3-admin$ lenticularis-admin -c wui-config.yaml show-permits
+lens3-admin$ lenticularis-admin -c api-config.yaml load-permit {csv-file}
+lens3-admin$ lenticularis-admin -c api-config.yaml list-permit
 ```
 
 ## Check the Status
@@ -354,17 +353,17 @@ $ systemctl status nginx
 $ systemctl status lenticularis-redis
 ```
 
-* Wui (Web-UI) status
-
-```
-$ systemctl status lenticularis-wui
-```
-
 * Mux (Multiplexer) status
 
 ```
 $ systemctl status lenticularis-mux
-lens3-admin$ lenticularis-admin -c wui-config.yaml show-muxs
+lens3-admin$ lenticularis-admin -c api-config.yaml show-muxs
+```
+
+* Api (Web-UI) status
+
+```
+$ systemctl status lenticularis-api
 ```
 
 ## Test Accesses

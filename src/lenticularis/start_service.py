@@ -8,7 +8,7 @@ import os
 from subprocess import Popen, PIPE, DEVNULL
 import sys
 from lenticularis.readconf import read_mux_conf
-from lenticularis.readconf import read_wui_conf
+from lenticularis.readconf import read_api_conf
 from lenticularis.utility import rephrase_exception_message
 from lenticularis.utility import logger, openlog
 from lenticularis.utility import copy_minimal_env
@@ -41,29 +41,29 @@ def _run_mux():
     pass
 
 
-def _run_wui():
+def _run_api():
     try:
-        (wui_conf, configfile) = read_wui_conf()
+        (api_conf, configfile) = read_api_conf()
     except Exception as e:
         m = rephrase_exception_message(e)
         sys.stderr.write(f"Lens3 reading a config file failed: ({m})\n")
         return
 
-    openlog(wui_conf["log_file"],
-            **wui_conf["log_syslog"])
-    servicename = "lenticularis-wui"
+    openlog(api_conf["log_file"],
+            **api_conf["log_syslog"])
+    servicename = "lenticularis-api"
     logger.info(f"Start {servicename} service.")
 
-    gunicorn_conf = wui_conf["gunicorn"]
+    gunicorn_conf = api_conf["gunicorn"]
     _port = gunicorn_conf["port"]
     bind = f"[::]:{_port}"
     env = copy_minimal_env(os.environ)
-    env["LENTICULARIS_WUI_CONFIG"] = configfile
+    env["LENTICULARIS_API_CONFIG"] = configfile
     cmd = [sys.executable, "-m", "gunicorn"]
     args = ["--worker-class", "uvicorn.workers.UvicornWorker", "--bind", bind]
     options = _list_gunicorn_command_options(gunicorn_conf)
     args += options
-    args += ["lenticularis.wui:app"]
+    args += ["lenticularis.api:app"]
     _run(servicename, env, cmd, args)
     pass
 
@@ -157,8 +157,8 @@ def main():
             _run_mux()
             assert False
             pass
-        elif args.target == "wui":
-            _run_wui()
+        elif args.target == "api":
+            _run_api()
             assert False
             pass
         else:

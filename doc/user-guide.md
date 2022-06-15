@@ -55,11 +55,11 @@ $ aws --endpoint-url=http://lens3.example.com/ s3 ls s3://somebucket1/
 (reverse-proxy) <+-->︎ Mux <+--> MinIO (per user)
                  |         +--> MinIO (per user)
                  |         +--> MinIO (per user)
-                 +--> Wui
+                 +--> Api
                       Redis
 ```
 
-Lens3 consists of Mux and Wui -- Mux is a multiplexer and Wui is a
+Lens3 consists of Mux and Api -- Mux is a multiplexer and Api is a
 setting Web-UI.  Others are by third party.  MinIO is an open-source
 but commercially supported S3 server.  Redis is an open-source
 database system.  A reverse-proxy is not a part of Lens3 but it is
@@ -67,7 +67,7 @@ required for operation.  Mux works as a reverse-proxy which forwards
 file access requests to an MinIO instance by looking at a bucket name.
 Mux determines the target MinIO instance using an association of a
 bucket and a user.  This association is stored in a Redis database.
-Wui provides management of buckets.  Wui manages buckets by a bucket
+Api provides management of buckets.  Api manages buckets by a bucket
 pool, which is a unit of management in Lens3 and corresponds to a
 single MinIO instance.  A user first creates a bucket pool, and then
 registers buckets to the pool.  Mux is also in charge of starting and
@@ -81,7 +81,7 @@ using "sudo".
 ### No Bucket Operations
 
 Lens3 does not accept any bucket operations: creation, deletion, and
-listing.  Buckets can only be managed via Wui.  Specifically, a bucket
+listing.  Buckets can only be managed via Api.  Specifically, a bucket
 creation request will fail because the request (applying to the root
 path) is not forwarded to a MinIO instance.  A bucket deletion will
 succeed, but it makes the states of Lens3 and a MinIO instance
@@ -157,6 +157,6 @@ unless it is public.
   distinct.
 * Some locking in accessing Redis are omitted.  Operations by the
   administrator tool might be sloppy.
-* A MC command is directly invoked at Wui host to change a setting of
+* A MC command is directly invoked at Api host to change a setting of
   a MinIO instance.  A MC command was only invoked at Mux (by way of
   Manager) in v1.1.

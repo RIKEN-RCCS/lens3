@@ -1,4 +1,4 @@
-# wui-config.yaml
+# api-config.yaml
 
 ## Redis Part
 
@@ -16,8 +16,8 @@ gunicorn:
     port: 8003
     workers: 2
     timeout: 120
-    access_logfile: "/var/tmp/lenticularis/lens3-gunicorn-wui-access-log"
-    log_file: "/var/tmp/lenticularis/lens3-gunicorn-wui-log"
+    access_logfile: "/var/tmp/lenticularis/lens3-gunicorn-api-access-log"
+    log_file: "/var/tmp/lenticularis/lens3-gunicorn-api-log"
     log_level: debug
     #log_syslog_facility: LOCAL8
     reload: yes
@@ -65,7 +65,7 @@ system:
 ## Logging Part
 
 ```
-log_file: "/var/tmp/lenticularis/lens3-wui-log"
+log_file: "/var/tmp/lenticularis/lens3-api-log"
 log_syslog:
     facility: LOCAL7
     priority: DEBUG

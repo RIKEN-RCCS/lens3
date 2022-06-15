@@ -6,7 +6,7 @@ This describes design notes of Lenticularis-S3.
 
 * Components
   * Mux (Multiplexer)
-  * Wui (Web-UI)
+  * Api (Web-UI)
   * MinIO (S3 server)
   * Redis
 
@@ -152,14 +152,14 @@ some interval (by heartbeat_interval).
 * ? → __INOPERABLE__: It is by a failure of starting MinIO.  This
   state is a deadend.
 
-### Wui/Mux systemd Services
+### Mux/Api systemd Services
 
 All states of services are stored in Redis.  systemd services can be
 stoped/started.
 
-### Wui Processes
+### Api Processes
 
-Wui is not designed as load-balanced.  Wui may consist of some
+Api is not designed as load-balanced.  Api may consist of some
 processes started by Gunicorn, but they are not distributed.
 
 ### Mux Processes
@@ -193,7 +193,7 @@ Mux+MinIO pair, and (2) stop an old Mux+MinIO pair.
 
 ## Glossary
 
-* __Probe-key__: An access-key used by Wui to tell Mux about wake up
+* __Probe-key__: An access-key used by Api to tell Mux about a wake up
   of MinIO.  This is key has no corresponding secret.  It is
   distiguished by an empty secret.
 

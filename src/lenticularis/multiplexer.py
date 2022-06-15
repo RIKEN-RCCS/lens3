@@ -301,7 +301,7 @@ class Multiplexer():
             raise Api_Error(403, f"Bad access from remote={client_addr}")
 
         if path == "/":
-            # Access to "/" is prohibited but for a probe-access from Wui.
+            # Access to "/" is prohibited but for a probe-access from Api.
             if access_key is None:
                 log_access("401", *access_info)
                 raise Api_Error(401, f"Bad access to the root path")

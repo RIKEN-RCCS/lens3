@@ -18,7 +18,7 @@ This service, called "Mux", is started as a systemd service.  Lens3
 also provides a simple Web-UI for managing a bucket pool.  A "bucket
 pool" is a management unit in Lens3 which is associated to each MinIO
 instance.  A Web-UI is used to register S3 buckets to a pool.  This
-service, called "Wui", is started as a systemd serivce.
+service, called "Api", is started as a systemd serivce.
 
 Refer to [MinIO](https://min.io) about MinIO.
 
@@ -53,9 +53,9 @@ Files.
 ```
 doc              documents
 src/lenticularis source code
+unit-file/api    configuration templates
 unit-file/mux    configuration templates
 unit-file/redis  configuration templates
-unit-file/wui    configuration templates
 nginx            templates for reverse-proxy configuration
 test             test code
 ```

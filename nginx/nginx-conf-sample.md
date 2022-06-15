@@ -62,7 +62,7 @@ server {
 
 # Hostname of WebUI.
 
-    server_name wui.lens3.example.com;
+    server_name api.lens3.example.com;
 
 # Designate a wildcard certificate.
 
@@ -84,11 +84,11 @@ server {
         proxy_set_header X-Remote-User $remote_user;
         proxy_set_header Host $http_host;
 
-        proxy_pass http://wui;
+        proxy_pass http://api;
     }
 }
 
-upstream wui {
+upstream api {
     # least_conn;
     server localhost:8001;
 }

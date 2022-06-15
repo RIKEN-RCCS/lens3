@@ -224,7 +224,7 @@ def _check_key_policy(key_policy):
 
 
 def check_user_naming(user_id):
-    return re.fullmatch("^[a-z_][-a-z0-9_]{0,31}$", user_id) is not None
+    return re.fullmatch("^[a-z_][-a-z0-9_.]{0,31}$", user_id) is not None
 
 
 def check_pool_naming(pool_id):

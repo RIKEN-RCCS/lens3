@@ -34,17 +34,17 @@ def app():
     mux_host = os.environ.get("LENTICULARIS_MUX_NODE")
     if not mux_host:
         mux_host = platform.node()
+        pass
 
     gunicorn_conf = mux_conf["gunicorn"]
     mux_port = gunicorn_conf["port"]
     ep = host_port(mux_host, mux_port)
     logger.info(f"Mux is running on a host=({ep})")
 
-    controller = Spawner(mux_conf, tables, configfile, mux_host, mux_port)
-    multiplexer = Multiplexer(mux_conf, tables, controller, mux_host, mux_port)
+    spawner = Spawner(mux_conf, tables, configfile, mux_host, mux_port)
+    mux = Multiplexer(mux_conf, tables, spawner, mux_host, mux_port)
 
-    atexit.register((lambda: multiplexer.__del__()))
+    atexit.register((lambda: mux.__del__()))
+    threading.Thread(target=mux.periodic_work, daemon=True).start()
 
-    threading.Thread(target=multiplexer.periodic_work, daemon=True).start()
-
-    return multiplexer
+    return mux

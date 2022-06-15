@@ -24,6 +24,7 @@ from lenticularis.utility import ERROR_EXIT_READCONF, ERROR_EXIT_EXCEPTION, ERRO
 from lenticularis.utility import format_rfc3339_z
 from lenticularis.utility import objdump
 from lenticularis.utility import random_str
+from lenticularis.utility import rephrase_exception_message
 from lenticularis.utility import logger, openlog
 from lenticularis.utility import tracing
 
@@ -647,7 +648,8 @@ def main():
         cmd.make_op_dict()
         cmd.execute_command()
     except Exception as e:
-        sys.stderr.write(f"Executing admin command failed: {e}\n")
+        m = rephrase_exception_message(e)
+        sys.stderr.write(f"Executing admin command failed: {m}\n")
         # print(traceback.format_exc())
         sys.exit(ERROR_EXIT_EXCEPTION)
         pass

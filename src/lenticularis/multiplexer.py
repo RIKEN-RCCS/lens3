@@ -123,7 +123,7 @@ class Multiplexer():
         # self.heartbeat_interval = int(ctl_param["heartbeat_interval"])
         # self.heartbeat_timeout = int(ctl_param["heartbeat_timeout"])
 
-        self._multiplexer_addrs = self._list_mux_ip_addresses()
+        self._mux_addrs = self._list_mux_ip_addresses()
         self.scheduler = Scheduler(tables)
         pass
 
@@ -186,20 +186,22 @@ class Multiplexer():
         pass
 
     def _wrap_res(self, res, environ, headers, sniff=False, sniff_marker=""):
+        ##AHO
         if _no_buffering(headers) or sniff:
             return Read1Reader(res, sniff=sniff, sniff_marker=sniff_marker, thunk=res)
         else:
             file_wrapper = environ["wsgi.file_wrapper"]
             return file_wrapper(res)
+        pass
 
     def _check_forwarding_host_trusted(self, peer_addr):
         if peer_addr is None:
             return False
         ip = make_typical_ip_address(peer_addr)
-        if (ip in self._trusted_proxies or ip in self._multiplexer_addrs):
+        if (ip in self._trusted_proxies or ip in self._mux_addrs):
             return True
-        self._multiplexer_addrs = self._list_mux_ip_addresses()
-        if ip in self._multiplexer_addrs:
+        self._mux_addrs = self._list_mux_ip_addresses()
+        if ip in self._mux_addrs:
             return True
         return False
 
@@ -370,12 +372,10 @@ class Multiplexer():
         content_type = environ.get("CONTENT_TYPE")
         if content_type:
             q_headers["CONTENT-TYPE"] = content_type
-        else:
             pass
         content_length = environ.get("CONTENT_LENGTH")
         if content_length:
             q_headers["CONTENT-LENGTH"] = content_length
-        else:
             pass
 
         url = f"http://{minio_ep}{path_and_query}"
@@ -422,8 +422,6 @@ class Multiplexer():
             respiter = []
 
         if respiter != []:
-            pass
-        else:
             pass
 
         content_length_downstream = next((v for (k, v) in r_headers if k.lower() == "content-length"), None)

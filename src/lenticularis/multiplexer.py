@@ -311,8 +311,10 @@ class Multiplexer():
                 log_access("401", *access_info)
                 raise Api_Error(401, f"Bad access to the root path")
             assert probe_key is not None
-            logger.debug(f"Mux (port={self._mux_port}) probe-access"
-                         f" for pool={pool_id}")
+            if self._verbose:
+                logger.debug(f"Mux (port={self._mux_port}) probe-access"
+                             f" for pool={pool_id}")
+                pass
         else:
             try:
                 probe_key = None
@@ -337,8 +339,10 @@ class Multiplexer():
                              f" failed: exception=({e})")
                 log_access("401", *access_info)
                 raise Api_Error(e.code, failure_message)
-            logger.debug(f"Mux (port={self._mux_port}) access"
-                         f" for bucket={path} for pool={pool_id}")
+            if self._verbose:
+                logger.debug(f"Mux (port={self._mux_port}) access"
+                             f" for bucket={path} for pool={pool_id}")
+                pass
             pass
 
         assert pool_id is not None

@@ -81,12 +81,17 @@ using "sudo".
 ### No Bucket Operations
 
 Lens3 does not accept any bucket operations: creation, deletion, and
-listing.  Buckets can only be created via Wui.  Specifically, a bucket
+listing.  Buckets can only be managed via Wui.  Specifically, a bucket
 creation request will fail because the request (applying to the root
 path) is not forwarded to a MinIO instance.  A bucket deletion will
 succeed, but it makes the states of Lens3 and a MinIO instance
 inconsistent.  Bucket listing also fails because a request is not
 forwarded.
+
+Note: Lens3 manages a run of a MinIO instance and stops the instance
+when it becomes idle.  At restarting a MinIO instance, Lens3 tries to
+restore the state of buckets and that results in a deleted bucket to
+be recreated.
 
 ### Bucket Naming Restrictions
 
@@ -104,13 +109,13 @@ bucket can only have a public access policy.
 Running MinIO leaves a directory ".minio.sys" in the pool (in the
 buckets-directory).
 
-### Bucket-Pool State
+## Bucket-Pool State
 
 A bucket-pool has a state reflecting the state of a MinIO instance.
 It does not include the process status of a MinIO instance.
 
 * Bucket-pool state
-  * __None__ is quickly moves to the INITIAL state.
+  * __None__ quickly moves to the INITIAL state.
   * __INITIAL__ indicates some setup is not performed yet on a MinIO
     instance (a transient state).
   * __READY__ indicates a service is ready, a setup for servicing is
@@ -126,14 +131,18 @@ It does not include the process status of a MinIO instance.
 
 ### Other Limitations
 
-* Lens3 does not support listing of buckets by `aws s3 ls`.  Simply,
-Lens3 prohibits accesses to the "/" of the bucket namespace, because
-the bucket namespace is shared by multiple users (and MinIO
-processes).
-
 * No STS support.
 
 * No event notifications support.
+
+* Lens3 does not support listing of buckets by `aws s3 ls`.  Simply,
+Lens3 prohibits accesses to the "/" of the bucket namespace, because
+the bucket namespace is shared by multiple users (and MinIO
+instances).
+
+* Lens3 does not support S3 CLI "presign" command.  Lens3 does not
+recognize a credential attached in an URL, and denies a bucket access
+unless it is public.
 
 ## Glossary
 

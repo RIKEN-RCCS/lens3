@@ -12,18 +12,18 @@ creating a file and set-env "LENS3TEST" to the file name.
 ## copy-file.sh
 
 [copy-file.sh](copy-file.sh) runs a very simple test using AWS S3 CLI.
-It runs commands: __cp__, __ls__, __mv__, __rm__, __presign__.  It
-generates a file of 32MB, and uploads and downloads it.  That file is
-large enough to start a multipart upload (8MB is the default threshold
-to use a multipart upload).
+It runs commands: __cp__, __ls__, __mv__, __rm__, __presign__,
+__website__.  It generates a file of 32MB, and uploads and downloads
+it.  That file is large enough to start a multipart upload (8MB is the
+default threshold to use a multipart upload).
 
-## set-website.sh
+__presign__ is useless.  Lens3 denies a bucket access unless it is
+public.
 
-[set-website.sh](set-website.sh) runs the __website__ command.  It
-will fail in Lens3.
+__website__ will fail in Lens3.
 
 ## Info
 
 For S3 CLI, refer to the links:
-* [S3 CLI commands](https://docs.aws.amazon.com/cli/latest/reference/s3/index.html)
-* [S3 CLI API commands](https://docs.aws.amazon.com/cli/latest/reference/s3api/index.html)
+* [S3 CLI commands](https://awscli.amazonaws.com/v2/documentation/api/latest/reference/s3/index.html)
+* [S3 CLI API commands](https://awscli.amazonaws.com/v2/documentation/api/latest/reference/s3api/index.html)

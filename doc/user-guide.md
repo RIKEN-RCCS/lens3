@@ -62,19 +62,41 @@ $ aws --endpoint-url=http://lens3.example.com/ s3 ls s3://somebucket1/
 Lens3 consists of Mux and Api -- Mux is a multiplexer and Api is a
 setting Web-UI.  Others are by third party.  MinIO is an open-source
 but commercially supported S3 server.  Redis is an open-source
-database system.  A reverse-proxy is not a part of Lens3 but it is
-required for operation.  Mux works as a reverse-proxy which forwards
-file access requests to an MinIO instance by looking at a bucket name.
-Mux determines the target MinIO instance using an association of a
-bucket and a user.  This association is stored in a Redis database.
-Api provides management of buckets.  Api manages buckets by a bucket
-pool, which is a unit of management in Lens3 and corresponds to a
-single MinIO instance.  A user first creates a bucket pool, and then
-registers buckets to the pool.  Mux is also in charge of starting and
-stopping a MinIO instance.  Mux starts a MinIO instance on receiving
-an access request, and after a while, Mux stops the instance when
-accesses become idle.  Mux starts a MinIO instance as a usual user
-process using "sudo".
+database system.  A reverse-proxy is not specified in Lens3 but it is
+required for operation.
+
+Mux works as a reverse-proxy which forwards file access requests to an
+MinIO instance by looking at a bucket name.  Mux determines the target
+MinIO instance using an association of a bucket and a user.  This
+association is stored in a Redis database.  Api provides management of
+buckets.  Api manages buckets by a bucket pool, which is a unit of
+management in Lens3 and corresponds to a single MinIO instance.  A
+user first creates a bucket pool, and then registers buckets to the
+pool.  Mux is also in charge of starting and stopping a MinIO
+instance.  Mux starts a MinIO instance on receiving an access request,
+and after a while, Mux stops the instance when accesses become idle.
+Mux starts a MinIO instance as a usual user process using "sudo".
+
+## Bucket-Pool State
+
+A bucket-pool is a management unit of S3 buckets in Lens3 and it has a
+state reflecting the state of a MinIO instance.  But, the state does
+not include the process status of an instance.
+
+* Bucket-pool state
+  * __None__ quickly moves to the INITIAL state.
+  * __INITIAL__ indicates some setup is not performed yet on a MinIO
+    instance (a transient state).
+  * __READY__ indicates a service is ready, a setup for servicing is
+    done.  It does not mean a MinIO instance is running.
+  * __DISABLED__ indicates a pool is temporarily unusable.  It may
+    transition between "READY" and "DISABLED" by actions of a user or
+    an administrator.  The causes of a transition include an
+    expiry of a pool, disabling a user account, or making a pool
+    offline.
+  * __INOPERABLE__ indicates an error state and a pool is permanently
+    unusable.  Mainly, it has failed to run a MinIO instance.  This
+    pool cannot be used and should be removed.
 
 ## Restrictions of Lens3
 
@@ -109,26 +131,6 @@ bucket can only have a public access policy.
 Running MinIO leaves a directory ".minio.sys" in the pool (in the
 buckets-directory).
 
-## Bucket-Pool State
-
-A bucket-pool has a state reflecting the state of a MinIO instance.
-It does not include the process status of a MinIO instance.
-
-* Bucket-pool state
-  * __None__ quickly moves to the INITIAL state.
-  * __INITIAL__ indicates some setup is not performed yet on a MinIO
-    instance (a transient state).
-  * __READY__ indicates a service is ready, a setup for servicing is
-    done.  It does not mean a MinIO instance is running.
-  * __DISABLED__ indicates a pool is temporarily unusable.  It may
-    transition between "READY" and "DISABLED" by actions of a user or
-    an administrator.  The causes of a transition include an
-    expiry of a pool, disabling a user account, or making a pool
-    offline.
-  * __INOPERABLE__ indicates an error state and a pool is permanently
-    unusable.  Mainly, it has failed to run a MinIO instance.  This
-    pool cannot be used and should be removed.
-
 ## Other Limitations
 
 * No STS support.
@@ -148,15 +150,15 @@ unless it is public.
 
 * __bucket pool__: A management unit of S3 buckets.  It corresponds to
   a single MinIO instance.
-* __probe access__: Api or an administrator tool accesses Mux to start
-  a MinIO instance.  Such access is called a probe access.  A probe
-  access is not forwarded to a MinIO instance.
+* __probe access__: Api or the administrator tool accesses Mux to
+  start a MinIO instance.  Such access is called a probe access.  A
+  probe access is not forwarded to a MinIO instance.
 
 ## Changes from v1.1 to v1.2
 
 * Host-style naming of buckets is dropped.
 * Accesses are forwarded by a bucket name.  Accesses were forwarded by
-  a access key in v1.1.  This change prohibits bucket operations.
+  an access key in v1.1.  This change prohibits bucket operations.
 * Bucket name space become shared by all users.  Bucket names must be
   distinct.
 * Rich features are dropped.

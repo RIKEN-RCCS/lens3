@@ -59,7 +59,7 @@ transient state.
 | ----          | ----          | ----          |
 | ma:pool-id    | MinIO-manager | (\*, \*\*)|
 | mn:pool-id    | MinIO-process | |
-| mx:mux-endpoint | Mux-description | |
+| mx:mux-endpoint | Mux-description | (\*\*) |
 
 An __ma:pool-id__ entry is a MinIO-manager under which a MinIO process
 runs.  It is a record: {"mux_host", "mux_port", "manager_pid",
@@ -72,9 +72,9 @@ An __mn:pool-id__ entry is a MinIO-process description: {"minio_ep",
 
 An __mx:mux-endpoint__ entry is a Mux description that is a record:
 {"host", "port", "start_time", "modification_time"}.  A key is an
-endpoint (host+port) of a Mux.  A start-time is a time the record is
-first created, and a modification-time is updated each time the record
-is refreshed.  The content has no particular use.
+endpoint (host+port) of a Mux.  The content has no particular use.  A
+start-time is a time Mux started.  A modification-time is a time the
+record is refreshed, which is renewed when an entry is gone by expiry.
 
 #### routing-table
 

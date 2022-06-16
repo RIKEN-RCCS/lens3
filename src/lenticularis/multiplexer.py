@@ -115,6 +115,7 @@ class Multiplexer():
                                  for addr in get_ip_addresses(h)}
         timer = int(mux_param["mux_ep_update_interval"])
         self._periodic_work_interval = timer
+        self._expiry = 3 * timer
         self._forwarding_timeout = int(mux_param["forwarding_timeout"])
         self._probe_access_timeout = int(mux_param["probe_access_timeout"])
         self._bad_response_delay = int(mux_param["bad_response_delay"])
@@ -177,22 +178,44 @@ class Multiplexer():
         if self._verbose:
             logger.debug(f"Updating Mux info (periodically).")
             pass
+        ep = host_port(self._mux_host, self._mux_port)
+        ok = self.tables.set_mux_expiry(ep, self._expiry)
+        if ok:
+            return
         now = int(time.time())
         mux_desc = {"host": self._mux_host, "port": self._mux_port,
                     "start_time": self._start_time,
                     "modification_time": now}
-        ep = host_port(self._mux_host, self._mux_port)
         self.tables.set_mux(ep, mux_desc)
+        self.tables.set_mux_expiry(ep, self._expiry)
         pass
 
-    def _wrap_res(self, res, environ, headers, sniff=False, sniff_marker=""):
-        ##AHO
-        if _no_buffering(headers) or sniff:
-            return Read1Reader(res, sniff=sniff, sniff_marker=sniff_marker, thunk=res)
-        else:
-            file_wrapper = environ["wsgi.file_wrapper"]
-            return file_wrapper(res)
-        pass
+    # def _wrap_res(self, res, environ, headers, sniff=False, sniff_marker=""):
+    #     if _no_buffering(headers) or sniff:
+    #         return Read1Reader(res, sniff=sniff)
+    #     else:
+    #         file_wrapper = environ["wsgi.file_wrapper"]
+    #         return file_wrapper(res)
+    #     pass
+
+    def _response_output(self, res, environ):
+        """Returns an iterator of a response body."""
+        # The file wrapper can be "wsgiref.util.FileWrapper" or
+        # "gunicorn.http.wsgi.FileWrapper".
+        file_wrapper = environ["wsgi.file_wrapper"]
+        return file_wrapper(res)
+
+    # def _request_input(self, environ):
+    #     rinput = environ.get("wsgi.input")
+    #     if rinput and sniff:
+    #         rinput = Read1Reader(rinput.reader)
+    #         pass
+    #     return rinput
+
+    def _request_input(self, environ):
+        """Returns a stream of a request body."""
+        rinput = environ.get("wsgi.input")
+        return rinput
 
     def _check_forwarding_host_trusted(self, peer_addr):
         if peer_addr is None:
@@ -383,15 +406,10 @@ class Multiplexer():
             pass
 
         url = f"http://{minio_ep}{path_and_query}"
-        winput = environ.get("wsgi.input")
 
-        sniff = False
+        rinput = self._request_input(environ)
 
-        if winput and sniff:
-            winput = Read1Reader(winput.reader, sniff=True, sniff_marker=">", use_read=True)
-            pass
-
-        req = Request(url, data=winput, headers=q_headers,
+        req = Request(url, data=rinput, headers=q_headers,
                       method=request_method)
         failure_message = (f"urlopen failure: url={url}"
                            f" for {request_method} {request_url};")
@@ -399,14 +417,12 @@ class Multiplexer():
             res = urlopen(req, timeout=self._forwarding_timeout)
             status = f"{res.status}"
             r_headers = res.getheaders()
-            respiter = self._wrap_res(res, environ, r_headers, sniff=sniff, sniff_marker="<")
-
+            response = self._response_output(res, environ)
         except HTTPError as e:
             logger.error(failure_message + f" exception={e}")
             status = f"{e.code}"
             r_headers = [(k, e.headers[k]) for k in e.headers]
-            respiter = self._wrap_res(e, environ, r_headers, sniff=sniff, sniff_marker="<E")
-
+            response = self._response_output(e, environ)
         except URLError as e:
             if _check_url_error_is_connection_errors(e):
                 # "Connection refused" etc.
@@ -416,16 +432,13 @@ class Multiplexer():
                 pass
             status = "503"
             r_headers = []
-            respiter = []
-
+            response = []
         except Exception as e:
             logger.error(failure_message + f" exception={e}",
                          exc_info=True)
             status = "500"
             r_headers = []
-            respiter = []
-
-        if respiter != []:
+            response = []
             pass
 
         content_length_downstream = next((v for (k, v) in r_headers if k.lower() == "content-length"), None)
@@ -435,6 +448,6 @@ class Multiplexer():
                    downstream=content_length_downstream)
 
         start_response(status, r_headers)
-        return respiter
+        return response
 
     pass

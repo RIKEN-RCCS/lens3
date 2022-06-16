@@ -171,6 +171,9 @@ class Table():
         self._process_table.set_mux(mux_ep, mux_desc)
         pass
 
+    def set_mux_expiry(self, mux_ep, timeout):
+        return self._process_table.set_mux_expiry(mux_ep, timeout)
+
     def get_mux(self, mux_ep):
         return self._process_table.get_mux(mux_ep)
 
@@ -483,6 +486,10 @@ class Process_Table(Table_Common):
         v = json.dumps(mux_desc)
         self.dbase.set(key, v)
         pass
+
+    def set_mux_expiry(self, mux_ep, timeout):
+        key = f"{self._mux_desc_prefix}{mux_ep}"
+        return self.dbase.r.expire(key, timeout)
 
     def get_mux(self, mux_ep):
         key = f"{self._mux_desc_prefix}{mux_ep}"

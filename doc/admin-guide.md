@@ -78,11 +78,11 @@ ProxyPreserveHost on (for Apache2)
 
 ## Load-Balanced Setting
 
-Muxes can be run on multiple hosts, and a reverse-proxy will
-distribute accesses to Muxes.  In contrast, Adm service is single.  In
-multiple Muxes setting, firewall settings shall be fixed.  The port
-range of communication for both Muxes and MinIO's on hosts must be
-open to Adm, since Adm accesses both Muxes and MinIO's.
+Mux's can be run on multiple hosts, and a reverse-proxy will
+distribute accesses to Mux's.  In contrast, Api service is single.  In
+multiple Muxs setting, firewall settings shall be fixed.  The port
+range of communication for both Mux's and MinIO's on hosts must be
+open to Api, since Api accesses both Mux's and MinIO's.
 
 ## RANDOM MEMO
 

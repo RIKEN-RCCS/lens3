@@ -380,7 +380,6 @@ function copy_pool_desc_for_edit(pooldesc) {
   edit_pool_data.permit_status = pooldesc["permit_status"];
   edit_pool_data.online_status = pooldesc["online_status"];
   edit_pool_data.pool_state = pooldesc["minio_state"];
-  show_message("editing");
 }
 
 function show_message(s) {

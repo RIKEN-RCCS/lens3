@@ -129,7 +129,7 @@ It does not include the process status of a MinIO instance.
     unusable.  Mainly, it has failed to run a MinIO instance.  This
     pool cannot be used and should be removed.
 
-### Other Limitations
+## Other Limitations
 
 * No STS support.
 
@@ -148,6 +148,9 @@ unless it is public.
 
 * __bucket pool__: A management unit of S3 buckets.  It corresponds to
   a single MinIO instance.
+* __probe access__: Api or an administrator tool accesses Mux to start
+  a MinIO instance.  Such access is called a probe access.  A probe
+  access is not forwarded to a MinIO instance.
 
 ## Changes from v1.1 to v1.2
 
@@ -159,5 +162,6 @@ unless it is public.
 * Rich features are dropped.
 * Some locking in accessing Redis are omitted.  Operations by the
   administrator tool might be sloppy.
-* A MC command is directly invoked at Api host to change a setting of
-  a MinIO instance.  A MC command was only invoked at Mux in v1.1.
+* MC commands are directly invoked at the Api host to change the
+  setting of a MinIO instance.  MC commands were only invoked at Mux
+  in v1.1.

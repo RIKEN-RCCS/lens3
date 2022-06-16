@@ -3,7 +3,7 @@
 // Copyright (c) 2022 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
 
-//// Editor ////
+//// Editor Data ////
 
 var csrf_token;
 
@@ -38,7 +38,7 @@ var make_new_pool_button_app = new Vue({
   methods: {
     kick_add_new_pool: () => {
       edit_pool_data.make_pool_mode = true;
-      get_user_template();
+      run_get_user_template();
     },
   },
 });
@@ -118,219 +118,161 @@ var show_status_app = new Vue({
 
 //// FUNCTIONS ////
 
+function submit_request(msg, triple, process_response) {
+  show_message(msg + " ...");
+  clear_status_field();
+
+  const method = triple.method;
+  const url_path = triple.url_path;
+  const body = triple.body;
+  console.log("method: " + method);
+  console.log("url_path: " + url_path);
+  console.log("body: " + body);
+  const request_options = {
+    method: method,
+    body: body,
+  };
+  fetch(url_path, request_options)
+    .then((response) => {
+      if (!response.ok) {
+        response.json().then(
+          (data) => {
+            console.log("response-data: " + data);
+            show_message(msg + " ... error: " + JSON.stringify(data));
+            render_response_status(data);
+            throw new Error(JSON.stringify(data));
+          })
+      } else {
+        response.json().then(
+          (data) => {
+            show_message(msg + " ... done: " + JSON.stringify(data));
+            render_response_status(data);
+            process_response(data);
+          })}
+    })
+    .catch((err) => {
+      console.log("Fetch error: ", err);
+    });
+}
+
+function run_get_user_template() {
+  const msg = "get user template"
+  const method = "GET";
+  const url_path = "/template";
+  const c = {};
+  const body = null;
+  const triple = {method, url_path, body};
+  return submit_request(msg, triple, set_user_template_data);
+}
+
+function run_get_pool_list() {
+  const msg = "get pool list"
+  const method = "GET";
+  const url_path = "/pool";
+  const body = null;
+  const triple = {method, url_path, body};
+  return submit_request(msg, triple, render_pool_list);
+}
+
 function run_make_pool() {
+  const msg = "make pool";
   const directory = edit_pool_data.buckets_directory;
   const owner_gid = edit_pool_data.group;
   console.log("make_pool: directory=" + directory);
-  return submit_operation("make pool", () => {
-    method = "POST";
-    url_path = ("/pool");
-    const c = {"pool": {"buckets_directory": directory,
-                        "owner_gid": owner_gid}};
-    c["CSRF-Token"] = csrf_token;
-    body = JSON.stringify(c);
-    return {method, url_path, body};
-  })
+  const method = "POST";
+  const url_path = ("/pool");
+  const c = {"pool": {"buckets_directory": directory,
+                      "owner_gid": owner_gid}};
+  c["CSRF-Token"] = csrf_token;
+  const body = JSON.stringify(c);
+  const triple = {method, url_path, body};
+  return submit_request(msg, triple, display_pool_in_edit_pool)
+}
+
+function run_delete_pool(i) {
+  const msg = "delete pool";
+  const pooldesc = pool_list_section_data.pool_desc_list[i]
+  const pool_name = pooldesc["pool_name"];
+  console.log(`pool_name = ${pool_name}`);
+  const method = "DELETE";
+  const url_path = "/pool/" + pool_name;
+  const c = {};
+  c["CSRF-Token"] = csrf_token;
+  const body = JSON.stringify(c);
+  const triple = {method, url_path, body};
+  return submit_request(msg, triple, (data) => {run_get_pool_list();});
 }
 
 function run_edit_pool(i) {
-  pool_desc = pool_list_section_data.pool_desc_list[i]
-  display_pool_in_edit_pool(pool_desc)
+  pooldesc = pool_list_section_data.pool_desc_list[i]
+  const data = {"pool_list": [pooldesc]}
+  display_pool_in_edit_pool(data)
 }
 
-function display_pool_in_edit_pool(pool_desc) {
-  copy_pool_desc_for_edit(pool_desc);
+function display_pool_in_edit_pool(data) {
+  pooldesc = data["pool_list"][0]
+  copy_pool_desc_for_edit(pooldesc);
   edit_pool_data.pool_name_visible = true;
   edit_pool_data.edit_pool_visible = true;
   pool_list_section_data.pool_data_visible = false;
 }
 
-function run_delete_pool(i) {
-  const pooldesc = pool_list_section_data.pool_desc_list[i]
-  const pool_name = pooldesc["pool_name"];
-  perform_delete_pool(pool_name);
-}
-
 function run_make_bucket() {
-  console.log("make_bucket: name=" + edit_pool_data.bucket_name
-              + ", policy=" + edit_pool_data.bucket_policy);
-  return submit_operation("make bucket", () => {
-    var name = edit_pool_data.bucket_name;
-    var policy = edit_pool_data.bucket_policy;
-    method = "PUT";
-    url_path = ("/pool/" + edit_pool_data.pool_name + "/bucket");
-    var c = {"bucket": {"name": name, "bkt_policy": policy}};
-    c["CSRF-Token"] = csrf_token;
-    body = JSON.stringify(c);
-    return {method, url_path, body};
-  });
+  const msg = "make bucket";
+  const name = edit_pool_data.bucket_name;
+  const policy = edit_pool_data.bucket_policy;
+  console.log("make_bucket: name=" + name + ", policy=" + policy);
+  const method = "PUT";
+  const url_path = ("/pool/" + edit_pool_data.pool_name + "/bucket");
+  const c = {"bucket": {"name": name, "bkt_policy": policy}};
+  c["CSRF-Token"] = csrf_token;
+  const body = JSON.stringify(c);
+  const triple = {method, url_path, body};
+  return submit_request(msg, triple, display_pool_in_edit_pool);
 }
 
 function run_delete_bucket(name) {
+  const msg = "delete bucket";
   console.log("delete_bucket: name=" + name);
-  return submit_operation("delete bucket", () => {
-    const method = "DELETE";
-    const url_path = ("/pool/" + edit_pool_data.pool_name + "/bucket/" + name);
-    const c = {};
-    c["CSRF-Token"] = csrf_token;
-    body = JSON.stringify(c);
-    return {method, url_path, body};
-  });
+  const method = "DELETE";
+  const url_path = ("/pool/" + edit_pool_data.pool_name + "/bucket/" + name);
+  const c = {};
+  c["CSRF-Token"] = csrf_token;
+  const body = JSON.stringify(c);
+  const triple = {method, url_path, body};
+  return submit_request(msg, triple, display_pool_in_edit_pool);
 }
 
 function run_make_access_key(rw) {
+  const msg = "make access-key";
   console.log("make_access_key: " + rw);
-  return submit_operation("make access-key", () => {
-    const method = "PUT";
-    const url_path = ("/pool/" + edit_pool_data.pool_name + "/secret");
-    const c = {"key_policy": rw};
-    c["CSRF-Token"] = csrf_token;
-    body = JSON.stringify(c);
-    return {method, url_path, body};
-  });
+  const method = "PUT";
+  const url_path = ("/pool/" + edit_pool_data.pool_name + "/secret");
+  const c = {"key_policy": rw};
+  c["CSRF-Token"] = csrf_token;
+  const body = JSON.stringify(c);
+  const triple = {method, url_path, body};
+  return submit_request(msg, triple, display_pool_in_edit_pool);
 }
 
 function run_delete_access_key(key) {
+  const msg = "delete access-key";
   console.log("delete_access_key: " + key);
-  return submit_operation("delete access-key", () => {
-    const method = "DELETE";
-    const url_path = ("/pool/" + edit_pool_data.pool_name + "/secret/" + key);
-    const c = {};
-    c["CSRF-Token"] = csrf_token;
-    body = JSON.stringify(c);
-    return {method, url_path, body};
-  });
-}
-
-function submit_operation(msg, triple) {
-  show_message(msg + " ...");
-  clear_status_field();
-
-  var method;
-  var url_path;
-  var body;
-
-  {
-    const tt = triple();
-    method = tt.method;
-    url_path = tt.url_path;
-    body = tt.body;
-  }
-
-  console.log("method: " + method);
-  console.log("url_path: " + url_path);
-  console.log("body: " + body);
-  var request_options = {
-    method: method,
-    body: body,
-  };
-
-  fetch(url_path, request_options)
-    .then(function(response) {
-      if (!response.ok) {
-        return response.json().then(
-            function(data) {
-              console.log("response-data: " + data);
-              show_message(msg + " ... error: " + JSON.stringify(data));
-              render_response_status(data)
-              if (data["pool_list"] != null) {
-                edit_pool_data.pool_state = data["pool_list"][0]["minio_state"];
-              }
-              throw new Error(JSON.stringify(data));
-            })
-      } else {
-        return response.json().then(function(data) {
-          show_message(msg + " ... done: " + JSON.stringify(data));
-          render_response_status(data)
-          edit_pool_data.pool_state = data["pool_list"][0]["minio_state"]
-          display_pool_in_edit_pool(data["pool_list"][0])
-        })}
-    })
-    .catch(function(err) {
-      console.log("Fetch Error: ", err);
-    });
+  const method = "DELETE";
+  const url_path = ("/pool/" + edit_pool_data.pool_name + "/secret/" + key);
+  const c = {};
+  c["CSRF-Token"] = csrf_token;
+  const body = JSON.stringify(c);
+  const triple = {method, url_path, body};
+  return submit_request(msg, triple, display_pool_in_edit_pool);
 }
 
 const bkt_policy_names = ["none", "public", "upload", "download"];
 const key_policy_names = ["readwrite", "readonly", "writeonly"];
 
-function compose_access_key_update_dict(csrf_token, accessKeyID) {
-  var pooldesc = {"access_keys": [{"access_key": accessKeyID}]};
-  var dict = {"pool": pooldesc};
-  dict["CSRF-Token"] = csrf_token;
-  body = JSON.stringify(dict);
-  return body;
-}
-
-function compose_empty_body(csrf_token) {
-  var dict = {};
-  dict["CSRF-Token"] = csrf_token;
-  body = JSON.stringify(dict);
-  return body;
-}
-
-function run_get_pool_list() {
-  show_message("get pool list ...");
-  clear_status_field();
-  const method = "GET";
-  const url_path = "/pool";
-  const request_options = {
-    method: method,
-    headers: {},
-  };
-  fetch(url_path, request_options)
-    .then(function(response) {
-      if (!response.ok) {
-        return response.json().then(
-          function(data) {
-            show_message("get pool list ... error: " + JSON.stringify(data));
-            render_response_status(data)
-            throw new Error(JSON.stringify(data));
-          })
-      } else {
-        response.json().then(function(data) {
-          csrf_token = data["CSRF-Token"];
-          parse_pool_desc_list(data["pool_list"]);
-          show_message("get pool list ... done");
-        })}
-    })
-    .catch(function(err) {
-      console.log("Fetch Error: ", err);
-    });
-}
-
-function get_user_template() {
-  show_message("get new pool ...");
-  clear_status_field();
-  const method = "GET";
-  const url_path = "/template";
-  const request_options = {
-    method: method,
-    headers: {},
-  };
-  fetch(url_path, request_options)
-    .then(function(response) {
-      if (!response.ok) {
-        return response.json().then(
-          function(data) {
-            show_message("get new pool ... error: " + JSON.stringify(data));
-            render_response_status(data)
-            throw new Error(JSON.stringify(data));
-          })
-      } else {
-        response.json().then(function(data) {
-          csrf_token = data["CSRF-Token"];
-          get_user_template_body(data["pool_list"]);
-          show_message("get new pool ... done");
-        })}
-    })
-    .catch(function(err) {
-      console.log("Fetch Error: ", err);
-    });
-}
-
-function get_user_template_body(pool_desc_list) {
-  desc = pool_desc_list[0];
+function set_user_template_data(data) {
+  const pool_desc_list = data["pool_list"];
+  const desc = pool_desc_list[0];
   console.assert(desc["api_version"] == "v1.2", "Lens3 api mismatch");
   copy_user_template_for_edit(desc);
   edit_pool_data.pool_name_visible = true;
@@ -338,42 +280,14 @@ function get_user_template_body(pool_desc_list) {
   pool_list_section_data.pool_data_visible = false;
 }
 
-function perform_delete_pool(pool_name) {
-  show_message("delete pool ...");
-  clear_status_field();
-  console.log(`pool_name = ${pool_name}`);
-  const request_options = {
-    method: "DELETE",
-    body: compose_empty_body(csrf_token),
-  };
-  var url_path = "/pool/" + pool_name;
-  fetch(url_path, request_options)
-    .then(function(response) {
-      if (!response.ok) {
-        return response.json().then(
-          function(data) {
-            show_message("delete pool ... error: " + JSON.stringify(data));
-            render_response_status(data)
-            throw new Error(JSON.stringify(data));
-          })
-      } else {
-        response.json().then(function(data) {
-          show_message("delete pool ... done");
-          run_get_pool_list();
-        })}
-    })
-    .catch(function(err) {
-      console.log("Fetch Error: ", err);
-    });
-}
-
-function parse_pool_desc_list(pool_desc_list) {
+function render_pool_list(data) {
+  const pool_desc_list = data["pool_list"];
   edit_pool_data.pool_name_visible = false;
   edit_pool_data.edit_pool_visible = false;
 
-  var pool_li_items = new Array();
+  const pool_li_items = new Array();
   for (var k = 0; k < pool_desc_list.length; k++) {
-    var pooldesc = pool_desc_list[k];
+    const pooldesc = pool_desc_list[k];
     pool_li_items.push(render_pool_as_ul_entry(pooldesc));
   }
 
@@ -454,7 +368,7 @@ function copy_pool_desc_for_edit(pooldesc) {
   edit_pool_data.bucket_policy = "none";
   edit_pool_data.group_choices = pooldesc["groups"];
 
-  var keys = pooldesc["access_keys"];
+  const keys = pooldesc["access_keys"];
   const rwkeys = keys.filter(d => d["key_policy"] == "readwrite")
   const rokeys = keys.filter(d => d["key_policy"] == "readonly")
   const wokeys = keys.filter(d => d["key_policy"] == "writeonly")
@@ -478,6 +392,12 @@ function clear_status_field() {
 }
 
 function render_response_status(data) {
+  if (data["CSRF-Token"] != null) {
+    csrf_token = data["CSRF-Token"];
+  }
+  if (data["pool_list"] != null && data["pool_list"][0] != null) {
+    edit_pool_data.pool_state = data["pool_list"][0]["minio_state"];
+  }
   show_status(data["status"])
   show_reason(data["reason"])
   show_duration(data["time"])
@@ -538,9 +458,9 @@ function run_debug() {
   //var date2 = new Date(s)
   //var d2 = date2.getTime() / 1000;
   //console.log("new Date: " + s + " => " + d2);
-  var s = "2022-03-31T00:00:00.000Z";
-  var t = parse_rfc3339(s);
-  var u = format_rfc3339(t);
+  const s = "2022-03-31T00:00:00.000Z";
+  const t = parse_rfc3339(s);
+  const u = format_rfc3339(t);
   console.log("parse: " + s + " => " + t);
   console.log("unparse: " + t + " => " + u);
 }

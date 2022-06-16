@@ -215,8 +215,7 @@ async def app_post_make_pool(
     body = await _get_request_body(request)
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
-    pooldesc = body.get("pool")
-    (code, reason, values) = api.api_make_pool(traceid, user_id, pooldesc)
+    (code, reason, values) = api.api_make_pool(traceid, user_id, body)
     response = _make_json_response(code, reason, values, csrf_protect,
                                    client_addr, user_id, request)
     return response

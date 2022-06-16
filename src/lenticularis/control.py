@@ -40,6 +40,7 @@ class Control_Api():
     """Setting Web-UI."""
 
     def __init__(self, api_conf):
+        self._api_version = "v1.2"
         self._api_conf = api_conf
 
         mux_param = api_conf["multiplexer"]
@@ -62,11 +63,15 @@ class Control_Api():
         self.trusted_proxies = {addr for h in trusted_proxies
                                 for addr in get_ip_addresses(h)}
 
+        self._bad_response_delay = 1
         self.tables = get_table(api_conf)
         pass
 
     def _ensure_make_pool_arguments(self, user_id, pooldesc):
-        """It normalizes the bucket-directory path."""
+        """Checks the entires of buckets_directory and owner_gid.  It
+        normalizes (in the posix sense) the path of a
+        buckets-directory.
+        """
         u = self.tables.get_user(user_id)
         assert u is not None
         groups = u.get("groups")
@@ -183,29 +188,34 @@ class Control_Api():
             t = self._return_user_template(user_id)
             return (200, None, {"pool_list": [t]})
         except Api_Error as e:
+            time.sleep(self._bad_response_delay)
             return (e.code, f"{e}", [])
         except Exception as e:
             m = rephrase_exception_message(e)
             logger.error((f"get_template failed: user={user_id};"
                           f" exception=({m})"),
                          exc_info=True)
+            time.sleep(self._bad_response_delay)
             return (500, m, [])
         pass
 
     # API:POOLS.
 
-    def api_make_pool(self, traceid, user_id, pooldesc0):
+    def api_make_pool(self, traceid, user_id, body):
+        pooldesc = body.get("pool")
         try:
-            triple = self._api_make_pool(traceid, user_id, pooldesc0)
+            triple = self._api_make_pool(traceid, user_id, pooldesc)
             return triple
         except Api_Error as e:
+            time.sleep(self._bad_response_delay)
             return (e.code, f"{e}", [])
         except Exception as e:
             m = rephrase_exception_message(e)
             logger.error((f"make_pool failed: user={user_id};"
-                          f" exception=({m}); pool=({pooldesc0})"),
+                          f" exception=({m}); pool=({pooldesc})"),
                          exc_info=True)
-            return (500, m, None)
+            time.sleep(self._bad_response_delay)
+            return (500, m, [])
         pass
 
     def api_delete_pool(self, traceid, user_id, pool_id):
@@ -215,12 +225,14 @@ class Control_Api():
             self._api_delete_pool(traceid, user_id, pool_id)
             return (200, None, [])
         except Api_Error as e:
+            time.sleep(self._bad_response_delay)
             return (e.code, f"{e}", [])
         except Exception as e:
             m = rephrase_exception_message(e)
             logger.error((f"delete_pool failed: user={user_id},"
                           f" pool={pool_id}; exception=({m})"),
                          exc_info=True)
+            time.sleep(self._bad_response_delay)
             return (500, m, [])
         pass
 
@@ -233,12 +245,14 @@ class Control_Api():
             triple = self._api_list_pools(traceid, user_id, pool_id)
             return triple
         except Api_Error as e:
+            time.sleep(self._bad_response_delay)
             return (e.code, f"{e}", [])
         except Exception as e:
             m = rephrase_exception_message(e)
             logger.error((f"list_pools failed: user={user_id}, pool={pool_id};"
                           f" exception=({m})"),
                          exc_info=True)
+            time.sleep(self._bad_response_delay)
             return (500, m, [])
         pass
 
@@ -258,6 +272,7 @@ class Control_Api():
             # assert name == bucket
         except Exception as e:
             m = rephrase_exception_message(e)
+            time.sleep(self._bad_response_delay)
             return (400, m, None)
         try:
             logger.debug(f"Adding a bucket to pool={pool_id}"
@@ -266,6 +281,7 @@ class Control_Api():
                                            bucket, policy)
             return triple
         except Api_Error as e:
+            time.sleep(self._bad_response_delay)
             return (e.code, f"{e}", [])
         except Exception as e:
             m = rephrase_exception_message(e)
@@ -273,7 +289,8 @@ class Control_Api():
                           f" pool={pool_id}, name={bucket},"
                           f" policy={policy}; exception=({m})"),
                          exc_info=True)
-            return (500, m, None)
+            time.sleep(self._bad_response_delay)
+            return (500, m, [])
         pass
 
     def api_delete_bucket(self, traceid, user_id, pool_id, bucket):
@@ -290,6 +307,7 @@ class Control_Api():
             triple = self._api_delete_bucket(traceid, user_id, pool_id, bucket)
             return triple
         except Api_Error as e:
+            time.sleep(self._bad_response_delay)
             return (e.code, f"{e}", [])
         except Exception as e:
             m = rephrase_exception_message(e)
@@ -297,7 +315,8 @@ class Control_Api():
                           f" pool={pool_id} bucket={bucket};"
                           f" exception=({m})"),
                          exc_info=True)
-            return (500, m, None)
+            time.sleep(self._bad_response_delay)
+            return (500, m, [])
         pass
 
     # API:SECRETS.
@@ -317,13 +336,15 @@ class Control_Api():
             triple = self._api_make_secret(traceid, user_id, pool_id, rw)
             return triple
         except Api_Error as e:
+            time.sleep(self._bad_response_delay)
             return (e.code, f"{e}", [])
         except Exception as e:
             m = rephrase_exception_message(e)
             logger.error((f"make_secret failed: user={user_id} pool={pool_id}"
                           f" policy={rw}; exception=({m})"),
                          exc_info=True)
-            return (500, m, None)
+            time.sleep(self._bad_response_delay)
+            return (500, m, [])
         pass
 
     def api_delete_secret(self, traceid, user_id, pool_id, access_key):
@@ -341,6 +362,7 @@ class Control_Api():
                                                     access_key)
             return triple
         except Api_Error as e:
+            time.sleep(self._bad_response_delay)
             return (e.code, f"{e}", [])
         except Exception as e:
             m = rephrase_exception_message(e)
@@ -348,7 +370,8 @@ class Control_Api():
                           f" pool={pool_id} access-key={access_key};"
                           f" exception=({m})"),
                          exc_info=True)
-            return (500, m, None)
+            time.sleep(self._bad_response_delay)
+            return (500, m, [])
         pass
 
     # API implementation.
@@ -360,19 +383,20 @@ class Control_Api():
         assert u is not None
         groups = u.get("groups")
         template = {
+            "api_version": self._api_version,
             "owner_uid": user_id,
             "owner_gid": groups[0],
             "groups": groups,
-            "buckets_directory": "",
-            "buckets": [],
-            "access_keys": [
-                   {"key_policy": "readwrite"},
-                   {"key_policy": "readonly"},
-                   {"key_policy": "writeonly"}],
-            "expiration_date": self._determine_expiration_date(),
-            "permit_status": True,
-            "online_status": True,
-            "atime": "0",
+            # "buckets_directory": "",
+            # "buckets": [],
+            # "access_keys": [
+            #        {"key_policy": "readwrite"},
+            #        {"key_policy": "readonly"},
+            #        {"key_policy": "writeonly"}],
+            # "expiration_date": self._determine_expiration_date(),
+            # "permit_status": True,
+            # "online_status": True,
+            # "atime": "0",
         }
         return template
 

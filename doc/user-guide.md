@@ -73,8 +73,8 @@ single MinIO instance.  A user first creates a bucket pool, and then
 registers buckets to the pool.  Mux is also in charge of starting and
 stopping a MinIO instance.  Mux starts a MinIO instance on receiving
 an access request, and after a while, Mux stops the instance when
-accesses become idle.  Mux starts a MinIO as a non-root user process
-using "sudo".
+accesses become idle.  Mux starts a MinIO instance as a usual user
+process using "sudo".
 
 ## Restrictions of Lens3
 
@@ -126,8 +126,8 @@ It does not include the process status of a MinIO instance.
     expiry of a pool, disabling a user account, or making a pool
     offline.
   * __INOPERABLE__ indicates an error state and a pool is permanently
-    unusable.  Mainly, it has failed to run a MinIO.  This pool cannot
-    be used and should be removed.
+    unusable.  Mainly, it has failed to run a MinIO instance.  This
+    pool cannot be used and should be removed.
 
 ### Other Limitations
 
@@ -152,11 +152,12 @@ unless it is public.
 ## Changes from v1.1 to v1.2
 
 * Host-style naming of buckets is dropped.
-* Some rich features are dropped.
+* Accesses are forwarded by a bucket name.  Accesses were forwarded by
+  a access key in v1.1.  This change prohibits bucket operations.
 * Bucket name space become shared by all users.  Bucket names must be
   distinct.
+* Rich features are dropped.
 * Some locking in accessing Redis are omitted.  Operations by the
   administrator tool might be sloppy.
 * A MC command is directly invoked at Api host to change a setting of
-  a MinIO instance.  A MC command was only invoked at Mux (by way of
-  Manager) in v1.1.
+  a MinIO instance.  A MC command was only invoked at Mux in v1.1.

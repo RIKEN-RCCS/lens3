@@ -48,7 +48,9 @@ class Client():
         headers = dict()
         headers["HOST"] = self.running_host
         headers["X-TRACEID"] = tracing.get()
-        headers["REMOTE-ADDR"] = self.running_host
+        headers["X-REAL-IP"] = self.running_host
+        # headers["X-Forwarded-For"] = self.running_host
+        # headers["REMOTE-ADDR"] = self.running_host
         if self.uid and self.password:
             s = self._auth_token()
             authorization = f"Basic {s}"

@@ -211,8 +211,8 @@ class Control_Api():
             return (e.code, f"{e}", [])
         except Exception as e:
             m = rephrase_exception_message(e)
-            logger.error((f"make_pool failed: user={user_id};"
-                          f" exception=({m}); pool=({pooldesc})"),
+            logger.error((f"make_pool failed: user={user_id},"
+                          f" pool=({pooldesc}); exception=({m})"),
                          exc_info=True)
             time.sleep(self._bad_response_delay)
             return (500, m, [])
@@ -267,7 +267,7 @@ class Control_Api():
             policy = d.get("bkt_policy")
             if not check_bucket_naming(bucket):
                 return (403, f"Bad bucket name={bucket}", [])
-            if policy not in ["none", "public", "upload", "download"]:
+            if policy not in {"none", "public", "upload", "download"}:
                 return (403, f"Bad bucket policy={policy}", [])
             # assert name == bucket
         except Exception as e:
@@ -326,7 +326,7 @@ class Control_Api():
             if not check_pool_naming(pool_id):
                 return (403, f"Bad pool-id={pool_id}", [])
             rw = body.get("key_policy")
-            if rw not in ["readwrite", "readonly", "writeonly"]:
+            if rw not in {"readwrite", "readonly", "writeonly"}:
                 return (403, f"Bad access policy={rw}", [])
         except Exception as e:
             m = rephrase_exception_message(e)
@@ -340,8 +340,8 @@ class Control_Api():
             return (e.code, f"{e}", [])
         except Exception as e:
             m = rephrase_exception_message(e)
-            logger.error((f"make_secret failed: user={user_id} pool={pool_id}"
-                          f" policy={rw}; exception=({m})"),
+            logger.error((f"make_secret failed: user={user_id},"
+                          f" pool={pool_id}, policy={rw}; exception=({m})"),
                          exc_info=True)
             time.sleep(self._bad_response_delay)
             return (500, m, [])
@@ -366,8 +366,8 @@ class Control_Api():
             return (e.code, f"{e}", [])
         except Exception as e:
             m = rephrase_exception_message(e)
-            logger.error((f"delete_secret failed: user={user_id}"
-                          f" pool={pool_id} access-key={access_key};"
+            logger.error((f"delete_secret failed: user={user_id},"
+                          f" pool={pool_id}, access-key={access_key};"
                           f" exception=({m})"),
                          exc_info=True)
             time.sleep(self._bad_response_delay)
@@ -416,8 +416,9 @@ class Control_Api():
             check_pool_is_well_formed(pooldesc1, None)
             return (200, None, {"pool_list": [pooldesc1]})
         except Exception as e:
+            m = rephrase_exception_message(e)
             logger.error(f"Created pool is not well-formed (internal error):"
-                         f" pool={pool_id} exception=({e})",
+                         f" pool={pool_id}; exception=({m})",
                          exc_info=True)
             raise
         pass
@@ -524,7 +525,8 @@ class Control_Api():
                 # assert p_ is None
                 # assert_mc_success(r, "mc.admin_service_stop")
         except Exception as e:
-            logger.error(f"Exception in delete_pool: exception=({e})",
+            m = rephrase_exception_message(e)
+            logger.error(f"clean_minio failed: exception=({m})",
                          exc_info=True)
             pass
         pass
@@ -534,13 +536,15 @@ class Control_Api():
         try:
             self.tables.delete_minio_ep(pool_id)
         except Exception as e:
-            logger.info(f"Exception in delete_minio_ep: exception=({e})")
+            m = rephrase_exception_message(e)
+            logger.info(f"delete_minio_ep failed: exception=({m})")
             pass
         try:
             self.tables.delete_access_timestamp(pool_id)
         except Exception as e:
-            logger.info(f"Exception in delete_access_timestamp:"
-                        f" exception=({e})")
+            m = rephrase_exception_message(e)
+            logger.info(f"delete_access_timestamp failed:"
+                        f" exception=({m})")
             pass
         pass
 
@@ -553,7 +557,8 @@ class Control_Api():
         try:
             self.tables.delete_buckets_directory(path)
         except Exception as e:
-            logger.info(f"Exception in delete_buckets_directory: ({e})")
+            m = rephrase_exception_message(e)
+            logger.info(f"delete_buckets_directory failed: exception=({m})")
             pass
         bktnames = [b["name"] for b in bkts]
         logger.debug(f"Deleting buckets (pool={pool_id}): {bktnames}")
@@ -561,7 +566,8 @@ class Control_Api():
             try:
                 self.tables.delete_bucket(b)
             except Exception as e:
-                logger.info(f"Exception in delete_bucket: ({e})")
+                m = rephrase_exception_message(e)
+                logger.info(f"delete_bucket failed: exception=({m})")
                 pass
             pass
         keynames = [k["access_key"] for k in keys]
@@ -570,24 +576,28 @@ class Control_Api():
             try:
                 self.tables.delete_id_unconditionally(k)
             except Exception as e:
-                logger.info(f"Exception in delete_id_unconditionally: ({e})")
+                m = rephrase_exception_message(e)
+                logger.info(f"delete_id_unconditionally failed: exception=({m})")
                 pass
             pass
         logger.debug(f"Deleting pool states (pool={pool_id})")
         try:
             self.tables.delete_pool(pool_id)
         except Exception as e:
-            logger.info(f"Exception in delete_pool: ({e})")
+            m = rephrase_exception_message(e)
+            logger.info(f"delete_pool failed: exception=({m})")
             pass
         try:
             self.tables.delete_pool_state(pool_id)
         except Exception as e:
-            logger.info(f"Exception in delete_pool_state: ({e})")
+            m = rephrase_exception_message(e)
+            logger.info(f"delete_pool_state failed: exception=({m})")
             pass
         try:
             self.tables.delete_id_unconditionally(pool_id)
         except Exception as e:
-            logger.info(f"Exception in delete_id_unconditionally: ({e})")
+            m = rephrase_exception_message(e)
+            logger.info(f"delete_id_unconditionally failed: exception=({m})")
             pass
         pass
 
@@ -671,7 +681,8 @@ class Control_Api():
                     pass
                 pass
         except Exception as e:
-            logger.error(f"Exception in delete_bucket: exception=({e})",
+            m = rephrase_exception_message(e)
+            logger.error(f"delete_bucket failed: exception=({m})",
                          exc_info=True)
             pass
         self.tables.delete_bucket(bucket)

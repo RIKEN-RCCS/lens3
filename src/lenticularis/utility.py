@@ -136,7 +136,8 @@ class Read1Reader():
             else:
                 b = self.stream.read1(self.amt)
         except Exception as e:
-            logger.error(f"Reading network failed: exception=({e})",
+            m = rephrase_exception_message(e)
+            logger.error(f"Reading network failed: exception=({m})",
                          exc_info=True)
             b = b""
             pass

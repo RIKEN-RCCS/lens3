@@ -4,10 +4,11 @@ These (in "test/stupid") are very simple tests.  Note the tests leave
 garbage files.  Run the tests in the "test/stupid" directory, because
 some tests need sample files which are in "test/stupid".
 
-The secret of S3 should be prepared in ".aws/*" in advance.  Also, the
-environment variables "EP" and "BKT" are used as the target, "EP" as
-an endpoint and "BKT" as a bucket name.  They can be specified by
-creating a file and set-env "LENS3TEST" to the file name.
+The secret of S3 should be prepared in ".aws/*" in advance.  Also, a
+bucket needs to be created in advance.  The environment variables "EP"
+and "BKT" are used to specify the target, "EP" as an endpoint and
+"BKT" as a bucket name.  They can be specified by creating a file and
+set-env "LENS3TEST" to the file name.
 
 ## copy-file.sh
 

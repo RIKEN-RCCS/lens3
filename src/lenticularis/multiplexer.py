@@ -31,6 +31,7 @@ from lenticularis.utility import Read1Reader
 from lenticularis.utility import get_ip_addresses
 from lenticularis.utility import make_typical_ip_address
 from lenticularis.utility import host_port
+from lenticularis.utility import rephrase_exception_message
 from lenticularis.utility import log_access
 from lenticularis.utility import logger
 from lenticularis.utility import tracing
@@ -147,8 +148,9 @@ class Multiplexer():
             start_response(status, [])
             return []
         except Exception as e:
+            m = rephrase_exception_message(e)
             logger.error(f"Unhandled exception in Mux (port={self._mux_port}):"
-                         f" exception=({e})",
+                         f" exception=({m})",
                          exc_info=True)
             pass
         start_response("500", [])
@@ -163,7 +165,8 @@ class Multiplexer():
             try:
                 self._register_mux()
             except Exception as e:
-                logger.error(f"Mux periodic_work failed: exception={e}")
+                m = rephrase_exception_message(e)
+                logger.error(f"Mux periodic_work failed: exception=({m})")
                 pass
             jitter = ((interval * random.random()) / 8)
             time.sleep(interval + jitter)
@@ -419,22 +422,23 @@ class Multiplexer():
             r_headers = res.getheaders()
             response = self._response_output(res, environ)
         except HTTPError as e:
-            logger.error(failure_message + f" exception={e}")
+            logger.error(failure_message + f" exception=({e})")
             status = f"{e.code}"
             r_headers = [(k, e.headers[k]) for k in e.headers]
             response = self._response_output(e, environ)
         except URLError as e:
             if _check_url_error_is_connection_errors(e):
                 # "Connection refused" etc.
-                logger.warning(failure_message + f" exception={e}")
+                logger.warning(failure_message + f" exception=({e})")
             else:
-                logger.error(failure_message + f" exception={e}")
+                logger.error(failure_message + f" exception=({e})")
                 pass
             status = "503"
             r_headers = []
             response = []
         except Exception as e:
-            logger.error(failure_message + f" exception={e}",
+            m = rephrase_exception_message(e)
+            logger.error(failure_message + f" exception=({m})",
                          exc_info=True)
             status = "500"
             r_headers = []

@@ -12,6 +12,7 @@ from subprocess import Popen, DEVNULL, PIPE
 from lenticularis.poolutil import Api_Error
 from lenticularis.utility import remove_trailing_slash
 from lenticularis.utility import list_diff3
+from lenticularis.utility import rephrase_exception_message
 from lenticularis.utility import logger
 from lenticularis.utility import random_str
 
@@ -127,7 +128,8 @@ class Mc():
             if self._alias is not None:
                 self.alias_remove()
         except Exception as e:
-            logger.error(f"MC alias-remove failed: exception={e}",
+            m = rephrase_exception_message(e)
+            logger.error(f"MC alias-remove failed: exception=({m})",
                          exc_info=True)
             pass
         finally:
@@ -137,7 +139,8 @@ class Mc():
             if self._config_dir is not None:
                 self._config_dir.cleanup()
         except Exception as e:
-            logger.error(f"TemporaryDirectory removal failed: exception={e}",
+            m = rephrase_exception_message(e)
+            logger.error(f"TemporaryDirectory removal failed: exception=({m})",
                          exc_info=True)
             pass
         finally:
@@ -290,15 +293,17 @@ class Mc():
                         pass
                     return (None, rr)
                 except Exception as e:
-                    logger.error(f"json.loads failed: exception={e}",
+                    m = rephrase_exception_message(e)
+                    logger.error(f"json.loads failed: exception=({m})",
                                  exc_info=True)
                     r = [_make_mc_error(f"Bad output from MC: ({outs})")]
                     return (None, r)
                 pass
         except Exception as e:
-            logger.error(f"Popen failed: cmd={cmd}; exception={e}")
+            m = rephrase_exception_message(e)
+            logger.error(f"Popen failed: cmd={cmd}; exception=({m})")
             r = [_make_mc_error(f"Executing MC command failed:"
-                                f" exception={e}")]
+                                f" exception=({m})")]
             return (None, r)
         pass
 
@@ -328,8 +333,9 @@ class Mc():
             assert_mc_success(keys0, "mc.admin_user_list")
             keys = [intern_mc_user_info(e) for e in keys0]
         except Exception as e:
+            m = rephrase_exception_message(e)
             logger.info(failure_message
-                        + f" failed (ignored): exception={e}")
+                        + f" failed (ignored): exception=({m})")
             keys = []
             pass
         for k in keys:
@@ -337,8 +343,9 @@ class Mc():
                 r = self.admin_user_remove(k.get("access_key"))
                 assert_mc_success(r, "mc.admin_user_remove")
             except Exception as e:
+                m = rephrase_exception_message(e)
                 logger.info(failure_message
-                            + f" failed (ignored): exception={e}")
+                            + f" failed (ignored): exception=({m})")
                 pass
             pass
         # Set none-policy to buckets.
@@ -347,8 +354,9 @@ class Mc():
             assert_mc_success(bkts0, "mc.list_buckets")
             bkts = [intern_mc_list_entry(e) for e in bkts0]
         except Exception as e:
+            m = rephrase_exception_message(e)
             logger.info(failure_message
-                        + f" failed (ignored): exception={e}")
+                        + f" failed (ignored): exception=({m})")
             bkts = []
             pass
         for b in bkts:
@@ -356,8 +364,9 @@ class Mc():
                 r = self.policy_set(b.get("name"), "none")
                 assert_mc_success(r, "mc.policy_set")
             except Exception as e:
+                m = rephrase_exception_message(e)
                 logger.info(failure_message
-                            + f" failed (ignored): exception={e}")
+                            + f" failed (ignored): exception=({m})")
                 pass
             pass
         pass
@@ -397,8 +406,9 @@ class Mc():
                 r = self.policy_set(b["name"], "none")
                 assert_mc_success(r, "mc.policy_set")
             except Exception as e:
+                m = rephrase_exception_message(e)
                 logger.info(failure_message
-                            + f" failed (ignored): exception={e}")
+                            + f" failed (ignored): exception=({m})")
                 pass
             pass
         for b in adds:
@@ -408,8 +418,9 @@ class Mc():
                 r = self.policy_set(b["name"], b["bkt_policy"])
                 assert_mc_success(r, "mc.policy_set")
             except Exception as e:
+                m = rephrase_exception_message(e)
                 logger.info(failure_message
-                            + f" failed (ignored): exception={e}")
+                            + f" failed (ignored): exception=({m})")
                 pass
             pass
         for b in mods:
@@ -417,8 +428,9 @@ class Mc():
                 r = self.policy_set(b["name"], b["bkt_policy"])
                 assert_mc_success(r, "mc.policy_set")
             except Exception as e:
+                m = rephrase_exception_message(e)
                 logger.info(failure_message
-                            + f" failed (ignored): exception={e}")
+                            + f" failed (ignored): exception=({m})")
                 pass
             pass
         pass
@@ -462,8 +474,9 @@ class Mc():
                 r = self.admin_user_remove(k["access_key"])
                 assert_mc_success(r, "mc.admin_user_remove")
             except Exception as e:
+                m = rephrase_exception_message(e)
                 logger.info(failure_message
-                            + f" failed (ignored): exception={e}")
+                            + f" failed (ignored): exception=({m})")
                 pass
             pass
         for k in adds:
@@ -475,8 +488,9 @@ class Mc():
                 r = self.admin_user_enable(k["access_key"])
                 assert_mc_success(r, "mc.admin_user_enable")
             except Exception as e:
+                m = rephrase_exception_message(e)
                 logger.info(failure_message
-                            + f" failed (ignored): exception={e}")
+                            + f" failed (ignored): exception=({m})")
                 pass
             pass
         pass

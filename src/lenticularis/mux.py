@@ -22,7 +22,8 @@ def app():
         (mux_conf, configfile) = read_mux_conf()
     except Exception as e:
         m = rephrase_exception_message(e)
-        sys.stderr.write(f"Lens3 reading a config file failed: ({m})\n")
+        sys.stderr.write(f"Lens3 reading a config file failed:"
+                         f" exception=({m})\n")
         return None
 
     openlog(mux_conf["log_file"],

@@ -8,6 +8,7 @@ import enum
 import jsonschema
 from urllib.request import Request, urlopen
 import urllib.error
+from lenticularis.utility import rephrase_exception_message
 from lenticularis.utility import logger
 
 
@@ -384,9 +385,9 @@ def access_mux(traceid, ep, access_key, facade_hostname, facade_host_ip,
         status = response.status
         assert isinstance(status, int)
     except urllib.error.HTTPError as e:
-        b = e.read()
+        body = e.read()
         logger.warning(f"urlopen to Mux failed for url=({url}):"
-                       f" exception=({e}); body=({b})")
+                       f" exception=({e}); body=({body})")
         status = e.code
         assert isinstance(status, int)
     except urllib.error.URLError as e:
@@ -394,8 +395,9 @@ def access_mux(traceid, ep, access_key, facade_hostname, facade_host_ip,
                      f" exception=({e})")
         status = 400
     except Exception as e:
+        m = rephrase_exception_message(e)
         logger.error(f"urlopen to Mux failed for url=({url}):"
-                     f" exception=({e})",
+                     f" exception=({m})",
                      exc_info=True)
         status = 400
         pass

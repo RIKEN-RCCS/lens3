@@ -83,7 +83,7 @@ A bucket-pool is a management unit of S3 buckets in Lens3 and it has a
 state reflecting the state of a MinIO instance.  But, the state does
 not include the process status of an instance.
 
-* Bucket-pool state
+* Bucket-pool state is:
   * __None__ quickly moves to the INITIAL state.
   * __INITIAL__ indicates some setup is not performed yet on a MinIO
     instance (a transient state).

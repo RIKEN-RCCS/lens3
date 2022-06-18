@@ -19,7 +19,8 @@ def _run_mux():
         (mux_conf, configfile) = read_mux_conf()
     except Exception as e:
         m = rephrase_exception_message(e)
-        sys.stderr.write(f"Lens3 reading a config file failed: ({m})\n")
+        sys.stderr.write(f"Lens3 reading a config file failed:"
+                         f" exception=({m})\n")
         return
 
     openlog(mux_conf["log_file"],
@@ -46,7 +47,8 @@ def _run_api():
         (api_conf, configfile) = read_api_conf()
     except Exception as e:
         m = rephrase_exception_message(e)
-        sys.stderr.write(f"Lens3 reading a config file failed: ({m})\n")
+        sys.stderr.write(f"Lens3 reading a config file failed:"
+                         f" exception=({m})\n")
         return
 
     openlog(api_conf["log_file"],
@@ -126,8 +128,9 @@ def _run(servicename, env, cmd, args):
         with Popen(cmd + args, stdin=DEVNULL, stdout=PIPE, stderr=PIPE, env=env) as p:
             (outs, errs) = p.communicate()
             p_status = p.wait()
-    except Exception:
-        logger.error(f"{servicename} failed to start.",
+    except Exception as e:
+        m = rephrase_exception_message(e)
+        logger.error(f"{servicename} failed to start: exception=({m})",
                      exc_info=True)
         sys.exit(1)
         pass

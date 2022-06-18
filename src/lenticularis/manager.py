@@ -27,6 +27,7 @@ from lenticularis.utility import generate_secret_key
 from lenticularis.utility import copy_minimal_env, host_port
 from lenticularis.utility import uniform_distribution_jitter
 from lenticularis.utility import wait_one_line_on_stdout
+from lenticularis.utility import rephrase_exception_message
 from lenticularis.utility import logger, openlog
 from lenticularis.utility import tracing
 
@@ -372,8 +373,9 @@ class Manager():
                 return (None, error_is_nonfatal)
         except Exception as e:
             # (e is SubprocessError, OSError, ValueError, usually).
+            m = rephrase_exception_message(e)
             logger.error(f"Manager (pool={pool_id}) failed to starting MinIO:"
-                         f" command=({cmd}); exception=({e})",
+                         f" command=({cmd}); exception=({m})",
                          exc_info=True)
             reason = "Start failed (exec failure)"
             self._set_pool_state(Pool_State.INOPERABLE, reason)
@@ -489,11 +491,12 @@ class Manager():
             except Exception as e:
                 alarm(0)
                 self._alarm_section = None
-                reason = f"{e}"
+                m = rephrase_exception_message(e)
+                reason = f"{m}"
                 self._set_pool_state(Pool_State.INOPERABLE, reason)
                 logger.error(f"Manager (pool={pool_id})"
-                             f" failed to initialization MinIO:"
-                             f" exception=({e})",
+                             f" failed to initialize MinIO:"
+                             f" exception=({m})",
                              exc_info=True)
                 raise
             pass
@@ -549,8 +552,9 @@ class Manager():
             logger.debug(f"Manager (pool={pool_id}) terminating with=({e})")
             pass
         except Exception as e:
+            m = rephrase_exception_message(e)
             logger.error(f"Manager (pool={pool_id}) errs in a watch loop:"
-                         f" MinIO={self._minio_ep}; exception=({e})",
+                         f" MinIO={self._minio_ep}; exception=({m})",
                          exc_info=True)
             pass
         pass
@@ -645,9 +649,10 @@ class Manager():
                 self.tables.delete_minio_ep(pool_id)
                 pass
         except Exception as e:
+            m = rephrase_exception_message(e)
             logger.error(f"Manager (pool={pool_id}) failed in"
                          f" removing MinIO records (ignored):"
-                         f" exception={e}",
+                         f" exception=({m})",
                          exc_info=True)
             pass
         pass
@@ -672,9 +677,10 @@ class Manager():
                              f" stopping MinIO timed out:"
                              f" exception ignored: exception=({e})")
             except Exception as e:
+                m = rephrase_exception_message(e)
                 logger.error(f"Manager (pool={pool_id})"
                              f" stopping MinIO failed:"
-                             f" exception ignored: exception=({e})",
+                             f" exception ignored: exception=({m})",
                              exc_info=True)
             finally:
                 alarm(0)
@@ -760,7 +766,8 @@ class Manager():
             logger.warning(failure_message + f" exception=({e})")
             return 503
         except Exception as e:
-            logger.warning(failure_message + f" exception=({e})")
+            m = rephrase_exception_message(e)
+            logger.warning(failure_message + f" exception=({m})")
             return 500
         pass
 
@@ -787,7 +794,8 @@ class Manager():
         except Alarmed:
             raise Exception("Hearbeat timeout")
         except Exception as e:
-            logger.error(f"Hearbeat failed: exception={e}")
+            m = rephrase_exception_message(e)
+            logger.error(f"Hearbeat failed: exception=({m})")
             alarm(0)
             self._alarm_section = None
             raise
@@ -821,8 +829,9 @@ def main():
     try:
         (mux_conf, _) = read_mux_conf(args.configfile)
     except Exception as e:
+        m = rephrase_exception_message(e)
         sys.stderr.write(f"Manager (pool={pool_id}) failed"
-                         f" in reading a config file: {e}\n")
+                         f" in reading a config file: exception=({m})\n")
         sys.exit(ERROR_EXIT_READCONF)
         pass
 
@@ -861,8 +870,9 @@ def main():
     try:
         ok = manager.manager_main()
     except Exception as e:
+        m = rephrase_exception_message(e)
         logger.error(f"Manager (pool={pool_id}) failed:"
-                     f" exception={e}",
+                     f" exception=({m})",
                      exc_info=True)
         pass
     sys.exit(0)

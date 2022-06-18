@@ -379,10 +379,13 @@ class Command():
                 s = f.read()
                 pass
         except OSError as e:
-            sys.stderr.write(f"{jsonfile}: {os.strerror(e.errno)}\n")
+            sys.stderr.write(f"Reading a file failed: ({jsonfile});"
+                             f" {os.strerror(e.errno)}\n")
             return
         except Exception as e:
-            sys.stderr.write(f"{jsonfile}: {e}\n")
+            m = rephrase_exception_message(e)
+            sys.stderr.write(f"Reading a file failed: ({jsonfile});"
+                             f" exception={m}\n")
             traceback.print_exc()
             return
         desc = json.loads(s, parse_int=None)
@@ -633,7 +636,8 @@ def main():
     try:
         (api_conf, _) = read_api_conf(args.configfile)
     except Exception as e:
-        sys.stderr.write(f"Reading conf failed: {e}\n")
+        m = rephrase_exception_message(e)
+        sys.stderr.write(f"Reading a config file failed: exception=({m})\n")
         sys.exit(ERROR_EXIT_READCONF)
         pass
 
@@ -649,7 +653,7 @@ def main():
         cmd.execute_command()
     except Exception as e:
         m = rephrase_exception_message(e)
-        sys.stderr.write(f"Executing admin command failed: {m}\n")
+        sys.stderr.write(f"Executing admin command failed: exception=({m})\n")
         # print(traceback.format_exc())
         sys.exit(ERROR_EXIT_EXCEPTION)
         pass

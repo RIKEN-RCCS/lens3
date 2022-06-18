@@ -80,31 +80,14 @@ tags::
 FORMAT=--format=json
 FORMAT=
 
-LENTICULARIS_ADMIN=lenticularis-admin $(FORMAT)
+PYFILES=lens3client.py apitest.py
 
-show::
-	@echo ----- allow-deny-rules
-	@$(LENTICULARIS_ADMIN) show allow-deny-rules
-	@echo ----- user-info
-	@$(LENTICULARIS_ADMIN) show user-info
-	@echo ----- zone
-	@$(LENTICULARIS_ADMIN) show zone --decrypt
-	@echo ----- multiplexer
-	@$(LENTICULARIS_ADMIN) show multiplexer
-	@echo ----- server-processes
-	@$(LENTICULARIS_ADMIN) show server-processes
-	@echo ----- routing-table
-	@$(LENTICULARIS_ADMIN) show routing-table
+pyright::
+	-(pyright $(PYFILES)) > pyright-output.txt
+	@grep -E ".* errors?, .* warnings?, .* informations?" pyright-output.txt
 
-drop::
-	lenticularis-admin drop
-	lenticularis-admin flush routing-table
+pyright-update::
+	pip3 install --user -U pyright
 
-tools: nrandom
-
-nrandom: nrandom.o
-	$(CC) -o $@ nrandom.o
-
-clean:
-	rm -f nrandom nrandom.o
+clean::
 	rm tags

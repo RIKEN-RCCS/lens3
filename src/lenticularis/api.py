@@ -36,7 +36,7 @@ try:
     (_api_conf, _) = read_api_conf()
 except Exception as e:
     m = rephrase_exception_message(e)
-    sys.stderr.write(f"Lens3 reading a config file failed: ({m})\n")
+    sys.stderr.write(f"Lens3 reading a config file failed: exception=({m})\n")
     sys.exit(ERROR_EXIT_READCONF)
     pass
 

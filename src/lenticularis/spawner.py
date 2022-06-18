@@ -8,6 +8,7 @@ from subprocess import Popen, DEVNULL, PIPE, TimeoutExpired
 import sys
 from lenticularis.utility import copy_minimal_env
 from lenticularis.utility import wait_one_line_on_stdout
+from lenticularis.utility import rephrase_exception_message
 from lenticularis.utility import logger
 
 
@@ -79,7 +80,8 @@ class Spawner():
                                 f" stdout=({outs}), stderr=({errs})")
                     pass
         except Exception as e:
-            logger.error(f"Starting a Manager failed: exception={e}",
+            m = rephrase_exception_message(e)
+            logger.error(f"Starting a Manager failed: exception=({m})",
                          exc_info=True)
             if outs != b"" or errs != b"":
                 logger.error(f"Output from a Manager:"

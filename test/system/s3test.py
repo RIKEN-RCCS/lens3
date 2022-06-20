@@ -18,8 +18,13 @@ class S3_Test():
 
     def __init__(self):
         url = "http://fgkvm-010-128-008-026.fdcs.r-ccs.riken.jp:8009"
+        self.access_key = None
+        self.secret_key = None
         self.session = boto3.Session(profile_name="default")
-        self.s3 = self.session.resource(service_name="s3", endpoint_url=url)
+        self.s3 = self.session.resource(
+            service_name="s3", endpoint_url=url,
+            aws_access_key_id=self.access_key,
+            aws_secret_access_key=self.secret_key)
         #self.s3 = boto3.resource("s3")
         pass
  

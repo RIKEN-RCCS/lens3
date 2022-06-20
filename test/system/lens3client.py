@@ -28,6 +28,8 @@ def random_str(n):
 
 
 class Client():
+    """Lens3 API client.  It just represents an access endpoint."""
+
     def __init__(self, uid, gid, password, home, hostname, *, proto="https"):
         self._api_version = "v1.2"
         self.uid = uid

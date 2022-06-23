@@ -1,35 +1,27 @@
 # Tests
 
-  - To run system test, install boto3 and run test suite in test/system.
-    System test requires live Lenticularis service, and dummy users.
+## Prerequisite
 
-    1. Create a hundred dummy users, who's names are from "u0000" to "u0999".
-      They may authenticated by basic authentication method of NGINX,
-      and their passwords are from "p0000" to "p0999".
+boto3
 
-    2.  Edit `test.yaml` to match your environment.
 
-      2.1
-        Make `reverse_proxy_addr`, `webui_domainname`, and `endpoint_url` match
-        your live Lenticularis service.
+## Tests in test.yaml
 
-      2.2
-        Scan `tests:` section at the tailing part of `test.yaml'.
-        System test will perform tests denoted here, in order.
+```
+tests:
+- cleanup_pool
+- test_api_manipulation
+- test_public_access
+- test_keytype
+- test_create_bucket
+- test_list_objects
+- test_object_xfr
+- test_object_xfr_spray
+```
 
-      ```
-      tests:
-          - cleanup_pool
-          - test_api_manipulation
-          - test_public_access
-          - test_keytype
-          - test_create_bucket
-          - test_list_objects
-          - test_object_xfr
-          - test_object_xfr_spray
-      ```
+## Brief Descriptions
 
-## Brief Description of Tests
+* Tests include one sending a false csrf_token.
 
 ### API:cleanup_pool
 

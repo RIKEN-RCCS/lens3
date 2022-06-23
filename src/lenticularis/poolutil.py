@@ -38,6 +38,7 @@ class ID_Use(enum.Enum):
     """A usage of an ID entry in the table.  The "id:" entries are either
     pool-ids or access-keys.
     """
+    # (NOT USED YET).
     POOL = "pool"
     KEY = "access_key"
 
@@ -48,6 +49,8 @@ class ID_Use(enum.Enum):
 
 
 class Key_Policy(enum.Enum):
+    """A policy to an access-key; names are taken from MinIO."""
+    # (NOT USED YET).
     READWRITE = "readwrite"
     READONLY = "readonly"
     WRITEONLY = "writeonly"
@@ -59,6 +62,8 @@ class Key_Policy(enum.Enum):
 
 
 class Bkt_Policy(enum.Enum):
+    """A public-access policy of a bucket; names are taken from MinIO."""
+    # (NOT USED YET).
     NONE = "none"
     UPLOAD = "upload"
     DOWNLOAD = "download"

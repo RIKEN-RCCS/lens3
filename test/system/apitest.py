@@ -1,4 +1,4 @@
-"""Tests on Lens3 Web-UI."""
+"""Tests on Lens3 Setting Web-API."""
 
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
@@ -15,7 +15,7 @@ from lens3client import random_str
 class Api_Test():
     def __init__(self, client):
         self.client = client
-        self.directory = None
+        self.working_directory = None
         pass
 
     def get_user_template(self):
@@ -45,10 +45,11 @@ class Api_Test():
 
     def make_pool(self):
         """Makes a pool with a directory of a random name."""
-        if self.directory is None:
-            self.directory = self.client.home + "/" + random_str(8).lower()
-            pooldesc = self.client.make_pool(self.directory)
-            sys.stdout.write(f"make_pool={pooldesc}\n")
+        if self.working_directory is None:
+            self.working_directory = (self.client.home + "/00"
+                                      + random_str(6).lower())
+            pooldesc = self.client.make_pool(self.working_directory)
+            # sys.stdout.write(f"make_pool={pooldesc}\n")
             return pooldesc
         pass
 
@@ -75,7 +76,18 @@ def run():
     test.get_user_template()
     pools = test.list_pools()
     # sys.stdout.write(f"pools={pools}\n")
-    pooldesc = test.make_pool()
+
+    pooldesc0 = test.make_pool()
+    pooldesc1 = client.find_pool(test.working_directory)
+
+    pool = pooldesc1["pool_name"]
+    policy = "readwrite"
+    print(f"Making an access-key with policy={policy} in pool={pool}\n")
+    client.make_secret(pool, policy)
+
+    pooldesc2 = client.find_pool(test.working_directory)
+    print(f"pooldesc={pooldesc2}")
+    client.get_credential(pooldesc2, "readwrite", "default")
     pass
 
 

@@ -87,30 +87,30 @@
       </div>
       <div>
         <span class="label">Access keys (rw)</span>
-        <button v-on:click="kick_make_key('readwrite')">New</button>
+        <button v-on:click="kick_make_secret('readwrite')">New</button>
       </div>
       <div v-for="k in access_keys_rw">
         <input v-model="k.access_key" size="64" disabled />
         <input v-model="k.secret_key" size="64" disabled />
-        <button v-on:click="kick_delete_key(k.access_key)">Delete</button>
+        <button v-on:click="kick_delete_secret(k.access_key)">Delete</button>
       </div>
       <div>
         <span class="label">Access keys (ro)</span>
-        <button v-on:click="kick_make_key('readonly')">New</button>
+        <button v-on:click="kick_make_secret('readonly')">New</button>
       </div>
       <div v-for="k in access_keys_ro">
         <input v-model="k.access_key" size="64" disabled />
         <input v-model="k.secret_key" size="64" disabled />
-        <button v-on:click="kick_delete_key(k.access_key)">Delete</button>
+        <button v-on:click="kick_delete_secret(k.access_key)">Delete</button>
       </div>
       <div>
         <span class="label">Access keys (wo)</span>
-        <button v-on:click="kick_make_key('writeonly')">New</button>
+        <button v-on:click="kick_make_secret('writeonly')">New</button>
       </div>
       <div v-for="k in access_keys_wo">
         <input v-model="k.access_key" size="64" disabled />
         <input v-model="k.secret_key" size="64" disabled />
-        <button v-on:click="kick_delete_key(k.access_key)">Delete</button>
+        <button v-on:click="kick_delete_secret(k.access_key)">Delete</button>
       </div>
     </div>
 

@@ -78,8 +78,8 @@ var keys_section_app = new Vue({
   el: "#keys_section",
   data: edit_pool_data,
   methods: {
-    kick_make_key: run_make_access_key,
-    kick_delete_key: run_delete_access_key,
+    kick_make_secret: run_make_secret,
+    kick_delete_secret: run_delete_secret,
   },
 });
 
@@ -243,10 +243,10 @@ function run_delete_bucket(name) {
   return submit_request(msg, triple, display_pool_in_edit_pool);
 }
 
-function run_make_access_key(rw) {
+function run_make_secret(rw) {
   const msg = "make access-key";
   console.log("make_access_key: " + rw);
-  const method = "PUT";
+  const method = "POST";
   const url_path = ("/pool/" + edit_pool_data.pool_name + "/secret");
   const c = {"key_policy": rw};
   c["CSRF-Token"] = csrf_token;
@@ -255,7 +255,7 @@ function run_make_access_key(rw) {
   return submit_request(msg, triple, display_pool_in_edit_pool);
 }
 
-function run_delete_access_key(key) {
+function run_delete_secret(key) {
   const msg = "delete access-key";
   console.log("delete_access_key: " + key);
   const method = "DELETE";

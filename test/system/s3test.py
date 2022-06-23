@@ -1,4 +1,4 @@
-"""Tests on S3 (thru Lens3)."""
+"""Tests on S3 Accesses thru Lens3."""
 
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
@@ -28,6 +28,20 @@ class S3_Test():
         #self.s3 = boto3.resource("s3")
         pass
  
+    def _set_traceid(self, traceid):
+        """See https://stackoverflow.com/questions/58828800."""
+        if self.traceid:
+            self.traceid = traceid
+            return
+        self.traceid = traceid
+        event_system = self.s3.meta.events
+        event_system.register_first("before-sign.*.*", self._add_header)
+        pass
+
+    def _add_header(self, request, **kwargs):
+        request.headers.add_header("x-traceid", self.traceid)
+        pass
+
     def upload_file(self):
         subprocess.run(["touch", "gomi-file0.txt"])
         subprocess.run(["shred", "-n", "1", "-s", "64K", "gomi-file0.txt"])
@@ -37,6 +51,22 @@ class S3_Test():
 
     pass
 
+
+# self.boto3_client = boto3.client
+# self.s3 = boto3.client()
+
+# r = self.s3.list_buckets()
+# return r["Buckets"]
+
+# r = self.s3.create_bucket(Bucket=bucket)
+# r = self.s3.delete_bucket(Bucket=bucket)
+
+# r = self.s3.list_objects(Bucket=bucket)
+# return r["Contents"]
+
+# r = self.s3.upload_fileobj(f, bucket, key)
+# r = self.s3.download_fileobj(bucket, key, f)
+# r = self.s3.delete_object(Bucket=bucket, Key=key)
 
 def read_test_conf():
     try:

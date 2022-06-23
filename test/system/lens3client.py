@@ -27,11 +27,27 @@ def random_str(n):
     return a + "".join(b)
 
 
+def _trunc100(x):
+    return (int(x/100)*100)
+
+
+class Lens3_Error(Exception):
+    def __init__(self, *args):
+        super().__init__(*args)
+        pass
+
+    pass
+
+
 class Client():
     """Lens3 API client.  It just represents an access endpoint."""
 
+    _bkt_policy_set = {"none", "public", "upload", "download"}
+    _key_policy_set = {"readwrite", "readonly", "writeonly"}
+
     def __init__(self, uid, gid, password, home, hostname, *, proto="https"):
         self._api_version = "v1.2"
+        self._verbose = False
         self.uid = uid
         self.gid = gid
         self.password = password
@@ -82,14 +98,16 @@ class Client():
             raise
         pass
 
+    # API Primitives.
+
     def get_user_template(self):
         path = "/template"
         template = self.access("GET", path)
         api_version = template["pool_list"][0]["api_version"]
-        sys.stdout.write(f"api_version=({api_version})\n")
+        # sys.stdout.write(f"api_version=({api_version})\n")
         assert api_version == self._api_version
         self.csrf_token = template.get("CSRF-Token")
-        sys.stdout.write(f"csrf_token=({self.csrf_token})\n")
+        # sys.stdout.write(f"csrf_token=({self.csrf_token})\n")
         return template
 
     def make_pool(self, directory):
@@ -110,7 +128,7 @@ class Client():
     def list_pools(self):
         path = f"/pool"
         desc = self.access("GET", path)
-        pools = desc["pool_list"] 
+        pools = desc["pool_list"]
         return pools
 
     def delete_pool(self, pool):
@@ -121,7 +139,7 @@ class Client():
         return self.access("DELETE", path, data=data)
 
     def make_bucket(self, pool, bucket, bkt_policy):
-        assert bkt_policy in {"none", "public", "upload", "download"}
+        assert bkt_policy in self._bkt_policy_set
         (_, self.csrf_token) = self.get_pool(pool)
         path = f"/pool/{pool}/bucket"
         body = {"CSRF-Token": self.csrf_token,
@@ -137,7 +155,7 @@ class Client():
         return self.access("DELETE", path, data=data)
 
     def make_secret(self, pool, key_policy):
-        assert key_policy in {"readwrite", "readonly", "writeonly"}
+        assert key_policy in self._key_policy_set
         path = f"/pool/{pool}/secret"
         body = {"CSRF-Token": self.csrf_token,
                 "key_policy": key_policy}
@@ -149,5 +167,30 @@ class Client():
         body = {"CSRF-Token": self.csrf_token}
         data = json.dumps(body).encode()
         return self.access("DELTE", path, data=data)
+
+    # Auxiliary.
+
+    def find_pool(self, directory):
+        pools = self.list_pools()
+        pooldesc = next((pooldesc for pooldesc in pools
+                         if pooldesc["buckets_directory"] == directory),
+                        None)
+        return pooldesc
+
+    def get_credential(self, pooldesc, policy, section_title):
+        assert policy in self._key_policy_set
+        keys = pooldesc["access_keys"]
+        # {"use", "owner", "access_key", "secret_key", "key_policy"}
+        pair = next(((k["access_key"], k["secret_key"]) for k in keys
+                     if k["key_policy"] == policy),
+                    None)
+        if pair is None:
+            raise Lens3_Error(f"No access-key for a policy {policy}")
+        else:
+            print(f"[{section_title}]\n"
+                  f"aws_access_key_id = {pair[0]}\n"
+                  f"aws_secret_access_key = {pair[1]}\n", end="")
+            pass
+        pass
 
     pass

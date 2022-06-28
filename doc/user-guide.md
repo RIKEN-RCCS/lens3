@@ -128,8 +128,14 @@ bucket can only have a public access policy.
 
 ### Residue Files
 
-Running MinIO leaves a directory ".minio.sys" in the pool (in the
-buckets-directory).
+Running MinIO leaves a directory ".minio.sys" in the buckets-directory
+of the pool.
+
+### Access Logs
+
+Lens3 does not provide access logs to users, althoughl we understand
+it is useful to some users.  Adminitrators may provide access logs at
+a request by filtering server logs.
 
 ## Other Limitations
 
@@ -146,13 +152,17 @@ instances).
 recognize a credential attached in an URL, and denies a bucket access
 unless it is public.
 
+* Lens3 does not provide accesses to the rich GUI of MinIO or the MC
+  command.
+
 ## Glossary
 
 * __bucket pool__: A management unit of S3 buckets.  It corresponds to
   a single MinIO instance.
 * __probe access__: Api or the administrator tool accesses Mux to
   start a MinIO instance.  Such access is called a probe access.  A
-  probe access is not forwarded to a MinIO instance.
+  probe access is dropped at Mux and not forwarded to a MinIO
+  instance.
 
 ## Changes from v1.1 to v1.2
 

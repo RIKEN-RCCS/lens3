@@ -89,11 +89,13 @@ open to Api, since Api accesses both Mux's and MinIO's.
 __Increasing Logging verbosity__: Some classes has a `self._verbose`
 variable.  Setting it true makes debug logging more verbose.
 
-__Heartbeating Interval__: The duration of an expiration of of a MinIO
-manager record is set as the same as the duration of
-(heartbeat-interval * heartbeat-misses).  However, heartbeating would
-take longer time adding timeout of urlopen, and an expiration of a
-MinIO manager record may come earlier than a heartbeat failure.
+__Heartbeating Interval__: The expiration of a MinIO manager record in
+Redis is set as a little larger than the duration of
+(heartbeat-interval * (heartbeat-misses + 2)).  However, heartbeating
+would take longer time by the timeout of urlopen, etc., and an
+expiration of a MinIO manager record may come earlier than a heartbeat
+failure.  That causes starting a new MinIO instance which replaces the
+old instance before a heartbeat failure.
 
 __sudo and SIGSTOP__: A sudo shows a peculiar behavior at a stop
 signal: It stops itself when a subprocess got stopped.  A sudo process
@@ -106,3 +108,9 @@ __Mux Node Name__: Mux registers its endpoint obtained by
 platform.node() to the database, but it should be explicitly given
 when it is inappropriate.  Set the environment variable
 "LENTICULARIS_MUX_NODE" in "lenticularis-mux.service".
+
+__Failing Proper Shutdown__: A MinIO instance sometimes may stay alive
+at a shutdown of the lenticularis-mux service.  Please check a MinIO
+process without a manager process and kill it (which has sudo as the
+parent and the sudo's parent is the init), when the lenticularis-mux
+service is frequently started/stopped.

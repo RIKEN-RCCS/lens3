@@ -1,8 +1,8 @@
-# Stupid Tests
+# Trivial Tests
 
-These (in "test/stupid") are very simple tests.  Note the tests leave
-garbage files.  Run the tests in the "test/stupid" directory, because
-some tests need sample files which are in "test/stupid".
+These (in "test/trivial") are very simple tests.  Note the tests leave
+garbage files.  Run the tests in the "test/trivial" directory, because
+some tests need sample files which are in "test/trivial".
 
 The secret of S3 should be prepared in ".aws/*" in advance.  Also, a
 bucket needs to be created in advance.  The environment variables "EP"

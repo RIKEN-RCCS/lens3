@@ -42,8 +42,8 @@ class Lens3_Error(Exception):
 class Client():
     """Lens3 API client.  It just represents an access endpoint."""
 
-    _bkt_policy_set = {"none", "public", "upload", "download"}
-    _key_policy_set = {"readwrite", "readonly", "writeonly"}
+    bkt_policy_set = {"none", "public", "upload", "download"}
+    key_policy_set = {"readwrite", "readonly", "writeonly"}
 
     def __init__(self, uid, gid, password, home, hostname, *, proto="https"):
         self._api_version = "v1.2"
@@ -118,7 +118,8 @@ class Client():
                 "pool": desc}
         path = f"/pool"
         data = json.dumps(body).encode()
-        return self.access("POST", path, data=data)
+        desc = self.access("POST", path, data=data)
+        return desc["pool_list"][0]
 
     def get_pool(self, pool):
         path = f"/pool/{pool}"
@@ -139,13 +140,12 @@ class Client():
         return self.access("DELETE", path, data=data)
 
     def make_bucket(self, pool, bucket, bkt_policy):
-        assert bkt_policy in self._bkt_policy_set
-        (_, self.csrf_token) = self.get_pool(pool)
+        assert bkt_policy in self.bkt_policy_set
         path = f"/pool/{pool}/bucket"
         body = {"CSRF-Token": self.csrf_token,
                 "bucket": {"name": bucket, "bkt_policy": bkt_policy}}
         data = json.dumps(body).encode()
-        return self.access("POST", path, data=data)
+        return self.access("PUT", path, data=data)
 
     def delete_bucket(self, pool, bucket):
         assert self.csrf_token is not None
@@ -155,7 +155,7 @@ class Client():
         return self.access("DELETE", path, data=data)
 
     def make_secret(self, pool, key_policy):
-        assert key_policy in self._key_policy_set
+        assert key_policy in self.key_policy_set
         path = f"/pool/{pool}/secret"
         body = {"CSRF-Token": self.csrf_token,
                 "key_policy": key_policy}
@@ -166,7 +166,7 @@ class Client():
         path = f"/pool/{pool}/secret/{key}"
         body = {"CSRF-Token": self.csrf_token}
         data = json.dumps(body).encode()
-        return self.access("DELTE", path, data=data)
+        return self.access("DELETE", path, data=data)
 
     # Auxiliary.
 
@@ -177,8 +177,8 @@ class Client():
                         None)
         return pooldesc
 
-    def get_credential(self, pooldesc, policy, section_title):
-        assert policy in self._key_policy_set
+    def get_aws_credential(self, pooldesc, policy, section_title):
+        assert policy in self.key_policy_set
         keys = pooldesc["access_keys"]
         # {"use", "owner", "access_key", "secret_key", "key_policy"}
         pair = next(((k["access_key"], k["secret_key"]) for k in keys

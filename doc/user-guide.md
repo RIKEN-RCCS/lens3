@@ -133,9 +133,9 @@ of the pool.
 
 ### Access Logs
 
-Lens3 does not provide access logs to users, althoughl we understand
-it is useful to some users.  Adminitrators may provide access logs at
-a request by filtering server logs.
+Lens3 does not provide access logs to users, although we understand it
+is useful to users.  Administrators may provide access logs to users
+by request by filtering server logs.
 
 ## Other Limitations
 

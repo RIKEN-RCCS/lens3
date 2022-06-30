@@ -244,8 +244,8 @@ def check_access_key_naming(access_key):
 
 
 def check_bucket_naming(name):
-    """Checks restrictions.  Names are all lowercase.  IT BANS DOTS.  It
-    bans "aws", "amazon", "minio", "goog.*", and "g00g.*".
+    """Checks restrictions.  Names are all lowercase.  Lens3 BANS DOTS.
+    Lens3 bans "aws", "amazon", "minio", "goog*", and "g00g*".
     """
     # [Bucket naming rules]
     # https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucketnamingrules.html

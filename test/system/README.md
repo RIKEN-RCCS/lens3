@@ -1,4 +1,4 @@
-# Tests
+# Simple Tests
 
 ## Prerequisite
 
@@ -18,6 +18,8 @@ tests:
 - test_object_xfr
 - test_object_xfr_spray
 ```
+
+Run "apitest.py" first, and then run "s3test.py".
 
 ## Brief Descriptions
 

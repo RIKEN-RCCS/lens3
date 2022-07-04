@@ -39,13 +39,12 @@ class Api_Test():
 
     def make_pool_for_test(self):
         """Makes a pool with a random name directory."""
-        if self.working_directory is None:
-            self.working_directory = (self.client.home + "/00"
-                                      + random_str(6).lower())
-            pooldesc = self.client.make_pool(self.working_directory)
-            # sys.stdout.write(f"make_pool_for_test={pooldesc}\n")
-            return pooldesc
-        pass
+        assert self.working_directory is None
+        self.working_directory = (self.client.home + "/00"
+                                  + random_str(6).lower())
+        pooldesc = self.client.make_pool(self.working_directory)
+        # sys.stdout.write(f"make_pool_for_test={pooldesc}\n")
+        return pooldesc
 
     # Failing to send csrf_token.
 
@@ -90,7 +89,7 @@ class Api_Test():
 
         working_buckets = set()
         policy = "none"
-        bucket = ("lens3-oddity-" + random_str(6).lower())
+        bucket = ("lenticularis-oddity-" + random_str(6).lower())
         print(f"Makeing a bucket bucket={bucket}")
         self.client.make_bucket(pool, bucket, policy)
         working_buckets.add(bucket)
@@ -106,9 +105,9 @@ class Api_Test():
         # Make buckets.
 
         for policy in self.client.bkt_policy_set:
-            bucket = ("lens3-oddity-" + random_str(6).lower())
+            bucket = ("lenticularis-oddity-" + random_str(6).lower())
             while bucket in working_buckets:
-                bucket = ("lens3-oddity-" + random_str(6).lower())
+                bucket = ("lenticularis-oddity-" + random_str(6).lower())
                 pass
             assert bucket not in working_buckets
             print(f"Makeing a bucket bucket={bucket}")
@@ -146,23 +145,30 @@ class Api_Test():
 
 
 def read_test_conf():
+    config = "testu.yaml"
     try:
-        with open("testu.yaml", "r") as f:
+        with open(config, "r") as f:
             conf = yaml.load(f, Loader=yaml.BaseLoader)
     except yaml.YAMLError as e:
-        raise Exception(f"cannot read {configfile} {e}")
+        raise Exception(f"cannot read {config} {e}")
     except Exception as e:
-        raise Exception(f"cannot read {configfile} {e}")
+        raise Exception(f"cannot read {config} {e}")
     return conf
 
 def run():
     conf = read_test_conf()
     tracing.set("_random_tracing_value_")
     # sys.stdout.write(f"tracing.get={tracing.get()}\n")
-    client = Client(conf["uid"], conf["gid"], conf["password"], conf["home"],
-                    conf["host"], proto=conf["proto"])
+    path = conf["home"]
+    uid = conf["uid"]
+    home = f"{path}/{uid}"
+    proto = conf["proto"]
+    ep = conf["apiep"]
+    url = f"{proto}://{ep}"
+    client = Client(conf["uid"], conf["gid"], conf["password"], home, url)
+    client.get_user_template()
     test = Api_Test(client)
-    test.client.get_user_template()
+
     print(f"Makeing a pool for testing")
     pooldesc = test.make_pool_for_test()
     print(f"A pool={pooldesc}")

@@ -45,16 +45,17 @@ class Client():
     bkt_policy_set = {"none", "public", "upload", "download"}
     key_policy_set = {"readwrite", "readonly", "writeonly"}
 
-    def __init__(self, uid, gid, password, home, hostname, *, proto="https"):
+    def __init__(self, uid, gid, password, home, url):
         self._api_version = "v1.2"
         self._verbose = False
         self.uid = uid
         self.gid = gid
         self.password = password
         self.home = home
-        self.hostname = hostname
+        # self.hostname = hostname
+        # self.url = f"{proto}://{self.hostname}"
+        self.url = url
         self.running_host = platform.node()
-        self.url = f"{proto}://{self.hostname}"
         self.csrf_token = None
         pass
 
@@ -119,7 +120,9 @@ class Client():
         path = f"/pool"
         data = json.dumps(body).encode()
         desc = self.access("POST", path, data=data)
-        return desc["pool_list"][0]
+        pooldesc = desc["pool_list"][0]
+        assert pooldesc is not None
+        return pooldesc
 
     def get_pool(self, pool):
         path = f"/pool/{pool}"

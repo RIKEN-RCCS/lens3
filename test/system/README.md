@@ -4,7 +4,6 @@
 
 boto3
 
-
 ## Tests in test.yaml
 
 ```
@@ -25,33 +24,15 @@ Run "apitest.py" first, and then run "s3test.py".
 
 * Tests include one sending a false csrf_token.
 
-### API:cleanup_pool
+### apitest.py
 
-Delete all pools of the user
+It tests API operations: pool creation/deletion, access-key
+creation/deletion, and bucket creation/deletion.
 
-### API:test_api_manipulation
+### s3test.py
 
-Create pool, change secret key
-
-                             - create and delete buckets with
-                               the lenticularis API
-                             - buckets policy: none/upload/donwload/public
-
-### test_public_access
-
-Set direct hostname the access without Access ID
-
-### test_keytype
-
-readwrite/redonly/writeonly
-
-### test_create_bucket
-
-Create and delete a bucket (with S3 API)
-
-### test_list_objects
-
-Put objects, list bucket, delete objects
+It tests S3 operations: file upload/download with varying bucket
+policies and access-key policies.
 
 ### test_object_xfr
 

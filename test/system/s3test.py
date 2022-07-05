@@ -3,6 +3,7 @@
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
+import enum
 import sys
 import time
 import yaml
@@ -16,6 +17,17 @@ from lens3client import tracing
 from lens3client import random_str
 
 
+class Expectation(enum.Enum):
+    OK = "OK"
+    E401 = "401"
+    EACCESSDENIED = "AccessDenied"
+
+    def __str__(self):
+        return self.value
+
+    pass
+
+
 class S3_Test():
     """S3 cleint wrapper."""
 
@@ -23,6 +35,7 @@ class S3_Test():
         url = "http://fgkvm-010-128-008-026.fdcs.r-ccs.riken.jp:8009"
         self.client = client
         self.working_directory = None
+        self.working_buckets = set()
         pass
 
     def _set_traceid(self, traceid):
@@ -59,41 +72,44 @@ class S3_Test():
             pass
         pooldesc = self.client.find_pool(self.working_directory)
         keyslist = pooldesc["access_keys"]
-        session = boto3.Session(profile_name="default")
         # s3 = boto3.resource("s3")
         # Make S3 client for each access-key (for each policy).
         self.s3clients = dict()
         for k in keyslist:
             access_key = k["access_key"]
             secret_key = k["secret_key"]
-            s3 = session.resource(
-                service_name="s3", endpoint_url=url,
+            session0 = boto3.Session(
+                profile_name="default",
                 aws_access_key_id=access_key,
                 aws_secret_access_key=secret_key)
+            s3 = session0.resource(
+                service_name="s3", endpoint_url=url)
             policy = k["key_policy"]
             self.s3clients[policy] = s3
             pass
         assert self.s3clients.keys() == self.client.key_policy_set
         # Make a public access client (without a key).
-        s3 = session.resource(
-            service_name="s3", endpoint_url=url)
+        session1 = boto3.Session(profile_name="default")
+        s3 = session1.resource(
+            service_name="s3", endpoint_url=url,
+            config=botocore.config.Config(signature_version=botocore.UNSIGNED))
         self.s3clients["void"] = s3
+        print(f"void-s3={s3}")
         print(f"s3clients={self.s3clients}")
         pass
 
     def make_buckets(self):
         pooldesc = self.client.find_pool(self.working_directory)
         pool = pooldesc["pool_name"]
-        working_buckets = set()
         for policy in self.client.bkt_policy_set:
             bucket = ("lenticularis-oddity-" + random_str(6).lower())
-            while bucket in working_buckets:
+            while bucket in self.working_buckets:
                 bucket = ("lenticularis-oddity-" + random_str(6).lower())
                 pass
-            assert bucket not in working_buckets
+            assert bucket not in self.working_buckets
             print(f"Makeing a bucket bucket={bucket}")
             self.client.make_bucket(pool, bucket, policy)
-            working_buckets.add(bucket)
+            self.working_buckets.add(bucket)
             pass
         pooldesc = self.client.find_pool(self.working_directory)
         bktslist = pooldesc["buckets"]
@@ -107,7 +123,7 @@ class S3_Test():
         pass
 
     def store_files_in_buckets(self):
-        print("Store a file in each bucket with the readwrite key.")
+        print("Storing a file in each bucket with the readwrite key.")
         data = open("gomi-file0.txt", "rb")
         s3 = self.s3clients["readwrite"]
         for (policy, bucket) in self.buckets.items():
@@ -116,42 +132,42 @@ class S3_Test():
         pass
 
     expectations = [
-        # (bkt, key, op, expectation)
-        ("none", "void", "w", False),
-        ("none", "readwrite", "w", True),
-        ("none", "readonly", "w", False),
-        ("none", "writeonly", "w", True),
-        ("none", "void", "r", False),
-        ("none", "readwrite", "r", True),
-        ("none", "readonly", "r", True),
-        ("none", "writeonly", "r", False),
+        # (bkt-policy, key-policy, op, expectation)
+        ("none", "void", "w", Expectation("401")),
+        ("none", "readwrite", "w", Expectation.OK),
+        ("none", "readonly", "w", Expectation("AccessDenied")),
+        ("none", "writeonly", "w", Expectation.OK),
+        ("none", "void", "r", Expectation("401")),
+        ("none", "readwrite", "r", Expectation.OK),
+        ("none", "readonly", "r", Expectation.OK),
+        ("none", "writeonly", "r", Expectation("AccessDenied")),
 
-        ("upload", "void", "w", False),  #?
-        ("upload", "readwrite", "w", True),
-        ("upload", "readonly", "w", False), #?
-        ("upload", "writeonly", "w", True),
-        ("upload", "void", "r", False),
-        ("upload", "readwrite", "r", True),
-        ("upload", "readonly", "r", True), #?
-        ("upload", "writeonly", "r", False), #?
+        ("upload", "void", "w", Expectation.OK),
+        ("upload", "readwrite", "w", Expectation.OK),
+        ("upload", "readonly", "w", Expectation("AccessDenied")),
+        ("upload", "writeonly", "w", Expectation.OK),
+        ("upload", "void", "r", Expectation("AccessDenied")),
+        ("upload", "readwrite", "r", Expectation.OK),
+        ("upload", "readonly", "r", Expectation.OK),
+        ("upload", "writeonly", "r", Expectation("AccessDenied")),
 
-        ("download", "void", "w", False),
-        ("download", "readwrite", "w", True),
-        ("download", "readonly", "w", False), #?
-        ("download", "writeonly", "w", True), #?
-        ("download", "void", "r", False), #?
-        ("download", "readwrite", "r", True),
-        ("download", "readonly", "r", True),
-        ("download", "writeonly", "r", False), #?
+        ("download", "void", "w", Expectation("AccessDenied")),
+        ("download", "readwrite", "w", Expectation.OK),
+        ("download", "readonly", "w", Expectation("AccessDenied")),
+        ("download", "writeonly", "w", Expectation.OK),
+        ("download", "void", "r", Expectation.OK),
+        ("download", "readwrite", "r", Expectation.OK),
+        ("download", "readonly", "r", Expectation.OK),
+        ("download", "writeonly", "r", Expectation("AccessDenied")),
 
-        ("public", "void", "w", False), #?
-        ("public", "readwrite", "w", True),
-        ("public", "readonly", "w", False), #?
-        ("public", "writeonly", "w", True),
-        ("public", "void", "r", False), #?
-        ("public", "readwrite", "r", True),
-        ("public", "readonly", "r", True),
-        ("public", "writeonly", "r", False), #?
+        ("public", "void", "w", Expectation.OK),
+        ("public", "readwrite", "w", Expectation.OK),
+        ("public", "readonly", "w", Expectation("AccessDenied")),
+        ("public", "writeonly", "w", Expectation.OK),
+        ("public", "void", "r", Expectation.OK),
+        ("public", "readwrite", "r", Expectation.OK),
+        ("public", "readonly", "r", Expectation.OK),
+        ("public", "writeonly", "r", Expectation("AccessDenied"))
     ]
 
     def match_policy_in_buckets(self):
@@ -172,15 +188,11 @@ class S3_Test():
                     assert data0 == data1
             except botocore.exceptions.ClientError as e:
                 #except urllib.error.HTTPError as e:
-                print(f"error={e.response['Error']['Code']}")
-                if key == "void":
-                    assert e.response["Error"]["Code"] == "403"
-                else:
-                    assert e.response["Error"]["Code"] == "AccessDenied"
-                    pass
-                assert expectation == False
+                error = e.response["Error"]["Code"]
+                # print(f"error={error}")
+                assert expectation == Expectation(error)
             else:
-                assert expectation == True
+                assert expectation == Expectation.OK
                 pass
             pass
         pass
@@ -203,31 +215,58 @@ class S3_Test():
         subprocess.run(["touch", "gomi-file0.txt"])
         subprocess.run(["shred", "-n", "1", "-s", "64K", "gomi-file0.txt"])
 
-        # Make S3 clients with access-keys.
+        # Test S3 clients with access-keys vs. bucket policies.
 
         self.make_s3_clients(url)
         self.make_buckets()
         self.store_files_in_buckets()
         self.match_policy_in_buckets()
 
-        # Bucket opetarions (they do not work).
+        # Bucket operations will fail (they do not work in Lens3).
 
-        r = self.s3.list_buckets()
-        print(f"list_buckets={r}")
+        s3 = self.s3clients["readwrite"]
+
+        # Listing buckets fails.
+
+        try:
+            r = list(s3.buckets.all())
+            print(f"buckets.all()={r}")
+        except botocore.exceptions.ClientError as e:
+            error = e.response["Error"]["Code"]
+            assert error == "401"
+            pass
         bucket = ("lenticularis-oddity-" + random_str(6).lower())
-        r = self.s3.create_bucket(Bucket=bucket)
-        print(f"create_bucket={r}")
-        r = self.s3.delete_bucket(Bucket=bucket)
-        print(f"delete_bucket={r}")
+        while bucket in self.working_buckets:
+            bucket = ("lenticularis-oddity-" + random_str(6).lower())
+            pass
+
+        # Creating a bucket fails.
+
+        try:
+            r = s3.create_bucket(Bucket=bucket)
+            print(f"create_bucket={r}")
+        except botocore.exceptions.ClientError as e:
+            error = e.response["Error"]["Code"]
+            assert error == "404"
+            pass
+
+        # r = s3.delete_bucket(Bucket=bucket)
+        # print(f"delete_bucket={r}")
+
+        bucketname = self.buckets["none"]
 
         # List objects.
 
-        r = self.s3.list_objects(Bucket=bucket)
-        # return r["Contents"]
+        bucket = s3.Bucket(bucketname)
+        r = list(bucket.objects.all())
+        print(f"bucket.objects.all()={r}")
 
-        # r = self.s3.upload_fileobj(f, bucket, key)
-        # r = self.s3.download_fileobj(bucket, key, f)
-        # r = self.s3.delete_object(Bucket=bucket, Key=key)
+        print(f"Uploading/downloading a file via S3.Bucket API.")
+        # upload_file(file, key); download_file(key, file)
+        r = bucket.upload_file("gomi-file0.txt", "gomi-file1.txt")
+        r = bucket.download_file("gomi-file1.txt", "gomi-file1.txt")
+        object = bucket.Object("gomi-file1.txt")
+        r = object.delete()
         pass
 
     pass

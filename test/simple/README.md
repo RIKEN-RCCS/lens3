@@ -15,10 +15,10 @@ Run "apitest.py" first, and then run "s3test.py".
 It tests API operations: pool creation/deletion, access-key
 creation/deletion, and bucket creation/deletion.
 
-It reads a file "testu.yaml", whose contents are following.  apiep is
-an endpoint of Web-API, and s3ep is an access point of S3.  home+uid
-is used as a directory to create a pool.  The password is used as a
-basic authentication key at the http reverse-proxy.
+It reads a file "testu.yaml", whose contents are as following.  apiep
+is an endpoint of Web-API, and s3ep is an access point of S3.
+home+uid is used as a directory to create a pool.  The password is
+used as a basic authentication key at the http reverse-proxy.
 
 ```
 apiep: "lens3.example.com:8008"

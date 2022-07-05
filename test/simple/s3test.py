@@ -44,8 +44,8 @@ class S3_Test():
             self.traceid = traceid
             return
         self.traceid = traceid
-        event_system = self.s3.meta.events
-        event_system.register_first("before-sign.*.*", self._add_header)
+        # event_system = self.s3.meta.events
+        # event_system.register_first("before-sign.*.*", self._add_header)
         pass
 
     def _add_header(self, request, **kwargs):
@@ -54,13 +54,12 @@ class S3_Test():
 
     def make_pool_for_test(self):
         """Makes a pool with a random name directory."""
-        if self.working_directory is None:
-            self.working_directory = (self.client.home + "/00"
-                                      + random_str(6).lower())
-            pooldesc = self.client.make_pool(self.working_directory)
-            # sys.stdout.write(f"make_pool_for_test={pooldesc}\n")
-            return pooldesc
-        pass
+        assert self.working_directory is None
+        self.working_directory = (self.client.home + "/00"
+                                  + random_str(6).lower())
+        pooldesc = self.client.make_pool(self.working_directory)
+        # sys.stdout.write(f"make_pool_for_test={pooldesc}\n")
+        return pooldesc
 
     def make_s3_clients(self, url):
         pooldesc = self.client.find_pool(self.working_directory)

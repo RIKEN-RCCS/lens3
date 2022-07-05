@@ -182,14 +182,15 @@ process will be terminated when a Manager exits.
 #### Forced Heartbeat Failure
 
 "kill -STOP" the MinIO process.  It causes heartbeat failure.  Note
-that, it leaves "minio" and "sudo" processes in STOP state.
+that it leaves "minio" and "sudo" processes in the STOP state.
 
 #### Forced Termination of Mux and MinIO
 
-#### Deletion of Redis Expiring Entries
+#### Forced Deletion of Redis Expiring Entries
 
-Forced removal of a __ma:pool-id__ entry should (1) start a new
-Mux+MinIO pair, and (2) stop an old Mux+MinIO pair.
+The action Lens3 takes at a forced removal of a __ma:pool-id__ entry
+in Redis should (1) start a new Mux+MinIO pair, and (2) stop an old
+Mux+MinIO pair.
 
 ## Glossary
 

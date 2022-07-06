@@ -175,14 +175,9 @@ It is highly site dependent.
 
 ### A Note about Nginx parameters
 
-Nginx has a parameter of the limits: "client_max_body_size"
-(default=1MB).  On the other hand, AWS S3 CLI has parameters for file
-transfers, "multipart_threshold" (default=8MB) and
-"multipart_chunksize" (default=8MB).  Especially,
-"multipart_chunksize" has the minimum 5MB.  The default value of Nginx
-is too small for the values of AWS S3 CLI.  The Nginx parameter is
-specified in the server section (or in the http section).  Refer to
-"lens3proxy.conf".  The size "0" can be used which means unlimited.
+Nginx has a parameter of the limit "client_max_body_size"
+(default=1MB).  The default value is too small.  The size "10M" seems
+adequate or "0" which means unlimited may also be adequate.
 
 ```
 server {
@@ -190,8 +185,15 @@ server {
 }
 ```
 
+"client_max_body_size" limits the payload.  On the other hand, AWS S3
+CLI has parameters for file transfers, "multipart_threshold"
+(default=8MB) and "multipart_chunksize" (default=8MB).  Especially,
+"multipart_chunksize" has the minimum 5MB.  Nginx parameters are
+specified in the server section (or in the http section).  Refer to
+"lens3proxy.conf".
+
 It is recommended to check the limits of the reverse-proxy, when
-encountering the 413 (Request Entity Too Large) error in simple tests.
+encountering the 413 error (Request Entity Too Large).
 
 The "client_max_body_size" is defined in ngx_http_core_module.  See
 for Nginx ngx_http_core_module parameters:

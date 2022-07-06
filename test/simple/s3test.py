@@ -32,7 +32,6 @@ class S3_Test():
     """S3 cleint wrapper."""
 
     def __init__(self, client):
-        url = "http://fgkvm-010-128-008-026.fdcs.r-ccs.riken.jp:8009"
         self.client = client
         self.working_directory = None
         self.working_buckets = set()
@@ -169,7 +168,7 @@ class S3_Test():
         ("public", "writeonly", "r", Expectation("AccessDenied"))
     ]
 
-    def match_policy_in_buckets(self):
+    def transfer_by_varying_policies(self):
         data0 = open("gomi-file0.txt", "rb").read()
         for (bkt, key, op, expectation) in self.expectations:
             print(f"Accessing ({op}) a {bkt}-bucket with a {key}-key.")
@@ -206,7 +205,6 @@ class S3_Test():
     # return self.boto3_client.upload_fileobj(f, bucket, key)
     # return self.boto3_client.download_fileobj(bucket, key, f)
 
-
     def run(self, url):
 
         # Make a test file (random 64KB).
@@ -219,7 +217,7 @@ class S3_Test():
         self.make_s3_clients(url)
         self.make_buckets()
         self.store_files_in_buckets()
-        self.match_policy_in_buckets()
+        self.transfer_by_varying_policies()
 
         # Bucket operations will fail (they do not work in Lens3).
 
@@ -260,19 +258,43 @@ class S3_Test():
         r = list(bucket.objects.all())
         print(f"bucket.objects.all()={r}")
 
+        # Upload/download objects.
+
         print(f"Uploading/downloading a file via S3.Bucket API.")
         # upload_file(file, key); download_file(key, file)
         r = bucket.upload_file("gomi-file0.txt", "gomi-file1.txt")
         r = bucket.download_file("gomi-file1.txt", "gomi-file1.txt")
         object = bucket.Object("gomi-file1.txt")
         r = object.delete()
+
+        # Upload/download files with varying sizes.
+
+        for i in [0, 1, 2, 3]:
+            size = 6113 * (13 ** i)
+            print(f"Uploading/downloading a file (size={size}).")
+            subprocess.run(["touch", "gomi0.txt"])
+            subprocess.run(["shred", "-n", "1", "-s", f"{size}", "gomi0.txt"])
+            name = f"gomi-file{i}.txt"
+            r = bucket.upload_file("gomi0.txt", name)
+            r = bucket.download_file(name, "gomi1.txt")
+            with open("gomi0.txt", "rb") as f:
+                data0 = f.read()
+                pass
+            with open("gomi1.txt", "rb") as f:
+                data1 = f.read()
+                pass
+            assert data0 == data1
+            del data0
+            del data1
+            pass
+
         pass
 
     pass
 
 
 def read_test_conf():
-    config = "testv.yaml"
+    config = "testu.yaml"
     try:
         with open(config, "r") as f:
             conf = yaml.load(f, Loader=yaml.BaseLoader)

@@ -6,7 +6,7 @@ This describes design notes of Lenticularis-S3.
 
 * Components
   * Mux (Multiplexer)
-  * Api (Web-UI)
+  * Api (Web-API)
   * MinIO (S3 server)
   * Redis
 

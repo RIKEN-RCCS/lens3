@@ -84,6 +84,14 @@ multiple Muxs setting, firewall settings shall be fixed.  The port
 range of communication for both Mux's and MinIO's on hosts must be
 open to Api, since Api accesses both Mux's and MinIO's.
 
+## S3 Signature Algorithm Version
+
+Lens3 works only with the signature v4 as MinIO does.  That is, an
+authentication header must include the string "AWS4-HMAC-SHA256".  If
+"pubic-access-user" appears in the access-log, it indicates the
+request has no valid authentication information and it is very likely
+the authentication header is wrong.
+
 ## RANDOM MEMO
 
 __Increasing Logging verbosity__: Some classes has a `self._verbose`

@@ -9,7 +9,7 @@ reverse-proxy <-->︎ Mux (Multiplexer) <--> MinIO
                                      <--> MinIO
                                      <--> ...
                                      <--> MinIO
-              <--> Api (Setting Web-UI)
+              <--> Api (Setting Web-API)
                    Redis
 ```
 
@@ -18,7 +18,7 @@ The steps are:
 * Setup a reverse-proxy
 * Start Redis
 * Start Mux (a Multiplexer service)
-* Start Api (a Web-UI service)
+* Start Api (a Web-API service)
 * Register users
 
 ## Assumptions
@@ -232,7 +232,7 @@ Note: Starting Redis will fail when the file owner of
 # systemctl start lenticularis-redis
 ```
 
-## Setup Api (Web-UI)
+## Setup Api (Web-API)
 
 * Copy the Api configuration file
   * Configuration file is: `/etc/lenticularis/api-config.yaml`
@@ -362,7 +362,7 @@ $ systemctl status lenticularis-mux
 lens3-admin$ lenticularis-admin -c api-config.yaml show-muxs
 ```
 
-* Api (Web-UI) status
+* Api (Web-API) status
 
 ```
 $ systemctl status lenticularis-api

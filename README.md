@@ -46,7 +46,9 @@ Lens3 is developed by the [Authors](AUTHORS.txt).  But, the code was
 reviewed by zzmatu and all remaining bugs are his responsibility.
 
 Lens3 utilizes third-party open source software, which is listed in
-[Acknowledgement](ACKNOWLEDGEMENT.txt).
+[Acknowledgement](ACKNOWLEDGEMENT.txt).  The directory
+"test/s3-benchmark" is a third-party benchmark program, which is
+copyrighted by wasabi-tech and the license is LGPL.
 
 Files.
 

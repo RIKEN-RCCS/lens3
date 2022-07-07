@@ -52,7 +52,7 @@ minio:
     mc: /home/lens3/bin/mc
 ```
 
-## Web-UI Part
+## Web-API Part
 
 ```
 system:

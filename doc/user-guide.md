@@ -2,8 +2,8 @@
 
 ## Quick Setup of Buckets
 
-Accessing the management Web-UI site first shows the two buttons: "New
-bucket pool" and "Show bucket pools".  Click "New bucket pool".
+Accessing the management Web-API site first shows the two buttons:
+"New bucket pool" and "Show bucket pools".  Click "New bucket pool".
 
 ![Landing page](ug1.jpg)
 
@@ -37,11 +37,18 @@ removes the pool.
 
 ## S3 Client Access Example
 
-The followng example shows an access to an endpoint using the AWS CLI.
-An access-key pair is provided by Lens3 Web-UI.
+The following example shows an access to an endpoint using the AWS
+CLI.  An access-key pair can be obtained by Lens3 Web-API.  Lens3
+works only with the signature algorithm v4, and it is specified as
+"s3v4".
 
 ```
-$ cat .aws/credentials
+$ cat ~/.aws/config
+[default]
+s3 =
+    signature_version = s3v4
+
+$ cat ~/.aws/credentials
 [default]
 aws_access_key_id = WoRKvRhrdaMNSlkZcJCB
 aws_secret_access_key = DzZv57R8wBIuVZdtAkE1uK1HoebLPMzKM6obA4IDqOhaLIBf
@@ -60,7 +67,7 @@ $ aws --endpoint-url=http://lens3.example.com/ s3 ls s3://somebucket1/
 ```
 
 Lens3 consists of Mux and Api -- Mux is a multiplexer and Api is a
-setting Web-UI.  Others are by third party.  MinIO is an open-source
+setting Web-API.  Others are by third party.  MinIO is an open-source
 but commercially supported S3 server.  Redis is an open-source
 database system.  A reverse-proxy is not specified in Lens3 but it is
 required for operation.

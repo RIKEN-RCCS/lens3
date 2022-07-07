@@ -8,7 +8,7 @@
 
 Run "apitest.py" first, and then run "s3test.py".
 
-* Tests include one sending a false csrf_token. (NOT YET)
+* (NOT YET) Tests include one sending a false csrf_token.
 
 ### apitest.py
 
@@ -37,3 +37,17 @@ bucket policies and access-key policies.  It tests using small files
 (64KB).
 
 It also reads a file "testu.yaml".
+
+## Other Tests
+
+https://github.com/wasabi-tech/s3-benchmark
+
+```
+git clone https://github.com/wasabi-tech/s3-benchmark.git
+```
+
+Since Lens3 does not accept bucket operations, a line in the code to
+create a bucket should be removed first.
+
+
+https://github.com/minio/warp

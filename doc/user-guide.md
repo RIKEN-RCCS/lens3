@@ -37,10 +37,9 @@ removes the pool.
 
 ## S3 Client Access Example
 
-The following example shows an access to an endpoint using the AWS
-CLI.  An access-key pair can be obtained by Lens3 Web-API.  Lens3
-works only with the signature algorithm v4, and it is specified as
-"s3v4".
+The following example shows accessing an endpoint using the AWS CLI.
+An access-key pair can be obtained by Lens3 Web-API.  Lens3 only works
+with the signature algorithm v4, and it is specified as "s3v4".
 
 ```
 $ cat ~/.aws/config
@@ -67,22 +66,22 @@ $ aws --endpoint-url=http://lens3.example.com/ s3 ls s3://somebucket1/
 ```
 
 Lens3 consists of Mux and Api -- Mux is a multiplexer and Api is a
-setting Web-API.  Others are by third party.  MinIO is an open-source
-but commercially supported S3 server.  Redis is an open-source
-database system.  A reverse-proxy is not specified in Lens3 but it is
-required for operation.
+setting Web-API.  Others are by third-parties.  MinIO is an
+open-source but commercially supported S3 server.  Redis is an
+open-source database system.  A reverse-proxy is not specified in
+Lens3 but it is required for operation.
 
 Mux works as a reverse-proxy which forwards file access requests to an
 MinIO instance by looking at a bucket name.  Mux determines the target
 MinIO instance using an association of a bucket and a user.  This
 association is stored in a Redis database.  Api provides management of
-buckets.  Api manages buckets by a bucket pool, which is a unit of
+buckets.  Api manages buckets by a bucket pool, which is a unit of a
 management in Lens3 and corresponds to a single MinIO instance.  A
 user first creates a bucket pool, and then registers buckets to the
 pool.  Mux is also in charge of starting and stopping a MinIO
 instance.  Mux starts a MinIO instance on receiving an access request,
 and after a while, Mux stops the instance when accesses become idle.
-Mux starts a MinIO instance as a usual user process using "sudo".
+Mux starts a MinIO instance as a user process using "sudo".
 
 ## Bucket-Pool State
 

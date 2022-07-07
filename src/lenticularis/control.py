@@ -37,7 +37,7 @@ from lenticularis.utility import logger
 
 
 class Control_Api():
-    """Setting Web-UI."""
+    """Setting Web-API."""
 
     def __init__(self, api_conf):
         self._api_version = "v1.2"
@@ -377,7 +377,7 @@ class Control_Api():
     # API implementation.
 
     def _return_user_template(self, user_id):
-        """Returns basic information on the user needed by Web-UI."""
+        """Returns basic information on the user needed by Web-API."""
         ensure_user_is_authorized(self.tables, user_id)
         u = self.tables.get_user(user_id)
         assert u is not None
@@ -409,7 +409,7 @@ class Control_Api():
         path = makepool["buckets_directory"]
         owner_gid = makepool["owner_gid"]
         pool_id = self.do_make_pool(traceid, user_id, owner_gid, path)
-        # Return a pool description for Web-UI.
+        # Return a pool description for Web-API.
         pooldesc1 = gather_pool_desc(self.tables, pool_id)
         assert pooldesc1 is not None
         try:

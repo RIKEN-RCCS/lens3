@@ -150,7 +150,7 @@ def ensure_secret_owner(tables, access_key, pool_id):
 
 
 def _drop_non_ui_info_from_keys(access_key):
-    """Drops unnecessary info to pass access-key info to Web-UI.  That is,
+    """Drops unnecessary info to pass access-key info to Web-API.  That is,
     they are {"use", "owner", "modification_time"}.
     """
     needed = {"access_key", "secret_key", "key_policy"}
@@ -169,7 +169,7 @@ def gather_buckets(tables, pool_id):
 
 def gather_keys(tables, pool_id):
     """Gathers keys in the pool, but drops a probe-key and slots
-    uninteresting to Web-UI.
+    uninteresting to Web-API.
     """
     keys = tables.list_access_keys_of_pool(pool_id)
     keys = sorted(keys, key=lambda k: k["modification_time"])
@@ -180,7 +180,7 @@ def gather_keys(tables, pool_id):
 
 
 def gather_pool_desc(tables, pool_id):
-    """Returns a pool description for displaying by Web-UI."""
+    """Returns a pool description for displaying by Web-API."""
     pooldesc = tables.get_pool(pool_id)
     if pooldesc is None:
         return None
@@ -354,7 +354,7 @@ def _pool_desc_schema(type_number):
 
 
 def check_pool_is_well_formed(pooldesc, user_):
-    """Checks a pool description is well-formed for passing to Web-UI."""
+    """Checks a pool description is well-formed for passing to Web-API."""
     schema = _pool_desc_schema({"type": "string"})
     jsonschema.validate(instance=pooldesc, schema=schema)
     for bucket in pooldesc.get("buckets", []):

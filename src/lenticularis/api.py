@@ -159,7 +159,7 @@ async def app_get_get_template(
         x_real_ip: Union[str, None] = Header(default=None),
         x_traceid: Union[str, None] = Header(default=None),
         csrf_protect: CsrfProtect = Depends()):
-    """Returns a user information for Web-UI."""
+    """Returns a user information for Web-API."""
     logger.debug(f"APP.GET /template")
     (user_id, client_addr, traceid) = (x_remote_user, x_real_ip, x_traceid)
     tracing.set(traceid)

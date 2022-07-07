@@ -5,27 +5,23 @@ package main
 
 import (
 	"bytes"
-	"crypto/hmac"
+	"code.cloudfoundry.org/bytefmt"
+	"context"
 	"crypto/md5"
-	"crypto/sha1"
-	"crypto/tls"
 	"encoding/base64"
 	"flag"
 	"fmt"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/pivotal-golang/bytefmt"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"io"
 	"io/ioutil"
 	"log"
 	"math/rand"
-	"net"
+	//"net"
 	"net/http"
 	"os"
-	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -50,43 +46,27 @@ func logit(msg string) {
 	}
 }
 
-// Our HTTP transport used for the roundtripper below
-var HTTPTransport http.RoundTripper = &http.Transport{
-	Proxy: http.ProxyFromEnvironment,
-	Dial: (&net.Dialer{
-		Timeout:   30 * time.Second,
-		KeepAlive: 30 * time.Second,
-	}).Dial,
-	TLSHandshakeTimeout:   10 * time.Second,
-	ExpectContinueTimeout: 0,
-	// Allow an unlimited number of idle connections
-	MaxIdleConnsPerHost: 4096,
-	MaxIdleConns:        0,
-	// But limit their idle time
-	IdleConnTimeout: time.Minute,
-	// Ignore TLS errors
-	TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-}
-
-var httpClient = &http.Client{Transport: HTTPTransport}
-
-func getS3Client() *s3.S3 {
+func getS3Client() *s3.Client {
 	// Build our config
-	creds := credentials.NewStaticCredentials(access_key, secret_key, "")
-	loglevel := aws.LogOff
-	// Build the rest of the configuration
-	awsConfig := &aws.Config{
-		Region:               aws.String(region),
-		Endpoint:             aws.String(url_host),
-		Credentials:          creds,
-		LogLevel:             &loglevel,
-		S3ForcePathStyle:     aws.Bool(true),
-		S3Disable100Continue: aws.Bool(true),
-		// Comment following to use default transport
-		HTTPClient: &http.Client{Transport: HTTPTransport},
+	customresolver := aws.EndpointResolverWithOptionsFunc(
+		func(service, region string, options ...interface{}) (aws.Endpoint, error) {
+			return aws.Endpoint{
+				//PartitionID:   "aws",
+				URL:           url_host,
+				SigningRegion: region,
+			}, nil
+		})
+	cfg, err := config.LoadDefaultConfig(context.TODO(),
+		config.WithEndpointResolverWithOptions(customresolver),
+		config.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(access_key, secret_key,
+				"")))
+	if err != nil {
+		log.Fatalf("FATAL: Unable to create new client.")
 	}
-	session := session.New(awsConfig)
-	client := s3.New(session)
+
+	//fmt.Printf("CFG=%v\n", cfg)
+	client := s3.NewFromConfig(cfg)
 	if client == nil {
 		log.Fatalf("FATAL: Unable to create new client.")
 	}
@@ -99,7 +79,7 @@ func createBucket(ignore_errors bool) {
 	client := getS3Client()
 	// Create our bucket (may already exist without error)
 	in := &s3.CreateBucketInput{Bucket: aws.String(bucket)}
-	if _, err := client.CreateBucket(in); err != nil {
+	if _, err := client.CreateBucket(context.TODO(), in); err != nil {
 		if ignore_errors {
 			log.Printf("WARNING: createBucket %s error, ignoring %v", bucket, err)
 		} else {
@@ -118,30 +98,32 @@ func deleteAllObjects() {
 	var err error
 	for loop := 1; ; loop++ {
 		// Delete all the existing objects and versions in the bucket
-		in := &s3.ListObjectVersionsInput{Bucket: aws.String(bucket), KeyMarker: keyMarker, VersionIdMarker: versionId, MaxKeys: aws.Int64(1000)}
-		if listVersions, listErr := client.ListObjectVersions(in); listErr == nil {
-			delete := &s3.Delete{Quiet: aws.Bool(true)}
-			for _, version := range listVersions.Versions {
-				delete.Objects = append(delete.Objects, &s3.ObjectIdentifier{Key: version.Key, VersionId: version.VersionId})
-			}
-			for _, marker := range listVersions.DeleteMarkers {
-				delete.Objects = append(delete.Objects, &s3.ObjectIdentifier{Key: marker.Key, VersionId: marker.VersionId})
-			}
-			if len(delete.Objects) > 0 {
-				// Start a delete routine
-				doDelete := func(bucket string, delete *s3.Delete) {
-					if _, e := client.DeleteObjects(&s3.DeleteObjectsInput{Bucket: aws.String(bucket), Delete: delete}); e != nil {
-						err = fmt.Errorf("DeleteObjects unexpected failure: %s", e.Error())
-					}
-					doneDeletes.Done()
+		in := &s3.ListObjectVersionsInput{Bucket: aws.String(bucket), KeyMarker: keyMarker, VersionIdMarker: versionId, MaxKeys: 1000}
+		if listVersions, listErr := client.ListObjectVersions(context.TODO(), in); listErr == nil {
+			/*
+				delete := &s3.Delete{Quiet: aws.Bool(true)}
+				for _, version := range listVersions.Versions {
+					delete.Objects = append(delete.Objects, &s3.ObjectIdentifier{Key: version.Key, VersionId: version.VersionId})
 				}
-				doneDeletes.Add(1)
-				go doDelete(bucket, delete)
-			}
-			// Advance to next versions
-			if listVersions.IsTruncated == nil || !*listVersions.IsTruncated {
-				break
-			}
+				for _, marker := range listVersions.DeleteMarkers {
+					delete.Objects = append(delete.Objects, &s3.ObjectIdentifier{Key: marker.Key, VersionId: marker.VersionId})
+				}
+				if len(delete.Objects) > 0 {
+					// Start a delete routine
+					doDelete := func(bucket string, delete *s3.Delete) {
+						if _, e := client.DeleteObjects(context.TODO(), &s3.DeleteObjectsInput{Bucket: aws.String(bucket), Delete: delete}); e != nil {
+							err = fmt.Errorf("DeleteObjects unexpected failure: %s", e.Error())
+						}
+						doneDeletes.Done()
+					}
+					doneDeletes.Add(1)
+					go doDelete(bucket, delete)
+				}
+				// Advance to next versions
+				if listVersions.IsTruncated == nil || !*listVersions.IsTruncated {
+					break
+				}
+			*/
 			keyMarker = listVersions.NextKeyMarker
 			versionId = listVersions.NextVersionIdMarker
 		} else {
@@ -161,72 +143,24 @@ func deleteAllObjects() {
 	}
 }
 
-// canonicalAmzHeaders -- return the x-amz headers canonicalized
-func canonicalAmzHeaders(req *http.Request) string {
-	// Parse out all x-amz headers
-	var headers []string
-	for header := range req.Header {
-		norm := strings.ToLower(strings.TrimSpace(header))
-		if strings.HasPrefix(norm, "x-amz") {
-			headers = append(headers, norm)
-		}
-	}
-	// Put them in sorted order
-	sort.Strings(headers)
-	// Now add back the values
-	for n, header := range headers {
-		headers[n] = header + ":" + strings.Replace(req.Header.Get(header), "\n", " ", -1)
-	}
-	// Finally, put them back together
-	if len(headers) > 0 {
-		return strings.Join(headers, "\n") + "\n"
-	} else {
-		return ""
-	}
-}
-
-func hmacSHA1(key []byte, content string) []byte {
-	mac := hmac.New(sha1.New, key)
-	mac.Write([]byte(content))
-	return mac.Sum(nil)
-}
-
-func setSignature(req *http.Request) {
-	// Setup default parameters
-	dateHdr := time.Now().UTC().Format("20060102T150405Z")
-	req.Header.Set("X-Amz-Date", dateHdr)
-	// Get the canonical resource and header
-	canonicalResource := req.URL.EscapedPath()
-	canonicalHeaders := canonicalAmzHeaders(req)
-	stringToSign := req.Method + "\n" + req.Header.Get("Content-MD5") + "\n" + req.Header.Get("Content-Type") + "\n\n" +
-		canonicalHeaders + canonicalResource
-	hash := hmacSHA1([]byte(secret_key), stringToSign)
-	signature := base64.StdEncoding.EncodeToString(hash)
-	req.Header.Set("Authorization", fmt.Sprintf("AWS %s:%s", access_key, signature))
-}
-
 func runUpload(thread_num int) {
+	client := getS3Client()
 	for time.Now().Before(endtime) {
-		objnum := atomic.AddInt32(&upload_count, 1)
-		fileobj := bytes.NewReader(object_data)
-		prefix := fmt.Sprintf("%s/%s/Object-%d", url_host, bucket, objnum)
-		req, _ := http.NewRequest("PUT", prefix, fileobj)
-		req.Header.Set("Content-Length", strconv.FormatUint(object_size, 10))
-		req.Header.Set("Content-MD5", object_data_md5)
-		setSignature(req)
-		if resp, err := httpClient.Do(req); err != nil {
-			log.Fatalf("FATAL: Error uploading object %s: %v", prefix, err)
-		} else if resp != nil && resp.StatusCode != http.StatusOK {
-			if (resp.StatusCode == http.StatusServiceUnavailable) {
-				atomic.AddInt32(&upload_slowdown_count, 1)
-				atomic.AddInt32(&upload_count, -1)
-			} else {
-				fmt.Printf("Upload status %s: resp: %+v\n", resp.Status, resp)
-				if resp.Body != nil {
-					body, _ := ioutil.ReadAll(resp.Body)
-					fmt.Printf("Body: %s\n", string(body))
-				}
-			}
+		n := atomic.AddInt32(&upload_count, 1)
+		objectname := fmt.Sprintf("Object-%d", (n - 1))
+		file := bytes.NewReader(object_data)
+		input := &s3.PutObjectInput{
+			Bucket: aws.String(bucket),
+			Key:    aws.String(objectname),
+			Body:   file,
+		}
+		_, err := client.PutObject(context.TODO(),
+			input,
+			func(u *s3.Options) {
+				u.UsePathStyle = true
+			})
+		if err != nil {
+			log.Fatalf("FATAL: Error uploading object %s: %v", objectname, err)
 		}
 	}
 	// Remember last done time
@@ -236,22 +170,24 @@ func runUpload(thread_num int) {
 }
 
 func runDownload(thread_num int) {
+	client := getS3Client()
 	for time.Now().Before(endtime) {
 		atomic.AddInt32(&download_count, 1)
-		objnum := rand.Int31n(download_count) + 1
-		prefix := fmt.Sprintf("%s/%s/Object-%d", url_host, bucket, objnum)
-		req, _ := http.NewRequest("GET", prefix, nil)
-		setSignature(req)
-		if resp, err := httpClient.Do(req); err != nil {
-			log.Fatalf("FATAL: Error downloading object %s: %v", prefix, err)
-		} else if resp != nil && resp.Body != nil {
-			if (resp.StatusCode == http.StatusServiceUnavailable){
-				atomic.AddInt32(&download_slowdown_count, 1)
-				atomic.AddInt32(&download_count, -1)
-			} else {
-				io.Copy(ioutil.Discard, resp.Body)
-			}
+		n := rand.Int31n(upload_count)
+		objectname := fmt.Sprintf("Object-%d", n)
+		input := &s3.GetObjectInput{
+			Bucket: aws.String(bucket),
+			Key:    aws.String(objectname),
 		}
+		res, err := client.GetObject(context.TODO(),
+			input,
+			func(u *s3.Options) {
+				u.UsePathStyle = true
+			})
+		if err != nil {
+			log.Fatalf("FATAL: Error downloading object %s: %v", objectname, err)
+		}
+		io.Copy(ioutil.Discard, res.Body)
 	}
 	// Remember last done time
 	download_finish = time.Now()
@@ -260,19 +196,24 @@ func runDownload(thread_num int) {
 }
 
 func runDelete(thread_num int) {
+	client := getS3Client()
 	for {
-		objnum := atomic.AddInt32(&delete_count, 1)
-		if objnum > upload_count {
+		n := atomic.AddInt32(&delete_count, 1)
+		if n > upload_count {
 			break
 		}
-		prefix := fmt.Sprintf("%s/%s/Object-%d", url_host, bucket, objnum)
-		req, _ := http.NewRequest("DELETE", prefix, nil)
-		setSignature(req)
-		if resp, err := httpClient.Do(req); err != nil {
-			log.Fatalf("FATAL: Error deleting object %s: %v", prefix, err)
-		} else if (resp != nil && resp.StatusCode == http.StatusServiceUnavailable) {
-			atomic.AddInt32(&delete_slowdown_count, 1)
-			atomic.AddInt32(&delete_count, -1)
+		objectname := fmt.Sprintf("Object-%d", n)
+		input := &s3.DeleteObjectInput{
+			Bucket: aws.String(bucket),
+			Key:    aws.String(objectname),
+		}
+		_, err := client.DeleteObject(context.TODO(),
+			input,
+			func(u *s3.Options) {
+				u.UsePathStyle = true
+			})
+		if err != nil {
+			log.Fatalf("FATAL: Error deleting object %s: %v", objectname, err)
 		}
 	}
 	// Remember last done time
@@ -283,7 +224,7 @@ func runDelete(thread_num int) {
 
 func main() {
 	// Hello
-	fmt.Println("Wasabi benchmark program v2.0")
+	fmt.Println("Wasabi benchmark program v2.0 (simplified)")
 
 	// Parse command line
 	myflag := flag.NewFlagSet("myflag", flag.ExitOnError)
@@ -292,7 +233,7 @@ func main() {
 	myflag.StringVar(&url_host, "u", "http://s3.wasabisys.com", "URL for host with method prefix")
 	myflag.StringVar(&bucket, "b", "wasabi-benchmark-bucket", "Bucket for testing")
 	myflag.StringVar(&region, "r", "us-east-1", "Region for testing")
-	myflag.IntVar(&duration_secs, "d", 60, "Duration of each test in seconds")
+	myflag.IntVar(&duration_secs, "d", 30, "Duration of each test in seconds")
 	myflag.IntVar(&threads, "t", 1, "Number of threads to run")
 	myflag.IntVar(&loops, "l", 1, "Number of times to repeat test")
 	var sizeArg string
@@ -325,8 +266,8 @@ func main() {
 	object_data_md5 = base64.StdEncoding.EncodeToString(hasher.Sum(nil))
 
 	// Create the bucket and delete all the objects
-	createBucket(true)
-	deleteAllObjects()
+	//createBucket(true)
+	//deleteAllObjects()
 
 	// Loop running the tests
 	for loop := 1; loop <= loops; loop++ {

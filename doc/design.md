@@ -192,6 +192,11 @@ The action Lens3 takes at a forced removal of a __ma:pool-id__ entry
 in Redis should (1) start a new Mux+MinIO pair, and (2) stop an old
 Mux+MinIO pair.
 
+## Deficiency
+
+We should not code in Python.  Next version will probably be in
+Go-lang instead of Python.
+
 ## Glossary
 
 * __Probe-key__: An access-key used by Api to tell Mux about a wake up

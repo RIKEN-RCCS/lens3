@@ -173,6 +173,12 @@ It is highly site dependent.
 ```
 -->
 
+### A Note about an Authenticated User
+
+Lens3 Web-API trusts the header "X-Remote-User" passed by the
+reverse-proxy.  Make sure the header is properly prepared by the proxy
+and not faked.
+
 ### A Note about Nginx parameters
 
 Nginx has a parameter of the limit "client_max_body_size"
@@ -186,23 +192,23 @@ server {
 ```
 
 "client_max_body_size" limits the payload.  On the other hand, AWS S3
-CLI has parameters for file transfers, "multipart_threshold"
+CLI has parameters for file transfers "multipart_threshold"
 (default=8MB) and "multipart_chunksize" (default=8MB).  Especially,
-"multipart_chunksize" has the minimum 5MB.  Nginx parameters are
-specified in the server section (or in the http section).  Refer to
-"lens3proxy.conf".
+"multipart_chunksize" has the minimum 5MB.
 
-It is recommended to check the limits of the reverse-proxy, when
-encountering the 413 error (Request Entity Too Large).
+It is recommended to check the limits of the reverse-proxy when
+encountering a 413 error (Request Entity Too Large).
 
-The "client_max_body_size" is defined in ngx_http_core_module.  See
-for Nginx ngx_http_core_module parameters:
+Nginx parameters are specified in the server section (or in the http
+section).  Refer to "lens3proxy.conf".  The "client_max_body_size" is
+defined in ngx_http_core_module.  See for the Nginx
+ngx_http_core_module parameters:
 [https://nginx.org/en/docs/http/ngx_http_core_module.html](https://nginx.org/en/docs/http/ngx_http_core_module.html#client_max_body_size)
 
-See for AWS S3 CLI parameters:
+See for the AWS S3 CLI parameters:
 [https://docs.aws.amazon.com/cli/latest/topic/s3-config.html](https://docs.aws.amazon.com/cli/latest/topic/s3-config.html).
 
-## Setup  Redis
+## Setup Redis
 
 * Copy the Redis configuration file
   * Configuration file is: `/etc/lenticularis/redis.conf`
@@ -349,7 +355,7 @@ lens3-admin$ lenticularis-admin -c api-config.yaml list-permit
 $ systemctl status nginx
 ```
 
-*  Redis status
+* Redis status
 
 ```
 $ systemctl status lenticularis-redis
@@ -379,6 +385,11 @@ $ systemctl status lenticularis-api
     * Cat contents of a file
 
 ```
+$ vi ~/.aws/config
+[default]
+s3 =
+    signature_version = s3v4
+
 $ vi $HOME/.aws/credentials
 [default]
 aws_access_key_id = zHb9uscWUDgcJ9ZdYzr6

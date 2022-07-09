@@ -3,16 +3,13 @@
 all::
 
 go::
-	go build s3-benchmark.go
+	go build sporadic.go
 
 goinit::
-	go mod init s3-benchmark
+	go mod init sporadic
 
 goget::
 	go get github.com/aws/aws-sdk-go-v2/aws
 	go get github.com/aws/aws-sdk-go-v2/config
-	go get github.com/aws/aws-sdk-go-v2/credentials
 	go get github.com/aws/aws-sdk-go-v2/service/s3
-
-clean::
-	rm -f s3-benchmark
+	go get github.com/aws/aws-sdk-go-v2/credentials

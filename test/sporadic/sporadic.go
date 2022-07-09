@@ -1,5 +1,8 @@
 /* sporadic.go */
 
+/* Runs uploading/downloading periodically.  It tests on
+   starting/stopping MinIO, which is a critical part of Lens3. */
+
 package main
 
 import (
@@ -8,19 +11,19 @@ import (
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	//"io"
 	"encoding/json"
+	"io/ioutil"
 	"log"
-	"time"
-	"sync"
 	"math/rand"
-    "io/ioutil"
+	"sync"
+	"time"
 )
 
-type S3c struct{
-	url string
+type S3c struct {
+	url    string
 	bucket string
 	client *s3.Client
 }
@@ -102,7 +105,7 @@ func download_files(wg *sync.WaitGroup, client S3c, gooddata []byte, count int, 
 		if err1 != nil {
 			log.Fatalf("Failure in downloading an object: %v", err1)
 		}
-		if ! bytes.Equal(data, gooddata) {
+		if !bytes.Equal(data, gooddata) {
 			log.Fatalf("Failure in downloading an object (wrong data)")
 		}
 	}
@@ -111,9 +114,9 @@ func download_files(wg *sync.WaitGroup, client S3c, gooddata []byte, count int, 
 func main() {
 	//log.SetFlags(log.LstdFlags | log.Lshortfile)
 	b, err0 := ioutil.ReadFile("testc.json")
-    if err0 != nil {
+	if err0 != nil {
 		log.Fatalf("Failure in reading testc.json: %v", err0)
-    }
+	}
 	var testc map[string]interface{}
 	err1 := json.Unmarshal(b, &testc)
 	if err1 != nil {
@@ -153,7 +156,7 @@ func main() {
 			}
 		}
 		wg.Wait()
-		sec := (time.Duration(period * (1.0 + (fluctuation / 100.0) * (2.0 * rand.Float64() - 1.0))) * time.Second)
+		sec := (time.Duration(period*(1.0+(fluctuation/100.0)*(2.0*rand.Float64()-1.0))) * time.Second)
 		fmt.Println("Sleeping in", sec, " ...")
 		time.Sleep(sec)
 	}

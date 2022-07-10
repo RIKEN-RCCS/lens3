@@ -359,6 +359,10 @@ class Storage_Table(Table_Common):
         return list(keyi)
 
     def set_ex_buckets_directory(self, path, pool_id):
+        """Registers atomically a directory.  At a failure, a returned current
+        owner information can be None due to a race (but practically
+        never).
+        """
         assert isinstance(pool_id, str)
         key = f"{self._buckets_directory_prefix}{path}"
         ok = self.dbase.r.setnx(key, pool_id)
@@ -433,6 +437,11 @@ class Process_Table(Table_Common):
         "host", "port", "start_time", "modification_time"}
 
     def set_ex_minio_manager(self, pool_id, desc):
+        """Registers atomically a manager process.  It returns OK/NG, paired
+        with a manager that took the role earlier when it fails.  At
+        a failure, a returned current owner information can be None due
+        to a race (but practically never).
+        """
         assert set(desc.keys()) == self._minio_manager_desc_keys
         key = f"{self._minio_manager_prefix}{pool_id}"
         v = json.dumps(desc)
@@ -441,7 +450,7 @@ class Process_Table(Table_Common):
             return (True, None)
         # Race, returns failure.
         o = self.get_minio_manager(pool_id)
-        return (False, o.get("pool") if o is not None else None)
+        return (False, o if o is not None else None)
 
     def set_minio_manager_expiry(self, pool_id, timeout):
         key = f"{self._minio_manager_prefix}{pool_id}"
@@ -562,6 +571,11 @@ class Routing_Table(Table_Common):
         return vv
 
     def set_ex_bucket(self, bucket, desc):
+        """Registers atomically a bucket.  It returns OK/NG, paired with a
+        pool-id that took the bucket name earlier when it fails.  At
+        a failure, a returned current owner information can be None due
+        to a race (but practically never).
+        """
         assert set(desc.keys()) == self._bucket_desc_keys
         key = f"{self._bucket_prefix}{bucket}"
         v = json.dumps(desc)

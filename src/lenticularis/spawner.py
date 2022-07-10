@@ -69,12 +69,16 @@ class Spawner():
                         pass
                     p_status = p.poll()
                     pass
-                if p_status is None or p_status != 0:
-                    logger.warning(f"Starting a Manager exited with"
-                                   f" a bad status: {p_status}")
+                if p_status is None:
+                    ok = True
+                    logger.debug(f"A Manager started.")
+                elif p_status == 0:
+                    ok = False
+                    logger.debug(f"A Manager exited with status={p_status}")
+                else:
+                    ok = False
+                    logger.warning(f"A Manager exited with status={p_status}")
                     pass
-                ok = True
-                logger.debug(f"A Manager started.")
                 if outs != b"" or errs != b"":
                     logger.info(f"Output from a Manager:"
                                 f" stdout=({outs}), stderr=({errs})")

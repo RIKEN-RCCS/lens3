@@ -8,6 +8,7 @@ import enum
 import jsonschema
 from urllib.request import Request, urlopen
 import urllib.error
+from lenticularis.utility import host_port
 from lenticularis.utility import rephrase_exception_message
 from lenticularis.utility import logger
 
@@ -217,6 +218,13 @@ def get_pool_owner_for_messages(tables, pool_id):
     if pooldesc is None:
         return "unknown-user"
     return pooldesc.get("owner_uid")
+
+
+def get_manager_name_for_messages(manager):
+    if manager is None:
+        return "unknown-mux-ep"
+    muxep = host_port(manager["mux_host"], manager["mux_port"])
+    return muxep
 
 
 def _check_bkt_policy(bkt_policy):

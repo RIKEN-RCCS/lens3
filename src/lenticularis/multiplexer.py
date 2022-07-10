@@ -121,9 +121,10 @@ class Multiplexer():
         self._probe_access_timeout = int(mux_param["probe_access_timeout"])
         self._bad_response_delay = int(mux_param["bad_response_delay"])
 
-        # ctl_param = mux_conf["minio_manager"]
-        # self.heartbeat_interval = int(ctl_param["heartbeat_interval"])
-        # self.heartbeat_timeout = int(ctl_param["heartbeat_timeout"])
+        ctl_param = mux_conf["minio_manager"]
+        self._minio_start_timeout = int(ctl_param["minio_start_timeout"])
+        self._minio_setup_timeout = int(ctl_param["minio_setup_timeout"])
+        self._service_starts_check_interval = 0.1
 
         self._mux_addrs = self._list_mux_ip_addresses()
         self.scheduler = Scheduler(tables)
@@ -141,7 +142,7 @@ class Multiplexer():
         except Api_Error as e:
             logger.error(f"Access in Mux (port={self._mux_port}) errs:"
                          f" exception=({e})",
-                         exc_info=False)
+                         exc_info=self._verbose)
             # Delay returning a response for a while.
             time.sleep(self._bad_response_delay)
             status = f"{e.code}"
@@ -232,11 +233,11 @@ class Multiplexer():
         return False
 
     def _start_service(self, traceid, pool_id, probe_key):
-        # CURRENTLY, IT STARTS A SERVICE ON A LOCAL HOST.
         """Runs MinIO on a local or remote host.  Use of probe_key forces to
         run on a local host.  Otherwise, the chooser chooses a host to
         run.
         """
+        # CURRENTLY, IT STARTS A SERVICE ON A LOCAL HOST.
         if probe_key is not None:
             ep = None
         else:
@@ -272,6 +273,22 @@ class Multiplexer():
         else:
             return host_port(host, port)
         pass
+
+    def _wait_for_service_starts(self, pool_id):
+        logger.debug(f"Mux (port={self._mux_port}) waits for service starts.")
+        limit = (int(time.time()) + self._minio_start_timeout
+                 + self._minio_setup_timeout)
+        while int(time.time()) < limit:
+            ep = self.tables.get_minio_ep(pool_id)
+            if ep is not None:
+                logger.debug(f"Mux (port={self._mux_port})"
+                             f" got service started.")
+                return (200, ep)
+            time.sleep(self._service_starts_check_interval)
+            pass
+        logger.warning(f"Mux (port={self._mux_port})"
+                       f" failed in waiting for service starts.")
+        return (404, None)
 
     def _process_request(self, environ, start_response):
         """Processes a request from Gunicorn.  It forwards a request/response
@@ -371,6 +388,9 @@ class Multiplexer():
                 pass
             pass
 
+        # Starting a MinIO instance may fail by a race when multiple
+        # accesses come here simultaneously.
+
         assert pool_id is not None
         minio_ep = self.tables.get_minio_ep(pool_id)
         if minio_ep is None:
@@ -378,15 +398,24 @@ class Multiplexer():
             if code == 200:
                 assert ep0 is not None
                 minio_ep = ep0
+            else:
+                assert code == 503
+                (code, ep0) = self._wait_for_service_starts(pool_id)
+                if code == 200:
+                    assert ep0 is not None
+                    minio_ep = ep0
+                else:
+                    log_access("404", *access_info)
+                    raise Api_Error(404, failure_message)
                 pass
             pass
 
         # It is OK if an endpoint is found.  A check for an
         # enabled/disabled state of the pool is not checked here.
 
-        if minio_ep is None:
-            log_access("404", *access_info)
-            raise Api_Error(404, failure_message)
+        assert minio_ep is not None
+        # log_access("404", *access_info)
+        # raise Api_Error(404, failure_message)
 
         self.tables.set_access_timestamp(pool_id)
 

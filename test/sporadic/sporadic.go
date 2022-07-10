@@ -140,7 +140,8 @@ func main() {
 	var wg sync.WaitGroup
 
 	for true {
-		fmt.Println("Running upload at", time.Now().Format("2022-07-09 23:00:00"), "...")
+		fmt.Println("Running uploading/downloading at",
+			time.Now(), "...")
 		for _, client := range clients {
 			for tid := 0; tid < threads; tid++ {
 				wg.Add(1)
@@ -148,7 +149,6 @@ func main() {
 			}
 		}
 		wg.Wait()
-		fmt.Println("Running download at", time.Now().Format("2022-07-09 23:00:00"), "...")
 		for _, client := range clients {
 			for tid := 0; tid < threads; tid++ {
 				wg.Add(1)
@@ -157,7 +157,7 @@ func main() {
 		}
 		wg.Wait()
 		sec := (time.Duration(period*(1.0+(fluctuation/100.0)*(2.0*rand.Float64()-1.0))) * time.Second)
-		fmt.Println("Sleeping in", sec, " ...")
+		fmt.Println("Sleeping in", sec, "...")
 		time.Sleep(sec)
 	}
 }

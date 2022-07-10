@@ -21,6 +21,7 @@ from lenticularis.readconf import read_mux_conf
 from lenticularis.table import get_table
 from lenticularis.poolutil import Pool_State
 from lenticularis.poolutil import gather_buckets, gather_keys
+from lenticularis.poolutil import get_manager_name_for_messages
 from lenticularis.utility import ERROR_EXIT_READCONF, ERROR_EXIT_FORK
 from lenticularis.utility import generate_access_key
 from lenticularis.utility import generate_secret_key
@@ -260,7 +261,7 @@ class Manager():
         (ok, holder) = self.tables.set_ex_minio_manager(pool_id, ma)
         if not ok:
             muxep0 = host_port(self._mux_host, self._mux_port)
-            muxep1 = host_port(holder["mux_host"], holder["mux_port"])
+            muxep1 = get_manager_name_for_messages(holder)
             logger.info(f"Manager (pool={pool_id}) yields work to another:"
                         f" Mux={muxep0} to Mux={muxep1}")
             return False
@@ -340,10 +341,10 @@ class Manager():
                              f" to start MinIO (all ports used).")
                 pass
             return False
-        ok = False
+        ok = True
         try:
             logger.info(f"Manager (pool={pool_id}) starting.")
-            ok = self._setup_and_watch_minio(p, pooldesc)
+            self._setup_and_watch_minio(p, pooldesc)
         finally:
             logger.info(f"Manager (pool={pool_id}) exiting.")
             pass

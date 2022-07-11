@@ -26,16 +26,19 @@ class Spawner():
         ctl_param = mux_conf["minio_manager"]
         self.port_min = ctl_param["port_min"]
         self.port_max = ctl_param["port_max"]
+        self._extra_timeout = 15
         pass
 
     def start(self, traceid, pool_id, probe_key):
-        # Runs a MinIO on the localhost.
+        """Runs a MinIO on a local host.  It returns 200 and an endpoint, or
+        500 on failure.
+        """
         ok = self._start_manager(traceid, pool_id)
         if not ok:
-            return (503, None)
+            return (500, None)
         ep = self.tables.get_minio_ep(pool_id)
         if ep is None:
-            return (503, None)
+            return (500, None)
         return (200, ep)
 
     def _start_manager(self, traceid, pool_id):
@@ -62,7 +65,7 @@ class Spawner():
                 p_status = p.poll()
                 if p_status is None:
                     try:
-                        (o_, e_) = p.communicate(timeout=15)
+                        (o_, e_) = p.communicate(timeout=self._extra_timeout)
                         outs += o_
                         errs += e_
                     except TimeoutExpired:
@@ -70,11 +73,11 @@ class Spawner():
                     p_status = p.poll()
                     pass
                 if p_status is None:
+                    ok = False
+                    logger.warning(f"A Manager may not go background.")
+                elif p_status == 0:
                     ok = True
                     logger.debug(f"A Manager started.")
-                elif p_status == 0:
-                    ok = False
-                    logger.debug(f"A Manager exited with status={p_status}")
                 else:
                     ok = False
                     logger.warning(f"A Manager exited with status={p_status}")

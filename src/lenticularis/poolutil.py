@@ -227,6 +227,10 @@ def get_manager_name_for_messages(manager):
     return muxep
 
 
+def tally_manager_expiry(tolerance, interval, timeout):
+    return ((tolerance + 1 + 2) * (interval + timeout))
+
+
 def _check_bkt_policy(bkt_policy):
     assert bkt_policy in {"none", "upload", "download", "public"}
     pass

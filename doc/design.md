@@ -61,10 +61,11 @@ transient state.
 | mn:pool-id    | MinIO-process | |
 | mx:mux-endpoint | Mux-description | (\*\*) |
 
-An __ma:pool-id__ entry is a MinIO-manager under which a MinIO process
-runs.  It is a record: {"mux_host", "mux_port", "manager_pid",
-"modification_time"}.  It is assigned in exclusion and protects
-accesses to mn:pool-id and ep:pool-id.
+An __ma:pool-id__ entry is a mutex to single out a MinIO-manager under
+which a MinIO process runs.  It is a record: {"mux_host", "mux_port",
+"start_time"}.  A start time is used to make the entry distinct.  It
+is assigned in exclusion and protects accesses to mn:pool-id and
+ep:pool-id.
 
 An __mn:pool-id__ entry is a MinIO-process description: {"minio_ep",
 "minio_pid", "admin", "password", "mux_host", "mux_port",

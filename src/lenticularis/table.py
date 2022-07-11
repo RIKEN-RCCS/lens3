@@ -426,8 +426,7 @@ class Process_Table(Table_Common):
     hashes_ = {}
 
     _minio_manager_desc_keys = {
-        "mux_host", "mux_port", "manager_pid",
-        "modification_time"}
+        "mux_host", "mux_port", "start_time"}
 
     _minio_process_desc_keys = {
         "minio_ep", "minio_pid", "admin", "password",

@@ -141,7 +141,7 @@ func main() {
 
 	for true {
 		fmt.Println("Running uploading/downloading at",
-			time.Now(), "...")
+			time.Now().Format(time.RFC3339), "...")
 		for _, client := range clients {
 			for tid := 0; tid < threads; tid++ {
 				wg.Add(1)

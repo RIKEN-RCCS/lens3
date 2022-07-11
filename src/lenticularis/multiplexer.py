@@ -26,6 +26,8 @@ from lenticularis.poolutil import ensure_pool_state
 from lenticularis.poolutil import ensure_pool_owner
 from lenticularis.poolutil import ensure_bucket_owner
 from lenticularis.poolutil import ensure_secret_owner
+from lenticularis.poolutil import get_manager_name_for_messages
+from lenticularis.poolutil import tally_manager_expiry
 from lenticularis.utility import host_port
 from lenticularis.utility import Read1Reader
 from lenticularis.utility import get_ip_addresses
@@ -116,7 +118,8 @@ class Multiplexer():
                                  for addr in get_ip_addresses(h)}
         timer = int(mux_param["mux_ep_update_interval"])
         self._periodic_work_interval = timer
-        self._expiry = 3 * timer
+        self._mux_expiry = 3 * timer
+
         self._forwarding_timeout = int(mux_param["forwarding_timeout"])
         self._probe_access_timeout = int(mux_param["probe_access_timeout"])
         self._bad_response_delay = int(mux_param["bad_response_delay"])
@@ -125,6 +128,13 @@ class Multiplexer():
         self._minio_start_timeout = int(ctl_param["minio_start_timeout"])
         self._minio_setup_timeout = int(ctl_param["minio_setup_timeout"])
         self._service_starts_check_interval = 0.1
+
+        self._heartbeat_interval = int(ctl_param["heartbeat_interval"])
+        self._heartbeat_tolerance = int(ctl_param["heartbeat_miss_tolerance"])
+        self._heartbeat_timeout = int(ctl_param["heartbeat_timeout"])
+        self._manager_expiry = tally_manager_expiry(self._heartbeat_tolerance,
+                                                    self._heartbeat_interval,
+                                                    self._heartbeat_timeout)
 
         self._mux_addrs = self._list_mux_ip_addresses()
         self.scheduler = Scheduler(tables)
@@ -183,7 +193,7 @@ class Multiplexer():
             logger.debug(f"Updating Mux info (periodically).")
             pass
         ep = host_port(self._mux_host, self._mux_port)
-        ok = self.tables.set_mux_expiry(ep, self._expiry)
+        ok = self.tables.set_mux_expiry(ep, self._mux_expiry)
         if ok:
             return
         now = int(time.time())
@@ -191,7 +201,7 @@ class Multiplexer():
                     "start_time": self._start_time,
                     "modification_time": now}
         self.tables.set_mux(ep, mux_desc)
-        self.tables.set_mux_expiry(ep, self._expiry)
+        self.tables.set_mux_expiry(ep, self._mux_expiry)
         pass
 
     # def _wrap_res(self, res, environ, headers, sniff=False, sniff_marker=""):
@@ -233,11 +243,37 @@ class Multiplexer():
         return False
 
     def _start_service(self, traceid, pool_id, probe_key):
-        """Runs MinIO on a local or remote host.  Use of probe_key forces to
-        run on a local host.  Otherwise, the chooser chooses a host to
-        run.
+        """Runs a MinIO service.  It returns 200 and an endpoint, or 500 when
+        starting a service fails.  It waits for a service to start
+        when multiple accesses happen simultaneously.  Use of probe_key
+        forces to run on a local host.  Otherwise, the chooser chooses
+        a host to run.
         """
         # CURRENTLY, IT STARTS A SERVICE ON A LOCAL HOST.
+
+        # Starting a service has a race when multiple accesses come
+        # here simultaneously.  Exclude others by registering a
+        # manager entry.
+
+        now = int(time.time())
+        ma = {
+            "mux_host": self._mux_host,
+            "mux_port": self._mux_port,
+            "start_time": now
+        }
+        self._minio_manager = ma
+        (ok, _) = self.tables.set_ex_minio_manager(pool_id, ma)
+        if not ok:
+            (code, ep0) = self._wait_for_service_starts(pool_id)
+            return (code, ep0)
+
+        # This request takes the role to start a manager.
+
+        ok = self.tables.set_minio_manager_expiry(pool_id, self._manager_expiry)
+        if not ok:
+            logger.warning(f"Manager (pool={pool_id}) failed to set expiry.")
+            pass
+
         if probe_key is not None:
             ep = None
         else:
@@ -249,8 +285,8 @@ class Multiplexer():
             (code, ep0) = self._spawner.start(traceid, pool_id, probe_key)
             return (code, ep0)
         else:
+            # THIS PART IS NOT USED NOW.
             # Run MinIO on a remote host.
-            # THIS IS NOT USED NOW.
             assert probe_key is None
             pooldesc = self.tables.get_pool(pool_id)
             probe_key = pooldesc["probe_key"]
@@ -258,20 +294,6 @@ class Multiplexer():
                               self._facade_hostname, self._facade_host_ip,
                               self._probe_access_timeout)
             return (code, ep)
-        pass
-
-    def _choose_server_host(self, pool_id):
-        # THIS IS NOT USED NOW.
-        """Chooses a host to run a MinIO.  It returns None to mean the
-        localhost.
-        """
-        (host, port) = self.scheduler.schedule(pool_id)
-        if host is None:
-            return None
-        elif host == self._mux_host:
-            return None
-        else:
-            return host_port(host, port)
         pass
 
     def _wait_for_service_starts(self, pool_id):
@@ -288,7 +310,21 @@ class Multiplexer():
             pass
         logger.warning(f"Mux (port={self._mux_port})"
                        f" failed in waiting for service starts.")
-        return (404, None)
+        return (500, None)
+
+    def _choose_server_host(self, pool_id):
+        # THIS IS NOT USED NOW.
+        """Chooses a host to run a MinIO.  It returns None to mean the
+        localhost.
+        """
+        (host, port) = self.scheduler.schedule(pool_id)
+        if host is None:
+            return None
+        elif host == self._mux_host:
+            return None
+        else:
+            return host_port(host, port)
+        pass
 
     def _process_request(self, environ, start_response):
         """Processes a request from Gunicorn.  It forwards a request/response
@@ -394,9 +430,6 @@ class Multiplexer():
         assert pool_id is not None
         self.tables.set_access_timestamp(pool_id)
 
-        # Starting a service has a race when multiple accesses come
-        # here simultaneously.
-
         minio_ep = self.tables.get_minio_ep(pool_id)
         if minio_ep is None:
             (code, ep0) = self._start_service(traceid, pool_id, probe_key)
@@ -404,14 +437,9 @@ class Multiplexer():
                 assert ep0 is not None
                 minio_ep = ep0
             else:
-                assert code == 503
-                (code, ep0) = self._wait_for_service_starts(pool_id)
-                if code == 200:
-                    assert ep0 is not None
-                    minio_ep = ep0
-                else:
-                    log_access("404", *access_info)
-                    raise Api_Error(404, failure_message)
+                assert code == 500
+                log_access("404", *access_info)
+                raise Api_Error(404, failure_message)
                 pass
             pass
 

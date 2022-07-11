@@ -388,10 +388,15 @@ class Multiplexer():
                 pass
             pass
 
-        # Starting a MinIO instance may fail by a race when multiple
-        # accesses come here simultaneously.
+        # Set a timestamp here, as early as possible, not to stop the
+        # service during processing a request.
 
         assert pool_id is not None
+        self.tables.set_access_timestamp(pool_id)
+
+        # Starting a service has a race when multiple accesses come
+        # here simultaneously.
+
         minio_ep = self.tables.get_minio_ep(pool_id)
         if minio_ep is None:
             (code, ep0) = self._start_service(traceid, pool_id, probe_key)
@@ -416,8 +421,6 @@ class Multiplexer():
         assert minio_ep is not None
         # log_access("404", *access_info)
         # raise Api_Error(404, failure_message)
-
-        self.tables.set_access_timestamp(pool_id)
 
         if probe_key is not None:
             # A probe-access does not access MinIO.

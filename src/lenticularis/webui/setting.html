@@ -87,30 +87,30 @@
       </div>
       <div>
         <span class="label">Access keys (rw)</span>
-        <button v-on:click="kick_make_key('readwrite')">New</button>
+        <button v-on:click="kick_make_secret('readwrite')">New</button>
       </div>
       <div v-for="k in access_keys_rw">
         <input v-model="k.access_key" size="64" disabled />
         <input v-model="k.secret_key" size="64" disabled />
-        <button v-on:click="kick_delete_key(k.access_key)">Delete</button>
+        <button v-on:click="kick_delete_secret(k.access_key)">Delete</button>
       </div>
       <div>
         <span class="label">Access keys (ro)</span>
-        <button v-on:click="kick_make_key('readonly')">New</button>
+        <button v-on:click="kick_make_secret('readonly')">New</button>
       </div>
       <div v-for="k in access_keys_ro">
         <input v-model="k.access_key" size="64" disabled />
         <input v-model="k.secret_key" size="64" disabled />
-        <button v-on:click="kick_delete_key(k.access_key)">Delete</button>
+        <button v-on:click="kick_delete_secret(k.access_key)">Delete</button>
       </div>
       <div>
         <span class="label">Access keys (wo)</span>
-        <button v-on:click="kick_make_key('writeonly')">New</button>
+        <button v-on:click="kick_make_secret('writeonly')">New</button>
       </div>
       <div v-for="k in access_keys_wo">
         <input v-model="k.access_key" size="64" disabled />
         <input v-model="k.secret_key" size="64" disabled />
-        <button v-on:click="kick_delete_key(k.access_key)">Delete</button>
+        <button v-on:click="kick_delete_secret(k.access_key)">Delete</button>
       </div>
     </div>
 
@@ -131,12 +131,12 @@
     <div>
       <hr />
       <div>
-        <span class="label">STATUS</span>
+        <span class="label">WEB-UI STATUS</span>
       </div>
       <div id="show_status">
-        <div>{{message}}</div>
         <div>{{status}}</div>
         <div>{{reason}}</div>
+        <div>{{message}}</div>
         <div>{{time}}</div>
         <button v-on:click="kick_debug">Debug</button> (dump internal
         data on javascript console)
@@ -145,5 +145,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
     <script src="scripts/lens3ui.js"></script>
+    <div hidden>Lens3 v1.2 2022-07-10</div>
   </body>
 </html>

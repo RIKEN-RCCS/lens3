@@ -8,11 +8,11 @@ Type=simple
 User=lens3
 Group=lens3
 WorkingDirectory=/var/tmp
-Environment=LENTICULARIS_ADM_CONFIG=/etc/lenticularis/adm-config.yaml
+Environment=LENTICULARIS_API_CONFIG=/etc/lenticularis/api-config.yaml
 StandardOutput=journal
 StandardError=journal
 
-ExecStart=python3 -m lenticularis.start_service adm
+ExecStart=python3 -m lenticularis.start_service api
 
 #PrivateTmp=true
 

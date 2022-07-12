@@ -28,7 +28,7 @@ suminio: suminio.o
 	$(CC) -o $@ suminio.o
 
 pycodestyle::
-	-(pycodestyle --max-line-length=120 *.py) > pycodestyle-output.txt
+	-(pycodestyle --config=pycodestyle *.py) > pycodestyle-output.txt
 
 pylint::
 	-(pylint --rcfile=pylintrc *.py) > pylint-output.txt
@@ -37,8 +37,24 @@ pyright::
 	-(pyright *.py) > pyright-output.txt
 	@grep -E ".* errors?, .* warnings?, .* informations?" pyright-output.txt
 
+pyright-update::
+	pip3 install --user -U pyright
+
 typestubs::
-	(pyright --createstub lenticularis.table)
+	pyright --createstub redis
+	pyright --createstub starlette
+	pyright --createstub fastapi
+	pyright --createstub fastapi.requests
+	pyright --createstub fastapi.staticfiles
+	pyright --createstub fastapi.responses
+	pyright --createstub fastapi_csrf_protect
+	pyright --createstub fastapi_csrf_protect.exceptions
+
+typestubs0::
+	pyright --createstub lenticularis
+	pyright --createstub lenticularis.api
+	pyright --createstub lenticularis.readconf
+	pyright --createstub lenticularis.utility
 
 tags::
 	ctags *.py webui/scripts/*.js

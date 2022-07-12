@@ -8,61 +8,69 @@ import os
 from subprocess import Popen, PIPE, DEVNULL
 import sys
 from lenticularis.readconf import read_mux_conf
-from lenticularis.readconf import read_adm_conf
+from lenticularis.readconf import read_api_conf
+from lenticularis.utility import rephrase_exception_message
 from lenticularis.utility import logger, openlog
-from lenticularis.utility import make_clean_env
+from lenticularis.utility import copy_minimal_env
 
 
-def start_mux():
+def _run_mux():
     try:
         (mux_conf, configfile) = read_mux_conf()
     except Exception as e:
-        sys.stderr.write(f"Lens3 reading config file failed: {e}\n")
+        m = rephrase_exception_message(e)
+        sys.stderr.write(f"Lens3 reading a config file failed:"
+                         f" exception=({m})\n")
         return
 
     openlog(mux_conf["log_file"],
             **mux_conf["log_syslog"])
-    logger.info("Start Lenticularis-S3 MUX service")
+    servicename = "lenticularis-mux"
+    logger.info("Start {servicename} service.")
 
     gunicorn_conf = mux_conf["gunicorn"]
     _port = gunicorn_conf["port"]
     bind = f"[::]:{_port}"
-    env = make_clean_env(os.environ)
+    env = copy_minimal_env(os.environ)
     env["LENTICULARIS_MUX_CONFIG"] = configfile
     cmd = [sys.executable, "-m", "gunicorn"]
     args = ["--bind", bind]
-    options = list_gunicorn_command_options(gunicorn_conf)
+    options = _list_gunicorn_command_options(gunicorn_conf)
     args += options
     args += ["lenticularis.mux:app()"]
-    run("lenticularis-mux", env, cmd, args)
-    return
+    _run(servicename, env, cmd, args)
+    pass
 
 
-def start_adm():
+def _run_api():
     try:
-        (adm_conf, configfile) = read_adm_conf()
+        (api_conf, configfile) = read_api_conf()
     except Exception as e:
-        sys.stderr.write(f"Lens3 reading config file failed: {e}\n")
+        m = rephrase_exception_message(e)
+        sys.stderr.write(f"Lens3 reading a config file failed:"
+                         f" exception=({m})\n")
         return
 
-    openlog(adm_conf["log_file"],
-            **adm_conf["log_syslog"])
-    logger.info("Start Lenticularis-S3 Adm service")
+    openlog(api_conf["log_file"],
+            **api_conf["log_syslog"])
+    servicename = "lenticularis-api"
+    logger.info(f"Start {servicename} service.")
 
-    gunicorn_conf = adm_conf["gunicorn"]
+    gunicorn_conf = api_conf["gunicorn"]
     _port = gunicorn_conf["port"]
     bind = f"[::]:{_port}"
-    env = make_clean_env(os.environ)
-    env["LENTICULARIS_ADM_CONFIG"] = configfile
+    env = copy_minimal_env(os.environ)
+    env["LENTICULARIS_API_CONFIG"] = configfile
     cmd = [sys.executable, "-m", "gunicorn"]
     args = ["--worker-class", "uvicorn.workers.UvicornWorker", "--bind", bind]
-    options = list_gunicorn_command_options(gunicorn_conf)
+    options = _list_gunicorn_command_options(gunicorn_conf)
     args += options
-    args += ["lenticularis.adm:app"]
-    run("lenticularis-adm", env, cmd, args)
-    return
+    args += ["lenticularis.api:app"]
+    _run(servicename, env, cmd, args)
+    pass
 
-def list_gunicorn_command_options(gunicorn_conf):
+
+def _list_gunicorn_command_options(gunicorn_conf):
     workers = gunicorn_conf.get("workers")
     threads = gunicorn_conf.get("threads")
     timeout = gunicorn_conf.get("timeout")
@@ -73,13 +81,13 @@ def list_gunicorn_command_options(gunicorn_conf):
     reload = gunicorn_conf.get("reload")
     args = []
     if workers:
-        args += ["--workers", workers]
+        args += ["--workers", str(workers)]
         pass
     if threads:
-        args += ["--threads", threads]
+        args += ["--threads", str(threads)]
         pass
     if timeout:
-        args += ["--timeout", timeout]
+        args += ["--timeout", str(timeout)]
         pass
     if access_logfile:
         args += ["--access-logfile", access_logfile]
@@ -99,9 +107,11 @@ def list_gunicorn_command_options(gunicorn_conf):
     if reload == "yes":
         args += ["--reload"]
         pass
+    assert all(isinstance(i, str) for i in args)
     return args
 
-def run(servicename, env, cmd, args):
+
+def _run(servicename, env, cmd, args):
     """Starts Gunicorn as a systemd service.  It will not return unless it
     a subprocess exits.  Note the stdout/stderr messages from Gunicorn
     is usually not helpful.  Examine the log file.
@@ -112,15 +122,19 @@ def run(servicename, env, cmd, args):
                  f" args=({args}),"
                  f" env=({env})")
 
+    assert all(isinstance(i, str) for i in (cmd + args))
     (outs, errs) = (b"", b"")
     try:
         with Popen(cmd + args, stdin=DEVNULL, stdout=PIPE, stderr=PIPE, env=env) as p:
             (outs, errs) = p.communicate()
             p_status = p.wait()
     except Exception as e:
-        logger.exception(f"{servicename} failed to start")
+        m = rephrase_exception_message(e)
+        logger.error(f"{servicename} failed to start: exception=({m})",
+                     exc_info=True)
         sys.exit(1)
         pass
+
     if p_status == 0:
         logger.debug(f"{servicename} exited: status={p_status}")
         sys.exit(p_status)
@@ -134,25 +148,32 @@ def run(servicename, env, cmd, args):
             sys.exit(p_status)
             pass
         pass
-    return
+    pass
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("target")
-    args = parser.parse_args()
-
-    if args.target == "mux":
-        start_mux()
+    try:
+        parser = argparse.ArgumentParser()
+        parser.add_argument("target")
+        args = parser.parse_args()
+        if args.target == "mux":
+            _run_mux()
+            assert False
+            pass
+        elif args.target == "api":
+            _run_api()
+            assert False
+            pass
+        else:
+            assert False
+            pass
+    except Exception as e:
+        m = rephrase_exception_message(e)
+        logger.error(f"Starting a lenticularis service failed:"
+                     f" exception=({m})")
+        sys.exit(1)
         pass
-    elif args.target == "adm":
-        start_adm()
-        pass
-    else:
-        assert False
-        pass
-    sys.exit(1)
-    return
+    pass
 
 
 if __name__ == "__main__":

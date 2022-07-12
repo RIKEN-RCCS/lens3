@@ -1,4 +1,6 @@
-"""lenticularis-admin command."""
+"""lenticularis-admin command.  It provides a way to directly modify
+databases.
+"""
 
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
@@ -10,63 +12,67 @@ import io
 import os
 import time
 import json
-#import threading
 import sys
 import traceback
-from lenticularis.pooladmin import Pool_Admin
-from lenticularis.readconf import read_adm_conf
+from lenticularis.control import Control_Api
+from lenticularis.readconf import read_api_conf
+from lenticularis.poolutil import Api_Error
+from lenticularis.poolutil import gather_pool_desc
 from lenticularis.poolutil import check_user_naming
+from lenticularis.poolutil import get_pool_owner_for_messages
 from lenticularis.utility import ERROR_EXIT_READCONF, ERROR_EXIT_EXCEPTION, ERROR_EXIT_ARGUMENT
 from lenticularis.utility import format_rfc3339_z
 from lenticularis.utility import objdump
-from lenticularis.utility import list_diff3
 from lenticularis.utility import random_str
+from lenticularis.utility import rephrase_exception_message
 from lenticularis.utility import logger, openlog
 from lenticularis.utility import tracing
 
 
-def get_nparams_of_fn(fn):
+def _get_nparams_of_fn(fn):
     sig = inspect.signature(fn)
     params = list(sig.parameters)
     nparams = len(params)
     if nparams > 0:
         v = sig.parameters.get(params[-1])
         assert v is not None
-        varargsp = (v.kind == v.VAR_POSITIONAL)
+        varargs = (v.kind == v.VAR_POSITIONAL)
     else:
-        varargsp = False
-    return (nparams - 1, varargsp)
+        varargs = False
+    return (nparams - 1, varargs)
 
 
-def fix_date_format(d, keys):
+def _make_date_readable(d, keys):
     for key in keys:
         d[key] = format_rfc3339_z(float(d[key]))
         pass
     pass
 
 
-def print_json_csv(table_name, c, formatting):
+def _print_json_csv(table_name, c, formatting):
     if formatting in {"json"}:
         dump = json.dumps(c)
         print(f"{dump}")
     else:
-        print(f"----- {table_name}")
+        print(f"---- {table_name}")
         with io.StringIO() as out:
             writer = csv.writer(out)
             for r in c:
                 writer.writerow(r)
+                pass
             v = out.getvalue()
+            pass
         print(f"{v}")
         pass
     pass
 
 
-def print_json_plain(table_name, outs, formatting, order=None):
+def _print_json_plain(title, outs, formatting, order=None):
     if formatting in {"json"}:
         dump = json.dumps(outs)
         print(f"{dump}")
     else:
-        print(f"----- {table_name}")
+        print(f"---- {title}")
         for d in outs:
             dump = objdump(d, order=order)
             print(f"{dump}")
@@ -75,139 +81,109 @@ def print_json_plain(table_name, outs, formatting, order=None):
     pass
 
 
-def read_allow_deny_rules(path):
-    with open(path, newline="") as f:
-        r = csv.reader(f, delimiter=",", quotechar='"')
-        return [[row[0].lower(), row[1]] for row in r]
-    pass
-
-
 def _read_user_list(path):
     """Reads a CSV file with rows: "add"/"delete", "uid", "group",
     "group", ..., to load a user-list.  It adds an entry to the
     user-list if add="add", or deletes otherwise.
-
     """
     with open(path, newline="") as f:
         rows = csv.reader(f, delimiter=",", quotechar='"')
         rows = list(rows)
-        print(f"rows={rows}")
         assert all(r[0].upper() == "ADD" or r[0].upper() == "DELETE"
                    for r in rows)
         assert all(check_user_naming(e) for r in rows for e in r[1:])
-        return [{"add": r[0].upper() == "ADD", "uid": r[1], "groups": r[2:]}
+        return [{"ADD": r[0].upper() == "ADD", "uid": r[1], "groups": r[2:]}
                 for r in rows]
     pass
 
 
-def _load_user_list(zone_adm, user_list):
+def _read_permit_list(path):
+    """Reads a CSV file with rows: "ENABLE"/"DISABLE", "uid", "uid",
+    "uid", ..., to load a permit-list.  Returns a list by changing the
+    first column in uppercase.
+    """
+    with open(path, newline="") as f:
+        rows = csv.reader(f, delimiter=",", quotechar='"')
+        rows = list(rows)
+        assert all(len(r) >= 2 for r in rows)
+        assert all(r[0].upper() == "ENABLE" or r[0].upper() == "DISABLE"
+                   for r in rows)
+        assert all(check_user_naming(e) for r in rows for e in r[1:])
+        return [[r[0].upper(), r[1]] for r in rows]
+    pass
+
+
+def _load_user(pool_adm, u):
+    # It discards "permitted" and "modification_time" slots.
     now = int(time.time())
-    for e in user_list:
-        id = e["uid"]
-        oldu = zone_adm.tables.get_user(id)
-        if e["add"] and oldu is not None:
-            newu = {"uid": id, "groups": e["groups"],
-                    "permitted": oldu["permitted"],
-                    "modification_date": now}
-            zone_adm.tables.set_user(id, newu)
-        elif not e["add"] and oldu is not None:
-            zone_adm.tables.delete_user(id)
-        elif  e["add"] and oldu is None:
-            newu = {"uid": id, "groups": e["groups"],
-                    "permitted": True,
-                    "modification_date": now}
-            zone_adm.tables.set_user(id, newu)
-        else:
-            pass
+    uid = u["uid"]
+    oldu = pool_adm.tables.get_user(uid)
+    if oldu is not None:
+        newu = {"uid": uid, "groups": u["groups"],
+                "permitted": oldu["permitted"],
+                "modification_time": now}
+        pool_adm.tables.set_user(uid, newu)
+    else:
+        newu = {"uid": uid, "groups": u["groups"],
+                "permitted": True,
+                "modification_time": now}
+        pool_adm.tables.set_user(uid, newu)
         pass
     pass
 
 
-def user_info_to_csv_row(id, ui):
+def _enable_disable_user(pool_adm, uid, permitted):
+    u = pool_adm.tables.get_user(uid)
+    if u is None:
+        raise Api_Error(500, f"Bad user (unknown): {uid}")
+    u["permitted"] = permitted
+    pool_adm.tables.set_user(uid, u)
+    pass
+
+
+def _list_permit_list(pool_adm):
+    users = pool_adm.tables.list_users()
+    uu = [(uid, pool_adm.tables.get_user(uid)["permitted"])
+          for uid in users]
+    bid = [id for (id, permitted) in uu if permitted]
+    ban = [id for (id, permitted) in uu if not permitted]
+    rows = [["ENABLE", *bid], ["DISABLE", *ban]]
+    return rows
+
+
+def _user_info_to_csv_row(uid, u):
     # "permitted" entry is ignored.
-    assert ui is not None
-    return ["add", id] + ui["groups"]
+    assert u is not None
+    return ["ADD", uid] + u["groups"]
 
 
-def format_mux(m, formatting):
+def _format_mux(m, formatting):
     (ep, desc) = m
     if formatting not in {"json"}:
-        fix_date_format(desc, ["last_interrupted_time", "start_time"])
+        _make_date_readable(desc, ["modification_time", "start_time"])
     return {ep: desc}
 
 
-def _store_user_info_add__(zone_adm, b):
-    # New Entry (no right hand side)
-    logger.debug(f"@@@ >> New {b}")
-    zone_adm.tables.set_user(b["uid"], b)
-
-
-def _store_user_info_delete__(zone_adm, e):
-    # Deleted Entry (no left hand side)
-    logger.debug(f"@@@ >> Delete {e}")
-    zone_adm.delete_user(e)
-    pass
-
-
-def _store_user_info_update__(zone_adm, x):
-    # Updated Entry
-    (b, e) = x
-    logger.debug(f"@@@ >> Update {b} {e}")
-    zone_adm.tables.set_user(b["uid"], b)
-    pass
-
-
-def _restore_zone_delete(zone_adm, traceid, e):
-    # Deleted Entry (no left hand side)
-    user_id = e.get("owner_uid")
-    zone_id = e.get("pool_name")
-    logger.debug(f"@@@ >> Delete {user_id} {zone_id}")
-    zone_adm.delete_zone(traceid, user_id, zone_id)
-    pass
-
-
-def _restore_zone_add(zone_adm, traceid, b):
-    # New Entry (no right hand side)
-    user_id = b.get("owner_uid")
-    zone_id = b.get("pool_name")
-    logger.debug(f"@@@ >> Insert / Update {user_id} {zone_id}")
-    b.pop("pool_name")
-    b.pop("minio_state")
-    zone_adm.restore_pool(traceid, user_id, zone_id, b,
-                          include_atime=True, initialize=False)
-    pass
-
-
-def _restore_zone_update(zone_adm, traceid, x):
-    # Updated Entry
-    (b, e) = x
-    _restore_zone_add(zone_adm, traceid, b)
-    pass
-
-
-def pool_key_order(e):
+def _pool_key_order(e):
     order = [
         "owner_uid",
         "owner_gid",
-        "root_secret",
-        "access_keys",
         "buckets_directory",
         "buckets",
-        "direct_hostnames",
+        "access_keys",
+        "minio_state",
+        "minio_reason",
         "expiration_date",
         "permit_status",
         "online_status",
-        "minio_state",
-        "atime",
-        ##AHO
-        "accessKeysPtr",
-        "directHostnamePtr",
+        "probe_key",
+        "modification_time",
+        "name",
+        "bkt_policy",
         "access_key",
         "secret_key",
         "key_policy",
-        "ptr",
-        "name",
-        "bkt_policy"]
+    ]
     return order.index(e) if e in order else len(order)
 
 
@@ -217,13 +193,13 @@ def _mux_key_order(e):
         "port",
         "mux_conf",
         "start_time",
-        "last_interrupted_time",
+        "modification_time",
         "lenticularis",
         "multiplexer"]
     return order.index(e) if e in order else len(order)
 
 
-def proc_key_order(e):
+def _proc_key_order(e):
     order = [
         "minio_ep",
         "minio_pid",
@@ -233,310 +209,413 @@ def proc_key_order(e):
     return order.index(e) if e in order else len(order)
 
 
-def route_key_order(e):
+def _directory_key_order(e):
     order = [
-        ##AHO
-        "accessKey",
-        "host",
-        "atime"]
+        "directory",
+        "pool"]
     return order.index(e) if e in order else len(order)
 
 
-##def quote(s):
-##    return f'"{s}"'
+def _bucket_key_order(e):
+    order = [
+        "pool",
+        "bkt_policy",
+        "modification_time"]
+    return order.index(e) if e in order else len(order)
+
+
+def _timestamp_key_order(e):
+    order = [
+        "pool",
+        "timestamp"]
+    return order.index(e) if e in order else len(order)
+
 
 class Command():
-    def __init__(self, adm_conf, traceid, args, rest):
-        self.adm_conf = adm_conf
-        self.zone_adm = Pool_Admin(adm_conf)
-        self.traceid = traceid
+    """Administration commands.  Api_Error is used as a placeholder and
+    its status code is 500 always.
+    """
+
+    def __init__(self, traceid, pool_adm, args, rest):
+        self._traceid = traceid
+        self.pool_adm = pool_adm
         self.args = args
         self.rest = rest
         pass
 
-    def fn_help(self):
+    def op_help(self):
+        """Print help."""
         prog = os.path.basename(sys.argv[0])
         print(f"USAGE")
-        for (k, v) in self.opdict.items():
-            (fn, args, help) = v
-            print(f"{prog} {args}\n\t{help}")
+        for (_, v) in self._op_dict.items():
+            (fn, args, _) = v
+            msg = inspect.getdoc(fn)
+            msg = msg.replace("\n", "\n\t") if msg is not None else None
+            print(f"{prog} {args}\n\t{msg}")
             pass
         sys.exit(ERROR_EXIT_ARGUMENT)
         pass
 
-    def fn_load_permit_list(self, csvfile):
-        logger.debug(f"@@@ INSERT ALLOW DENY RULES")
-        rules = read_allow_deny_rules(csvfile)
-        logger.debug(f"@@@ rules = {rules}")
-        self.zone_adm.store_allow_deny_rules(rules)
-        fixed = self.zone_adm.fix_affected_zone(self.traceid)
-        logger.debug(f"@@@ fixed = {fixed}")
+    def op_load_user(self, csvfile):
+        """Load a user list from a file."""
+        desc_list = _read_user_list(csvfile)
+        adds = [{"uid": d["uid"], "groups": d["groups"]}
+                for d in desc_list if d["ADD"]]
+        dels = [{"uid": d["uid"], "groups": d["groups"]}
+                for d in desc_list if not d["ADD"]]
+        for u in dels:
+            print(f"deleting a user: {u}")
+            self.pool_adm.tables.delete_user(u["uid"])
+            pass
+        for u in adds:
+            print(f"adding a user: {u}")
+            _load_user(self.pool_adm, u)
+            pass
         pass
 
-    def fn_show_permit_list(self):
-        rules = self.zone_adm.fetch_allow_deny_rules()
-        print_json_csv("allow deny rules", rules, self.args.format)
-        pass
-
-    def fn_load_user_list(self, csvfile):
-        user_info = _read_user_list(csvfile)
-        _load_user_list(self.zone_adm, user_info)
-        fixed = self.zone_adm.fix_affected_zone(self.traceid)
-        pass
-
-    def fn_show_user_list(self):
-        users = self.zone_adm.tables.list_users()
-        uu = [user_info_to_csv_row(id, self.zone_adm.tables.get_user(id))
+    def op_list_user(self):
+        """Print a user list."""
+        users = self.pool_adm.tables.list_users()
+        uu = [_user_info_to_csv_row(id, self.pool_adm.tables.get_user(id))
               for id in users]
-        print_json_csv("user info", uu, self.args.format)
+        _print_json_csv("user info", uu, self.args.format)
         pass
 
-    def fn_insert_zone(self, zone_id, jsonfile):
-        logger.debug(f"@@@ INSERT ZONE")
-        try:
-            with open(jsonfile, "r") as f:
-                r = f.read()
-        except OSError as e:
-            sys.stderr.write(f"{jsonfile}: {os.strerror(e.errno)}\n")
-            logger.exception(e)
-            return
-        except Exception as e:
-            sys.stderr.write(f"{jsonfile}: {e}\n")
-            logger.exception(e)
-            return
-        zone = json.loads(r, parse_int=None)
-        user_id = zone["owner_uid"]
-        self.zone_adm.restore_pool(self.traceid, user_id, zone_id, zone,
-                                   include_atime=False, initialize=True)
-        pass
-
-    def fn_delete_zone(self, *zoneIDs):
-        logger.debug(f"@@@ DISABLE ZONE")
-        for zone_id in zoneIDs:
-            user_id = self.zone_adm.zone_to_user(zone_id)
-            self.zone_adm.delete_zone(self.traceid, user_id, zone_id)
+    def op_load_permit(self, csvfile):
+        """Load a user permit list from a file."""
+        rules = _read_permit_list(csvfile)
+        for row in rules:
+            assert (len(row) >= 1
+                    and (row[0] == "ENABLE" or row[0] == "DISABLE"))
+            permitted = (row[0] == "ENABLE")
+            for uid in row[1:]:
+                _enable_disable_user(self.pool_adm, uid, permitted)
+                pass
             pass
         pass
 
-    def fn_disable_zone(self, *zoneIDs):
-        logger.debug(f"@@@ DISABLE ZONE")
-        for zone_id in zoneIDs:
-            user_id = self.zone_adm.zone_to_user(zone_id)
-            self.zone_adm.disable_zone(self.traceid, user_id, zone_id)
-            pass
+    def op_list_permit(self):
+        """Print a user permit list."""
+        rows = _list_permit_list(self.pool_adm)
+        _print_json_csv("user permit list", rows, self.args.format)
         pass
 
-    def fn_enable_zone(self, *zoneIDs):
-        logger.debug(f"@@@ ENABLE ZONE")
-        for zone_id in zoneIDs:
-            user_id = self.zone_adm.zone_to_user(zone_id)
-            self.zone_adm.enable_zone(self.traceid, user_id, zone_id)
+    def op_show_pool(self, *pool_id):
+        """Show pools."""
+        pool_list = list(pool_id)
+        if pool_list == []:
+            pool_list = self.pool_adm.tables.list_pools(None)
             pass
-        pass
-
-    def fn_show_zone(self, *zoneIDs):
-        decrypt = False
-        if len(zoneIDs) > 0 and zoneIDs[0] == "--decrypt":
-            zoneIDs = list(zoneIDs)
-            zoneIDs.pop(0)
-            decrypt = True
-            pass
-        zoneIDs = set(zoneIDs)
-        (zone_list, broken_zone) = self.zone_adm.fetch_zone_list(None, extra_info=True, include_atime=True, decrypt=decrypt)
-        outs = []
-        for zone in zone_list:
-            zone_id = zone["pool_name"]
-            if zoneIDs != set() and zone_id not in zoneIDs:
+        pools = []
+        for pid in pool_list:
+            pooldesc = gather_pool_desc(self.pool_adm.tables, pid)
+            if pooldesc is None:
+                print(f"No pool found for {pid}")
                 continue
             if self.args.format not in {"json"}:
-                fix_date_format(zone, ["atime", "expiration_date"])
+                _make_date_readable(pooldesc, ["expiration_date", "modification_time"])
                 pass
-            zone.pop("pool_name")
-            outs.append({zone_id: zone})
+            pooldesc.pop("pool_name")
+            pools.append({pid: pooldesc})
             pass
-        print_json_plain("zones", outs, self.args.format, order=pool_key_order)
-        logger.debug(f"broken zones: {broken_zone}")
+        _print_json_plain("pools", pools, self.args.format,
+                          order=_pool_key_order)
         pass
 
-    def fn_dump_zone(self):
-        rules = self.zone_adm.fetch_allow_deny_rules()
-        unix_users = self.zone_adm.tables.list_users()
-        users = [self.zone_adm.tables.get_user(id) for id in unix_users]
-        (zone_list, _) = self.zone_adm.fetch_zone_list(None, include_atime=True)
-        dump_data = json.dumps({"rules": rules, "users": users, "zones": zone_list})
-        print(dump_data)
+    def op_show_minio(self, pool_id):
+        """Show a MinIO process and a Manager of a pool."""
+        proc_list = self.pool_adm.tables.list_minio_procs(pool_id)
+        proc_list = sorted(list(proc_list))
+        outs = [{pool: process} for (pool, process) in proc_list]
+        _print_json_plain("minio", outs, self.args.format,
+                          order=_proc_key_order)
+        ma = self.pool_adm.tables.get_minio_manager(pool_id)
+        outs = [{pool_id: ma}] if ma is not None else []
+        _print_json_plain("manager", outs, self.args.format,
+                          order=_proc_key_order)
         pass
 
-    def fn_restore_zone(self, dump_file):
-        logger.debug(f"@@@ INSERT ZONE")
-        with open(dump_file) as f:
-            dump_data = f.read()
-            pass
-        j = json.loads(dump_data, parse_int=None)
-        rules = j["rules"]
-        user_info = j["users"]
-        zone_list = j["zones"]
-        self.zone_adm.store_allow_deny_rules(rules)
-        _load_user_list(self.zone_adm, user_info)
-        (existing, _) = self.zone_adm.fetch_zone_list(None)
-        (ll, pp, rr) = list_diff3(zone_list, lambda b: b.get("pool_name"),
-                                  existing, lambda e: e.get("pool_name"))
-        for x in rr:
-            _restore_zone_delete(self.zone_adm, self.traceid, x)
-            pass
-        for x in ll:
-            _restore_zone_add(self.zone_adm, self.traceid, x)
-            pass
-        for x in pp:
-            _restore_zone_update(self.zone_adm, self.traceid, x)
+    def op_delete_pool(self, *pool_id):
+        """Delete pools by pool-id."""
+        if not self.args.yes:
+            print("Need yes (-y) for action.")
+        else:
+            pool_list = list(pool_id)
+            traceid = self._traceid
+            for pid in pool_list:
+                # self.pool_adm.do_delete_pool(traceid, pid)
+                self.pool_adm.erase_minio_ep(traceid, pid)
+                self.pool_adm.erase_pool_data(traceid, pid)
+                pass
             pass
         pass
 
-    def fn_drop_zone(self):
-        everything = self.args.everything
-        self.zone_adm.flush_storage_table(everything=everything)
-        pass
-
-    def fn_reset_db(self):
-        everything = self.args.everything
-        self.zone_adm.reset_database(everything=everything)
-        pass
-
-    def fn_list_db(self):
-        self.zone_adm.print_database()
-        pass
-
-    def fn_show_muxs(self):
-        muxs = sorted(list(self.zone_adm.fetch_multiplexer_list()))
-        outs = [format_mux(m, self.args.format) for m in muxs]
-        print_json_plain("muxs", outs, self.args.format, order=_mux_key_order)
-        pass
-
-    def fn_show_server_processes(self):
-        process_list = sorted(list(self.zone_adm.fetch_process_list()))
-        logger.debug(f"@@@ process_list = {process_list}")
-        outs = [{zone: process} for (zone, process) in process_list]
-        print_json_plain("servers", outs, self.args.format, order=proc_key_order)
-        pass
-
-    def fn_flush_server_processes(self):
-        everything = self.args.everything
-        logger.debug(f"@@@ EVERYTHING = {everything}")
-        self.zone_adm.flush_process_table(everything=everything)
-        pass
-
-    def fn_delete_server_processes(self, *processIDs):
-        logger.debug(f"@@@ DELETE = {processIDs}")
-        for processID in processIDs:
-            logger.debug(f"@@@ DELETE = {processID}")
-            self.zone_adm.delete_process(processID)
+    def op_dump(self, users_or_pools):
+        """Dumps users or pools.  Specify users or pools."""
+        if users_or_pools.upper() == "USERS":
+            user_list = self.pool_adm.tables.list_users()
+            users = [self.pool_adm.tables.get_user(id) for id in user_list]
+            data = json.dumps({"users": users})
+            print(data)
+        elif users_or_pools.upper() == "POOLS":
+            pool_list = self.pool_adm.tables.list_pools(None)
+            pools = [gather_pool_desc(self.pool_adm.tables, id)
+                     for id in pool_list]
+            data = json.dumps({"pools": pools})
+            print(data)
+        else:
+            print(f"users-or_pools is either users or pools")
             pass
         pass
 
-    def fn_throw_decoy(self, zone_id):
-        logger.debug(f"@@@ THROW DECOY zone_id = {zone_id}")
-        self.zone_adm.access_mux_for_pool(self.traceid, zone_id, force=True)
+    def op_restore(self, jsonfile):
+        """Restore users and pools from a file.  Pools are given new pool-ids.
+        It is an error if some entries are already occupied: a
+        buckets-directory, bucket names, and access-keys, (or etc.).
+        Records of a file is {users: [...], pools: [...]}.
+        """
+        try:
+            with open(jsonfile) as f:
+                s = f.read()
+                pass
+        except OSError as e:
+            sys.stderr.write(f"Reading a file failed: ({jsonfile});"
+                             f" {os.strerror(e.errno)}\n")
+            return
+        except Exception as e:
+            m = rephrase_exception_message(e)
+            sys.stderr.write(f"Reading a file failed: ({jsonfile});"
+                             f" exception={m}\n")
+            traceback.print_exc()
+            return
+        desc = json.loads(s, parse_int=None)
+        users = desc.get("users", [])
+        pools = desc.get("pools", [])
+        # Insert users.
+        for u in users:
+            _load_user(self.pool_adm, u)
+            pass
+        # Insert new pools.
+        for pooldesc in pools:
+            self._restore_pool(self._traceid, pooldesc)
+            pass
         pass
 
-    def fn_show_routing_table(self):
-        pairs = self.zone_adm.tables.routing_table.list_routes()
-        print_json_plain("routing table", pairs, self.args.format, order=route_key_order)
+    def _restore_pool(self, traceid, pooldesc):
+        now = int(time.time())
+        user_id = pooldesc["owner_uid"]
+        owner_gid = pooldesc["owner_gid"]
+        path = pooldesc["buckets_directory"]
+        u = self.pool_adm.tables.get_user(user_id)
+        if u is None:
+            raise Api_Error(500, f"Bad user (unknown): {user_id}")
+        if owner_gid not in u["groups"]:
+            raise Api_Error(500, f"Bad group for a user: {owner_gid}")
+        # Add a new pool.
+        try:
+            # pool_id = self.pool_adm.do_make_pool(traceid, user_id,
+            #                                      owner_gid, path)
+            pool_id = self.pool_adm.make_new_pool(traceid, user_id,
+                                                  owner_gid, path)
+            assert pool_id is not None
+            pooldesc["pool_name"] = pool_id
+        except Exception:
+            raise
+        # Add buckets.
+        try:
+            bkts = pooldesc["buckets"]
+            for desc in bkts:
+                bucket = desc["name"]
+                bkt_policy = desc["bkt_policy"]
+                # self.pool_adm.do_make_bucket(traceid, pool_id,
+                #                              bucket, bkt_policy)
+                self._make_bucket(traceid, pool_id, bucket, bkt_policy)
+        except Exception:
+            # self.pool_adm.do_delete_pool(traceid, pool_id)
+            self.pool_adm.erase_minio_ep(traceid, pool_id)
+            self.pool_adm.erase_pool_data(traceid, pool_id)
+            raise
+        # Add access-keys.
+        added = []
+        try:
+            keys = pooldesc["access_keys"]
+            for k in keys:
+                key = k["access_key"]
+                secret = k["secret_key"]
+                key_policy = k["key_policy"]
+                desc = k.copy()
+                desc.pop("access_key")
+                desc["use"] = "access_key"
+                desc["owner"] = pool_id
+                desc["modification_time"] = now
+                ok = self.pool_adm.tables.set_ex_id(key, desc)
+                if not ok:
+                    raise Api_Error(500, "Duplicate access-key: {key}")
+                added.append(key)
+                # self.pool_adm.do_record_secret(traceid, pool_id,
+                #                                key, secret, key_policy)
+        except Exception:
+            for key in added:
+                self.pool_adm.tables.delete_id_unconditionally(key)
+                pass
+            # self.pool_adm.do_delete_pool(traceid, pool_id)
+            self.pool_adm.erase_minio_ep(traceid, pool_id)
+            self.pool_adm.erase_pool_data(traceid, pool_id)
+            raise
         pass
 
-    ##def fn_show_routing_table(self):
-    ##    (akey_list, host_list, atime_list) = self.zone_adm.fetch_route_list()
-    ##    akey_list = [(v, e) for (e, v) in akey_list]
-    ##    host_list = [(v, e) for (e, v) in host_list]
-    ##    atime_list = list(atime_list)
-    ##    servers = [e for (e, v) in akey_list] + [e for (e, v) in host_list] + [e for (e, v) in atime_list]
-    ##    servers = sorted(list(set(servers)))
-    ##    logger.debug(f"HOST_LIST = {host_list}")
-    ##    logger.debug(f"SERVERS = {servers}")
-    ##
-    ##    def collect_routes_of_server(server):
-    ##        accessKeys = [akey for (srv, akey) in akey_list if srv == server]
-    ##        hosts = [host for (srv, host) in host_list if srv == server]
-    ##        atime = next((atm for (srv, atm) in atime_list if srv == server), None)
-    ##        routes = {"accessKey": accessKeys, "host": hosts, "atime": atime}
-    ##        if self.args.format not in {"json"}:
-    ##            fix_date_format(routes, ["atime"])
-    ##        return {server: routes}
-    ##
-    ##    outs = [collect_routes_of_server(server) for server in servers]
-    ##    print_json_plain("routing table", outs, self.args.format, order=route_key_order)
-
-    def fn_flush_routing_table(self):
-        everything = self.args.everything
-        self.zone_adm.flush_routing_table(everything=everything)
+    def _make_bucket(self, traceid, pool_id, bucket, bkt_policy):
+        now = int(time.time())
+        desc = {"pool": pool_id, "bkt_policy": bkt_policy,
+                "modification_time": now}
+        (ok, holder) = self.pool_adm.tables.set_ex_bucket(bucket, desc)
+        if not ok:
+            owner = get_pool_owner_for_messages(self.pool_adm.tables, holder)
+            raise Api_Error(403, f"Bucket name taken: owner={owner}")
         pass
 
-    op_help_list = [
-        (fn_help, "Print help."),
+    def op_list_bucket(self, *pool_id):
+        """Show buckets of pools."""
+        pool_list = list(pool_id)
+        if pool_list == []:
+            bkts = self.pool_adm.tables.list_buckets(None)
+        else:
+            bkts = [b for pid in pool_list
+                    for b in self.pool_adm.tables.list_buckets(pid)]
+            pass
+        bkts = [{d["name"]: {"pool": d["pool"], "bkt_policy": d["bkt_policy"]}}
+                for d in bkts]
+        _print_json_plain("buckets", bkts, self.args.format, order=_bucket_key_order)
+        pass
 
-        (fn_load_user_list, "Loads user list."),
-        (fn_show_user_list, "Prints user list."),
+    def op_list_dir(self):
+        """List buckets-directories of pools."""
+        dirs = self.pool_adm.tables.list_buckets_directories()
+        dirs = [{d["pool"]: d} for d in dirs]
+        _print_json_plain("directories", dirs, self.args.format,
+                          order=_directory_key_order)
+        pass
 
-        (fn_load_permit_list, "Loads permit list."),
-        (fn_show_permit_list, "Shows permit list."),
+    def op_list_ep(self):
+        """List endpoints of Mux and MinIO."""
+        # Mux.
+        muxs = self.pool_adm.tables.list_muxs()
+        muxs = sorted(list(muxs))
+        outs = [_format_mux(m, self.args.format) for m in muxs]
+        _print_json_plain("mux", outs, self.args.format, order=_mux_key_order)
+        # MinIO.
+        eps = self.pool_adm.tables.list_minio_ep()
+        eps = [{ep: {"pool": pid}} for (pid, ep) in eps]
+        _print_json_plain("minio", eps, self.args.format, order=_bucket_key_order)
+        pass
 
-        (fn_insert_zone, "insert-zone"),
-        (fn_delete_zone, "delete-zone"),
-        (fn_disable_zone, "disable-zone"),
-        (fn_enable_zone, "enable-zone"),
-        (fn_show_zone, "show-zone"),
+    def op_list_timestamp(self):
+        """Show timestamps."""
+        stamps = self.pool_adm.tables.list_access_timestamps()
+        stamps = [{d["pool"]:
+                   {"timestamp": format_rfc3339_z(float(d["timestamp"]))}}
+                  for d in stamps]
+        _print_json_plain("timestamps", stamps, self.args.format, order=_timestamp_key_order)
+        pass
 
-        (fn_dump_zone, "dump-zone"),
-        (fn_restore_zone, "restore-zone"),
-        (fn_drop_zone, "drop-zone"),
+    def op_delete_ep(self, *pool_id):
+        """Delete endpoint entires from a database.  Entries of
+        MinIO-managers (ma:pool-id), MinIO-processes (mn:pool-id), and
+        MinIO-eps (ep:pool-id) are deleted.
+        """
+        pool_list = list(pool_id)
+        for pid in pool_list:
+            self.pool_adm.tables.delete_minio_manager(pid)
+            self.pool_adm.tables.delete_minio_proc(pid)
+            self.pool_adm.tables.delete_minio_ep(pid)
+            pass
+        pass
 
-        (fn_reset_db, "reset-db"),
-        (fn_list_db, "list-db"),
+    def op_access_mux(self, pool_id):
+        """Access Mux for a pool.  It may wake up or stop MinIO."""
+        traceid = self._traceid
+        self.pool_adm.access_mux_for_pool(traceid, pool_id)
+        pass
 
-        (fn_show_muxs, "show-muxs"),
+    def op_list_db(self):
+        """List all database keys."""
+        self.pool_adm.tables.print_all()
+        pass
 
-        (fn_show_server_processes, "show-minios"),
-        (fn_flush_server_processes, "flush-server-processes"),
-        (fn_delete_server_processes, "delete-server-processes"),
+    def op_reset_db(self):
+        """Clear all records in the database."""
+        if not self.args.yes:
+            print("Need yes (-y) for action.")
+        else:
+            everything = self.args.everything
+            self.pool_adm.tables.clear_all(everything=everything)
+            pass
+        pass
 
-        (fn_throw_decoy, "throw-decoy"),
+    op_list = [
+        op_help,
 
-        (fn_show_routing_table, "show-routing"),
-        (fn_flush_routing_table, "clear-routing"),
+        op_load_user,
+        op_list_user,
+        op_load_permit,
+        op_list_permit,
+
+        op_show_pool,
+        op_show_minio,
+        op_list_bucket,
+        op_list_dir,
+        op_list_ep,
+        op_list_timestamp,
+
+        op_delete_pool,
+        # op_delete_ep,
+        op_dump,
+        op_restore,
+        op_access_mux,
+
+        op_list_db,
+        op_reset_db,
     ]
 
-    def make_op_help_entry(self, fn, help):
+    def make_op_entry(self, fn, _):
         # sig.parameters=['self', 'csvfile']
-        (nparams, varargs) = get_nparams_of_fn(fn)
-        name = fn.__name__.removeprefix("fn_").replace("_", "-")
+        (_, varargs) = _get_nparams_of_fn(fn)
+        name = fn.__name__.removeprefix("op_").replace("_", "-")
         sig = inspect.signature(fn)
         pars = list(sig.parameters)
         self_ = pars.pop(0)
         assert self_ == "self"
-        prog = [name, *pars]
+        prog = [name, *pars] + (["..."] if varargs else [])
+        prog = [s.replace("_", "-") for s in prog]
         usage = " ".join(prog)
-        return (name, fn, usage, help)
+        return (name, fn, usage, None)
 
     def make_op_dict(self):
-        d = {name: (fn, args, help)
-             for (name, fn, args, help)
-             in (self.make_op_help_entry(fn, help)
-                 for (fn, help) in self.op_help_list)}
-        self.opdict = d
+        d = {name: (fn, args, None)
+             for (name, fn, args, _)
+             in (self.make_op_entry(fn, None)
+                 for fn in self.op_list)}
+        self._op_dict = d
         pass
 
     def execute_command(self):
         # fn = Command.optbl.get(self.args.operation)
-        ent = self.opdict.get(self.args.operation)
+        ent = self._op_dict.get(self.args.operation)
         # if fn is None:
         if ent is None:
             raise Exception(f"undefined operation: {self.args.operation}")
         (fn, _, _) = ent
-        (nparams, varargsp) = get_nparams_of_fn(fn)
-        if not varargsp and len(self.rest) != nparams:
+        (nparams, varargs) = _get_nparams_of_fn(fn)
+        if not varargs and len(self.rest) != nparams:
             sys.stderr.write("Missing/excessive arguments for command.\n")
-            self.fn_help()
+            self.op_help()
             pass
-        return fn(self, *self.rest)
+        try:
+            fn(self, *self.rest)
+        except Api_Error as e:
+            sys.stderr.write(f"{e}.\n")
+            pass
+        pass
 
     pass
 
@@ -545,44 +624,37 @@ def main():
     # _commands = Command.optbl.keys()
 
     parser = argparse.ArgumentParser()
-    #parser.add_argument("operation",
-    #choices=_commands)
+    # parser.add_argument("operation", choices=_commands)
     parser.add_argument("operation")
     parser.add_argument("--configfile", "-c")
     parser.add_argument("--format", "-f", choices=["text", "json"])
     parser.add_argument("--everything", type=bool, default=False)
-    parser.add_argument("--yes", "-y", type=bool, default=False)
-    #action=argparse.BooleanOptionalAction was introduced in Python3.9
-
-    args, rest = parser.parse_known_args()
+    parser.add_argument("--yes", "-y", default=False,
+                        action=argparse.BooleanOptionalAction)
+    (args, rest) = parser.parse_known_args()
 
     try:
-        (adm_conf, configfile) = read_adm_conf(args.configfile)
+        (api_conf, _) = read_api_conf(args.configfile)
     except Exception as e:
-        sys.stderr.write(f"Reading conf failed: {e}\n")
+        m = rephrase_exception_message(e)
+        sys.stderr.write(f"Reading a config file failed: exception=({m})\n")
         sys.exit(ERROR_EXIT_READCONF)
         pass
 
     traceid = random_str(12)
-    #threading.current_thread().name = traceid
     tracing.set(traceid)
-    openlog(adm_conf["log_file"],
-            **adm_conf["log_syslog"])
-    ##logger.info("**** START ADMIN ****")
-    logger.debug(f"traceid = {traceid}")
+    openlog(api_conf["log_file"],
+            **api_conf["log_syslog"])
 
     try:
-        logger.debug(f"@@@ MAIN")
-        ##zone_adm = Pool_Admin(adm_conf)
-        adm = Command(adm_conf, traceid, args, rest)
-
-        adm.make_op_dict()
-
-        adm.execute_command()
+        pool_adm = Control_Api(api_conf)
+        cmd = Command(traceid, pool_adm, args, rest)
+        cmd.make_op_dict()
+        cmd.execute_command()
     except Exception as e:
-        sys.stderr.write(f"Executing admin command failed: {e}\n")
-        print(traceback.format_exc())
-        ##adm.fn_help()
+        m = rephrase_exception_message(e)
+        sys.stderr.write(f"Executing admin command failed: exception=({m})\n")
+        # print(traceback.format_exc())
         sys.exit(ERROR_EXIT_EXCEPTION)
         pass
     pass

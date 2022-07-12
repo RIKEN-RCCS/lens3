@@ -6,23 +6,28 @@
 import re
 import enum
 import jsonschema
-from lenticularis.utility import dict_diff
+from urllib.request import Request, urlopen
+import urllib.error
+from lenticularis.utility import host_port
+from lenticularis.utility import rephrase_exception_message
 from lenticularis.utility import logger
 
 
 class Api_Error(Exception):
     def __init__(self, code, *args):
-        self._code = code
+        self.code = code
         super().__init__(*args)
-        return
+        pass
 
     pass
 
 
 class Pool_State(enum.Enum):
-    Initial = "initial"
-    Ready = "ready"
-    Inoperable = "inoperable"
+    """A pool state."""
+    INITIAL = "initial"
+    READY = "ready"
+    DISABLED = "disabled"
+    INOPERABLE = "inoperable"
 
     def __str__(self):
         return self.value
@@ -30,204 +35,234 @@ class Pool_State(enum.Enum):
     pass
 
 
-def _update_for_key(dict0, key, dict1, overwrite):
-    """Dict-updates for the key.  It skips updating an existing entry
-    unless overwrite.
+class ID_Use(enum.Enum):
+    """A usage of an ID entry in the table.  The "id:" entries are either
+    pool-ids or access-keys.
     """
-    if dict0.get(key) is None or overwrite:
-        val = dict1.get(key)
-        if val is not None:
-            dict0[key] = val
-    else:
-        pass
-    return
+    # (NOT USED YET).
+    POOL = "pool"
+    KEY = "access_key"
+
+    def __str__(self):
+        return self.value
+
+    pass
 
 
-def merge_pool_descriptions(user_id, existing, zone):
-    ## Note it disallows updating "root_secret" by preferring an
-    ## existing one.
-    if not existing:
-        existing = {}
-    zone["owner_uid"] = user_id
-    _update_for_key(zone, "owner_gid", existing, False)
-    _update_for_key(zone, "root_secret", existing, True)
-    _update_for_key(zone, "buckets_directory", existing, False)
-    _update_for_key(zone, "buckets", existing, False)
-    _update_for_key(zone, "access_keys", existing, False)
-    _update_for_key(zone, "direct_hostnames", existing, False)
-    _update_for_key(zone, "expiration_date", existing, False)
-    _update_for_key(zone, "online_status", existing, False)
-    return
+class Key_Policy(enum.Enum):
+    """A policy to an access-key; names are taken from MinIO."""
+    # (NOT USED YET).
+    READWRITE = "readwrite"
+    READONLY = "readonly"
+    WRITEONLY = "writeonly"
+
+    def __str__(self):
+        return self.value
+
+    pass
 
 
-def compare_access_keys(existing, zone):
-    if existing is None:
-        return []
-    e = existing.get("access_keys")
-    z = zone.get("access_keys")
-    if (e, z) == (None, None):
-        return []
+class Bkt_Policy(enum.Enum):
+    """A public-access policy of a bucket; names are taken from MinIO."""
+    # (NOT USED YET).
+    NONE = "none"
+    UPLOAD = "upload"
+    DOWNLOAD = "download"
+    PUBLIC = "public"
 
-    if z is None:
-        return []
-    e_dic = {i.get("access_key"): i for i in e}
-    z_dic = {i.get("access_key"): i for i in z}
-    #logger.debug(f"@@@ {e_dic} {z_dic}")
-    return dict_diff(e_dic, z_dic)
+    def __str__(self):
+        return self.value
+
+    pass
 
 
-def compare_buckets_directory(existing, zone):
-    if existing is None:
-        return []
-    e = existing.get("buckets_directory")
-    z = zone.get("buckets_directory")
-    if z is None:
-        return []
-    if e != z:
-        return [{"reason": "modified", "existing": e, "new": z}]
-    return []
-
-
-def compare_buckets(existing, zone):
-    if existing is None:
-        return []
-    e = existing.get("buckets")
-    z = zone.get("buckets")
-    if z is None:
-        return []
-    e_dic = {i.get("name"): i for i in e}
-    z_dic = {i.get("name"): i for i in z}
-    #logger.debug(f"@@@ {e_dic} {z_dic}")
-    return dict_diff(e_dic, z_dic)
-
-
-def _zone_keys(zoneID, zone):
-    return set([zoneID] + [e.get("access_key")
-                           for e in zone.get("access_keys")])
-
-
-def _direct_hostnames(zone):
-    return set(zone.get("direct_hostnames"))
-
-
-def check_conflict(zoneID, zone, z_id, z):
-    #logger.debug(f"@@@ zoneID = {zoneID}, zone = {zone}, z_id = {z_id}, z = {z}")
-
-    reasons = []
-
-    #logger.debug(f"@@@ z_id = {z_id}")
-    #logger.debug(f"@@@ zone = {zone}")
-    #logger.debug(f"@@@ z = {z}")
-
-    # check Access Key ID
-    new = _zone_keys(zoneID, zone)
-    old = _zone_keys(z_id, z)
-    #logger.debug(f"@@@ new = {new}")
-    #logger.debug(f"@@@ old = {old}")
-    i = new.intersection(old)
-    if i:
-        #logger.debug(f"@@@ KEY CONFLICT {i}")
-        reasons.append({"Zone ID / Access Key ID": i})
-        pass
-    # check buckets directories
-    new = {zone["buckets_directory"]}
-    old = {z["buckets_directory"]}
-    #logger.debug(f"@@@ new = {new}")
-    #logger.debug(f"@@@ old = {old}")
-    i = new.intersection(old)
-    if new == old:
-        #logger.debug(f"@@@ DIR CONFLICT {new}")
-        reasons.append({"buckets_directory": i})
-        pass
-    # check Direct Hostnames
-    new = _direct_hostnames(zone)
-    old = _direct_hostnames(z)
-    #logger.debug(f"@@@ new = {new}")
-    #logger.debug(f"@@@ old = {old}")
-    i = new.intersection(old)
-    if i:
-        #logger.debug(f"@@@ HOST CONFLICT {i}")
-        reasons.append({"directHostname": i})
-        pass
-    return reasons
-
-
-def check_policy(policy):
-    if policy not in {"none", "upload", "download", "public"}:
-        raise Exception(f"invalid policy: {policy}")
-    return
-
-
-def check_key_policy(key_policy):
-    if key_policy not in {"readwrite", "readonly", "writeonly"}:
-        raise Exception(f"invalid key_policy: {key_policy}")
-    return
-
-
-def check_status(status):
-    if status not in {"online", "offline"}:
-        raise Exception(f"invalid status: {status}")
-    return
-
-
-def check_permission(permission):
-    if permission not in {"allowed", "denied"}:
-        raise Exception(f"invalid permission: {permission}")
-    return
-
-
-def check_number(number):
-    if not number.isdigit():
-        raise Exception(f"number expected: {number}")
-    return
-
-
-def check_pool_dict_is_sound(pooldesc, user, adm_conf):
-    """Checks somewhat on values are defined in _check_zone_values.
+def ensure_bucket_policy(bucket, desc, access_key):
+    """Performs a very weak check that a bucket accepts any public access
+       or an access has an access-key.
     """
+    pool_id = desc["pool"]
+    policy = desc["bkt_policy"]
+    if policy in {"public", "download", "upload"}:
+        # ANY PUBLIC ACCESS ARE PASSED.
+        return
+    elif access_key is not None:
+        # JUST CHECK AN ACEESS IS WITH A KEY.
+        return
+    raise Api_Error(401, f"Access-key missing")
 
-    for bucket in pooldesc.get("buckets", []):
-        check_policy(bucket["bkt_policy"])
-    check_status(pooldesc["online_status"])
-    check_permission(pooldesc["permit_status"])
-    for accessKey in pooldesc.get("access_keys", []):
-        check_key_policy(accessKey["key_policy"])
+
+def ensure_user_is_authorized(tables, user_id):
+    u = tables.get_user(user_id)
+    assert u is not None
+    if not u.get("permitted"):
+        raise Api_Error(403, (f"User disabled: {user_id}"))
+    pass
+
+
+def ensure_mux_is_running(tables):
+    muxs = tables.list_mux_eps()
+    if len(muxs) == 0:
+        raise Api_Error(500, (f"No Mux services in Lens3"))
+    pass
+
+
+def ensure_pool_state(tables, pool_id):
+    (poolstate, _) = tables.get_pool_state(pool_id)
+    if poolstate != Pool_State.READY:
+        if poolstate == Pool_State.DISABLED:
+            raise Api_Error(403, f"Pool disabled")
+        elif poolstate == Pool_State.INOPERABLE:
+            raise Api_Error(500, f"Pool inoperable")
+        else:
+            raise Api_Error(500, f"Pool is in {poolstate}")
         pass
+    pass
 
-    check_number(pooldesc["expiration_date"])
-    check_number(pooldesc.get("atime", "0"))  # may be absent
 
-    # XXX fixme check_policy()
-    # XXX FIXME
-    # group: user's group
-    # buckets directory: path
-    # buckets: 3..63, [a-z0-9][-\.a-z0-9][a-z0-9]
-    #          no .. , not ip-address form
-    # check all direct hostnames ends with one of direct_hostname_domains
-    # expiration date is not past
-    # zoneID: 24 [a-zA-Z][\w]+
-    # Access Key ID: 16..128 [a-zA-Z][\w]+
-    # Secret Access Key: 1..128 string
-    # status: online/offline
-    return
+def ensure_pool_owner(tables, pool_id, user_id):
+    pooldesc = tables.get_pool(pool_id)
+    if pooldesc is None:
+        raise Api_Error(403, (f"Non-existing pool: {pool_id}"))
+    if pooldesc.get("owner_uid") != user_id:
+        raise Api_Error(403, (f"Not an owner of a pool: {pool_id}"))
+    pass
+
+
+def ensure_bucket_owner(tables, bucket, pool_id):
+    desc = tables.get_bucket(bucket)
+    if desc is None:
+        raise Api_Error(403, f"Non-exisiting bucket: {bucket}")
+    if desc.get("pool") != pool_id:
+        raise Api_Error(403, (f"Bucket for a wrong pool: {bucket}"))
+    pass
+
+
+def ensure_secret_owner(tables, access_key, pool_id):
+    """Checks a key owner is a pool.  It accepts no access-key."""
+    if access_key is None:
+        return
+    desc = tables.get_id(access_key)
+    if desc is None:
+        raise Api_Error(403, f"Non-existing access-key: {access_key}")
+    if not (desc.get("use") == "access_key"
+            and desc.get("owner") == pool_id):
+        raise Api_Error(403, f"Wrong access-key: {access_key}")
+    pass
+
+
+def _drop_non_ui_info_from_keys(access_key):
+    """Drops unnecessary info to pass access-key info to Web-API.  That is,
+    they are {"use", "owner", "modification_time"}.
+    """
+    needed = {"access_key", "secret_key", "key_policy"}
+    return {k: v for (k, v) in access_key.items() if k in needed}
+
+
+def gather_buckets(tables, pool_id):
+    """Gathers buckets in the pool.  It drops unnecessary slots."""
+    bkts = tables.list_buckets(pool_id)
+    bkts = [{k: v for (k, v) in d.items()
+             if k not in {"pool", "modification_time"}}
+            for d in bkts]
+    bkts = sorted(bkts, key=lambda k: k["name"])
+    return bkts
+
+
+def gather_keys(tables, pool_id):
+    """Gathers keys in the pool, but drops a probe-key and slots
+    uninteresting to Web-API.
+    """
+    keys = tables.list_access_keys_of_pool(pool_id)
+    keys = sorted(keys, key=lambda k: k["modification_time"])
+    keys = [k for k in keys
+            if (k is not None and k.get("secret_key") != "")]
+    keys = [_drop_non_ui_info_from_keys(k) for k in keys]
+    return keys
+
+
+def gather_pool_desc(tables, pool_id):
+    """Returns a pool description for displaying by Web-API."""
+    pooldesc = tables.get_pool(pool_id)
+    if pooldesc is None:
+        return None
+    bd = tables.get_buckets_directory_of_pool(pool_id)
+    pooldesc["buckets_directory"] = bd
+    assert pooldesc["buckets_directory"] is not None
+    # Gather buckets.
+    bkts = gather_buckets(tables, pool_id)
+    pooldesc["buckets"] = bkts
+    # Gather keys.
+    keys = gather_keys(tables, pool_id)
+    pooldesc["access_keys"] = keys
+    # pooldesc.pop("probe_key")
+    pooldesc["pool_name"] = pool_id
+    (poolstate, reason) = tables.get_pool_state(pool_id)
+    pooldesc["minio_state"] = str(poolstate)
+    pooldesc["minio_reason"] = str(reason)
+    # pooldesc["expiration_date"]
+    # pooldesc["online_status"]
+    user_id = pooldesc["owner_uid"]
+    u = tables.get_user(user_id)
+    pooldesc["permit_status"] = u["permitted"]
+    check_pool_is_well_formed(pooldesc, None)
+    return pooldesc
+
+
+def get_pool_owner_for_messages(tables, pool_id):
+    """Finds an owner of a pool for printing error messages.  It returns
+    unknown-user, when an owner is not found.
+    """
+    if pool_id is None:
+        return "unknown-user"
+    pooldesc = tables.get_pool(pool_id)
+    if pooldesc is None:
+        return "unknown-user"
+    return pooldesc.get("owner_uid")
+
+
+def get_manager_name_for_messages(manager):
+    if manager is None:
+        return "unknown-mux-ep"
+    muxep = host_port(manager["mux_host"], manager["mux_port"])
+    return muxep
+
+
+def tally_manager_expiry(tolerance, interval, timeout):
+    return ((tolerance + 1 + 2) * (interval + timeout))
+
+
+def _check_bkt_policy(bkt_policy):
+    assert bkt_policy in {"none", "upload", "download", "public"}
+    pass
+
+
+def _check_key_policy(key_policy):
+    assert key_policy in {"readwrite", "readonly", "writeonly"}
+    pass
+
 
 def check_user_naming(user_id):
-    return re.fullmatch("^[a-z_][-a-z0-9_]{0,31}$", user_id) is not None
+    return re.fullmatch("^[a-z_][-a-z0-9_.]{0,31}$", user_id) is not None
 
 
 def check_pool_naming(pool_id):
     assert pool_id is not None
-    return re.fullmatch("[a-zA-Z0-9]{20}", pool_id) is not None
+    return re.fullmatch("[a-zA-Z][a-zA-Z0-9]{19}", pool_id) is not None
+
+
+def check_access_key_naming(access_key):
+    assert access_key is not None
+    return re.fullmatch("[a-zA-Z][a-zA-Z0-9]{19}", access_key) is not None
 
 
 def check_bucket_naming(name):
-    """Checks restrictions.  Names are all lowercase.  IT BANS DOTS.  It
-    bans "aws", "amazon", "minio", "goog.*", and "g00g.*".
+    """Checks restrictions.  Names are all lowercase.  Lens3 BANS DOTS.
+    Lens3 bans "aws", "amazon", "minio", "goog*", and "g00g*".
     """
-    ## [Bucket naming rules]
-    ## https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucketnamingrules.html
-    ## [Bucket naming guidelines]
-    ## https://cloud.google.com/storage/docs/naming-buckets
+    # [Bucket naming rules]
+    # https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucketnamingrules.html
+    # [Bucket naming guidelines]
+    # https://cloud.google.com/storage/docs/naming-buckets
     return (re.fullmatch("[a-z0-9-]{3,63}", name) is not None
             and
             re.fullmatch(
@@ -235,6 +270,37 @@ def check_bucket_naming(name):
                  "|^xn--.*$|^.*-s3alias$|^aws$|^amazon$"
                  "|^minio$|^goog.*$|^g00g.*$"),
                 name) is None)
+
+
+def forge_s3_auth(access_key):
+    """Makes an S3 authorization for an access-key."""
+    return f"AWS4-HMAC-SHA256 Credential={access_key}////"
+
+
+def parse_s3_auth(authorization):
+    """Extracts an access-key in an S3 authorization, or returns None if
+    not found.
+    """
+    if authorization is None:
+        return None
+    components = authorization.split(" ")
+    if "AWS4-HMAC-SHA256" not in components:
+        return None
+    for c in components:
+        if c.startswith("Credential="):
+            e = c.find("/")
+            if e == -1:
+                return None
+            else:
+                k = c[len("Credential="):e]
+                if check_access_key_naming(k):
+                    return k
+                else:
+                    return None
+        else:
+            pass
+        pass
+    return None
 
 
 def _pool_desc_schema(type_number):
@@ -272,28 +338,24 @@ def _pool_desc_schema(type_number):
             "pool_name": {"type": "string"},
             "owner_uid": {"type": "string"},
             "owner_gid": {"type": "string"},
-            "root_secret": {"type": "string"},
             "buckets_directory": {"type": "string"},
             "buckets": {"type": "array", "items": bucket},
-            "probe_access": {"type": "string"},
             "access_keys": {"type": "array", "items": access_key},
-            "direct_hostnames": {"type": "array", "items": {"type": "string"}},
-            "expiration_date": type_number,
-            "permit_status": {"type": "string"},
-            "online_status": {"type": "string"},
+            "probe_key": {"type": "string"},
             "minio_state": {"type": "string"},
-            # Below keys are internally held:
-            # "atime"
-       },
+            "minio_reason": {"type": "string"},
+            "expiration_date": {"type": "integer"},
+            "permit_status": {"type": "boolean"},
+            "online_status": {"type": "boolean"},
+            "modification_time": {"type": "integer"},
+        },
         "required": [
             # "pool_name",
             "owner_uid",
             "owner_gid",
-            "root_secret",
             "buckets_directory",
             "buckets",
             "access_keys",
-            "direct_hostnames",
             "expiration_date",
             "permit_status",
             "online_status",
@@ -303,8 +365,58 @@ def _pool_desc_schema(type_number):
     return schema
 
 
-def check_pool_is_well_formed(desc, user_):
-    """Checks a pool description is well-formed for passing to Web-UI."""
+def check_pool_is_well_formed(pooldesc, user_):
+    """Checks a pool description is well-formed for passing to Web-API."""
     schema = _pool_desc_schema({"type": "string"})
-    jsonschema.validate(instance=desc, schema=schema)
-    return
+    jsonschema.validate(instance=pooldesc, schema=schema)
+    for bucket in pooldesc.get("buckets", []):
+        _check_bkt_policy(bucket["bkt_policy"])
+        pass
+    for accessKey in pooldesc.get("access_keys", []):
+        _check_key_policy(accessKey["key_policy"])
+        pass
+    pass
+
+
+def access_mux(traceid, ep, access_key, facade_hostname, facade_host_ip,
+               timeout):
+    # Mux requires several http-headers, especially including
+    # "X-REAL-IP".  See the code of Mux.
+    proto = "http"
+    url = f"{proto}://{ep}/"
+    headers = {}
+    headers["HOST"] = facade_hostname
+    headers["X-REAL-IP"] = facade_host_ip
+    authorization = forge_s3_auth(access_key)
+    headers["AUTHORIZATION"] = authorization
+    headers["X-FORWARDED-PROTO"] = proto
+    if traceid is not None:
+        headers["X-TRACEID"] = traceid
+        pass
+    req = Request(url, headers=headers)
+    logger.debug(f"urlopen with url={url}, timeout={timeout},"
+                 f" headers={headers}")
+    try:
+        with urlopen(req, timeout=timeout) as response:
+            pass
+        status = response.status
+        assert isinstance(status, int)
+    except urllib.error.HTTPError as e:
+        body = e.read()
+        logger.warning(f"urlopen to Mux failed for url=({url}):"
+                       f" exception=({e}); body=({body})")
+        status = e.code
+        assert isinstance(status, int)
+    except urllib.error.URLError as e:
+        logger.error(f"urlopen to Mux failed for url=({url}):"
+                     f" exception=({e})")
+        status = 400
+    except Exception as e:
+        m = rephrase_exception_message(e)
+        logger.error(f"urlopen to Mux failed for url=({url}):"
+                     f" exception=({m})",
+                     exc_info=True)
+        status = 400
+        pass
+    logger.debug(f"urlopen to Mux: status={status}")
+    return status

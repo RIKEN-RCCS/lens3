@@ -9,7 +9,7 @@ reverse-proxy <-->︎ Mux (Multiplexer) <--> MinIO
                                      <--> MinIO
                                      <--> ...
                                      <--> MinIO
-              <--> Adm (Administration Web-UI)
+              <--> Api (Setting Web-API)
                    Redis
 ```
 
@@ -17,16 +17,16 @@ The steps are:
 * Prepare prerequisite software and install Lens3
 * Setup a reverse-proxy
 * Start Redis
-* Start Adm (a Web-UI service)
 * Start Mux (a Multiplexer service)
+* Start Api (a Web-API service)
 * Register users
 
 ## Assumptions
 
 Some services are needed to use Lens3 as shown in the configuration
 figure above.  In this setup, we assume Nginx as a reverse-proxy.  Mux
-and Adm are Gunicorn services, and we assume Mux runs at port=8004 and
-Adm at port=8003.  A reverse-proxy should be setup for Mux and Adm
+and Api are Gunicorn services, and we assume Mux runs at port=8004 and
+Api at port=8003.  A reverse-proxy should be setup for Mux and Api
 ports.  In addition, Redis is needed and Redis runs at port=6378.  A
 pseudo user "lens3" is used for the owner of the daemons/services.  We
 also assume RedHat8.5 and Python3.9 at this writing (in March 2022).
@@ -36,7 +36,7 @@ also assume RedHat8.5 and Python3.9 at this writing (in March 2022).
 
 * Services used
   * Lenticularis Mux
-  * Lenticularis Adm
+  * Lenticularis Api
   * Redis (port=6378)
   * Reverse-proxy
 
@@ -46,14 +46,13 @@ also assume RedHat8.5 and Python3.9 at this writing (in March 2022).
   * `lens3-admin:lens3` -- a pseudo user for administration
 
 * Used files and directories
-  * /usr/lib/systemd/system/lenticularis-adm.service
+  * /usr/lib/systemd/system/lenticularis-api.service
   * /usr/lib/systemd/system/lenticularis-mux.service
   * /usr/lib/systemd/system/lenticularis-redis.service
-  * /etc/lenticularis/adm-config.yaml
+  * /etc/lenticularis/api-config.yaml
   * /etc/lenticularis/mux-config.yaml
   * /etc/lenticularis/redis.conf
   * /etc/nginx/conf.d/lens3proxy.conf
-  * /etc/nginx/private
   * /etc/nginx/private/htpasswd
   * /run/lenticularis-redis (temporary)
 
@@ -81,7 +80,7 @@ hosts.  httpd-tools is only required if you use basic authentication.
 
 Install Python packages.
 
-* Do as "lens3"
+* Do as the user "lens3"
 
 ```
 # su - lens3
@@ -93,7 +92,7 @@ $ pip3 install --user -r requirements.txt
 
 Install MinIO binaries minio and mc from min.io.
 
-* Download files as "lens3"
+* Download files as the user "lens3"
 
 ```
 $ cd ~
@@ -129,7 +128,7 @@ It is expected ls will show ... "system_u:object_r:tmp_t:s0".
 # setsebool -P httpd_can_network_connect 1
 ```
 
-## Start a Reverse-proxy
+## Start a Reverse-proxy (Nginx)
 
 It is highly site dependent.
 
@@ -155,7 +154,7 @@ It is highly site dependent.
 # chmod og-rwx /etc/nginx/private/htpasswd
 ```
 
-* Start Nginx during configuration changes
+* Stop/start Nginx during configuration changes
 
 ```
 # systemctl stop nginx
@@ -164,17 +163,55 @@ It is highly site dependent.
 # systemctl start nginx
 ```
 
-    - Make firewall to pass HTTP connections
-      ```
-      # apt-get install apache2-utils
-      # firewall-cmd --permanent --add-service=https
-      # firewall-cmd --reload
-      ```
+* Let the firewall pass HTTP connections
 
-## Start Redis
+<!--
+```
+# apt-get install apache2-utils
+# firewall-cmd --permanent --add-service=https
+# firewall-cmd --reload
+```
+-->
+
+### A Note about an Authenticated User
+
+Lens3 Web-API trusts the header "X-Remote-User" passed by the
+reverse-proxy.  Make sure the header is properly prepared by the proxy
+and not faked.
+
+### A Note about Nginx parameters
+
+Nginx has a parameter of the limit "client_max_body_size"
+(default=1MB).  The default value is too small.  The size "10M" seems
+adequate or "0" which means unlimited may also be adequate.
+
+```
+server {
+    client_max_body_size 10M;
+}
+```
+
+"client_max_body_size" limits the payload.  On the other hand, AWS S3
+CLI has parameters for file transfers "multipart_threshold"
+(default=8MB) and "multipart_chunksize" (default=8MB).  Especially,
+"multipart_chunksize" has the minimum 5MB.
+
+It is recommended to check the limits of the reverse-proxy when
+encountering a 413 error (Request Entity Too Large).
+
+Nginx parameters are specified in the server section (or in the http
+section).  Refer to "lens3proxy.conf".  The "client_max_body_size" is
+defined in ngx_http_core_module.  See for the Nginx
+ngx_http_core_module parameters:
+[https://nginx.org/en/docs/http/ngx_http_core_module.html](https://nginx.org/en/docs/http/ngx_http_core_module.html#client_max_body_size)
+
+See for the AWS S3 CLI parameters:
+[https://docs.aws.amazon.com/cli/latest/topic/s3-config.html](https://docs.aws.amazon.com/cli/latest/topic/s3-config.html).
+
+## Setup Redis
 
 * Copy the Redis configuration file
-  * Configuration file: `/etc/lenticularis/redis.conf`
+  * Configuration file is: `/etc/lenticularis/redis.conf`
 * Change the fields of redis.conf.
   * bind: Network interfaces; localhost by default
   * port: A port for Redis
@@ -201,42 +238,35 @@ Note: Starting Redis will fail when the file owner of
 # systemctl start lenticularis-redis
 ```
 
-## Setup Adm (Web-UI)
+## Setup Api (Web-API)
 
-* Copy the Adm configuration file
-  * Configuration file: `/etc/lenticularis/adm-config.yaml`
+* Copy the Api configuration file
+  * Configuration file is: `/etc/lenticularis/api-config.yaml`
+  * Modify it
+  * See [api-config-yaml.md](api-config-yaml.md) for the fields
+  * (Use a random for CSRF_secret_key)
 
 ```
 # mkdir -p /etc/lenticularis
-# cp $TOP/unit-file/adm/adm-config.yaml.in /etc/lenticularis/adm-config.yaml
-# vi /etc/lenticularis/adm-config.yaml
-# chown lens3:lens3 /etc/lenticularis/adm-config.yaml
-# chmod o-rwx /etc/lenticularis/adm-config.yaml
+# cp $TOP/unit-file/api/api-config.yaml.in /etc/lenticularis/api-config.yaml
+# vi /etc/lenticularis/api-config.yaml
+# chown lens3:lens3 /etc/lenticularis/api-config.yaml
+# chmod o-rwx /etc/lenticularis/api-config.yaml
 ```
 
-* Modify it
-  * See [adm-config-yaml.md](adm-config-yaml.md) for the fields
-  * Replace placeholders: @REDIS_HOST@, @REDIS_PORT@, @REDIS_PASSWORD@
-  * Replace placeholders: @DELEGATE_HOSTNAME@, @DIRECT_HOSTNAME_DOMAIN@, @RESERVED_HOSTNAME@
-  * Replace placeholders: @FACILITY@, @PRIORITY@
-  * Replace placeholders: @REVERSE_PROXY_ADDRESS@, @CSRF_SECRET_KEY@
-  * (Use a random for CSRF_secret_key)
-
-* Copy the systemd unit file for Adm
+* Copy the systemd unit file for Api
 
 ```
-# cp $TOP/unit-file/adm/lenticularis-adm.service /usr/lib/systemd/system/
+# cp $TOP/unit-file/api/lenticularis-api.service /usr/lib/systemd/system/
 ```
 
 * Modify it if necessary
-  * See the template `$TOP/unit-file/mux/lenticularis-adm.service.in`
-  * Replace placeholders: @API_USER@, @ADM_CONFIG@
 
 ## Setup sudoers for Mux
 
 Lens3 runs MinIO as a usual user process, and thus, it uses sudo to
-start MinIO.  The setting in the provided file is that only the user
-"lens3" is able to run "/home/lens3/bin/minio".
+start MinIO.  The provided example setting is that the user "lens3" is
+only allowed to run "/home/lens3/bin/minio".
 
 * Copy a sudoers entry in /etc/sudoers.d
   * Modify it if necessary
@@ -249,42 +279,34 @@ start MinIO.  The setting in the provided file is that only the user
 
 ## Setup Mux (Multiplexer)
 
-* Copy the Multiplexer configuration file
-  * Configuration file: `/etc/lenticularis/mux-config.yaml`
+* Copy the Mux configuration file
+  * Configuration file is: `/etc/lenticularis/mux-config.yaml`
+  * Modify it
+  * See [mux-config-yaml.md](mux-config-yaml.md) for the fields
 
 ```
 # mkdir -p /etc/lenticularis/
-# cp $TOP/multiplexer/mux-config.yaml.in /etc/lenticularis/mux-config.yaml
+# cp $TOP/unit-file/mux/mux-config.yaml.in /etc/lenticularis/mux-config.yaml
 # vi /etc/lenticularis/mux-config.yaml
 # chown lens3:lens3 /etc/lenticularis/mux-config.yaml
 # chmod o-rwx /etc/lenticularis/mux-config.yaml
 ```
 
-* Modify it
-  * See [mux-config-yaml.md](mux-config-yaml.md) for the fields
-  * Replace placeholders: @REDIS_HOST@, @REDIS_PORT@, @REDIS_PASSWORD@
-  * Replace placeholders: @SERVER_PORT@, @DELEGATE_HOSTNAME@, @REVERSE_PROXY_ADDRESS@, @API_ADDRESS@
-  * Replace placeholders: @PORT_MIN@, @PORT_MAX@, @MINIO@, @MINIO_HTTP_TRACE@, @MC@
-  * Replace placeholders: @FACILITY@, @PRIORITY@
-
-* Copy the systemd unit file for Multiplexer
+* Copy the systemd unit file for Mux
+  * Modify it if necessary
 
 ```
 # cp $TOP/unit-file/mux/lenticularis-mux.service /usr/lib/systemd/system/
 ```
 
-* Modify it if necessary
-  * See the template `$TOP/unit-file/mux/lenticularis-mux.service.in`
-  * Replace placeholders: @MUX_USER@, @MUX_CONFIG@
-
-## Start Services (Adm and Mux)
+## Start Services (Mux and Api)
 
 ```
 # systemctl daemon-reload
-# systemctl enable lenticularis-adm
-# systemctl start lenticularis-adm
 # systemctl enable lenticularis-mux
 # systemctl start lenticularis-mux
+# systemctl enable lenticularis-api
+# systemctl start lenticularis-api
 ```
 
 ## Register Users
@@ -307,22 +329,22 @@ ADD,user2,group2a,group2b,group2c, ...
 * Register users to Lens3 by `lenticularis-admin` command
 
 ```
-lens3-admin$ lenticularis-admin -c adm-config.yaml load-user-list {csv-file}
-lens3-admin$ lenticularis-admin -c adm-config.yaml show-user-list
+lens3-admin$ lenticularis-admin -c api-config.yaml load-user {csv-file}
+lens3-admin$ lenticularis-admin -c api-config.yaml list-user
 ```
 
-* (Optionally) Prepare a list of users allowed to access
-  * An entry is a "allow" prefix and a list of user names
+* (Optionally) Prepare a list of users enabled to access
+  * An entry is a "enable" prefix and a list of user names
 
 ```
-allow,user1,user2
+ENABLE,user1,user2,user3, ...
 ```
 
 * Register permit-list to Lens3 by `lenticularis-admin` command.
 
 ```
-lens3-admin$ lenticularis-admin -c adm-config.yaml load-permit-list {csv-file}
-lens3-admin$ lenticularis-admin -c adm-config.yaml show-permit-list --format=json
+lens3-admin$ lenticularis-admin -c api-config.yaml load-permit {csv-file}
+lens3-admin$ lenticularis-admin -c api-config.yaml list-permit
 ```
 
 ## Check the Status
@@ -333,23 +355,23 @@ lens3-admin$ lenticularis-admin -c adm-config.yaml show-permit-list --format=jso
 $ systemctl status nginx
 ```
 
-*  Redis status
+* Redis status
 
 ```
 $ systemctl status lenticularis-redis
-```
-
-* Adm (Web-UI) status
-
-```
-$ systemctl status lenticularis-adm
 ```
 
 * Mux (Multiplexer) status
 
 ```
 $ systemctl status lenticularis-mux
-lens3-admin$ lenticularis-admin -c adm-config.yaml show-muxs
+lens3-admin$ lenticularis-admin -c api-config.yaml show-muxs
+```
+
+* Api (Web-API) status
+
+```
+$ systemctl status lenticularis-api
 ```
 
 ## Test Accesses
@@ -363,6 +385,11 @@ lens3-admin$ lenticularis-admin -c adm-config.yaml show-muxs
     * Cat contents of a file
 
 ```
+$ vi ~/.aws/config
+[default]
+s3 =
+    signature_version = s3v4
+
 $ vi $HOME/.aws/credentials
 [default]
 aws_access_key_id = zHb9uscWUDgcJ9ZdYzr6

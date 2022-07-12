@@ -1,40 +1,63 @@
-# LENS3
-Lenticularis-S3, a multiplexer to MinIO to service multiple MinIO instances at a single access point.
+# Lens3
+
+Lenticularis-S3 is a hub of MinIO to service multiple MinIO instances
+at a single access point.
+
+__Lenticularis-S3 comes with ABSOLUTELY NO WARRANTY.__
 
 ## Overview
 
-Lenticularis-S3 (Lens3) is a multiplexer to MinIO for S3 object
+Lenticularis-S3 (Lens3) is a multiplexer to MinIO, an S3 object
 storage service.  It starts a MinIO instance as a non-root process for
-each user to confine unintended operations.  Lens3 launches a MinIO
-instance on a request, redirects file access requests to an instance,
-and manages the life-time of an instance.  Lens3 also provides simple
-Web UI to service a pool manager.  A pool manager associates a bucket
-pool to a directory, and the bucket names in the pool to the entries
-in the directory.
+each user to confine unintended operations.
+
+Lens3 works as a reverse-proxy and a manager of MinIO instances.  It
+launches a MinIO instance on a request, redirects S3 file access
+requests to the instance, and manages the life-time of the instance.
+This service, called "Mux", is started as a systemd service.  Lens3
+also provides a simple Web-UI for managing a bucket pool.  A "bucket
+pool" is a management unit in Lens3 which is associated to each MinIO
+instance.  A Web-UI is used to register S3 buckets to a pool.  This
+service, called "Api", is started as a systemd serivce.
+
+Refer to [MinIO](https://min.io) about MinIO.
 
 ## Installation
 
-* See [doc/setting.md](doc/setting.md)
+* See [doc/setting.md](doc/setting.md).
 
 ## Guides
 
 For users,
-see [doc/user-guide.md](doc/user-guide.md)
+see [doc/user-guide.md](doc/user-guide.md).
 
 For administrators,
-see [doc/admin-guide.md](doc/admin-guide.md)
+see [doc/admin-guide.md](doc/admin-guide.md).
+
+For programmers,
+see [doc/design.md](doc/design.md).
 
 ## Manifestation
 
+Lens3 is copyrighted by RIKEN R-CCS.  Part of the results is
+obtained by using Fugaku at RIKEN R-CCS.
+
+Lens3 is developed by the [Authors](AUTHORS.txt).  But, the code was
+reviewed by zzmatu and all remaining bugs are his responsibility.
+
+Lens3 utilizes third-party open source software, which is listed in
+[Acknowledgement](ACKNOWLEDGEMENT.txt).  The directory
+"test/s3-benchmark" is a third-party benchmark program, which is
+copyrighted by wasabi-tech and the license is LGPL.
+
+Files.
+
 ```
-doc             documents
-src             source code
-test            test tools
-redis           (Redis related files)
-nginx           templates for reverse-proxy configuration
-unit-file/webui         templates for configuration
-unit-file/multiplexer   templates for configuration
-devel           for developer
-devel/lxc       lxc environment for developer
-devel/install   install script for lxc
+doc              documents
+src/lenticularis source code
+unit-file/api    configuration templates
+unit-file/mux    configuration templates
+unit-file/redis  configuration templates
+nginx            templates for reverse-proxy configuration
+test             test code
 ```

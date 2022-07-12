@@ -14,6 +14,3 @@ pylint::
 
 pyright::
 	cd src/lenticularis ; make pyright
-
-typestubs::
-	(cd src ; pyright --createstub lenticularis.table)

@@ -193,10 +193,14 @@ The action Lens3 takes at a forced removal of a __ma:pool-id__ entry
 in Redis should (1) start a new Mux+MinIO pair, and (2) stop an old
 Mux+MinIO pair.
 
-## Deficiency
+## Short Term TODO, or Deficiency
 
-We should not code in Python.  Next version will probably be in
-Go-lang instead of Python.
+* Adding control on the pool statuses "online" and "expiration" via
+  Web-API.  They are of fixed values currently.
+* Starting MinIO with --json.  It will make parsing the output
+  reliable.
+* Avoiding Python.  The code will likely be in Go-lang in the next
+  release
 
 ## Glossary
 
@@ -227,3 +231,9 @@ Instead, a timeout of p.comminicate() will be in effect.
 __MC command concurrency__: Lens3 assumes concurrently running
 multiple MC commands with distinct aliases and distinct config-dirs do
 not interfere.
+
+__MinIO start delay__: Lens3 delays request handling on starting
+MinIO.  Alternatively, it can be returning 503 with a "Retry-After"
+http header.  Nginx (a reverse-proxy in front of Lens3) seems
+returning 502 on long delays.  See
+[rfc7231](https://httpwg.org/specs/rfc7231.htm).

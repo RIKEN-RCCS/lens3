@@ -195,12 +195,12 @@ Mux+MinIO pair.
 
 ## Short Term TODO, or Deficiency
 
-* Adding control on the pool statuses "online" and "expiration" via
+* Add control on the pool statuses "online" and "expiration" via
   Web-API.  They are of fixed values currently.
-* Starting MinIO with --json.  It will make parsing the output
+* Start MinIO with the --json option.  It will make parsing the output
   reliable.
-* Avoiding Python.  The code will likely be in Go-lang in the next
-  release
+* Not be in Python.  The code will be in Go-lang in the next release.
+* Make the key generation Web-API like the API of STS.
 
 ## Glossary
 

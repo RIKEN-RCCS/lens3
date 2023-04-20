@@ -15,6 +15,7 @@ process, but Lens3 starts MinIO instances as non-root processes for
 each user to confine unintended operations.
 
 | ![lens3-overview](v1/doc/lens3-overview.svg) |
+|:--:|
 | *Fig. Lens3 overview.* |
 
 Lens3 works as a reverse-proxy and a manager of MinIO instances.  It

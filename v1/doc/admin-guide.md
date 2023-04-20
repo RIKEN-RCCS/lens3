@@ -32,7 +32,8 @@ modifications.  Note that it does not change the status of a MinIO
 instance, and the modifications will be reflected at the next start of
 a MinIO instance.  Moreover, modifications could be inconsistent.
 
-See [lenticularis-admin.md](lenticularis-admin.md) for commands.
+See [lenticularis-admin.md](lenticularis-admin.md) for the list of
+commands.
 
 ## Design Assumptions
 

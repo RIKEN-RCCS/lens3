@@ -7,16 +7,16 @@ __Lenticularis-S3 comes with ABSOLUTELY NO WARRANTY.__
 
 ## Overview
 
-Lenticularis-S3 (Lens3) provides an S3 service at a single access
-point by running multiple MinIO instances.  MinIO is an S3 object
-storage service.  Refer to [https://min.io](https://min.io) about
-MinIO.  MinIO is usually started as a service running as a root
-process, but Lens3 starts MinIO instances as non-root processes for
-each user to confine unintended operations.
+Lenticularis-S3 (Lens3) provides an S3 service by multiple MinIO
+instances at a single access point.  MinIO is an S3 object storage
+service, and refer to [https://min.io](https://min.io) about MinIO.
+While MinIO is usually started as a root process, Lens3 starts MinIO
+instances as non-root processes for each user to confine unintended
+operations.
 
 | ![lens3-overview](v1/doc/lens3-overview.svg) |
 |:--:|
-| *Fig. Lens3 overview.* |
+| **Fig. Lens3 overview.** |
 
 Lens3 works as a reverse-proxy and a manager of MinIO instances.  It
 launches a MinIO instance on an S3 request, redirects file access

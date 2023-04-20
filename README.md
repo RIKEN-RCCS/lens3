@@ -1,20 +1,23 @@
 # Lens3
 
-Lenticularis-S3 is a hub of MinIO to service multiple MinIO instances
-at a single access point.
+Lenticularis-S3 is a multiplexer to MinIO to service multiple MinIO
+instances at a single access point.
 
 __Lenticularis-S3 comes with ABSOLUTELY NO WARRANTY.__
 
 ## Overview
 
-Lenticularis-S3 (Lens3) is a multiplexer to MinIO.  MinIO is an S3
-object storage service.  It starts a MinIO instance as a non-root
-process for each user to confine unintended operations.
+Lenticularis-S3 (Lens3) provides an S3 service at a single access
+point by running multiple MinIO instances.  MinIO is an S3 object
+storage service.  Refer to [https://min.io](https://min.io) about
+MinIO.  MinIO is usually started as a service running as a root
+process, but Lens3 starts MinIO instances as non-root processes for
+each user to confine unintended operations.
 
-Refer to [https://min.io](https://min.io) about MinIO.
+![lens3-overview](v1/doc/lens3-overview.svg)
 
 Lens3 works as a reverse-proxy and a manager of MinIO instances.  It
-launches a MinIO instance on a request, redirects S3 file access
+launches a MinIO instance on an S3 request, redirects file access
 requests to the instance, and manages the life-time of the instance.
 This service, called "Mux", is started as a systemd service.  Lens3
 also provides a simple Web-UI for managing a bucket pool.  A "bucket
@@ -42,8 +45,7 @@ Lens3 is copyrighted by RIKEN R-CCS.  Part of the results is
 obtained by using Fugaku at RIKEN R-CCS.
 
 Lens3 is developed by R-CSS and the [authors](AUTHORS.txt).  But, the
-code was reviewed by zzmatu and all remaining bugs are his
-responsibility.
+code was reviewed by zzmatu and remaining bugs are his responsibility.
 
 Lens3 utilizes third-party open source software, which is listed in
 [acknowledgement](v1/ACKNOWLEDGEMENT.txt).  The directory
@@ -55,10 +57,10 @@ Files.
 ```
 v1/doc           documents
 v1/src/lenticularis source code
-unit-file/api    configuration templates
-unit-file/mux    configuration templates
-unit-file/redis  configuration templates
-nginx            templates for reverse-proxy configuration
-apache           templates for reverse-proxy configuration
+unit-file/api    daemon configuration templates
+unit-file/mux    daemon configuration templates
+unit-file/redis  daemon configuration templates
+nginx            example templates of reverse-proxy configuration
+apache           example templates of reverse-proxy configuration
 test             test code
 ```

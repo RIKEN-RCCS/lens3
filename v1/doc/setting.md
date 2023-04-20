@@ -24,7 +24,7 @@ The steps are:
 ## Assumptions
 
 Some services are needed to use Lens3 as shown in the configuration
-figure above.  In this setup, we assume Nginx as a reverse-proxy.  Mux
+figure above.  In this setup, we assume NGINX as a reverse-proxy.  Mux
 and Api are Gunicorn services, and we assume Mux runs at port=8004 and
 Api at port=8003.  A reverse-proxy should be setup for Mux and Api
 ports.  In addition, Redis is needed and Redis runs at port=6378.  A
@@ -67,15 +67,13 @@ also assume RedHat8.5 and Python3.9 at this writing (in March 2022).
 
 ## Install Prerequisite Software
 
-Install packages Development-Tools, Redis, Python, and Nginx onto the
-hosts.  httpd-tools is only required if you use basic authentication.
+Install packages Development-Tools, Redis, and Python onto the
+hosts.
 
 ```
 # dnf groupinstall "Development Tools"
 # dnf install redis
 # dnf install python39
-# dnf install nginx
-# dnf install httpd-tools
 ```
 
 Install Python packages.
@@ -84,7 +82,7 @@ Install Python packages.
 
 ```
 # su - lens3
-$ cd $TOP
+$ cd $TOP/v1
 $ pip3 install --user -r requirements.txt
 ```
 
@@ -128,9 +126,17 @@ It is expected ls will show ... "system_u:object_r:tmp_t:s0".
 # setsebool -P httpd_can_network_connect 1
 ```
 
-## Start a Reverse-proxy (Nginx)
+## Start a Reverse-proxy (NGINX)
 
 It is highly site dependent.
+
+Install NGINX.  httpd-tools is required if you use basic
+authentication.
+
+```
+# dnf install nginx
+# dnf install httpd-tools
+```
 
 * Copy a configuration file to /etc/nginx/conf.d/
   * A sample file is in $TOP/nginx/lens3proxy.conf
@@ -154,7 +160,7 @@ It is highly site dependent.
 # chmod og-rwx /etc/nginx/private/htpasswd
 ```
 
-* Stop/start Nginx during configuration changes
+* Stop/start NGINX during configuration changes
 
 ```
 # systemctl stop nginx
@@ -179,9 +185,9 @@ Lens3 Web-API trusts the header "X-Remote-User" passed by the
 reverse-proxy.  Make sure the header is properly prepared by the proxy
 and not faked.
 
-### A Note about Nginx parameters
+### A Note about NGINX parameters
 
-Nginx has a parameter of the limit "client_max_body_size"
+NGINX has a parameter of the limit "client_max_body_size"
 (default=1MB).  The default value is too small.  The size "10M" seems
 adequate or "0" which means unlimited may also be adequate.
 
@@ -199,14 +205,28 @@ CLI has parameters for file transfers "multipart_threshold"
 It is recommended to check the limits of the reverse-proxy when
 encountering a 413 error (Request Entity Too Large).
 
-Nginx parameters are specified in the server section (or in the http
+NGINX parameters are specified in the server section (or in the http
 section).  Refer to "lens3proxy.conf".  The "client_max_body_size" is
-defined in ngx_http_core_module.  See for the Nginx
+defined in ngx_http_core_module.  See for the NGINX
 ngx_http_core_module parameters:
 [https://nginx.org/en/docs/http/ngx_http_core_module.html](https://nginx.org/en/docs/http/ngx_http_core_module.html#client_max_body_size)
 
 See for the AWS S3 CLI parameters:
 [https://docs.aws.amazon.com/cli/latest/topic/s3-config.html](https://docs.aws.amazon.com/cli/latest/topic/s3-config.html).
+
+## Start a Reverse-proxy (Apache)
+
+It is highly site dependent.
+
+Install Apache.
+
+```
+# dnf install httpd mod_proxy_html
+# dnf install mod_auth_openidc
+# dnf install httpd-tools
+```
+
+? httpd-filesystem
 
 ## Setup Redis
 
@@ -349,7 +369,7 @@ lens3-admin$ lenticularis-admin -c api-config.yaml list-permit
 
 ## Check the Status
 
-* Nginx status
+* NGINX status
 
 ```
 $ systemctl status nginx

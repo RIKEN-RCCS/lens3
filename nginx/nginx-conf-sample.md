@@ -6,7 +6,7 @@ server {
     listen [::]:443 ssl;
 
 # Declare hostname(s) (using a wildcard).  Hostnames may match the
-# webui server_name declared in another section.  Note Nginx prefers
+# webui server_name declared in another section.  Note NGINX prefers
 # an exact match to a wildcard.
 
     server_name lens3.example.com *.lens3.example.com;

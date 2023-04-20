@@ -1,14 +1,21 @@
 # Lenticularis-S3 Administration Guide
 
-## System Overview
+## System Maintenance
 
-## System Management
+### Updating MinIO and Mc Binaries
+
+MinIO and Mc should be updated manually.  Note that Lens3 may fail to
+operate on updating versions of MinIO or Mc.
+
+```
+mc admin update
+```
 
 ### Json File Backup
 
-A json file backup of uses/pools is usually not necessary.  A database
-backup is preferred.  A json file backup is done by a
-lenticularis-admin dump command.
+A database of uses/pools can be saved/restored as a json file.  A json
+file backup is done by a lenticularis-admin dump command.  However, a
+backup of a Redis database is preferred.
 
 ```
 $ lenticularis-admin dump users > users.json
@@ -19,11 +26,18 @@ $ lenticularis-admin restore users.json
 $ lenticularis-admin restore pools.json
 ```
 
-### Updating MinIO and Mc Binaries
+### Redis DB Backup
 
-```
-mc admin update
-```
+Lens3 uses "Snapshotting" of the database to a file.  The interval of
+a snapshot and the file location can be found under the keywords
+"save", "dbfilename", and "dir" in the configuration
+"/etc/lenticularis/redis.conf".  Lens3 uses "save 907 1" by default,
+which is an interval about 15 minutes.  Since Lens3 does nothing on
+the backup file, daily copying of snapshots should be performed by
+cron.
+
+See Redis documents for more information: [Redis
+persistence](https://redis.io/docs/manual/persistence/)
 
 ## Administration Command (lenticularis-admin)
 
@@ -47,22 +61,7 @@ commands.
   operation will continue.  However, stopping the MinIO processes will
   leave zombies (due to the behavior of sudo).
 
-## Redis
-
-### Redis DB Backup
-
-Lens3 uses "Snapshotting" of the database to a file.  The interval of
-a snapshot and the file location can be found under the keywords
-"save", "dbfilename", and "dir" in the configuration
-"/etc/lenticularis/redis.conf".  Lens3 uses "save 907 1" by default,
-which is an interval about 15 minutes.  Since Lens3 does nothing on
-the backup file, daily copying of snapshots should be performed by
-cron.
-
-See Redis documents for more information: [Redis
-persistence](https://redis.io/docs/manual/persistence/)
-
-### Redis Service
+## Redis Service
 
 Lens3 calls "redis-shutdown" with a fake configuration parameter
 "lenticularis/redis" in lenticularis-redis.service.  It lets point to

@@ -1,4 +1,5 @@
-"""A config file reader."""
+"""A config file reader.  Config files are in yaml, and they are read
+and checked against json schema."""
 
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause

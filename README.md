@@ -11,8 +11,8 @@ Lenticularis-S3 (Lens3) provides an S3 service by running multiple
 MinIO instances at a single access point.  MinIO is an S3 object
 storage service, and refer to [https://min.io](https://min.io) about
 MinIO.  While MinIO is usually started as a root process, Lens3 starts
-MinIO instances as non-root processes for each user to confine
-unintended operations.
+MinIO instances as non-root processes to confine unintended operations
+to each user.
 
 | ![lens3-overview](v1/doc/lens3-overview.svg) |
 |:--:|
@@ -52,7 +52,7 @@ code was reviewed by zzmatu and remaining bugs are his responsibility.
 Lens3 utilizes third-party open source software, which is listed in
 [acknowledgement](v1/ACKNOWLEDGEMENT.txt).  The directory
 "test/s3-benchmark" is a third-party benchmark program, which is
-copyrighted by wasabi-tech and the license is LGPL.
+copyrighted by wasabi-tech and is licensed with LGPL.
 
 Files.
 

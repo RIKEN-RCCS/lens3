@@ -12,6 +12,7 @@ from lenticularis.utility import logger
 
 # Redis DB number.
 
+_SETTING_TABLE = 0
 _STORAGE_TABLE = 1
 _PROCESS_TABLE = 2
 _ROUTING_TABLE = 3

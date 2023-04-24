@@ -126,12 +126,28 @@ It is expected ls will show ... "system_u:object_r:tmp_t:s0".
 # setsebool -P httpd_can_network_connect 1
 ```
 
-## Start a Reverse-proxy (NGINX)
+## Start a Reverse-Proxy
 
 It is highly site dependent.
 
-Install NGINX.  httpd-tools is required if you use basic
-authentication.
+The following headers are passed to the Lens3 Mux and Api by a proxy.
+Api requires {"X-Remote-User"}, which holds a UID of an authenticated
+user (Unix UID).  Mux requires {"Host", "X-Forwarded-For",
+"X-Forwarded-Host", "X-Forwarded-Server", "X-Forwarded-Proto",
+"X-Real-IP"}.  "Connection" (for keep-alive) is forced unset for Mux.
+These are all practically standard headers.
+
+Note {"X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Server"} are
+set implicitly by a proxy in Apache.
+
+### An Authenticated User
+
+Lens3 Api trusts the "X-Remote-User" header passed by the proxy.  Make
+sure the header is properly prepared by the proxy and not faked.
+
+### Proxy by NGINX
+
+Install NGINX.  The following example uses basic authentication.
 
 ```
 # dnf install nginx
@@ -179,12 +195,6 @@ authentication.
 ```
 -->
 
-### A Note about an Authenticated User
-
-Lens3 Web-API trusts the header "X-Remote-User" passed by the
-reverse-proxy.  Make sure the header is properly prepared by the proxy
-and not faked.
-
 ### A Note about NGINX parameters
 
 NGINX has a parameter of the limit "client_max_body_size"
@@ -214,9 +224,7 @@ ngx_http_core_module parameters:
 See for the AWS S3 CLI parameters:
 [https://docs.aws.amazon.com/cli/latest/topic/s3-config.html](https://docs.aws.amazon.com/cli/latest/topic/s3-config.html).
 
-## Start a Reverse-proxy (Apache)
-
-It is highly site dependent.
+### Proxy by Apache
 
 Install Apache.
 

@@ -11,6 +11,19 @@ operate on updating versions of MinIO or Mc.
 mc admin update
 ```
 
+### Redis DB Backup
+
+Lens3 uses Redis's "snapshotting" of the database to a file.  The
+interval of a snapshot and the file location can be found under the
+keywords "save", "dbfilename", and "dir" in the configuration
+"/etc/lenticularis/redis.conf".  Lens3 uses "save 907 1" by default,
+which is an interval about 15 minutes.  Since Lens3 does nothing on
+the backup file, daily copying/rotating of snapshots should be
+performed by cron.
+
+See Redis documents for more information: [Redis
+persistence](https://redis.io/docs/manual/persistence/)
+
 ### Json File Backup
 
 A database of uses/pools can be saved/restored as a json file.  A json
@@ -25,19 +38,6 @@ $ lenticularis-admin reset-db
 $ lenticularis-admin restore users.json
 $ lenticularis-admin restore pools.json
 ```
-
-### Redis DB Backup
-
-Lens3 uses "Snapshotting" of the database to a file.  The interval of
-a snapshot and the file location can be found under the keywords
-"save", "dbfilename", and "dir" in the configuration
-"/etc/lenticularis/redis.conf".  Lens3 uses "save 907 1" by default,
-which is an interval about 15 minutes.  Since Lens3 does nothing on
-the backup file, daily copying of snapshots should be performed by
-cron.
-
-See Redis documents for more information: [Redis
-persistence](https://redis.io/docs/manual/persistence/)
 
 ## Administration Command (lenticularis-admin)
 

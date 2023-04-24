@@ -4,17 +4,12 @@ This describes design notes of Lenticularis-S3.
 
 ## Components of Lens3
 
-* Components
-  * Mux (Multiplexer)
-  * Api (Web-API)
-  * MinIO (S3 server)
-  * Redis
-
-### Manager (under Mux)
-
-A Manager starts a MinIO instance and manages its life-time.
-
-## Security
+* Mux (Multiplexer)
+* Manager: A Manager runs under a Mux and starts a MinIO instance and
+  manages its life-time.
+* Api (Web-API)
+* MinIO (S3 server)
+* Redis
 
 ## Design Notes
 
@@ -22,15 +17,24 @@ A Manager starts a MinIO instance and manages its life-time.
 
 Lens3 uses a couple of databases (by a database number), but the
 division is arbitrary because the distinct prefixes are used.  Most of
-the entries are records in json, and the others are simple strings.
+the entries are json records, but some are simple strings.
 
 Note: In the tables below, entries with "(\*)" are set atomically (by
 "setnx"), and entries with "(\*\*)" are with expiry.
 
-#### storage-table
+#### Setting-Table (DB=0)
 
-| Key           | Value         | Description   |
-| ----          | ----          | ----          |
+| Key            | Value         | Notes   |
+| ----           | ----          | ---- |
+| "cf:lens3-api" | api-config    | |
+| "cf:lens3-mux" | mux-config    | |
+
+NOT IMPLEMENTED YET.
+
+#### Storage-Table (DB=1)
+
+| Key           | Value         | Notes   |
+| ----          | ----          | ---- |
 | po:pool-id    | pool-description | |
 | uu:user       | user-info     | |
 | ps:pool-id    | pool-state    | |
@@ -53,10 +57,10 @@ in exclusion.  Note it is avoided to run multiple MinIO instances in
 the same directory.  However, some MinIO instances may run in a
 transient state.
 
-#### process-table
+#### Process-Table (DB=2)
 
-| Key           | Value         | Description   |
-| ----          | ----          | ----          |
+| Key           | Value         | Notes   |
+| ----          | ----          | ---- |
 | ma:pool-id    | MinIO-manager | (\*, \*\*)|
 | mn:pool-id    | MinIO-process | |
 | mx:mux-endpoint | Mux-description | (\*\*) |
@@ -77,10 +81,10 @@ endpoint (host+port) of a Mux.  The content has no particular use.  A
 start-time is a time Mux started.  A modification-time is a time the
 record is refreshed, which is renewed when an entry is gone by expiry.
 
-#### routing-table
+#### Routing-Table (DB=3)
 
-| Key           | Value         | Description   |
-| ----          | ----          | ----          |
+| Key           | Value         | Notes   |
+| ----          | ----          | ---- |
 | ep:pool-id    | MinIO-endpoint | |
 | bk:bucket-name | bucket-description | A mapping by a bucket-name (\*) |
 | ts:pool-id    | timestamp     | Timestamp on the last access (string) |
@@ -92,18 +96,20 @@ record: {"pool", "bkt_policy", "modification_time"}.  A bkt-policy
 indicates public R/W status of a bucket: {"none", "upload",
 "download", "public"}, which are borrowed from MinIO.
 
-#### pickone-table
+#### Pickone-Table (DB=4)
 
-| Key           | Value         | Description   |
-| ----          | ----          | ----          |
+| Key           | Value         | Notes   |
+| ----          | ----          | ---- |
 | id:random     | key-description | An entry to keep uniqueness (*) |
 
-An id:random entry stores a generated key for pool-id or access-key.
-A key-description is a record: {"use", "owner", "secret_key",
-"key_policy", "modification_time"}.  A use/owner pair is either
-"pool"/user-id or "access_key"/pool-id.  A secret-key and a key-policy
-fields are missing for an entry for use=pool.  A key-policy is one of
-{"readwrite", "readonly", "writeonly"}, which are borrowed from MinIO.
+An id:random entry stores a generated key for a pool-id and an
+access-key.  A key-description is a record: {"use", "owner",
+"secret_key", "key_policy", "modification_time"}.  An owner field
+depends on the use field, and it is either a user-id (for use="pool")
+or a pool-id (for use="access_key").  A secret-key and a key-policy
+fields are missing for use="pool".  A key-policy is one of
+{"readwrite", "readonly", "writeonly"}, whose names are borrowed from
+MinIO.
 
 ### Bucket policy
 
@@ -202,6 +208,8 @@ Mux+MinIO pair.
 * Not be in Python.  The code will be in Go-lang in the next release.
 * Make the key generation Web-API like the API of STS.
 
+## Security
+
 ## Glossary
 
 * __Probe-key__: An access-key used by Api to tell Mux about a wake up
@@ -234,6 +242,6 @@ not interfere.
 
 __MinIO start delay__: Lens3 delays request handling on starting
 MinIO.  Alternatively, it can be returning 503 with a "Retry-After"
-http header.  Nginx (a reverse-proxy in front of Lens3) seems
+http header.  NGINX (a reverse-proxy in front of Lens3) seems
 returning 502 on long delays.  See
 [rfc7231](https://httpwg.org/specs/rfc7231.htm).

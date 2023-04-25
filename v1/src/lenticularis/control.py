@@ -48,7 +48,7 @@ class Control_Api():
         self._facade_hostname = mux_param["facade_hostname"]
         self._facade_host_ip = get_ip_addresses(self._facade_hostname)[0]
 
-        settings = api_conf["system"]
+        settings = api_conf["controller"]
         self._max_pool_expiry = int(settings["max_pool_expiry"])
 
         ctl_param = api_conf["minio_manager"]
@@ -59,7 +59,7 @@ class Control_Api():
         env = copy_minimal_env(os.environ)
         self._env_mc = env
 
-        trusted_proxies = api_conf["system"]["trusted_proxies"]
+        trusted_proxies = api_conf["controller"]["trusted_proxies"]
         self.trusted_proxies = {addr for h in trusted_proxies
                                 for addr in get_ip_addresses(h)}
 
@@ -183,16 +183,16 @@ class Control_Api():
 
     # API interfaces.
 
-    def api_return_user_template(self, traceid, user_id):
+    def api_return_user_info(self, traceid, user_id):
         try:
-            t = self._return_user_template(user_id)
+            t = self._return_user_info(user_id)
             return (200, None, {"pool_list": [t]})
         except Api_Error as e:
             time.sleep(self._bad_response_delay)
             return (e.code, f"{e}", [])
         except Exception as e:
             m = rephrase_exception_message(e)
-            logger.error((f"get_template failed: user={user_id};"
+            logger.error((f"get_user_info failed: user={user_id};"
                           f" exception=({m})"),
                          exc_info=True)
             time.sleep(self._bad_response_delay)
@@ -376,7 +376,7 @@ class Control_Api():
 
     # API implementation.
 
-    def _return_user_template(self, user_id):
+    def _return_user_info(self, user_id):
         """Returns basic information on the user needed by Web-API."""
         ensure_user_is_authorized(self.tables, user_id)
         u = self.tables.get_user(user_id)
@@ -387,16 +387,6 @@ class Control_Api():
             "owner_uid": user_id,
             "owner_gid": groups[0],
             "groups": groups,
-            # "buckets_directory": "",
-            # "buckets": [],
-            # "access_keys": [
-            #        {"key_policy": "readwrite"},
-            #        {"key_policy": "readonly"},
-            #        {"key_policy": "writeonly"}],
-            # "expiration_date": self._determine_expiration_date(),
-            # "permit_status": True,
-            # "online_status": True,
-            # "atime": "0",
         }
         return template
 

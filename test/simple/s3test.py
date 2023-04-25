@@ -317,7 +317,7 @@ def run():
     ep = conf["apiep"]
     url = f"{proto}://{ep}"
     client = Client(conf["uid"], conf["gid"], conf["password"], home, url)
-    client.get_user_template()
+    client.get_user_info()
     test = S3_Test(client)
 
     print(f"Makeing a pool for testing")

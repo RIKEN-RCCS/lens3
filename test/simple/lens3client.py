@@ -101,8 +101,8 @@ class Client():
 
     # API Primitives.
 
-    def get_user_template(self):
-        path = "/template"
+    def get_user_info(self):
+        path = "/user-info"
         template = self.access("GET", path)
         api_version = template["pool_list"][0]["api_version"]
         # sys.stdout.write(f"api_version=({api_version})\n")

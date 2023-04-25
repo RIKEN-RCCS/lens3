@@ -52,7 +52,10 @@ app.mount("/scripts/",
           StaticFiles(directory=os.path.join(_webui_dir, "scripts")),
           name="scripts")
 with open(os.path.join(_webui_dir, "setting.html")) as f:
-    _setting_html = f.read()
+    basepath = _api_conf["controller"]["base_path"]
+    parameters = ('<script type="text/javascript">const base_path="'
+                  + basepath + '";</script>')
+    _setting_html = f.read().replace("PLACE_PARAMETERS_HERE", parameters)
     pass
 
 
@@ -86,7 +89,7 @@ async def _get_request_body(request):
 
 
 class CsrfSettings(BaseModel):
-    secret_key: str = _api_conf["system"]["CSRF_secret_key"]
+    secret_key: str = _api_conf["controller"]["CSRF_secret_key"]
     pass
 
 
@@ -146,24 +149,24 @@ async def app_get_show_ui(
     code = status.HTTP_200_OK
     log_access(f"{code}", client_addr, user_id, request.method, request.url)
     with open(os.path.join(_webui_dir, "setting.html")) as f:
-        _setting_html_nocache = f.read()
+        _setting_html_nocache = f.read().replace("PLACE_PARAMETERS_HERE", parameters)
         pass
     response = HTMLResponse(status_code=code, content=_setting_html_nocache)
     return response
 
 
-@app.get("/template")
-async def app_get_get_template(
+@app.get("/user-info")
+async def app_get_get_user_info(
         request: Request,
         x_remote_user: Union[str, None] = Header(default=None),
         x_real_ip: Union[str, None] = Header(default=None),
         x_traceid: Union[str, None] = Header(default=None),
         csrf_protect: CsrfProtect = Depends()):
     """Returns a user information for Web-API."""
-    logger.debug(f"APP.GET /template")
+    logger.debug(f"APP.GET /user-info")
     (user_id, client_addr, traceid) = (x_remote_user, x_real_ip, x_traceid)
     tracing.set(traceid)
-    (code, reason, values) = api.api_return_user_template(traceid, user_id)
+    (code, reason, values) = api.api_return_user_info(traceid, user_id)
     response = _make_json_response(code, reason, values, csrf_protect,
                                    client_addr, user_id, request)
     return response

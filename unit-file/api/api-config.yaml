@@ -15,6 +15,13 @@ gunicorn:
 
 aws_signature: "AWS4-HMAC-SHA256"
 
+controller:
+    trusted_proxies:
+        - localhost
+    base_path: "/api"
+    CSRF_secret_key: xyzzy
+    max_pool_expiry: 630720000
+
 multiplexer:
     facade_hostname: fgkvm-010-128-008-026.fdcs.r-ccs.riken.jp
     probe_access_timeout: 60
@@ -25,12 +32,6 @@ minio_manager:
 minio:
     minio: /home/lens3/bin/minio
     mc: /home/lens3/bin/mc
-
-system:
-    trusted_proxies:
-        - localhost
-    max_pool_expiry: 630720000
-    CSRF_secret_key: xyzzy
 
 log_file: "/var/tmp/lenticularis/lens3-api-log"
 log_syslog:

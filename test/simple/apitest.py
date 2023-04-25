@@ -27,8 +27,8 @@ class Api_Test():
             pass
         pass
 
-    def get_user_template__(self):
-        self.client.get_user_template()
+    def get_user_info__(self):
+        self.client.get_user_info()
         pass
 
     def list_pools__(self):
@@ -166,7 +166,7 @@ def run():
     ep = conf["apiep"]
     url = f"{proto}://{ep}"
     client = Client(conf["uid"], conf["gid"], conf["password"], home, url)
-    client.get_user_template()
+    client.get_user_info()
     test = Api_Test(client)
 
     print(f"Makeing a pool for testing")

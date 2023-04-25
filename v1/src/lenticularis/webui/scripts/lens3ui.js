@@ -1,9 +1,14 @@
-// Lenticularis-S3 Web-UI
+/* Lenticularis-S3 Web-UI */
 
 // Copyright (c) 2022 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
 
-//// Editor Data ////
+// Note a constant "base_path" is set in the script part in
+// "setting.html".  A base_path is the base-url used when running
+// behind the proxy.  It can be something like "", ".", "/api", etc
+// (without a trailing slash).
+
+/* Editor Data */
 
 var csrf_token;
 
@@ -38,7 +43,7 @@ var make_new_pool_button_app = new Vue({
   methods: {
     kick_add_new_pool: () => {
       edit_pool_data.make_pool_mode = true;
-      run_get_user_template();
+      run_get_user_info();
     },
   },
 });
@@ -98,7 +103,7 @@ var pool_list_section_app = new Vue({
   }
 });
 
-//// Server Response ////
+/* Server Response */
 
 var show_status_data = {
   status: "---",
@@ -116,7 +121,7 @@ var show_status_app = new Vue({
   },
 });
 
-//// FUNCTIONS ////
+/* FUNCTIONS */
 
 function submit_request(msg, triple, process_response) {
   show_message(msg + " ...");
@@ -155,20 +160,20 @@ function submit_request(msg, triple, process_response) {
     });
 }
 
-function run_get_user_template() {
-  const msg = "get user template"
+function run_get_user_info() {
+  const msg = "get user info"
   const method = "GET";
-  const url_path = "/template";
+  const url_path = (base_path + "/user-info");
   const c = {};
   const body = null;
   const triple = {method, url_path, body};
-  return submit_request(msg, triple, set_user_template_data);
+  return submit_request(msg, triple, set_user_info_data);
 }
 
 function run_get_pool_list() {
   const msg = "get pool list"
   const method = "GET";
-  const url_path = "/pool";
+  const url_path = (base_path + "/pool");
   const body = null;
   const triple = {method, url_path, body};
   return submit_request(msg, triple, render_pool_list);
@@ -180,7 +185,7 @@ function run_make_pool() {
   const owner_gid = edit_pool_data.group;
   console.log("make_pool: directory=" + directory);
   const method = "POST";
-  const url_path = ("/pool");
+  const url_path = (base_path + "/pool");
   const c = {"pool": {"buckets_directory": directory,
                       "owner_gid": owner_gid}};
   c["CSRF-Token"] = csrf_token;
@@ -195,7 +200,7 @@ function run_delete_pool(i) {
   const pool_name = pooldesc["pool_name"];
   console.log(`pool_name = ${pool_name}`);
   const method = "DELETE";
-  const url_path = "/pool/" + pool_name;
+  const url_path = (base_path + "/pool/" + pool_name);
   const c = {};
   c["CSRF-Token"] = csrf_token;
   const body = JSON.stringify(c);
@@ -223,7 +228,8 @@ function run_make_bucket() {
   const policy = edit_pool_data.bucket_policy;
   console.log("make_bucket: name=" + name + ", policy=" + policy);
   const method = "PUT";
-  const url_path = ("/pool/" + edit_pool_data.pool_name + "/bucket");
+  const url_path = (base_path + "/pool/" + edit_pool_data.pool_name
+                    + "/bucket");
   const c = {"bucket": {"name": name, "bkt_policy": policy}};
   c["CSRF-Token"] = csrf_token;
   const body = JSON.stringify(c);
@@ -235,7 +241,8 @@ function run_delete_bucket(name) {
   const msg = "delete bucket";
   console.log("delete_bucket: name=" + name);
   const method = "DELETE";
-  const url_path = ("/pool/" + edit_pool_data.pool_name + "/bucket/" + name);
+  const url_path = (base_path + "/pool/" + edit_pool_data.pool_name
+                    + "/bucket/" + name);
   const c = {};
   c["CSRF-Token"] = csrf_token;
   const body = JSON.stringify(c);
@@ -247,7 +254,8 @@ function run_make_secret(rw) {
   const msg = "make access-key";
   console.log("make_access_key: " + rw);
   const method = "POST";
-  const url_path = ("/pool/" + edit_pool_data.pool_name + "/secret");
+  const url_path = (base_path + "/pool/" + edit_pool_data.pool_name
+                    + "/secret");
   const c = {"key_policy": rw};
   c["CSRF-Token"] = csrf_token;
   const body = JSON.stringify(c);
@@ -259,7 +267,8 @@ function run_delete_secret(key) {
   const msg = "delete access-key";
   console.log("delete_access_key: " + key);
   const method = "DELETE";
-  const url_path = ("/pool/" + edit_pool_data.pool_name + "/secret/" + key);
+  const url_path = (base_path + "/pool/" + edit_pool_data.pool_name
+                    + "/secret/" + key);
   const c = {};
   c["CSRF-Token"] = csrf_token;
   const body = JSON.stringify(c);
@@ -270,11 +279,11 @@ function run_delete_secret(key) {
 const bkt_policy_names = ["none", "public", "upload", "download"];
 const key_policy_names = ["readwrite", "readonly", "writeonly"];
 
-function set_user_template_data(data) {
+function set_user_info_data(data) {
   const pool_desc_list = data["pool_list"];
   const desc = pool_desc_list[0];
   console.assert(desc["api_version"] == "v1.2", "Lens3 api mismatch");
-  copy_user_template_for_edit(desc);
+  copy_user_info_for_edit(desc);
   edit_pool_data.pool_name_visible = true;
   edit_pool_data.edit_pool_visible = false;
   pool_list_section_data.pool_data_visible = false;
@@ -351,7 +360,7 @@ function render_pool_as_ul_entry(pooldesc) {
   ];
 }
 
-function copy_user_template_for_edit(desc) {
+function copy_user_info_for_edit(desc) {
   edit_pool_data.user = desc["owner_uid"];
   edit_pool_data.group = desc["owner_gid"];
   edit_pool_data.group_choices = desc["groups"];

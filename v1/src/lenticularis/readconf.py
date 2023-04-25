@@ -11,18 +11,18 @@ import yaml
 from lenticularis.utility import rephrase_exception_message
 
 
-_mux_conf_envname = "LENTICULARIS_MUX_CONFIG"
-_api_conf_envname = "LENTICULARIS_API_CONFIG"
+_mux_conf_env_name = "LENTICULARIS_MUX_CONFIG"
+_api_conf_env_name = "LENTICULARIS_API_CONFIG"
 
 
 def read_mux_conf(configfile=None):
     return readconf(configfile, _fix_mux_conf, _validate_mux_conf,
-                    _mux_conf_envname)
+                    _mux_conf_env_name)
 
 
 def read_api_conf(configfile=None):
     return readconf(configfile, _fix_api_conf, _validate_api_conf,
-                    _api_conf_envname)
+                    _api_conf_env_name)
 
 
 def readconf(configfile, fixfn, valfn, envname):
@@ -225,16 +225,18 @@ def _api_schema(number_type):
         ],
         "additionalProperties": False,
     }
-    system = {
+    controller = {
         "type": "object",
         "properties": {
             "trusted_proxies": {"type": "array", "items": {"type": "string"}},
             "max_pool_expiry": number_type,
+            "base_path": {"type": "string"},
             "CSRF_secret_key": {"type": "string"},
         },
         "required": [
             "trusted_proxies",
             "max_pool_expiry",
+            "base_path",
             "CSRF_secret_key",
         ],
         "additionalProperties": False,
@@ -248,7 +250,7 @@ def _api_schema(number_type):
             "multiplexer": multiplexer,
             "minio_manager": minio_manager,
             "minio": minio,
-            "system": system,
+            "controller": controller,
             "log_file": {"type": "string"},
             "log_syslog": _syslog_schema(number_type),
         },
@@ -258,7 +260,7 @@ def _api_schema(number_type):
             "multiplexer",
             "minio_manager",
             "minio",
-            "system",
+            "controller",
             "log_syslog",
         ],
         "additionalProperties": False,

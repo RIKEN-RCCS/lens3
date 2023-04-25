@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name="lenticularis",
-    version="1.1",
+    version="1.2",
     author="",
     author_email="",
     description="",
@@ -22,14 +22,13 @@ setup(
         "console_scripts": ["lenticularis-admin=lenticularis.admintool:main"]
     },
     install_requires=[
-        'redis',
-        'hiredis',
-        'gunicorn',
+        'wheel',
         'jsonschema',
         'pyyaml',
-        'wheel',
-        'fastapi',
+        'redis',
+        'gunicorn',
         'uvicorn',
+        'fastapi',
         'fastapi_csrf_protect',
         'pytest']
 )

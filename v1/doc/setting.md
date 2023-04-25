@@ -4,14 +4,9 @@
 
 This document describes minimal setting for Lenticularis-S3 (Lens3).
 
-```
-reverse-proxy <-->︎ Mux (Multiplexer) <--> MinIO
-                                     <--> MinIO
-                                     <--> ...
-                                     <--> MinIO
-              <--> Api (Setting Web-API)
-                   Redis
-```
+| ![lens3-setting](v1/doc/lens3-setting.svg) |
+|:--:|
+| **Fig. Lens3 overview.** |
 
 The steps are:
 * Prepare prerequisite software and install Lens3
@@ -266,7 +261,10 @@ Note: Starting Redis will fail when the file owner of
 # systemctl start lenticularis-redis
 ```
 
-## Setup Api (Web-API)
+## Setup Lens3-Api (Web-API)
+
+Lens3-Api will be started as a system service with
+uid:gid="lens3":"lens3".  This section prepares for it.
 
 * Copy the Api configuration file
   * Configuration file is: `/etc/lenticularis/api-config.yaml`
@@ -307,6 +305,9 @@ only allowed to run "/home/lens3/bin/minio".
 
 ## Setup Mux (Multiplexer)
 
+Lens3-Mux will be started as a system service with
+uid:gid="lens3":"lens3".  This section prepares for it.
+
 * Copy the Mux configuration file
   * Configuration file is: `/etc/lenticularis/mux-config.yaml`
   * Modify it
@@ -339,9 +340,9 @@ only allowed to run "/home/lens3/bin/minio".
 
 ## Register Users
 
-Lens3 has its own a list of users (with uid + gid) and a list of
+Lens3 has its own a list of users (with uid+gid) and a list of
 enablement status of the users.  It does not look at the databases of
-the underlying OS whereas it uses uid + gid of the system.
+the underlying OS whereas it uses uid+gid of the system.
 
 See [Administration Guide](admin-guide.md#).
 

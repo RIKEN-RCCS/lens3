@@ -1,11 +1,10 @@
-redis
-hiredis
-gunicorn
+wheel
 jsonschema
 pyyaml
-wheel
-fastapi
+redis
+gunicorn
 uvicorn
+fastapi
 fastapi_csrf_protect
 pytest
 .

@@ -21,11 +21,12 @@ to each user.
 Lens3 works as a reverse-proxy and a manager of MinIO instances.  It
 launches a MinIO instance on an S3 request, redirects file access
 requests to the instance, and manages the life-time of the instance.
-This service, called "Mux", is started as a systemd service.  Lens3
-also provides a simple Web-UI for managing a bucket pool.  A "bucket
-pool" is a management unit in Lens3 which is associated to each MinIO
-instance.  A Web-UI is used to register S3 buckets to a pool.  This
-service, called "Api", is started as a systemd serivce.
+This service, called "Lens3-Mux", is started as a systemd service.
+Lens3 also provides a simple Web-UI for managing a bucket pool.  A
+"bucket pool" is a management unit in Lens3 which is associated to
+each MinIO instance.  A Web-UI is used to register S3 buckets to a
+pool.  This service, called "Lens3-Api", is started as a systemd
+serivce, too.
 
 ## Guides
 

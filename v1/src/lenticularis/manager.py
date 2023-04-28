@@ -727,7 +727,7 @@ class Manager():
         (ok, reason) = self._check_pool_is_enabled()
         if not ok:
             raise Termination(reason)
-        # Check the life-time is expired.
+        # Check the lifetime is expired.
         elapsed = now - self._last_access_ts
         if elapsed > self._minio_awake_duration:
             ts = self.tables.get_access_timestamp(pool_id)

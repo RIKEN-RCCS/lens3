@@ -78,11 +78,12 @@ ProxyPreserveHost on (for Apache2)
 
 ## Load-Balanced Setting
 
-Mux's can be run on multiple hosts, and a reverse-proxy will
-distribute accesses to Mux's.  In contrast, Api service is single.  In
-multiple Muxs setting, firewall settings shall be fixed.  The port
-range of communication for both Mux's and MinIO's on hosts must be
-open to Api, since Api accesses both Mux's and MinIO's.
+Lens3-Mux's can be run on multiple hosts, and a reverse-proxy will
+distribute accesses to Lens3-Mux's.  In contrast, Lens3-Api service is
+single.  In a multiple Lens3-Mux setting, firewall settings need to be
+fixed.  The port range of communication for both Lens3-Mux's and
+MinIO's on hosts must be open to Lens3-Api, since Lens3-Api accesses
+both Lens3-Mux's and MinIO's.
 
 ## S3 Signature Algorithm Version
 
@@ -112,7 +113,7 @@ runs as a usual user under sudo.  This results in the MinIO process is
 never waited for.  Implication of this is that Lens3 should be run in
 an environment isolated from users.
 
-__Mux Node Name__: Mux registers its endpoint obtained by
+__Mux Node Name__: Lens3-Mux registers its endpoint obtained by
 platform.node() to the database, but it should be explicitly given
 when it is inappropriate.  Set the environment variable
 "LENTICULARIS_MUX_NODE" in "lenticularis-mux.service".

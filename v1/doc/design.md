@@ -4,10 +4,10 @@ This describes design notes of Lenticularis-S3.
 
 ## Components of Lens3
 
-* Mux (Multiplexer)
-* Manager: A Manager runs under a Mux and starts a MinIO instance and
-  manages its life-time.
-* Api (Web-API)
+* Lens3-Mux (Multiplexer)
+* Manager: A Manager runs under a Lens3-Mux and starts a MinIO
+  instance and manages its lifetime.
+* Lens3-Api (Web-API)
 * MinIO (S3 server)
 * Redis
 
@@ -75,11 +75,12 @@ An __mn:pool-id__ entry is a MinIO-process description: {"minio_ep",
 "minio_pid", "admin", "password", "mux_host", "mux_port",
 "manager_pid", "modification_time"}.
 
-An __mx:mux-endpoint__ entry is a Mux description that is a record:
-{"host", "port", "start_time", "modification_time"}.  A key is an
-endpoint (host+port) of a Mux.  The content has no particular use.  A
-start-time is a time Mux started.  A modification-time is a time the
-record is refreshed, which is renewed when an entry is gone by expiry.
+An __mx:mux-endpoint__ entry is a Lens3-Mux description that is a
+record: {"host", "port", "start_time", "modification_time"}.  A key is
+an endpoint (host+port) of a Lens3-Mux.  The content has no particular
+use.  A start-time is a time Lens3-Mux started.  A modification-time
+is a time the record is refreshed, which is renewed when an entry is
+gone by expiry.
 
 #### Routing-Table (DB=3)
 
@@ -123,9 +124,9 @@ mc policy set download alias/bucket
 mc policy set none alias/bucket
 ```
 
-Accesses to deleted buckets in Lens3 are refused at Mux, but they
-remain accessbile in MinIO, which have access policy "none" and are
-accessible using access-keys.
+Accesses to deleted buckets in Lens3 are refused at Lens3-Mux, but
+they remain accessbile in MinIO, which have access policy "none" and
+are accessible using access-keys.
 
 ### Redis Database Operations
 
@@ -146,7 +147,7 @@ modifications on the user-list.
 ### Pool State Transition
 
 A bucket-pool has a state in: (None), __INITIAL__, __READY__,
-__DISABLED__, and __INOPERABLE__.  Mux (a Manager) governs a
+__DISABLED__, and __INOPERABLE__.  Lens3-Mux (a Manager) governs a
 transition of states.  A Manager checks conditions of a transition at
 some interval (by heartbeat_interval).
 
@@ -159,21 +160,22 @@ some interval (by heartbeat_interval).
 * ? → __INOPERABLE__: It is by a failure of starting MinIO.  This
   state is a deadend.
 
-### Mux/Api systemd Services
+### Lens3-Mux/Lens3-Api systemd Services
 
 All states of services are stored in Redis.  systemd services can be
 stoped/started.
 
-### Api Processes
+### Lens3-Api Processes
 
-Api is not designed as load-balanced.  Api may consist of some
-processes started by Gunicorn, but they are not distributed.
+Lens3-Api is not designed as load-balanced.  Lens3-Api may consist of
+some processes started by Gunicorn, but they are not distributed.
 
-### Mux Processes
+### Lens3-Mux Processes
 
-There exists multiple Mux processes for a single Mux service, as it is
-started by Gunicorn.  Some book-keeping periodical operations (running
-in background threads) are performed more frequently than expected.
+There exists multiple Lens3-Mux processes for a single Lens3-Mux
+service, as it is started by Gunicorn.  Some book-keeping periodical
+operations (running in background threads) are performed more
+frequently than expected.
 
 ### MinIO Clients
 
@@ -191,13 +193,13 @@ process will be terminated when a Manager exits.
 "kill -STOP" the MinIO process.  It causes heartbeat failure.  Note
 that it leaves "minio" and "sudo" processes in the STOP state.
 
-#### Forced Termination of Mux and MinIO
+#### Forced Termination of Lens3-Mux and MinIO
 
-#### Forced Deletion of Redis Expiring Entries
+#### Forced Expiration of Lens3-Mux Entries in Redis
 
-The action Lens3 takes at a forced removal of a __ma:pool-id__ entry
-in Redis should (1) start a new Mux+MinIO pair, and (2) stop an old
-Mux+MinIO pair.
+The action to fake a forced removal of a __ma:pool-id__ entry in Redis
+should (1) start a new Lens3-Mux + MinIO pair, and then (2) stop an
+old Lens3-Mux + MinIO pair.
 
 ## Short Term TODO, or Deficiency
 
@@ -212,15 +214,15 @@ Mux+MinIO pair.
 
 ## Glossary
 
-* __Probe-key__: An access-key used by Api to tell Mux about a wake up
-  of MinIO.  This is key has no corresponding secret.  It is
-  distiguished by an empty secret.
+* __Probe-key__: An access-key used by Lens3-Api to tell Lens3-Mux
+  about a wake up of MinIO.  This is key has no corresponding secret.
+  It is distiguished by an empty secret.
 
 ## RANDOM MEMO
 
 __Load balancing__: The "scheduler.py" file is not used in v1.2, which
-is for distributing the processes.  Lens3 now assumes accesses to Mux
-is in itself balanced by a front-end reverse-proxy.
+is for distributing the processes.  Lens3 now assumes accesses to
+Lens3-Mux is in itself balanced by a front-end reverse-proxy.
 
 __Removing buckets__: Lens3 does not remove buckets at all.  It just
 makes them inaccessible.  It is because MinIO's "mc rb" command

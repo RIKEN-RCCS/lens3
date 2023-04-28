@@ -4,7 +4,7 @@
 
 This document describes minimal setting for Lenticularis-S3 (Lens3).
 
-| ![lens3-setting](v1/doc/lens3-setting.svg) |
+| ![lens3-setting](lens3-setting.svg) |
 |:--:|
 | **Fig. Lens3 overview.** |
 
@@ -12,26 +12,27 @@ The steps are:
 * Prepare prerequisite software and install Lens3
 * Setup a reverse-proxy
 * Start Redis
-* Start Mux (a Multiplexer service)
-* Start Api (a Web-API service)
+* Start Lens3-Mux (a Multiplexer service)
+* Start Lens3-Api (a Web-API service)
 * Register users
 
 ## Assumptions
 
 Some services are needed to use Lens3 as shown in the configuration
-figure above.  In this setup, we assume NGINX as a reverse-proxy.  Mux
-and Api are Gunicorn services, and we assume Mux runs at port=8004 and
-Api at port=8003.  A reverse-proxy should be setup for Mux and Api
-ports.  In addition, Redis is needed and Redis runs at port=6378.  A
-pseudo user "lens3" is used for the owner of the daemons/services.  We
-also assume RedHat8.5 and Python3.9 at this writing (in March 2022).
+figure above.  In this setup, we assume NGINX as a reverse-proxy.
+Lens3-Mux and Lens3-Api are Gunicorn services, and we assume Lens3-Mux
+runs at port=8004 and Lens3-Api at port=8003.  A reverse-proxy should
+be setup for Lens3-Mux and Lens3-Api ports.  In addition, Redis is
+needed and Redis runs at port=6378.  A pseudo user "lens3" is used for
+the owner of the daemons/services.  We also assume RedHat8.5 and
+Python3.9 at this writing (in March 2022).
 
 * Python
   * 3.9 and later
 
 * Services used
-  * Lenticularis Mux
-  * Lenticularis Api
+  * Lenticularis Lens3-Mux
+  * Lenticularis Lens3-Api
   * Redis (port=6378)
   * Reverse-proxy
 
@@ -125,19 +126,19 @@ It is expected ls will show ... "system_u:object_r:tmp_t:s0".
 
 It is highly site dependent.
 
-The following headers are passed to the Lens3 Mux and Api by a proxy.
-Api requires {"X-Remote-User"}, which holds a UID of an authenticated
-user (Unix UID).  Mux requires {"Host", "X-Forwarded-For",
-"X-Forwarded-Host", "X-Forwarded-Server", "X-Forwarded-Proto",
-"X-Real-IP"}.  "Connection" (for keep-alive) is forced unset for Mux.
-These are all practically standard headers.
+The following headers are passed to the Lens3-Mux and Lens3-Api by a
+proxy.  Lens3-Api requires {"X-Remote-User"}, which holds a UID of an
+authenticated user (Unix UID).  Lens3-Mux requires {"Host",
+"X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Server",
+"X-Forwarded-Proto", "X-Real-IP"}.  "Connection" (for keep-alive) is
+forced unset for Lens3-Mux.  These are all practically standard headers.
 
 Note {"X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Server"} are
 set implicitly by a proxy in Apache.
 
 ### An Authenticated User
 
-Lens3 Api trusts the "X-Remote-User" header passed by the proxy.  Make
+Lens3-Api trusts the "X-Remote-User" header passed by the proxy.  Make
 sure the header is properly prepared by the proxy and not faked.
 
 ### Proxy by NGINX
@@ -266,7 +267,7 @@ Note: Starting Redis will fail when the file owner of
 Lens3-Api will be started as a system service with
 uid:gid="lens3":"lens3".  This section prepares for it.
 
-* Copy the Api configuration file
+* Copy the Lens3-Api configuration file
   * Configuration file is: `/etc/lenticularis/api-config.yaml`
   * Modify it
   * See [api-config-yaml.md](api-config-yaml.md) for the fields
@@ -280,7 +281,7 @@ uid:gid="lens3":"lens3".  This section prepares for it.
 # chmod o-rwx /etc/lenticularis/api-config.yaml
 ```
 
-* Copy the systemd unit file for Api
+* Copy the systemd unit file for Lens3-Api
 
 ```
 # cp $TOP/unit-file/api/lenticularis-api.service /usr/lib/systemd/system/
@@ -288,7 +289,7 @@ uid:gid="lens3":"lens3".  This section prepares for it.
 
 * Modify it if necessary
 
-## Setup sudoers for Mux
+## Setup sudoers for Lens3-Mux
 
 Lens3 runs MinIO as a usual user process, and thus, it uses sudo to
 start MinIO.  The provided example setting is that the user "lens3" is
@@ -303,12 +304,12 @@ only allowed to run "/home/lens3/bin/minio".
 # chmod o-rwx /etc/sudoers.d/lenticularis-sudoers
 ```
 
-## Setup Mux (Multiplexer)
+## Setup Lens3-Mux (Multiplexer)
 
 Lens3-Mux will be started as a system service with
 uid:gid="lens3":"lens3".  This section prepares for it.
 
-* Copy the Mux configuration file
+* Copy the Lens3-Mux configuration file
   * Configuration file is: `/etc/lenticularis/mux-config.yaml`
   * Modify it
   * See [mux-config-yaml.md](mux-config-yaml.md) for the fields
@@ -321,14 +322,14 @@ uid:gid="lens3":"lens3".  This section prepares for it.
 # chmod o-rwx /etc/lenticularis/mux-config.yaml
 ```
 
-* Copy the systemd unit file for Mux
+* Copy the systemd unit file for Lens3-Mux
   * Modify it if necessary
 
 ```
 # cp $TOP/unit-file/mux/lenticularis-mux.service /usr/lib/systemd/system/
 ```
 
-## Start Services (Mux and Api)
+## Start Services (Lens3-Mux and Lens3-Api)
 
 ```
 # systemctl daemon-reload
@@ -390,14 +391,14 @@ $ systemctl status nginx
 $ systemctl status lenticularis-redis
 ```
 
-* Mux (Multiplexer) status
+* Lens3-Mux (Multiplexer) status
 
 ```
 $ systemctl status lenticularis-mux
 lens3-admin$ lenticularis-admin -c api-config.yaml show-muxs
 ```
 
-* Api (Web-API) status
+* Lens3-Api (Web-API) status
 
 ```
 $ systemctl status lenticularis-api

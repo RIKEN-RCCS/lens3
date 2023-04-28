@@ -1,4 +1,4 @@
-"""Lenticularis-S3 Api Client."""
+"""Lenticularis-S3 Lens3-Api Client."""
 
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause

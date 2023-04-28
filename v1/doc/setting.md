@@ -48,9 +48,9 @@ Python3.9 at this writing (in March 2022).
   * /etc/lenticularis/api-config.yaml
   * /etc/lenticularis/mux-config.yaml
   * /etc/lenticularis/redis.conf
+  * /run/lenticularis-redis (temporary)
   * /etc/nginx/conf.d/lens3proxy.conf
   * /etc/nginx/private/htpasswd
-  * /run/lenticularis-redis (temporary)
 
 ## Setup Pseudo-users for Services
 
@@ -150,9 +150,9 @@ Install NGINX.  The following example uses basic authentication.
 # dnf install httpd-tools
 ```
 
-* Copy a configuration file to /etc/nginx/conf.d/
-  * A sample file is in $TOP/nginx/lens3proxy.conf
-  * Copy it as /etc/nginx/conf.d/lens3proxy.conf
+* Prepare a configuration file in /etc/nginx/conf.d/
+  * Sample files are in $TOP/nginx/
+  * Copy one as /etc/nginx/conf.d/lens3proxy.conf
   * Edit it
 
 ```
@@ -182,14 +182,6 @@ Install NGINX.  The following example uses basic authentication.
 ```
 
 * Let the firewall pass HTTP connections
-
-<!--
-```
-# apt-get install apache2-utils
-# firewall-cmd --permanent --add-service=https
-# firewall-cmd --reload
-```
--->
 
 ### A Note about NGINX parameters
 
@@ -222,6 +214,10 @@ See for the AWS S3 CLI parameters:
 
 ### Proxy by Apache
 
+The steps are similar to the NGINX case.  Set up a configuration file
+with needed authentication, and (re)start a service.  Note here we
+assume Redhat variant Linux.
+
 Install Apache.
 
 ```
@@ -230,7 +226,19 @@ Install Apache.
 # dnf install httpd-tools
 ```
 
-? httpd-filesystem
+* Prepare a configuration file in /etc/httpd/conf.d/
+  * Sample files are in $TOP/apache/
+  * Copy one as /etc/httpd/conf.d/lens3proxy.conf
+  * Edit it
+
+```
+# cp $TOP/apache/lens3proxy80.conf /etc/httpd/conf.d/lens3proxy.conf
+# vi /etc/httpd/conf.d/lens3proxy.conf
+# chcon -u system_u -u system_u /etc/httpd/conf.d/lens3proxy.conf
+# chown apache:apache /etc/httpd/conf.d/lens3proxy.conf
+# chmod og-rwx /etc/httpd/conf.d/lens3proxy.conf
+# ls -lZ /etc/httpd/conf.d/lens3proxy.conf
+```
 
 ## Setup Redis
 

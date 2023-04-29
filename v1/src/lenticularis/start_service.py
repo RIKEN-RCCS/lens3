@@ -23,8 +23,7 @@ def _run_mux():
                          f" exception=({m})\n")
         return
 
-    openlog(mux_conf["log_file"],
-            **mux_conf["log_syslog"])
+    openlog(mux_conf["log_file"], **mux_conf["log_syslog"])
     servicename = "lenticularis-mux"
     logger.info("Start {servicename} service.")
 
@@ -32,7 +31,7 @@ def _run_mux():
     _port = gunicorn_conf["port"]
     bind = f"[::]:{_port}"
     env = copy_minimal_env(os.environ)
-    env["LENTICULARIS_MUX_CONFIG"] = configfile
+    env["LENS3_MUX_CONFIG"] = configfile
     cmd = [sys.executable, "-m", "gunicorn"]
     args = ["--bind", bind]
     options = _list_gunicorn_command_options(gunicorn_conf)
@@ -51,8 +50,7 @@ def _run_api():
                          f" exception=({m})\n")
         return
 
-    openlog(api_conf["log_file"],
-            **api_conf["log_syslog"])
+    openlog(api_conf["log_file"], **api_conf["log_syslog"])
     servicename = "lenticularis-api"
     logger.info(f"Start {servicename} service.")
 
@@ -60,7 +58,7 @@ def _run_api():
     _port = gunicorn_conf["port"]
     bind = f"[::]:{_port}"
     env = copy_minimal_env(os.environ)
-    env["LENTICULARIS_API_CONFIG"] = configfile
+    env["LENS3_API_CONFIG"] = configfile
     cmd = [sys.executable, "-m", "gunicorn"]
     args = ["--worker-class", "uvicorn.workers.UvicornWorker", "--bind", bind]
     options = _list_gunicorn_command_options(gunicorn_conf)

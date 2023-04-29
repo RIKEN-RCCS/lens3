@@ -61,7 +61,7 @@ Python3.9 at this writing (in March 2022).
 # usermod -a -G lens3 lens3-admin
 ```
 
-## Install Prerequisite Software
+## Install Prerequisites
 
 Install packages Development-Tools, Redis, and Python onto the
 hosts.
@@ -72,7 +72,23 @@ hosts.
 # dnf install python39
 ```
 
-Install Python packages.
+Install MinIO binaries minio and mc from min.io.
+
+* Download files as the user "lens3"
+
+```
+# su - lens3
+$ cd ~
+$ mkdir bin
+$ curl https://dl.min.io/server/minio/release/linux-amd64/minio -o /tmp/minio
+$ install -m 755 -c /tmp/minio ~/bin/minio
+$ curl https://dl.min.io/client/mc/release/linux-amd64/mc -o /tmp/mc
+# install -m 755 -c /tmp/mc ~/bin/mc
+```
+
+## Install Lens3.
+
+Install Python packages and Lens3.
 
 * Do as the user "lens3"
 
@@ -80,21 +96,6 @@ Install Python packages.
 # su - lens3
 $ cd $TOP/v1
 $ pip3 install --user -r requirements.txt
-```
-
-<!-- # su lens3-admin -c "pip3 install -r python-packages.txt --user" -->
-
-Install MinIO binaries minio and mc from min.io.
-
-* Download files as the user "lens3"
-
-```
-$ cd ~
-$ mkdir bin
-$ curl https://dl.min.io/server/minio/release/linux-amd64/minio -o /tmp/minio
-$ install -m 755 -c /tmp/minio ~/bin/minio
-$ curl https://dl.min.io/client/mc/release/linux-amd64/mc -o /tmp/mc
-# install -m 755 -c /tmp/mc ~/bin/mc
 ```
 
 ## Prepare a Log-file Directory
@@ -364,11 +365,11 @@ ADD,user2,group2a,group2b,group2c, ...
 ...
 ```
 
-* Register users to Lens3 by `lenticularis-admin` command
+* Register users to Lens3 by `lens3-admin` command
 
 ```
-lens3-admin$ lenticularis-admin -c api-config.yaml load-user {csv-file}
-lens3-admin$ lenticularis-admin -c api-config.yaml list-user
+lens3-admin$ lens3-admin -c api-config.yaml load-user {csv-file}
+lens3-admin$ lens3-admin -c api-config.yaml list-user
 ```
 
 * (Optionally) Prepare a list of users enabled to access
@@ -378,11 +379,11 @@ lens3-admin$ lenticularis-admin -c api-config.yaml list-user
 ENABLE,user1,user2,user3, ...
 ```
 
-* Register permit-list to Lens3 by `lenticularis-admin` command.
+* Register permit-list to Lens3 by `lens3-admin` command.
 
 ```
-lens3-admin$ lenticularis-admin -c api-config.yaml load-permit {csv-file}
-lens3-admin$ lenticularis-admin -c api-config.yaml list-permit
+lens3-admin$ lens3-admin -c api-config.yaml load-permit {csv-file}
+lens3-admin$ lens3-admin -c api-config.yaml list-permit
 ```
 
 ## Check the Status
@@ -403,7 +404,7 @@ $ systemctl status lenticularis-redis
 
 ```
 $ systemctl status lenticularis-mux
-lens3-admin$ lenticularis-admin -c api-config.yaml show-muxs
+lens3-admin$ lens3-admin -c api-config.yaml show-muxs
 ```
 
 * Lens3-Api (Web-API) status

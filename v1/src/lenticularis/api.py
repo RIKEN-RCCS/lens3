@@ -40,8 +40,7 @@ except Exception as e:
     sys.exit(ERROR_EXIT_READCONF)
     pass
 
-openlog(_api_conf["log_file"],
-        **_api_conf["log_syslog"])
+openlog(_api_conf["log_file"], **_api_conf["log_syslog"])
 logger.info("START Api.")
 
 _pkgdir = os.path.dirname(inspect.getfile(lenticularis))
@@ -52,9 +51,8 @@ app.mount("/scripts/",
           StaticFiles(directory=os.path.join(_webui_dir, "scripts")),
           name="scripts")
 with open(os.path.join(_webui_dir, "setting.html")) as f:
-    basepath = _api_conf["controller"]["base_path"]
     parameters = ('<script type="text/javascript">const base_path="'
-                  + basepath + '";</script>')
+                  + api.base_path + '";</script>')
     _setting_html = f.read().replace("PLACE_PARAMETERS_HERE", parameters)
     pass
 
@@ -112,8 +110,9 @@ def csrf_protect_exception_handler(request: Request, exc: CsrfProtectError):
 @app.middleware("http")
 async def validate_session(request: Request, call_next):
     peer_addr = make_typical_ip_address(str(request.client.host))
-    user_id = request.headers.get("X-REMOTE-USER")
+    claim = request.headers.get("X-REMOTE-USER")
     client_addr = request.headers.get("X-REAL-IP")
+    user_id = api.convert_claim_to_uid(claim)
     now = int(time.time())
 
     if peer_addr not in api.trusted_proxies:
@@ -144,11 +143,14 @@ async def app_get_show_ui(
         x_real_ip: Union[str, None] = Header(default=None),
         x_traceid: Union[str, None] = Header(default=None)):
     logger.debug(f"APP.GET /")
-    (user_id, client_addr, traceid) = (x_remote_user, x_real_ip, x_traceid)
-    tracing.set(traceid)
+    tracing.set(x_traceid)
+    user_id = api.convert_claim_to_uid(x_remote_user)
+    client_addr = x_real_ip
     code = status.HTTP_200_OK
     log_access(f"{code}", client_addr, user_id, request.method, request.url)
     with open(os.path.join(_webui_dir, "setting.html")) as f:
+        parameters = ('<script type="text/javascript">const base_path="'
+                  + api.base_path + '";</script>')
         _setting_html_nocache = f.read().replace("PLACE_PARAMETERS_HERE", parameters)
         pass
     response = HTMLResponse(status_code=code, content=_setting_html_nocache)
@@ -164,9 +166,10 @@ async def app_get_get_user_info(
         csrf_protect: CsrfProtect = Depends()):
     """Returns a user information for Web-API."""
     logger.debug(f"APP.GET /user-info")
-    (user_id, client_addr, traceid) = (x_remote_user, x_real_ip, x_traceid)
-    tracing.set(traceid)
-    (code, reason, values) = api.api_return_user_info(traceid, user_id)
+    tracing.set(x_traceid)
+    user_id = api.convert_claim_to_uid(x_remote_user)
+    client_addr = x_real_ip
+    (code, reason, values) = api.api_return_user_info(x_traceid, user_id)
     response = _make_json_response(code, reason, values, csrf_protect,
                                    client_addr, user_id, request)
     return response
@@ -180,9 +183,10 @@ async def app_get_list_pools(
         x_traceid: Union[str, None] = Header(default=None),
         csrf_protect: CsrfProtect = Depends()):
     logger.debug(f"APP.GET /pool")
-    (user_id, client_addr, traceid) = (x_remote_user, x_real_ip, x_traceid)
-    tracing.set(traceid)
-    (code, reason, values) = api.api_list_pools(traceid, user_id, None)
+    tracing.set(x_traceid)
+    user_id = api.convert_claim_to_uid(x_remote_user)
+    client_addr = x_real_ip
+    (code, reason, values) = api.api_list_pools(x_traceid, user_id, None)
     response = _make_json_response(code, reason, values, csrf_protect,
                                    client_addr, user_id, request)
     return response
@@ -197,9 +201,10 @@ async def app_get_get_pool(
         x_traceid: Union[str, None] = Header(default=None),
         csrf_protect: CsrfProtect = Depends()):
     logger.debug(f"APP.GET /pool/{pool_id}")
-    (user_id, client_addr, traceid) = (x_remote_user, x_real_ip, x_traceid)
-    tracing.set(traceid)
-    (code, reason, values) = api.api_list_pools(traceid, user_id, pool_id)
+    tracing.set(x_traceid)
+    user_id = api.convert_claim_to_uid(x_remote_user)
+    client_addr = x_real_ip
+    (code, reason, values) = api.api_list_pools(x_traceid, user_id, pool_id)
     response = _make_json_response(code, reason, values, csrf_protect,
                                    client_addr, user_id, request)
     return response
@@ -213,12 +218,13 @@ async def app_post_make_pool(
         x_traceid: Union[str, None] = Header(default=None),
         csrf_protect: CsrfProtect = Depends()):
     logger.debug(f"APP.POST /pool")
-    (user_id, client_addr, traceid) = (x_remote_user, x_real_ip, x_traceid)
-    tracing.set(traceid)
+    tracing.set(x_traceid)
+    user_id = api.convert_claim_to_uid(x_remote_user)
+    client_addr = x_real_ip
     body = await _get_request_body(request)
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
-    (code, reason, values) = api.api_make_pool(traceid, user_id, body)
+    (code, reason, values) = api.api_make_pool(x_traceid, user_id, body)
     response = _make_json_response(code, reason, values, csrf_protect,
                                    client_addr, user_id, request)
     return response
@@ -233,12 +239,13 @@ async def app_delete_delete_pool(
         x_traceid: Union[str, None] = Header(default=None),
         csrf_protect: CsrfProtect = Depends()):
     logger.debug(f"APP.DELETE /pool/{pool_id}")
-    (user_id, client_addr, traceid) = (x_remote_user, x_real_ip, x_traceid)
-    tracing.set(traceid)
+    tracing.set(x_traceid)
+    user_id = api.convert_claim_to_uid(x_remote_user)
+    client_addr = x_real_ip
     body = await _get_request_body(request)
     csrf_token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(csrf_token)
-    (code, reason, values) = api.api_delete_pool(traceid, user_id, pool_id)
+    (code, reason, values) = api.api_delete_pool(x_traceid, user_id, pool_id)
     response = _make_json_response(code, reason, values, csrf_protect,
                                    client_addr, user_id, request)
     return response
@@ -253,12 +260,13 @@ async def app_put_make_bucket(
         x_traceid: Union[str, None] = Header(default=None),
         csrf_protect: CsrfProtect = Depends()):
     logger.debug(f"APP.PUT /pool/{pool_id}/bucket")
-    (user_id, client_addr, traceid) = (x_remote_user, x_real_ip, x_traceid)
-    tracing.set(traceid)
+    tracing.set(x_traceid)
+    user_id = api.convert_claim_to_uid(x_remote_user)
+    client_addr = x_real_ip
     body = await _get_request_body(request)
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
-    (code, reason, values) = api.api_make_bucket(traceid, user_id, pool_id, body)
+    (code, reason, values) = api.api_make_bucket(x_traceid, user_id, pool_id, body)
     response = _make_json_response(code, reason, values, csrf_protect,
                                    client_addr, user_id, request)
     return response
@@ -274,12 +282,13 @@ async def app_delete_delete_bucket(
         x_traceid: Union[str, None] = Header(default=None),
         csrf_protect: CsrfProtect = Depends()):
     logger.debug(f"APP.DELETE /pool/{pool_id}/bucket/{bucket}")
-    (user_id, client_addr, traceid) = (x_remote_user, x_real_ip, x_traceid)
-    tracing.set(traceid)
+    tracing.set(x_traceid)
+    user_id = api.convert_claim_to_uid(x_remote_user)
+    client_addr = x_real_ip
     body = await _get_request_body(request)
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
-    (code, reason, values) = api.api_delete_bucket(traceid, user_id, pool_id, bucket)
+    (code, reason, values) = api.api_delete_bucket(x_traceid, user_id, pool_id, bucket)
     response = _make_json_response(code, reason, values, csrf_protect,
                                    client_addr, user_id, request)
     return response
@@ -294,12 +303,13 @@ async def app_post_make_secret(
         x_traceid: Union[str, None] = Header(default=None),
         csrf_protect: CsrfProtect = Depends()):
     logger.debug(f"APP.POST /pool/{pool_id}/secret")
-    (user_id, client_addr, traceid) = (x_remote_user, x_real_ip, x_traceid)
-    tracing.set(traceid)
+    tracing.set(x_traceid)
+    user_id = api.convert_claim_to_uid(x_remote_user)
+    client_addr = x_real_ip
     body = await _get_request_body(request)
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
-    (code, reason, values) = api.api_make_secret(traceid, user_id, pool_id, body)
+    (code, reason, values) = api.api_make_secret(x_traceid, user_id, pool_id, body)
     response = _make_json_response(code, reason, values, csrf_protect,
                                    client_addr, user_id, request)
     return response
@@ -315,12 +325,13 @@ async def app_delete_delete_secret(
         x_traceid: Union[str, None] = Header(default=None),
         csrf_protect: CsrfProtect = Depends()):
     logger.debug(f"APP.DELETE /pool/{pool_id}/secret/{access_key}")
-    (user_id, client_addr, traceid) = (x_remote_user, x_real_ip, x_traceid)
-    tracing.set(traceid)
+    tracing.set(x_traceid)
+    user_id = api.convert_claim_to_uid(x_remote_user)
+    client_addr = x_real_ip
     body = await _get_request_body(request)
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
-    (code, reason, values) = api.api_delete_secret(traceid, user_id, pool_id, access_key)
+    (code, reason, values) = api.api_delete_secret(x_traceid, user_id, pool_id, access_key)
     response = _make_json_response(code, reason, values, csrf_protect,
                                    client_addr, user_id, request)
     return response

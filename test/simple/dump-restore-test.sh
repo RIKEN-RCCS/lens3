@@ -6,9 +6,9 @@ set -o errexit
 set -o nounset
 
 tmpdir=$(mktemp -d) || exit 1
-lenticularis-admin dump > $tmpdir/dump
-lenticularis-admin restore $tmpdir/dump                                                                                                                  
-lenticularis-admin dump > $tmpdir/dump2                                                                                                                  
+lens3-admin dump > $tmpdir/dump
+lens3-admin restore $tmpdir/dump
+lens3-admin dump > $tmpdir/dump2
 if diff $tmpdir/dump $tmpdir/dump2; then
 	echo OK -- dump-restore test
 fi

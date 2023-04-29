@@ -11,8 +11,8 @@ import yaml
 from lenticularis.utility import rephrase_exception_message
 
 
-_mux_conf_env_name = "LENTICULARIS_MUX_CONFIG"
-_api_conf_env_name = "LENTICULARIS_API_CONFIG"
+_mux_conf_env_name = "LENS3_MUX_CONFIG"
+_api_conf_env_name = "LENS3_API_CONFIG"
 
 
 def read_mux_conf(configfile=None):
@@ -45,14 +45,14 @@ def readconf(configfile, fixfn, valfn, envname):
     return (conf, configfile)
 
 
-def _gunicorn_schema(number_type):
-    sc = {
+def _gunicorn_schema():
+    _schema = {
         "type": "object",
         "properties": {
             "port": {"type": "string"},
-            "workers": number_type,
-            "threads": number_type,
-            "timeout": number_type,
+            "workers": {"type": "number"},
+            "threads": {"type": "number"},
+            "timeout": {"type": "number"},
             "access_logfile": {"type": "string"},
             "log_file": {"type": "string"},
             "log_level": {"type": "string"},
@@ -64,15 +64,15 @@ def _gunicorn_schema(number_type):
         ],
         "additionalProperties": False,
     }
-    return sc
+    return _schema
 
 
-def _redis_schema(number_type):
-    sc = {
+def _redis_schema():
+    _schema = {
         "type": "object",
         "properties": {
             "host": {"type": "string"},
-            "port": number_type,
+            "port": {"type": "number"},
             "password": {"type": "string"},
         },
         "required": [
@@ -82,11 +82,11 @@ def _redis_schema(number_type):
         ],
         "additionalProperties": False,
     }
-    return sc
+    return _schema
 
 
-def _syslog_schema(number_type):
-    sc = {
+def _syslog_schema():
+    _schema = {
         "type": "object",
         "properties": {
             "facility": {"type": "string"},
@@ -98,22 +98,22 @@ def _syslog_schema(number_type):
         ],
         "additionalProperties": False,
     }
-    return sc
+    return _schema
 
 
-def _mux_schema(number_type):
+def _mux_schema():
     multiplexer = {
         "type": "object",
         "properties": {
-            "facade_hostname": {"type": "string"},
+            "front_host": {"type": "string"},
             "trusted_proxies": {"type": "array", "items": {"type": "string"}},
-            "mux_ep_update_interval": number_type,
-            "forwarding_timeout": number_type,
-            "probe_access_timeout": number_type,
-            "bad_response_delay": number_type,
+            "mux_ep_update_interval": {"type": "number"},
+            "forwarding_timeout": {"type": "number"},
+            "probe_access_timeout": {"type": "number"},
+            "bad_response_delay": {"type": "number"},
         },
         "required": [
-            "facade_hostname",
+            "front_host",
             "trusted_proxies",
             "mux_ep_update_interval",
             "forwarding_timeout",
@@ -126,17 +126,17 @@ def _mux_schema(number_type):
         "type": "object",
         "properties": {
             "sudo": {"type": "string"},
-            "port_min": number_type,
-            "port_max": number_type,
-            "minio_awake_duration": number_type,
+            "port_min": {"type": "number"},
+            "port_max": {"type": "number"},
+            "minio_awake_duration": {"type": "number"},
             "minio_setup_at_restart": {"type": "boolean"},
-            "heartbeat_interval": number_type,
-            "heartbeat_miss_tolerance": number_type,
-            "heartbeat_timeout": number_type,
-            "minio_start_timeout": number_type,
-            "minio_setup_timeout": number_type,
-            "minio_stop_timeout": number_type,
-            "minio_mc_timeout": number_type,
+            "heartbeat_interval": {"type": "number"},
+            "heartbeat_miss_tolerance": {"type": "number"},
+            "heartbeat_timeout": {"type": "number"},
+            "minio_start_timeout": {"type": "number"},
+            "minio_setup_timeout": {"type": "number"},
+            "minio_stop_timeout": {"type": "number"},
+            "minio_mc_timeout": {"type": "number"},
         },
         "required": [
             "sudo",
@@ -166,19 +166,22 @@ def _mux_schema(number_type):
         ],
         "additionalProperties": False,
     }
-    sc = {
+    _schema = {
         "type": "object",
         "properties": {
-            "redis": _redis_schema(number_type),
-            "gunicorn": _gunicorn_schema(number_type),
+            "version": {"type": "string"},
             "aws_signature": {"type": "string"},
+            "redis": _redis_schema(),
+            "gunicorn": _gunicorn_schema(),
             "multiplexer": multiplexer,
             "minio_manager": minio_manager,
             "minio": minio,
             "log_file": {"type": "string"},
-            "log_syslog": _syslog_schema(number_type),
+            "log_syslog": _syslog_schema(),
         },
         "required": [
+            "version",
+            "aws_signature",
             "redis",
             "gunicorn",
             "multiplexer",
@@ -188,28 +191,30 @@ def _mux_schema(number_type):
         ],
         "additionalProperties": False,
     }
-    return sc
+    return _schema
 
 
-def _api_schema(number_type):
-    multiplexer = {
+def _api_schema():
+    controller = {
         "type": "object",
         "properties": {
-            "facade_hostname": {"type": "string"},
-            "probe_access_timeout": number_type,
+            "front_host": {"type": "string"},
+            "trusted_proxies": {"type": "array", "items": {"type": "string"}},
+            "base_path": {"type": "string"},
+            "claim_to_uid": {"type": "string"},
+            "probe_access_timeout": {"type": "number"},
+            "minio_mc_timeout": {"type": "number"},
+            "max_pool_expiry": {"type": "number"},
+            "CSRF_secret_key": {"type": "string"},
         },
         "required": [
-            "facade_hostname",
+            "front_host",
+            "trusted_proxies",
+            "base_path",
+            "claim_to_uid",
             "probe_access_timeout",
-        ],
-        "additionalProperties": False,
-    }
-    minio_manager = {
-        "type": "object",
-        "properties": {
-            "minio_mc_timeout": number_type,
-        },
-        "required": [
+            "max_pool_expiry",
+            "CSRF_secret_key",
         ],
         "additionalProperties": False,
     }
@@ -225,62 +230,50 @@ def _api_schema(number_type):
         ],
         "additionalProperties": False,
     }
-    controller = {
+    _schema = {
         "type": "object",
         "properties": {
-            "trusted_proxies": {"type": "array", "items": {"type": "string"}},
-            "max_pool_expiry": number_type,
-            "base_path": {"type": "string"},
-            "CSRF_secret_key": {"type": "string"},
-        },
-        "required": [
-            "trusted_proxies",
-            "max_pool_expiry",
-            "base_path",
-            "CSRF_secret_key",
-        ],
-        "additionalProperties": False,
-    }
-    sc = {
-        "type": "object",
-        "properties": {
-            "redis": _redis_schema(number_type),
-            "gunicorn": _gunicorn_schema(number_type),
+            "version": {"type": "string"},
             "aws_signature": {"type": "string"},
-            "multiplexer": multiplexer,
-            "minio_manager": minio_manager,
-            "minio": minio,
+            "redis": _redis_schema(),
+            "gunicorn": _gunicorn_schema(),
             "controller": controller,
+            "minio": minio,
             "log_file": {"type": "string"},
-            "log_syslog": _syslog_schema(number_type),
+            "log_syslog": _syslog_schema(),
         },
         "required": [
-            "gunicorn",
+            "version",
+            "aws_signature",
             "redis",
-            "multiplexer",
-            "minio_manager",
-            "minio",
+            "gunicorn",
             "controller",
+            "minio",
             "log_syslog",
         ],
         "additionalProperties": False,
     }
-    return sc
+    return _schema
 
 
 def _validate_mux_conf(conf):
-    jsonschema.validate(instance=conf, schema=_mux_schema({"type": "number"}))
+    jsonschema.validate(instance=conf, schema=_mux_schema())
     pass
 
 
 def _validate_api_conf(conf):
-    jsonschema.validate(instance=conf, schema=_api_schema({"type": "number"}))
+    jsonschema.validate(instance=conf, schema=_api_schema())
+    claim = conf["controller"]["claim_to_uid"]
+    keyset = {"uid", "email-id"}
+    if not claim in keyset:
+        raise Exception(f"api-config: bad claim_to_uid={claim};"
+                        f" it should be one of {keyset}")
     pass
 
 
 def _fix_type(data, schema):
-    """Rereads tokens as for schema.  It fixes yaml data.  It passes
-    missing/additional properties, which are checked by json
+    """Rereads and fixes tokens in yaml to match for json schema.  It
+    passes missing/additional properties, which are checked by json
     validation.
     """
     if schema["type"] == "object":
@@ -315,12 +308,12 @@ def _fix_type(data, schema):
 
 
 def _fix_mux_conf(conf):
-    schema = _mux_schema({"type": "number"})
+    schema = _mux_schema()
     conf = _fix_type(conf, schema)
     return conf
 
 
 def _fix_api_conf(conf):
-    schema = _api_schema({"type": "number"})
+    schema = _api_schema()
     conf = _fix_type(conf, schema)
     return conf

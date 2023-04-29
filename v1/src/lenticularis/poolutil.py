@@ -378,15 +378,15 @@ def check_pool_is_well_formed(pooldesc, user_):
     pass
 
 
-def access_mux(traceid, ep, access_key, facade_hostname, facade_host_ip,
+def access_mux(traceid, ep, access_key, front_hostname, front_host_ip,
                timeout):
     # Mux requires several http-headers, especially including
     # "X-REAL-IP".  See the code of Mux.
     proto = "http"
     url = f"{proto}://{ep}/"
     headers = {}
-    headers["HOST"] = facade_hostname
-    headers["X-REAL-IP"] = facade_host_ip
+    headers["HOST"] = front_hostname
+    headers["X-REAL-IP"] = front_host_ip
     authorization = forge_s3_auth(access_key)
     headers["AUTHORIZATION"] = authorization
     headers["X-FORWARDED-PROTO"] = proto

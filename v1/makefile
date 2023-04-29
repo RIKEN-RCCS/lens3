@@ -1,16 +1,7 @@
 ## makefile
 
 all::
-	@echo "USAGE: make install"
+	@echo "USAGE: make install (by the user lens3)"
 
 install::
 	pip3 install --user -r requirements.txt
-
-pycodestyle::
-	cd src/lenticularis ; make pycodestyle
-
-pylint::
-	cd src/lenticularis ; make pylint
-
-pyright::
-	cd src/lenticularis ; make pyright

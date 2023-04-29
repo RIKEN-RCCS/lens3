@@ -26,13 +26,12 @@ def app():
                          f" exception=({m})\n")
         return None
 
-    openlog(mux_conf["log_file"],
-            **mux_conf["log_syslog"])
+    openlog(mux_conf["log_file"], **mux_conf["log_syslog"])
     logger.info("START Mux.")
 
     tables = get_table(mux_conf)
 
-    mux_host = os.environ.get("LENTICULARIS_MUX_NODE")
+    mux_host = os.environ.get("LENS3_MUX_NODE")
     if not mux_host:
         mux_host = platform.node()
         pass

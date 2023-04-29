@@ -1,3 +1,6 @@
+version: "v1.2"
+aws_signature: "AWS4-HMAC-SHA256"
+
 redis:
     host: localhost
     port: 6378
@@ -13,21 +16,16 @@ gunicorn:
     #log_syslog_facility: LOCAL8
     reload: yes
 
-aws_signature: "AWS4-HMAC-SHA256"
-
 controller:
+    front_host: fgkvm-010-128-008-026.fdcs.r-ccs.riken.jp
     trusted_proxies:
         - localhost
     base_path: "/api"
-    CSRF_secret_key: xyzzy
-    max_pool_expiry: 630720000
-
-multiplexer:
-    facade_hostname: fgkvm-010-128-008-026.fdcs.r-ccs.riken.jp
+    claim_to_uid: email-id
     probe_access_timeout: 60
-
-minio_manager:
     minio_mc_timeout: 10
+    max_pool_expiry: 630720000
+    CSRF_secret_key: xyzzy
 
 minio:
     minio: /home/lens3/bin/minio

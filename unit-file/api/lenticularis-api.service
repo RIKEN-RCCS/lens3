@@ -8,7 +8,7 @@ Type=simple
 User=lens3
 Group=lens3
 WorkingDirectory=/var/tmp
-Environment=LENTICULARIS_API_CONFIG=/etc/lenticularis/api-config.yaml
+Environment=LENS3_API_CONFIG=/etc/lenticularis/api-config.yaml
 StandardOutput=journal
 StandardError=journal
 

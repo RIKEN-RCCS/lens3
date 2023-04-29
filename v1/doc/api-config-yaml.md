@@ -33,7 +33,7 @@ aws_signature: "AWS4-HMAC-SHA256"
 
 ```
 multiplexer:
-    facade_hostname: fgkvm-010-128-008-026.fdcs.r-ccs.riken.jp
+    front_host: fgkvm-010-128-008-026.fdcs.r-ccs.riken.jp
     probe_access_timeout: 60
 ```
 

@@ -40,28 +40,26 @@ class Control_Api():
     """Setting Web-API."""
 
     def __init__(self, api_conf):
-        self._api_version = "v1.2"
         self._api_conf = api_conf
+        assert api_conf["version"] == "v1.2"
+        self._api_version = "v1.2"
 
-        mux_param = api_conf["multiplexer"]
-        self._probe_access_timeout = int(mux_param["probe_access_timeout"])
-        self._facade_hostname = mux_param["facade_hostname"]
-        self._facade_host_ip = get_ip_addresses(self._facade_hostname)[0]
-
-        settings = api_conf["controller"]
-        self._max_pool_expiry = int(settings["max_pool_expiry"])
-
-        ctl_param = api_conf["minio_manager"]
-        self._mc_timeout = int(ctl_param["minio_mc_timeout"])
+        api_param = api_conf["controller"]
+        self._front_hostname = api_param["front_host"]
+        self._front_host_ip = get_ip_addresses(self._front_hostname)[0]
+        proxies = api_param["trusted_proxies"]
+        self.trusted_proxies = {addr for h in proxies
+                                for addr in get_ip_addresses(h)}
+        self.base_path = api_param["base_path"]
+        self.claim_to_uid = api_param["claim_to_uid"]
+        self._probe_access_timeout = int(api_param["probe_access_timeout"])
+        self._mc_timeout = int(api_param["minio_mc_timeout"])
+        self._max_pool_expiry = int(api_param["max_pool_expiry"])
 
         minio_param = api_conf["minio"]
         self._bin_mc = minio_param["mc"]
         env = copy_minimal_env(os.environ)
         self._env_mc = env
-
-        trusted_proxies = api_conf["controller"]["trusted_proxies"]
-        self.trusted_proxies = {addr for h in trusted_proxies
-                                for addr in get_ip_addresses(h)}
 
         self._bad_response_delay = 1
         self.tables = get_table(api_conf)
@@ -120,6 +118,24 @@ class Control_Api():
             raise
         pass
 
+    def convert_claim_to_uid(self, claim):
+        """Converts a claim data passed by REMOTE-USER to a uid.  It returns
+        None if a claim is ill-formed.  It is identity if it is a
+        basic-authetication data.
+        """
+        if self.claim_to_uid == "uid":
+            return claim
+        elif self.claim_to_uid == "email-id":
+            name, atmark, domain = claim.partition("@")
+            if atmark is None:
+                return None
+            else:
+                return name
+        else:
+            assert claim in {"uid", "email-id"}
+            pass
+        pass
+
     def check_user_is_registered(self, user_id):
         """Checks a user is known.  It does not reject disabled-state users to
         allow them to view the setting.
@@ -176,7 +192,7 @@ class Control_Api():
         access_key = pooldesc["probe_key"]
         assert access_key is not None
         status = access_mux(traceid, ep, access_key,
-                            self._facade_hostname, self._facade_host_ip,
+                            self._front_hostname, self._front_host_ip,
                             self._probe_access_timeout)
         logger.debug(f"Access Mux for pool={pool_id}: status={status}")
         return status

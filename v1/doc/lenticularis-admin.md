@@ -1,34 +1,34 @@
-# lenticularis-admin
+# lens3-admin
 
-## $PYENV_SHIMS/lenticularis-admin
+## $PYENV_SHIMS/lens3-admin
 
-* lenticularis-admin delete-server-processes [server-ID ...]
-* lenticularis-admin delete-zone Zone-ID ...
-* lenticularis-admin disable-zone Zone-ID ...
-* lenticularis-admin drop
+* lens3-admin delete-server-processes [server-ID ...]
+* lens3-admin delete-zone Zone-ID ...
+* lens3-admin disable-zone Zone-ID ...
+* lens3-admin drop
 
-* lenticularis-admin __dump__
+* lens3-admin __dump__
         Dumps all tables.
 
-* lenticularis-admin enable-zone Zone-ID ...
+* lens3-admin enable-zone Zone-ID ...
 
-* lenticularis-admin flush-routing-table
-* lenticularis-admin flush-server-processes
-* lenticularis-admin insert-allow-deny-rules file
-* lenticularis-admin insert-user-info file
-* lenticularis-admin insert-zone Zone-ID zonefile
+* lens3-admin flush-routing-table
+* lens3-admin flush-server-processes
+* lens3-admin insert-allow-deny-rules file
+* lens3-admin insert-user-info file
+* lens3-admin insert-zone Zone-ID zonefile
 
-* lenticularis-admin print-all
+* lens3-admin print-all
         Prints the database.
-* lenticularis-admin __reset-all__
+* lens3-admin __reset-all__
         Resets the database, except the list of users.
 
-* lenticularis-admin restore
-* lenticularis-admin restore-dumpfile registers all dumped tables.
-* lenticularis-admin show-allow-deny-rules
-* lenticularis-admin show-multiplexer
-* lenticularis-admin show-routing-table
-* lenticularis-admin show-server-processes
-* lenticularis-admin show-user-info
-* lenticularis-admin show-zone [Zone-ID ...]
-* lenticularis-admin throw-decoy Zone-ID
+* lens3-admin restore
+* lens3-admin restore-dumpfile registers all dumped tables.
+* lens3-admin show-allow-deny-rules
+* lens3-admin show-multiplexer
+* lens3-admin show-routing-table
+* lens3-admin show-server-processes
+* lens3-admin show-user-info
+* lens3-admin show-zone [Zone-ID ...]
+* lens3-admin throw-decoy Zone-ID

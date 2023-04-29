@@ -1,4 +1,4 @@
-"""lenticularis-admin command.  It provides a way to directly modify
+"""lens3-admin command.  It provides a way to directly modify
 databases.
 """
 
@@ -643,8 +643,7 @@ def main():
 
     traceid = random_str(12)
     tracing.set(traceid)
-    openlog(api_conf["log_file"],
-            **api_conf["log_syslog"])
+    openlog(api_conf["log_file"], **api_conf["log_syslog"])
 
     try:
         pool_adm = Control_Api(api_conf)

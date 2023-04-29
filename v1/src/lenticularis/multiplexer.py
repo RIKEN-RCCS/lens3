@@ -104,15 +104,19 @@ class Multiplexer():
 
     def __init__(self, mux_conf, tables, spawner, host, port):
         self._verbose = False
+        self._mux_conf = mux_conf
         self.tables = tables
         self._spawner = spawner
         self._mux_host = host
         self._mux_port = int(port)
         self._start_time = int(time.time())
 
+        assert mux_conf["version"] == "v1.2"
+        self._mux_version = "v1.2"
+
         mux_param = mux_conf["multiplexer"]
-        self._facade_hostname = mux_param["facade_hostname"].lower()
-        self._facade_host_ip = get_ip_addresses(self._facade_hostname)[0]
+        self._front_hostname = mux_param["front_host"].lower()
+        self._front_host_ip = get_ip_addresses(self._front_hostname)[0]
         proxies = mux_param["trusted_proxies"]
         self._trusted_proxies = {addr for h in proxies
                                  for addr in get_ip_addresses(h)}
@@ -291,7 +295,7 @@ class Multiplexer():
             pooldesc = self.tables.get_pool(pool_id)
             probe_key = pooldesc["probe_key"]
             code = access_mux(traceid, ep, probe_key,
-                              self._facade_hostname, self._facade_host_ip,
+                              self._front_hostname, self._front_host_ip,
                               self._probe_access_timeout)
             return (code, ep)
         pass

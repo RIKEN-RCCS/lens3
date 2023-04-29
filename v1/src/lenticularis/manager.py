@@ -831,7 +831,7 @@ def main():
     parser.add_argument("--traceid")
     args = parser.parse_args()
 
-    # pool_id = os.environ.get("LENTICULARIS_POOL_ID")
+    # pool_id = os.environ.get("LENS3_POOL_ID")
     # if pool_id is None:
     #    sys.stderr.write(f"Manager failed: No pool-ID.\n")
     #    sys.exit(ERROR_EXIT_READCONF)
@@ -848,8 +848,7 @@ def main():
         pass
 
     tracing.set(args.traceid)
-    openlog(mux_conf["log_file"],
-            **mux_conf["log_syslog"])
+    openlog(mux_conf["log_file"], **mux_conf["log_syslog"])
 
     try:
         pid = os.fork()

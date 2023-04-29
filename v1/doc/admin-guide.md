@@ -27,26 +27,26 @@ persistence](https://redis.io/docs/manual/persistence/)
 ### Json File Backup
 
 A database of uses/pools can be saved/restored as a json file.  A json
-file backup is done by a lenticularis-admin dump command.  However, a
+file backup is done by a lens3-admin dump command.  However, a
 backup of a Redis database is preferred.
 
 ```
-$ lenticularis-admin dump users > users.json
-$ lenticularis-admin dump pools > pools.jsan
+$ lens3-admin dump users > users.json
+$ lens3-admin dump pools > pools.jsan
   ......
-$ lenticularis-admin reset-db
-$ lenticularis-admin restore users.json
-$ lenticularis-admin restore pools.json
+$ lens3-admin reset-db
+$ lens3-admin restore users.json
+$ lens3-admin restore pools.json
 ```
 
-## Administration Command (lenticularis-admin)
+## Administration Command (lens3-admin)
 
-Lens3 provides a lenticularis-admin command for direct database
+Lens3 provides a lens3-admin command for direct database
 modifications.  Note that it does not change the status of a MinIO
 instance, and the modifications will be reflected at the next start of
 a MinIO instance.  Moreover, modifications could be inconsistent.
 
-See [lenticularis-admin.md](lenticularis-admin.md) for the list of
+See [lens3-admin.md](lens3-admin.md) for the list of
 commands.
 
 ## Design Assumptions
@@ -116,7 +116,7 @@ an environment isolated from users.
 __Mux Node Name__: Lens3-Mux registers its endpoint obtained by
 platform.node() to the database, but it should be explicitly given
 when it is inappropriate.  Set the environment variable
-"LENTICULARIS_MUX_NODE" in "lenticularis-mux.service".
+"LENS3_MUX_NODE" in "lenticularis-mux.service".
 
 __Failing Proper Shutdown__: A MinIO instance sometimes may stay alive
 at a shutdown of the lenticularis-mux service.  Please check a MinIO

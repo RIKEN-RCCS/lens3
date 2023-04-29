@@ -86,7 +86,7 @@ $ curl https://dl.min.io/client/mc/release/linux-amd64/mc -o /tmp/mc
 # install -m 755 -c /tmp/mc ~/bin/mc
 ```
 
-## Install Lens3.
+## Install Lens3
 
 Install Python packages and Lens3.
 

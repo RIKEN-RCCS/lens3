@@ -87,7 +87,7 @@ var keys_section_app = new Vue({
   data: edit_pool_data,
   methods: {
     kick_make_secret: run_make_secret,
-    kick_copy_clipboard: copy_clipboard,
+    kick_copy_to_clipboard: copy_to_clipboard,
     kick_delete_secret: run_delete_secret,
   },
 });
@@ -279,7 +279,7 @@ function run_delete_secret(key) {
   return submit_request(msg, triple, display_pool_in_edit_pool);
 }
 
-function copy_clipboard(s) {
+function copy_to_clipboard(s) {
   navigator.clipboard.writeText(s);
 }
 

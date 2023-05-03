@@ -17,11 +17,11 @@ gunicorn:
     reload: yes
 
 controller:
-    front_host: fgkvm-010-128-008-026.fdcs.r-ccs.riken.jp
+    front_host: lens3.example.com
     trusted_proxies:
         - localhost
     base_path: "/api"
-    claim_to_uid: email-id
+    claim_uid_map: email-name
     probe_access_timeout: 60
     minio_mc_timeout: 10
     max_pool_expiry: 630720000

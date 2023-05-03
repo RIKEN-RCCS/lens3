@@ -1,22 +1,25 @@
-"""Accessors for the set of Redis DBs."""
+"""Accessors of the Redis DB.  A table is accessed like a single
+database, while it is implemented by a couple of databases inside.
+"""
 
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
 import time
 import json
+import redis
+from redis import Redis
 from lenticularis.poolutil import Pool_State
-from lenticularis.dbase import DBase
 from lenticularis.utility import generate_access_key
 from lenticularis.utility import logger
 
 # Redis DB number.
 
-_SETTING_TABLE = 0
-_STORAGE_TABLE = 1
-_PROCESS_TABLE = 2
-_ROUTING_TABLE = 3
-_PICKONE_TABLE = 4
+_SETTING_DB = 0
+_STORAGE_DB = 1
+_PROCESS_DB = 2
+_ROUTING_DB = 3
+_MONOKEY_DB = 4
 
 
 _limit_of_id_generation_loop = 30
@@ -24,18 +27,15 @@ _limit_of_id_generation_loop = 30
 
 def get_table(mux_conf):
     redis_conf = mux_conf["redis"]
-    redis_host = redis_conf["host"]
-    redis_port = redis_conf["port"]
-    redis_password = redis_conf["password"]
-    storage_table = Storage_Table(redis_host, redis_port, _STORAGE_TABLE,
-                                  redis_password)
-    process_table = Process_Table(redis_host, redis_port, _PROCESS_TABLE,
-                                  redis_password)
-    routing_table = Routing_Table(redis_host, redis_port, _ROUTING_TABLE,
-                                  redis_password)
-    pickone_table = Pickone_Table(redis_host, redis_port, _PICKONE_TABLE,
-                                  redis_password)
-    return Table(storage_table, process_table, routing_table, pickone_table)
+    host = redis_conf["host"]
+    port = redis_conf["port"]
+    password = redis_conf["password"]
+    setting = Setting_Table(host, port, _SETTING_DB, password)
+    storage = Storage_Table(host, port, _STORAGE_DB, password)
+    process = Process_Table(host, port, _PROCESS_DB, password)
+    routing = Routing_Table(host, port, _ROUTING_DB, password)
+    monokey = Monokey_Table(host, port, _MONOKEY_DB, password)
+    return Table(setting, storage, process, routing, monokey)
 
 
 def _print_all(r, name):
@@ -75,14 +75,36 @@ def _scan_table(r, prefix, target):
 
 
 class Table():
-    def __init__(self, storage_table, process_table, routing_table, pickone_table):
-        self._storage_table = storage_table
-        self._process_table = process_table
-        self._routing_table = routing_table
-        self._pickone_table = pickone_table
+    """Redis databases."""
+
+    def __init__(self, setting, storage, process, routing, monokey):
+        self._setting_table = setting
+        self._storage_table = storage
+        self._process_table = process
+        self._routing_table = routing
+        self._monokey_table = monokey
         pass
 
-    # Storage-table:
+    # Setting-Table:
+
+    def set_user(self, userinfo):
+        self._setting_table.set_user(userinfo)
+        pass
+
+    def get_user(self, uid):
+        return self._setting_table.get_user(uid)
+
+    def map_claim_to_uid(self, claim):
+        return self._setting_table.map_claim_to_uid(claim)
+
+    def delete_user(self, uid):
+        self._setting_table.delete_user(uid)
+        pass
+
+    def list_users(self):
+        return self._setting_table.list_users()
+
+    # Storage-Table:
 
     def set_pool(self, pool_id, pooldesc):
         self._storage_table.set_pool(pool_id, pooldesc)
@@ -114,20 +136,6 @@ class Table():
     def list_buckets_directories(self):
         return self._storage_table.list_buckets_directories()
 
-    def set_user(self, uid, info):
-        self._storage_table.set_user(uid, info)
-        pass
-
-    def get_user(self, uid):
-        return self._storage_table.get_user(uid)
-
-    def delete_user(self, uid):
-        self._storage_table.delete_user(uid)
-        pass
-
-    def list_users(self):
-        return self._storage_table.list_users()
-
     def set_pool_state(self, pool_id, state, reason):
         self._storage_table.set_pool_state(pool_id, state, reason)
         pass
@@ -139,7 +147,7 @@ class Table():
         self._storage_table.delete_pool_state(pool_id)
         pass
 
-    # Process-table:
+    # Process-Table:
 
     def set_ex_minio_manager(self, pool_id, desc):
         return self._process_table.set_ex_minio_manager(pool_id, desc)
@@ -188,7 +196,7 @@ class Table():
     def list_mux_eps(self):
         return self._process_table.list_mux_eps()
 
-    # Routing-table:
+    # Routing-Table:
 
     def set_ex_bucket(self, bucket, desc):
         return self._routing_table.set_ex_bucket(bucket, desc)
@@ -231,46 +239,126 @@ class Table():
     def list_access_timestamps(self):
         return self._routing_table.list_access_timestamps()
 
-    # Pickone-table:
+    # Monokey-Table:
 
-    def make_unique_id(self, usage, owner, info={}):
-        return self._pickone_table.make_unique_id(usage, owner, info)
+    def make_unique_id(self, usage, owner, info):
+        return self._monokey_table.make_unique_id(usage, owner, info)
 
-    def set_ex_id(self, uid, desc):
-        return self._pickone_table.set_ex_id(uid, desc)
+    def set_ex_key(self, accesskey, desc):
+        return self._monokey_table.set_ex_key(accesskey, desc)
 
     def get_id(self, uid):
-        return self._pickone_table.get_id(uid)
+        return self._monokey_table.get_id(uid)
 
     def delete_id_unconditionally(self, uid):
-        self._pickone_table.delete_id_unconditionally(uid)
+        self._monokey_table.delete_id_unconditionally(uid)
         pass
 
     def list_access_keys_of_pool(self, pool_id):
-        return self._pickone_table.list_access_keys_of_pool(pool_id)
+        return self._monokey_table.list_access_keys_of_pool(pool_id)
 
     # Clear tables.
 
     def clear_all(self, everything=False):
+        self._setting_table.clear_all(everything=everything)
         self._storage_table.clear_all(everything=everything)
         self._process_table.clear_all(everything=everything)
         self._routing_table.clear_all(everything=everything)
-        self._pickone_table.clear_all(everything=everything)
+        self._monokey_table.clear_all(everything=everything)
         pass
 
     def print_all(self):
+        self._setting_table.print_all()
         self._storage_table.print_all()
         self._process_table.print_all()
         self._routing_table.print_all()
-        self._pickone_table.print_all()
+        self._monokey_table.print_all()
         pass
 
     pass
 
 
+def _wait_for_redis(db):
+    while True:
+        try:
+            db.ping()
+            logger.debug("Connected to Redis.")
+            return
+        except redis.ConnectionError:
+            logger.debug("Connection to Redis failed (sleeping).")
+            time.sleep(30)
+            pass
+        pass
+    pass
+
+
 class Table_Common():
     def __init__(self, host, port, db, password):
-        self.dbase = DBase(host, port, db, password)
+        # self.db = DBase(host, port, db, password)
+        self.db = Redis(host=host, port=port, db=db, password=password,
+                        charset="utf-8", decode_responses=True)
+        _wait_for_redis(self.db)
+        pass
+
+    pass
+
+
+class Setting_Table(Table_Common):
+    _user_info_prefix = "uu:"
+    _user_claim_prefix = "um:"
+
+    _user_info_keys = {
+        "uid", "claim", "groups", "enabled", "modification_time"}
+
+    def set_user(self, userinfo):
+        assert set(userinfo.keys()) == self._user_info_keys
+        uid = userinfo["uid"]
+        assert uid is not None and uid != ""
+        key1 = f"{self._user_info_prefix}{uid}"
+        v = json.dumps(userinfo)
+        self.db.set(key1, v)
+        claim = userinfo["claim"]
+        if claim != "":
+            key2 = f"{self._user_claim_prefix}{claim}"
+            self.db.set(key2, uid)
+            pass
+        pass
+
+    def get_user(self, uid):
+        key1 = f"{self._user_info_prefix}{uid}"
+        v = self.db.get(key1)
+        return json.loads(v, parse_int=None) if v is not None else None
+
+    def map_claim_to_uid(self, claim):
+        assert claim != ""
+        key2 = f"{self._user_claim_prefix}{claim}"
+        v = self.db.get(key2)
+        return v
+
+    def delete_user(self, uid):
+        key1 = f"{self._user_info_prefix}{uid}"
+        v = self.db.get(key1)
+        self.db.delete(key1)
+        claim = v["claim"] if v is not None else ""
+        if claim != "":
+            key2 = f"{self._user_claim_prefix}{claim}"
+            self.db.delete(key2)
+            pass
+        pass
+
+    def list_users(self):
+        keyi = _scan_table(self.db, self._user_info_prefix, None)
+        return list(keyi)
+
+    def clear_all(self, everything):
+        if everything:
+            _delete_all(self.db, self._user_info_prefix)
+            _delete_all(self.db, self._user_claim_prefix)
+            pass
+        pass
+
+    def print_all(self):
+        _print_all(self.db, "setting")
         pass
 
     pass
@@ -278,39 +366,32 @@ class Table_Common():
 
 class Storage_Table(Table_Common):
     _pool_desc_prefix = "po:"
-    _buckets_directory_prefix = "bd:"
     _pool_state_prefix = "ps:"
-    _user_info_prefix = "uu:"
-    storage_table_lock_prefix = "zk:"
-    hashes_ = {_pool_desc_prefix}
+    _buckets_directory_prefix = "bd:"
 
-    # Pool data is partial entries of the json schema.
+    # A pool description is semi-static partial state, which will be
+    # amended by such as an enabled state.
 
-    pool_desc_stored_keys = {
-        "pool_name", "owner_uid", "owner_gid",
-        "buckets_directory", "probe_key",
-        "expiration_date", "online_status", "modification_time"}
-    _pool_desc_keys = pool_desc_stored_keys
-
-    _user_info_keys = {
-        "uid", "groups", "permitted", "modification_time"}
+    _pool_desc_keys = {
+        "pool_name", "owner_uid", "owner_gid", "buckets_directory",
+        "probe_key", "online_status", "expiration_time", "modification_time"}
 
     def set_pool(self, pool_id, pooldesc):
         assert set(pooldesc.keys()) == self._pool_desc_keys
         key = f"{self._pool_desc_prefix}{pool_id}"
         v = json.dumps(pooldesc)
-        self.dbase.set(key, v)
+        self.db.set(key, v)
         pass
 
     def get_pool(self, pool_id):
         key = f"{self._pool_desc_prefix}{pool_id}"
-        v = self.dbase.get(key)
+        v = self.db.get(key)
         pooldesc = (json.loads(v, parse_int=None)
                     if v is not None else None)
         return pooldesc
 
     def delete_pool(self, pool_id):
-        self.dbase.delete(f"{self._pool_desc_prefix}{pool_id}")
+        self.db.delete(f"{self._pool_desc_prefix}{pool_id}")
         pass
 
     def set_pool_state(self, pool_id, state : Pool_State, reason):
@@ -318,12 +399,12 @@ class Storage_Table(Table_Common):
         assert reason is not None
         s = str(state)
         v = json.dumps((s, reason))
-        self.dbase.set(key, v)
+        self.db.set(key, v)
         pass
 
     def get_pool_state(self, pool_id):
         key = f"{self._pool_state_prefix}{pool_id}"
-        v = self.dbase.get(key)
+        v = self.db.get(key)
         (s, reason) = (json.loads(v, parse_int=None)
                        if v is not None else (None, None))
         state = Pool_State(s) if s is not None else None
@@ -331,32 +412,11 @@ class Storage_Table(Table_Common):
 
     def delete_pool_state(self, pool_id):
         key = f"{self._pool_state_prefix}{pool_id}"
-        self.dbase.delete(key)
+        self.db.delete(key)
         pass
-
-    def set_user(self, uid, userinfo):
-        assert set(userinfo.keys()) == self._user_info_keys
-        key = f"{self._user_info_prefix}{uid}"
-        v = json.dumps(userinfo)
-        self.dbase.set(key, v)
-        pass
-
-    def get_user(self, uid):
-        key = f"{self._user_info_prefix}{uid}"
-        v = self.dbase.get(key)
-        return json.loads(v, parse_int=None) if v is not None else None
-
-    def delete_user(self, uid):
-        key = f"{self._user_info_prefix}{uid}"
-        self.dbase.delete(key)
-        pass
-
-    def list_users(self):
-        keyi = _scan_table(self.dbase.r, self._user_info_prefix, None)
-        return list(keyi)
 
     def list_pools(self, pool_id):
-        keyi = _scan_table(self.dbase.r, self._pool_desc_prefix, pool_id)
+        keyi = _scan_table(self.db, self._pool_desc_prefix, pool_id)
         return list(keyi)
 
     def set_ex_buckets_directory(self, path, pool_id):
@@ -366,7 +426,7 @@ class Storage_Table(Table_Common):
         """
         assert isinstance(pool_id, str)
         key = f"{self._buckets_directory_prefix}{path}"
-        ok = self.dbase.r.setnx(key, pool_id)
+        ok = self.db.setnx(key, pool_id)
         if ok:
             return (ok, None)
         o = self.get_buckets_directory(path)
@@ -379,11 +439,11 @@ class Storage_Table(Table_Common):
 
     def get_buckets_directory(self, path):
         key = f"{self._buckets_directory_prefix}{path}"
-        v = self.dbase.get(key)
+        v = self.db.get(key)
         return v
 
     def get_buckets_directory_of_pool(self, pool_id):
-        keyi = _scan_table(self.dbase.r, self._buckets_directory_prefix, None)
+        keyi = _scan_table(self.db, self._buckets_directory_prefix, None)
         path = next((i for (i, v)
                      in ((i, self.get_buckets_directory(i)) for i in keyi)
                      if v == pool_id), None)
@@ -391,11 +451,11 @@ class Storage_Table(Table_Common):
 
     def delete_buckets_directory(self, path):
         key = f"{self._buckets_directory_prefix}{path}"
-        self.dbase.delete(key)
+        self.db.delete(key)
         pass
 
     def list_buckets_directories(self):
-        keyi = _scan_table(self.dbase.r, self._buckets_directory_prefix, None)
+        keyi = _scan_table(self.db, self._buckets_directory_prefix, None)
         bkts = [{"directory": i, "pool": v}
                 for (i, v) in ((i, self.get_buckets_directory(i))
                                for i in keyi)
@@ -403,17 +463,13 @@ class Storage_Table(Table_Common):
         return bkts
 
     def clear_all(self, everything):
-        _delete_all(self.dbase.r, self._pool_desc_prefix)
-        _delete_all(self.dbase.r, self._buckets_directory_prefix)
-        _delete_all(self.dbase.r, self._pool_state_prefix)
-        if everything:
-            _delete_all(self.dbase.r, self._user_info_prefix)
-            pass
-        _delete_all(self.dbase.r, self.storage_table_lock_prefix)
+        _delete_all(self.db, self._pool_desc_prefix)
+        _delete_all(self.db, self._buckets_directory_prefix)
+        _delete_all(self.db, self._pool_state_prefix)
         pass
 
     def print_all(self):
-        _print_all(self.dbase.r, "storage")
+        _print_all(self.db, "storage")
         pass
 
     pass
@@ -423,8 +479,6 @@ class Process_Table(Table_Common):
     _minio_manager_prefix = "ma:"
     _minio_process_prefix = "mn:"
     _mux_desc_prefix = "mx:"
-    process_table_lock_prefix = "lk:"
-    hashes_ = {}
 
     _minio_manager_desc_keys = {
         "mux_host", "mux_port", "start_time"}
@@ -445,7 +499,7 @@ class Process_Table(Table_Common):
         assert set(desc.keys()) == self._minio_manager_desc_keys
         key = f"{self._minio_manager_prefix}{pool_id}"
         v = json.dumps(desc)
-        ok = self.dbase.r.setnx(key, v)
+        ok = self.db.setnx(key, v)
         if ok:
             return (True, None)
         # Race, returns failure.
@@ -454,37 +508,37 @@ class Process_Table(Table_Common):
 
     def set_minio_manager_expiry(self, pool_id, timeout):
         key = f"{self._minio_manager_prefix}{pool_id}"
-        return self.dbase.r.expire(key, timeout)
+        return self.db.expire(key, timeout)
 
     def get_minio_manager(self, pool_id):
         key = f"{self._minio_manager_prefix}{pool_id}"
-        v = self.dbase.get(key)
+        v = self.db.get(key)
         return json.loads(v, parse_int=None) if v is not None else None
 
     def delete_minio_manager(self, pool_id):
         key = f"{self._minio_manager_prefix}{pool_id}"
-        self.dbase.delete(key)
+        self.db.delete(key)
         pass
 
     def set_minio_proc(self, pool_id, procdesc):
         assert set(procdesc.keys()) == self._minio_process_desc_keys
         key = f"{self._minio_process_prefix}{pool_id}"
         v = json.dumps(procdesc)
-        self.dbase.set(key, v)
+        self.db.set(key, v)
         pass
 
     def get_minio_proc(self, pool_id):
         key = f"{self._minio_process_prefix}{pool_id}"
-        v = self.dbase.get(key)
+        v = self.db.get(key)
         return json.loads(v, parse_int=None) if v is not None else None
 
     def delete_minio_proc(self, pool_id):
         key = f"{self._minio_process_prefix}{pool_id}"
-        self.dbase.delete(key)
+        self.db.delete(key)
         pass
 
     def list_minio_procs(self, pool_id):
-        keyi = _scan_table(self.dbase.r, self._minio_process_prefix, pool_id)
+        keyi = _scan_table(self.db, self._minio_process_prefix, pool_id)
         vv = [(i, v) for (i, v) in ((i, self.get_minio_proc(i)) for i in keyi)
               if v is not None]
         return vv
@@ -493,32 +547,32 @@ class Process_Table(Table_Common):
         assert set(mux_desc.keys()) == self._mux_desc_keys
         key = f"{self._mux_desc_prefix}{mux_ep}"
         v = json.dumps(mux_desc)
-        self.dbase.set(key, v)
+        self.db.set(key, v)
         pass
 
     def set_mux_expiry(self, mux_ep, timeout):
         key = f"{self._mux_desc_prefix}{mux_ep}"
-        return self.dbase.r.expire(key, timeout)
+        return self.db.expire(key, timeout)
 
     def get_mux(self, mux_ep):
         key = f"{self._mux_desc_prefix}{mux_ep}"
-        v = self.dbase.get(key)
+        v = self.db.get(key)
         return json.loads(v, parse_int=None) if v is not None else None
 
     def delete_mux(self, mux_ep):
         key = f"{self._mux_desc_prefix}{mux_ep}"
-        self.dbase.delete(key)
+        self.db.delete(key)
         pass
 
     def list_muxs(self):
-        keyi = _scan_table(self.dbase.r, self._mux_desc_prefix, None)
+        keyi = _scan_table(self.db, self._mux_desc_prefix, None)
         vv = [(i, v) for (i, v) in ((i, self.get_mux(i)) for i in keyi)
               if v is not None]
         return vv
 
     def list_mux_eps(self):
         """Retruns a list of (host, port)."""
-        keyi = _scan_table(self.dbase.r, self._mux_desc_prefix, None)
+        keyi = _scan_table(self.db, self._mux_desc_prefix, None)
         eps = [(desc["host"], desc["port"])
                for (_, desc) in ((ep, self.get_mux(ep)) for ep in keyi)
                if desc is not None]
@@ -528,14 +582,13 @@ class Process_Table(Table_Common):
         """Clears Redis DB.  It leaves entires for multiplexers unless
         everything.
         """
-        _delete_all(self.dbase.r, self._minio_manager_prefix)
-        _delete_all(self.dbase.r, self._minio_process_prefix)
-        _delete_all(self.dbase.r, self._mux_desc_prefix)
-        _delete_all(self.dbase.r, self.process_table_lock_prefix)
+        _delete_all(self.db, self._minio_manager_prefix)
+        _delete_all(self.db, self._minio_process_prefix)
+        _delete_all(self.db, self._mux_desc_prefix)
         pass
 
     def print_all(self):
-        _print_all(self.dbase.r, "process")
+        _print_all(self.db, "process")
         pass
 
     pass
@@ -545,27 +598,26 @@ class Routing_Table(Table_Common):
     _minio_ep_prefix = "ep:"
     _bucket_prefix = "bk:"
     _access_timestamp_prefix = "ts:"
-    hashes_ = {}
 
     _bucket_desc_keys = {"pool", "bkt_policy", "modification_time"}
 
     def set_minio_ep(self, pool_id, ep):
         assert isinstance(ep, str)
         key = f"{self._minio_ep_prefix}{pool_id}"
-        self.dbase.set(key, ep)
+        self.db.set(key, ep)
         pass
 
     def get_minio_ep(self, pool_id):
         key = f"{self._minio_ep_prefix}{pool_id}"
-        return self.dbase.get(key)
+        return self.db.get(key)
 
     def delete_minio_ep(self, pool_id):
         key = f"{self._minio_ep_prefix}{pool_id}"
-        self.dbase.delete(key)
+        self.db.delete(key)
         pass
 
     def list_minio_ep(self):
-        keyi = _scan_table(self.dbase.r, self._minio_ep_prefix, None)
+        keyi = _scan_table(self.db, self._minio_ep_prefix, None)
         vv = [(i, v) for (i, v) in ((i, self.get_minio_ep(i)) for i in keyi)
               if v is not None]
         return vv
@@ -579,7 +631,7 @@ class Routing_Table(Table_Common):
         assert set(desc.keys()) == self._bucket_desc_keys
         key = f"{self._bucket_prefix}{bucket}"
         v = json.dumps(desc)
-        ok = self.dbase.r.setnx(key, v)
+        ok = self.db.setnx(key, v)
         if ok:
             return (True, None)
         # Race, returns failure.
@@ -588,16 +640,16 @@ class Routing_Table(Table_Common):
 
     def get_bucket(self, bucket):
         key = f"{self._bucket_prefix}{bucket}"
-        v = self.dbase.get(key)
+        v = self.db.get(key)
         return json.loads(v, parse_int=None) if v is not None else None
 
     def delete_bucket(self, bucket):
         key = f"{self._bucket_prefix}{bucket}"
-        self.dbase.delete(key)
+        self.db.delete(key)
         pass
 
     def list_buckets(self, pool_id):
-        keyi = _scan_table(self.dbase.r, self._bucket_prefix, None)
+        keyi = _scan_table(self.db, self._bucket_prefix, None)
         bkts = [{"name": name, **d}
                 for (name, d)
                 in [(name, self.get_bucket(name)) for name in keyi]
@@ -609,21 +661,21 @@ class Routing_Table(Table_Common):
     def set_access_timestamp(self, pool_id):
         key = f"{self._access_timestamp_prefix}{pool_id}"
         ts = int(time.time())
-        self.dbase.set(key, f"{ts}")
+        self.db.set(key, f"{ts}")
         pass
 
     def get_access_timestamp(self, pool_id):
         key = f"{self._access_timestamp_prefix}{pool_id}"
-        v = self.dbase.get(key)
+        v = self.db.get(key)
         return int(v) if v is not None else None
 
     def delete_access_timestamp(self, pool_id):
         key = f"{self._access_timestamp_prefix}{pool_id}"
-        self.dbase.delete(key)
+        self.db.delete(key)
         pass
 
     def list_access_timestamps(self):
-        keyi = _scan_table(self.dbase.r, self._access_timestamp_prefix, None)
+        keyi = _scan_table(self.db, self._access_timestamp_prefix, None)
         stamps = [{"pool": pid, "timestamp": ts}
                   for (pid, ts)
                   in [(pid, self.get_access_timestamp(pid)) for pid in keyi]
@@ -631,36 +683,37 @@ class Routing_Table(Table_Common):
         return stamps
 
     def clear_all(self, everything):
-        _delete_all(self.dbase.r, self._minio_ep_prefix)
-        _delete_all(self.dbase.r, self._bucket_prefix)
-        _delete_all(self.dbase.r, self._access_timestamp_prefix)
+        _delete_all(self.db, self._minio_ep_prefix)
+        _delete_all(self.db, self._bucket_prefix)
+        _delete_all(self.db, self._access_timestamp_prefix)
         pass
 
     def print_all(self):
-        _print_all(self.dbase.r, "routing")
+        _print_all(self.db, "routing")
         pass
 
     pass
 
 
-class Pickone_Table(Table_Common):
+class Monokey_Table(Table_Common):
     _id_prefix = "id:"
-    hashes_ = {}
 
-    _id_desc_keys = {"use", "owner", "secret_key", "key_policy",
-                     "modification_time"}
+    _id_desc_keys = {"pool": {"use", "owner", "modification_time"},
+                     "key": {"use", "owner", "secret_key", "key_policy",
+                             "expiration_time", "modification_time"}}
 
-    def make_unique_id(self, usage, owner, info={}):
-        assert usage in {"pool", "access_key"}
-        assert usage != "access_key" or info != {}
+    def make_unique_id(self, usage, owner, info):
+        """Makes a unique key for a pool-id or an access-key."""
+        assert usage in {"pool", "key"}
         now = int(time.time())
         desc = {"use": usage, "owner": owner, **info, "modification_time": now}
+        assert set(desc.keys()) == self._id_desc_keys[usage]
         v = json.dumps(desc)
         id_generation_loops = 0
         while True:
             xid = generate_access_key()
             key = f"{self._id_prefix}{xid}"
-            ok = self.dbase.r.setnx(key, v)
+            ok = self.db.setnx(key, v)
             if ok:
                 return xid
             id_generation_loops += 1
@@ -669,41 +722,44 @@ class Pickone_Table(Table_Common):
         assert False
         pass
 
-    def set_ex_id(self, xid, desc):
-        assert set(desc.keys()) == self._id_desc_keys
-        key = f"{self._id_prefix}{xid}"
+    def set_ex_key(self, accesskey, desc):
+        assert set(desc.keys()) == self._id_desc_keys["key"]
+        key = f"{self._id_prefix}{accesskey}"
         v = json.dumps(desc)
-        ok = self.dbase.r.setnx(key, v)
+        ok = self.db.setnx(key, v)
         return ok
 
     def get_id(self, xid):
         key = f"{self._id_prefix}{xid}"
-        v = self.dbase.get(key)
-        return json.loads(v, parse_int=None) if v is not None else None
+        v = self.db.get(key)
+        desc = json.loads(v, parse_int=None) if v is not None else None
+        assert (set(desc.keys()) == self._id_desc_keys[desc["use"]]
+                if desc is not None else True)
+        return desc
 
     def delete_id_unconditionally(self, xid):
         key = f"{self._id_prefix}{xid}"
-        self.dbase.delete(key)
+        self.db.delete(key)
         pass
 
     def list_access_keys_of_pool(self, pool_id):
         """Lists access-keys of a pool.  It includes an probe-key.  A
         probe-key is an access-key but has no corresponding secret-key.
         """
-        keyi = _scan_table(self.dbase.r, self._id_prefix, None)
+        keyi = _scan_table(self.db, self._id_prefix, None)
         keys = [{"access_key": i, **d}
                 for (i, d) in [(i, self.get_id(i)) for i in keyi]
                 if (d is not None
-                    and d["use"] == "access_key"
+                    and d["use"] == "key"
                     and d["owner"] == pool_id)]
         return keys
 
     def clear_all(self, everything):
-        _delete_all(self.dbase.r, self._id_prefix)
+        _delete_all(self.db, self._id_prefix)
         pass
 
     def print_all(self):
-        _print_all(self.dbase.r, "pickone")
+        _print_all(self.db, "monokey")
         pass
 
     pass

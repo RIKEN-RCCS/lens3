@@ -14,7 +14,7 @@ from lenticularis.utility import make_clean_env
 #from lenticularis.utility import validate_zone_dict
 #from lenticularis.utility import semantic_check_zone_dict
 from lenticularis.utility import outer_join
-from lenticularis.utility import format_rfc3339_z
+from lenticularis.utility import format_time_z
 from lenticularis.utility import sha1
 from lenticularis.utility import remove_trailing_shash
 from lenticularis.utility import pick_one
@@ -279,11 +279,11 @@ def test_sha1():
         assert got == expected
 
 
-def test_format_rfc3339_z():
+def test_format_time_z():
     for item in [(0, "1970-01-01T00:00:00.000000Z"),
                  (1635212507, "2021-10-26T01:41:47.000000Z")]:
         (input, expected) = item
-        got = format_rfc3339_z(input)
+        got = format_time_z(input)
         assert got == expected
 
 

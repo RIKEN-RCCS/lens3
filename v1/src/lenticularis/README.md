@@ -16,16 +16,13 @@
 * [admintool.py](admintool.py)
 * [start_service.py](start_service.py)
 
-* [dbase.py](dbase.py)
 * [readconf.py](readconf.py)
 * [mc.py](mc.py)
 * [poolutil.py](poolutil.py)
 * [table.py](table.py)
 * [utility.py](utility.py)
 
-* [test](test)
+* [test](test): Simple tests.  NOT MAINTAINED NOW.
 
-* [lockdb.py](lockdb.py) NOT-USED
-* [scheduler.py](scheduler.py) NOT-USED
-* [suminio.c](suminio.c) NOT-USED
-* [makefile](makefile) NOT-USED
+* [makefile](makefile): It defines rules for running pycodestyle,
+  pylint, and pyright.

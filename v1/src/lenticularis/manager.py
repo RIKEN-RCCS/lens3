@@ -162,11 +162,11 @@ class Manager():
         if poolstate in {Pool_State.INOPERABLE}:
             return (False, currentreason)
         user_id = pooldesc["owner_uid"]
-        unexpired = now < pooldesc["expiration_date"]
+        unexpired = now < pooldesc["expiration_time"]
         u = self.tables.get_user(user_id)
-        permitted = u["permitted"]
+        enabled = u["enabled"]
         online = pooldesc["online_status"]
-        ok = (unexpired and permitted and online)
+        ok = (unexpired and enabled and online)
         # if not ok and poolstate in {}:
         #     reason = "Pool disabled initially"
         #     self._set_pool_state(Pool_State.INOPERABLE, reason)
@@ -176,7 +176,7 @@ class Manager():
                 reason = "Pool expired"
                 self._set_pool_state(Pool_State.DISABLED, reason)
                 return (False, reason)
-            if not permitted:
+            if not enabled:
                 reason = "User disabled"
                 self._set_pool_state(Pool_State.DISABLED, reason)
                 return (False, reason)

@@ -1,13 +1,17 @@
-"""Pool mangement.  This implements operations of Api."""
+"""Lens3-Api implementation. This implements pool mangement of
+Lens3-Api.
+"""
 
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
+import inspect
 import os
 import sys
 import time
 import posixpath
 import traceback
+import lenticularis
 from lenticularis.mc import Mc, assert_mc_success
 from lenticularis.mc import intern_mc_user_info
 from lenticularis.mc import intern_mc_list_entry
@@ -51,10 +55,15 @@ class Control_Api():
         self.trusted_proxies = {addr for h in proxies
                                 for addr in get_ip_addresses(h)}
         self.base_path = api_param["base_path"]
-        self.claim_to_uid = api_param["claim_to_uid"]
+        self.claim_uid_map = api_param["claim_uid_map"]
         self._probe_access_timeout = int(api_param["probe_access_timeout"])
         self._mc_timeout = int(api_param["minio_mc_timeout"])
         self._max_pool_expiry = int(api_param["max_pool_expiry"])
+
+        pkgdir = os.path.dirname(inspect.getfile(lenticularis))
+        self.webui_dir = os.path.join(pkgdir, "webui")
+
+        self.csrf_key = api_param["CSRF_secret_key"]
 
         minio_param = api_conf["minio"]
         self._bin_mc = minio_param["mc"]
@@ -90,8 +99,8 @@ class Control_Api():
 
     def _make_mc_for_pool(self, traceid, pool_id):
         """Returns an MC command instance.  It accesses a Mux to start a
-        MinIO, even when a MinIO is running, to keep it running for a
-        while.
+        MinIO, or to keep it running for a while even when a MinIO is
+        running.
         """
         logger.debug(f"Access a Mux to start Minio for pool={pool_id}.")
         status = self.access_mux_for_pool(traceid, pool_id)
@@ -118,27 +127,29 @@ class Control_Api():
             raise
         pass
 
-    def convert_claim_to_uid(self, claim):
+    def map_claim_to_uid(self, claim):
         """Converts a claim data passed by REMOTE-USER to a uid.  It returns
         None if a claim is ill-formed.  It is identity if it is a
         basic-authetication data.
         """
-        if self.claim_to_uid == "uid":
+        if self.claim_uid_map == "id":
             return claim
-        elif self.claim_to_uid == "email-id":
+        elif self.claim_uid_map == "email-name":
             name, atmark, domain = claim.partition("@")
             if atmark is None:
                 return None
             else:
                 return name
+        elif self.claim_uid_map == "map":
+            return None
         else:
-            assert claim in {"uid", "email-id"}
+            assert self.claim_uid_map in {"id", "email-name", "map"}
             pass
         pass
 
     def check_user_is_registered(self, user_id):
-        """Checks a user is known.  It does not reject disabled-state users to
-        allow them to view the setting.
+        """Checks a user is known.  It does not reject disabled users to allow
+        them to view the setting.
         """
         if user_id is None:
             return False
@@ -160,14 +171,20 @@ class Control_Api():
         (poolstate, _) = self.tables.get_pool_state(pool_id)
         return poolstate
 
-    def _determine_expiration_date(self):
+    def _determine_expiration_time(self):
         now = int(time.time())
         duration = self._max_pool_expiry
         return (now + duration)
 
+    def _check_expiration_range(expiration):
+        now = int(time.time())
+        return (((now - 10) <= expiration)
+                and (expiration <= (now + self._max_pool_expiry)))
+
     def access_mux_for_pool(self, traceid, pool_id):
-        """Tries to access a Mux of the pool.  It accesses an arbitrary Mux
-        when no MinIO is running, which will start a new MinIO.
+        """Tries to access a Mux from Api for a pool.  It accesses an
+        arbitrary Mux when no MinIO is running, which will start a new
+        MinIO.
         """
         pooldesc = self.tables.get_pool(pool_id)
         if pooldesc is None:
@@ -215,7 +232,7 @@ class Control_Api():
             return (500, m, [])
         pass
 
-    # API:POOLS.
+    # Pools interface.
 
     def api_make_pool(self, traceid, user_id, body):
         pooldesc = body.get("pool")
@@ -272,7 +289,7 @@ class Control_Api():
             return (500, m, [])
         pass
 
-    # API:BUCKETS.
+    # Buckets interface.
 
     def api_make_bucket(self, traceid, user_id, pool_id, body):
         try:
@@ -335,7 +352,7 @@ class Control_Api():
             return (500, m, [])
         pass
 
-    # API:SECRETS.
+    # Secrets interface.
 
     def api_make_secret(self, traceid, user_id, pool_id, body):
         try:
@@ -344,12 +361,21 @@ class Control_Api():
             rw = body.get("key_policy")
             if rw not in {"readwrite", "readonly", "writeonly"}:
                 return (403, f"Bad access policy={rw}", [])
+            tv = body.get("expiration_time")
+            if tv is None:
+                return (403, f"Bad expiration={tv}", [])
+            try:
+                expiration = int(tv)
+            except ValueError:
+                return (403, f"Bad expiration={tv}", [])
+            if not _check_expiration_range(expiration):
+                return (403, f"Bad expiration={tv}", [])
         except Exception as e:
             m = rephrase_exception_message(e)
             return (400, m, None)
         try:
             logger.debug(f"Adding a new secret: {rw}")
-            triple = self._api_make_secret(traceid, user_id, pool_id, rw)
+            triple = self._api_make_secret(traceid, user_id, pool_id, rw, expiration)
             return triple
         except Api_Error as e:
             time.sleep(self._bad_response_delay)
@@ -406,7 +432,7 @@ class Control_Api():
         }
         return template
 
-    # IMPL:POOLS.
+    # Pools handling implementation.
 
     def _api_make_pool(self, traceid, user_id, makepool):
         ensure_mux_is_running(self.tables)
@@ -436,23 +462,25 @@ class Control_Api():
 
     def make_new_pool(self, traceid, user_id, owner_gid, path):
         now = int(time.time())
+        expiration = self._determine_expiration_time()
         pooldesc = {
             "pool_name": "(* given-later *)",
             "owner_uid": user_id,
             "owner_gid": owner_gid,
             "buckets_directory": path,
             "probe_key": "(* given-later *)",
-            "expiration_date": self._determine_expiration_date(),
+            "expiration_time": expiration,
             "online_status": True,
             "modification_time": now,
         }
         pool_id = None
         probe_key = None
         try:
-            pool_id = self.tables.make_unique_id("pool", user_id)
+            pool_id = self.tables.make_unique_id("pool", user_id, {})
             pooldesc["pool_name"] = pool_id
-            info = {"secret_key": "", "key_policy": "readwrite"}
-            probe_key = self.tables.make_unique_id("access_key", pool_id, info)
+            info = {"secret_key": "", "key_policy": "readwrite",
+                    "expiration_time": expiration}
+            probe_key = self.tables.make_unique_id("key", pool_id, info)
             pooldesc["probe_key"] = probe_key
             (ok, holder) = self.tables.set_ex_buckets_directory(path, pool_id)
             if not ok:
@@ -625,7 +653,7 @@ class Control_Api():
         pool_list = sorted(pool_list, key=lambda k: k["buckets_directory"])
         return (200, None, {"pool_list": pool_list})
 
-    # IMPL:BUCKETS.
+    # Buckets handling implementation.
 
     def _api_make_bucket(self, traceid, user_id, pool_id, bucket, policy):
         ensure_mux_is_running(self.tables)
@@ -695,16 +723,17 @@ class Control_Api():
         pooldesc1 = gather_pool_desc(self.tables, pool_id)
         return pooldesc1
 
-    # IMPL:SECRETS.
+    # Secrets handling implementation.
 
-    def _api_make_secret(self, traceid, user_id, pool_id, key_policy):
+    def _api_make_secret(self, traceid, user_id, pool_id, key_policy, expiration):
         ensure_mux_is_running(self.tables)
         ensure_user_is_authorized(self.tables, user_id)
         ensure_pool_owner(self.tables, pool_id, user_id)
         ensure_pool_state(self.tables, pool_id)
         secret = generate_secret_key()
-        info = {"secret_key": secret, "key_policy": key_policy}
-        key = self.tables.make_unique_id("access_key", pool_id, info)
+        info = {"secret_key": secret, "key_policy": key_policy,
+                "expiration_time": expiration}
+        key = self.tables.make_unique_id("key", pool_id, info)
         pooldesc1 = self.do_record_secret(traceid, pool_id,
                                           key, secret, key_policy)
         return (200, None, {"pool_list": [pooldesc1]})

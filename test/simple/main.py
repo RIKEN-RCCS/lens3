@@ -6,7 +6,7 @@ import datetime
 from common import rconf
 from common import wakeup_at
 from lentclient import LentClient
-from lenticularis.utility import format_rfc3339_z
+from lenticularis.utility import format_time_z
 from lenticularis.utility import logger, openlog
 from file_manipulation import test_create_bucket
 from file_manipulation import test_list_objects
@@ -64,7 +64,7 @@ def main():
     else:
         endpoint_url = args.endpoint_url
 
-    print(f"{format_rfc3339_z(time.time())} Start: environ: {user} {password} {endpoint_url}", flush=True)
+    print(f"{format_time_z(time.time())} Start: environ: {user} {password} {endpoint_url}", flush=True)
     logger.debug(f"Start: environ: {user} {password} {endpoint_url}")
 
     #logger.debug(f"endpoint_url: {endpoint_url}")
@@ -120,14 +120,14 @@ def main():
     for test in conf["tests"]:
         try:
             globals()[test](system_test)
-            print(f"{format_rfc3339_z(time.time())} {test}: OK", flush=True)
+            print(f"{format_time_z(time.time())} {test}: OK", flush=True)
             logger.debug(f"{test}: OK")
         except Exception as e:
-            print(f"{format_rfc3339_z(time.time())} {test}: FAIL {e}", flush=True)
+            print(f"{format_time_z(time.time())} {test}: FAIL {e}", flush=True)
             logger.debug(f"{test}: FAIL {e}")
             logger.exception(f"{e}")
             raise
-    print(f"{format_rfc3339_z(time.time())} Done", flush=True)
+    print(f"{format_time_z(time.time())} Done", flush=True)
     logger.debug(f"Done")
 
 

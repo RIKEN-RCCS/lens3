@@ -4,115 +4,126 @@ This describes design notes of Lenticularis-S3.
 
 ## Components of Lens3
 
-* Lens3-Mux (Multiplexer)
+* Lens3-Mux
+* Lens3-Api (Web-API)
 * Manager: A Manager runs under a Lens3-Mux and starts a MinIO
   instance and manages its lifetime.
-* Lens3-Api (Web-API)
 * MinIO (S3 server)
 * Redis
 
-## Design Notes
+## Redis Databases (prefixes of keys)
 
-### Redis Database Keys (prefixes)
-
-Lens3 uses a couple of databases (by a database number), but the
-division is arbitrary because the distinct prefixes are used.  Most of
-the entries are json records, but some are simple strings.
+Lens3 uses a couple of Redis databases (by database numbers), but the
+division is arbitrary as the distinct prefixes are used.  Most of the
+entries are json records, and others are simple strings.
 
 Note: In the tables below, entries with "(\*)" are set atomically (by
 "setnx"), and entries with "(\*\*)" are with expiry.
 
-#### Setting-Table (DB=0)
+A date+time is by unix seconds.  Web-API also passes a date+time by
+unix seconds.
 
-| Key            | Value         | Notes   |
-| ----           | ----          | ---- |
-| "cf:lens3-api" | api-config    | |
-| "cf:lens3-mux" | mux-config    | |
+### Setting-Table (DB=0)
 
-NOT IMPLEMENTED YET.
+The Setting-Table stores semi-static information.
 
-#### Storage-Table (DB=1)
+| Key            | Value      | Notes   |
+| ----           | ----       | ---- |
+| "cf:lens3-api" | api-config | |
+| "cf:lens3-mux" | mux-config | |
+| uu:uid         | user-info  | |
+| um:claim       | uid        | Optional |
+
+__cf:lens3-api__ and __cf:lens3-mux__ entries store the common
+settings in a database.  NOT IMPLEMENTED YET.
+
+A __uu:uid__ entry is a record of a user-info: {"uid", "groups",
+"claim", "enabled", "modification_time"}, where "groups" is a string
+list, "claim" is a string (maybe empty), and "enabled" is a boolean.
+
+A __um:claim__ entry is a map from a user claim to a uid.  Entries are
+used only when Lens-Api is configured with "claim_uid_map=map".
+
+### Storage-Table (DB=1)
 
 | Key           | Value         | Notes   |
 | ----          | ----          | ---- |
 | po:pool-id    | pool-description | |
-| uu:user       | user-info     | |
 | ps:pool-id    | pool-state    | |
-| bd:directory  | pool-id       | A bucket-directory (string) (\*) |
+| bd:directory  | pool-id       | A bucket-directory (path string) (\*) |
 
 A __po:pool-id__ entry is a pool description: {"pool_name",
 "owner_uid", "owner_gid", "buckets_directory", "probe_key",
-"expiration_date", "online_status", "modification_time"}.  It holds
+"online_status", "expiration_time", "modification_time"}.  It holds
 the semi-static part of pool information.
-
-A __uu:user__ entry is a record of a user: {"groups", "permitted",
-"modification_time"} where "groups" is a string list and "permitted"
-is a boolean.
 
 A __ps:pool-id__ entry is a pool-state which is one of: "initial",
 "ready", "disabled", and "inoperable".
 
-A __bd:directory__ is a bucket-directory entry.  The entry is assigned
-in exclusion.  Note it is avoided to run multiple MinIO instances in
-the same directory.  However, some MinIO instances may run in a
-transient state.
+A __bd:directory__ is a bucket-directory entry.  The entry is
+atomically assigned.  Lens3 forbids running multiple MinIO instances
+in the same directory.  Note, however, MinIO instances may possibly
+run in a transient state at a race in starting/stopping an instance.
 
-#### Process-Table (DB=2)
+### Process-Table (DB=2)
 
-| Key           | Value         | Notes   |
-| ----          | ----          | ---- |
-| ma:pool-id    | MinIO-manager | (\*, \*\*)|
-| mn:pool-id    | MinIO-process | |
+| Key             | Value           | Notes   |
+| ----            | ----            | ---- |
+| ma:pool-id      | MinIO-manager   | (\*, \*\*)|
+| mn:pool-id      | MinIO-process   | |
 | mx:mux-endpoint | Mux-description | (\*\*) |
 
-An __ma:pool-id__ entry is a mutex to single out a MinIO-manager under
-which a MinIO process runs.  It is a record: {"mux_host", "mux_port",
-"start_time"}.  A start time is used to make the entry distinct.  It
-is assigned in exclusion and protects accesses to mn:pool-id and
-ep:pool-id.
+An __ma:pool-id__ entry holds a MinIO-manager under which a MinIO
+process runs.  It is a record: {"mux_host", "mux_port", "start_time"}.
+A start time makes the entry distinct.  It is atomically assigned to
+ensure uniqueness of a running Manager (a loser quits).
 
 An __mn:pool-id__ entry is a MinIO-process description: {"minio_ep",
 "minio_pid", "admin", "password", "mux_host", "mux_port",
-"manager_pid", "modification_time"}.
+"manager_pid", "modification_time"}.  A admin/password pair specifies
+an administrator.
 
 An __mx:mux-endpoint__ entry is a Lens3-Mux description that is a
 record: {"host", "port", "start_time", "modification_time"}.  A key is
-an endpoint (host+port) of a Lens3-Mux.  The content has no particular
-use.  A start-time is a time Lens3-Mux started.  A modification-time
-is a time the record is refreshed, which is renewed when an entry is
-gone by expiry.
+an endpoint of a Lens3-Mux (a host:port string).  The content has no
+particular use.  A start-time is a time Lens3-Mux started.  A
+modification-time is a time the record is refreshed, which is renewed
+when an entry is gone by expiry.
 
-#### Routing-Table (DB=3)
+### Routing-Table (DB=3)
 
-| Key           | Value         | Notes   |
-| ----          | ----          | ---- |
-| ep:pool-id    | MinIO-endpoint | |
+| Key            | Value              | Notes   |
+| ----           | ----               | ---- |
+| ep:pool-id     | MinIO-endpoint     | |
 | bk:bucket-name | bucket-description | A mapping by a bucket-name (\*) |
-| ts:pool-id    | timestamp     | Timestamp on the last access (string) |
+| ts:pool-id     | timestamp          | Timestamp on the last access (string) |
 
 An __ep:pool-id__ entry is a MinIO-endpoint (a host:port string).
 
-A __bk:bucket-name__ entry is a bucket-description that is a
-record: {"pool", "bkt_policy", "modification_time"}.  A bkt-policy
-indicates public R/W status of a bucket: {"none", "upload",
-"download", "public"}, which are borrowed from MinIO.
+A __bk:bucket-name__ entry is a record of a bucket-description:
+{"pool", "bkt_policy", "modification_time"}.  A bkt-policy indicates
+public R/W status of a bucket: {"none", "upload", "download",
+"public"}, whose names are borrowed from MinIO.
 
-#### Pickone-Table (DB=4)
+### Monokey-Table (DB=4)
 
-| Key           | Value         | Notes   |
-| ----          | ----          | ---- |
+| Key           | Value           | Notes   |
+| ----          | ----            | ---- |
 | id:random     | key-description | An entry to keep uniqueness (*) |
 
-An id:random entry stores a generated key for a pool-id and an
-access-key.  A key-description is a record: {"use", "owner",
-"secret_key", "key_policy", "modification_time"}.  An owner field
-depends on the use field, and it is either a user-id (for use="pool")
-or a pool-id (for use="access_key").  A secret-key and a key-policy
-fields are missing for use="pool".  A key-policy is one of
-{"readwrite", "readonly", "writeonly"}, whose names are borrowed from
-MinIO.
+An id:random entry stores a generated random for a pool-id or an
+access-key.  The "use" field distinguishes these, "use"="pool" or
+"use"="key".
 
-### Bucket policy
+A "pool" description is a record: {"use"="pool", "owner",
+"modification_time"}, where an owner is a uid.
+
+A "key" description is a record: {"use"="key", "owner", "secret_key",
+"key_policy", "expiration_time", "modification_time"}, where an owner
+is a pool-id.  A key-policy is one of {"readwrite", "readonly",
+"writeonly"}, whose names are borrowed from MinIO.
+
+## Bucket policy
 
 Public r/w policy is given to a bucket by Lens3.  Lens3 invokes the mc
 command, one of the following.
@@ -128,7 +139,7 @@ Accesses to deleted buckets in Lens3 are refused at Lens3-Mux, but
 they remain accessbile in MinIO, which have access policy "none" and
 are accessible using access-keys.
 
-### Redis Database Operations
+## Redis Database Operations
 
 A single Redis instance is used, and not distributed.
 
@@ -144,12 +155,12 @@ Lens3.
 Operations by an administrator is NOT mutexed.  They include
 modifications on the user-list.
 
-### Pool State Transition
+## Pool State Transition
 
-A bucket-pool has a state in: (None), __INITIAL__, __READY__,
-__DISABLED__, and __INOPERABLE__.  Lens3-Mux (a Manager) governs a
-transition of states.  A Manager checks conditions of a transition at
-some interval (by heartbeat_interval).
+A bucket-pool will be in a state of: (None), __INITIAL__, __READY__,
+__DISABLED__, and __INOPERABLE__.  A Manager started by Lens3-Mux
+governs a transition of a state.  A Manager checks conditions of a
+transition at intervals (by heartbeat_interval).
 
 * __None__ → __INITIAL__: It is a quick transition.
 * __INITIAL__ → __READY__: It is at a start of MinIO.
@@ -158,44 +169,44 @@ some interval (by heartbeat_interval).
   offline.
 * __DISABLED__ → __INITIAL__: It is at a cease of a disabling condition.
 * ? → __INOPERABLE__: It is by a failure of starting MinIO.  This
-  state is a deadend.
+  state is a deadend.  A bucket-pool should be removed.
 
 ### Lens3-Mux/Lens3-Api systemd Services
 
 All states of services are stored in Redis.  systemd services can be
 stoped/started.
 
-### Lens3-Api Processes
+## Lens3-Api Processes
 
 Lens3-Api is not designed as load-balanced.  Lens3-Api may consist of
 some processes started by Gunicorn, but they are not distributed.
 
-### Lens3-Mux Processes
+## Lens3-Mux Processes
 
 There exists multiple Lens3-Mux processes for a single Lens3-Mux
 service, as it is started by Gunicorn.  Some book-keeping periodical
 operations (running in background threads) are performed more
 frequently than expected.
 
-### MinIO Clients
+## MinIO Clients
 
 Note that alias commands are local (not connect to a MinIO).
 
-### Manager Processes
+## Manager Processes
 
 A Manager becomes a session leader (by calling setsid), and a MinIO
 process will be terminated when a Manager exits.
 
 ## Service Tests
 
-#### Forced Heartbeat Failure
+### Forced Heartbeat Failure
 
 "kill -STOP" the MinIO process.  It causes heartbeat failure.  Note
 that it leaves "minio" and "sudo" processes in the STOP state.
 
-#### Forced Termination of Lens3-Mux and MinIO
+### Forced Termination of Lens3-Mux and MinIO
 
-#### Forced Expiration of Lens3-Mux Entries in Redis
+### Forced Expiration of Lens3-Mux Entries in Redis
 
 The action to fake a forced removal of a __ma:pool-id__ entry in Redis
 should (1) start a new Lens3-Mux + MinIO pair, and then (2) stop an
@@ -207,10 +218,15 @@ old Lens3-Mux + MinIO pair.
   Web-API.  They are of fixed values currently.
 * Start MinIO with the --json option.  It will make parsing the output
   reliable.
-* Not be in Python.  The code will be in Go-lang in the next release.
-* Make the key generation Web-API like the API of STS.
+* Rewrite in Go-lang.  The code will be in Go in the next release.
+* Make access-key generation of Web-API behave like STS.
+* Make starting a MinIO instance via the frontend proxy.  Currently,
+  an arbitrary Mux is chosen, but the proxy can balance loads.
 
 ## Security
+
+Security totally depends on the setting of the proxy.  Ask experts for
+setting up the proxy.
 
 ## Glossary
 

@@ -88,7 +88,8 @@ $ curl https://dl.min.io/client/mc/release/linux-amd64/mc -o /tmp/mc
 
 ## Install Lens3
 
-Install Python packages and Lens3.
+Install Python packages and Lens3.  Installation should be run in the
+"v1" directory.
 
 * Do as the user "lens3"
 

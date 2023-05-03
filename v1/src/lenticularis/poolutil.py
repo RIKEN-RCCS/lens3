@@ -41,7 +41,7 @@ class ID_Use(enum.Enum):
     """
     # (NOT USED YET).
     POOL = "pool"
-    KEY = "access_key"
+    KEY = "key"
 
     def __str__(self):
         return self.value
@@ -94,7 +94,7 @@ def ensure_bucket_policy(bucket, desc, access_key):
 def ensure_user_is_authorized(tables, user_id):
     u = tables.get_user(user_id)
     assert u is not None
-    if not u.get("permitted"):
+    if not u.get("enabled"):
         raise Api_Error(403, (f"User disabled: {user_id}"))
     pass
 
@@ -144,7 +144,7 @@ def ensure_secret_owner(tables, access_key, pool_id):
     desc = tables.get_id(access_key)
     if desc is None:
         raise Api_Error(403, f"Non-existing access-key: {access_key}")
-    if not (desc.get("use") == "access_key"
+    if not (desc.get("use") == "key"
             and desc.get("owner") == pool_id):
         raise Api_Error(403, f"Wrong access-key: {access_key}")
     pass
@@ -199,11 +199,11 @@ def gather_pool_desc(tables, pool_id):
     (poolstate, reason) = tables.get_pool_state(pool_id)
     pooldesc["minio_state"] = str(poolstate)
     pooldesc["minio_reason"] = str(reason)
-    # pooldesc["expiration_date"]
+    # pooldesc["expiration_time"]
     # pooldesc["online_status"]
     user_id = pooldesc["owner_uid"]
     u = tables.get_user(user_id)
-    pooldesc["permit_status"] = u["permitted"]
+    pooldesc["enable_status"] = u["enabled"]
     check_pool_is_well_formed(pooldesc, None)
     return pooldesc
 
@@ -272,6 +272,10 @@ def check_bucket_naming(name):
                 name) is None)
 
 
+def check_claim_string(claim):
+    return re.fullmatch("^[-_a-zA-Z0-9.:@%]{0,256}$", claim) is not None
+
+
 def forge_s3_auth(access_key):
     """Makes an S3 authorization for an access-key."""
     return f"AWS4-HMAC-SHA256 Credential={access_key}////"
@@ -303,7 +307,7 @@ def parse_s3_auth(authorization):
     return None
 
 
-def _pool_desc_schema(type_number):
+def _pool_desc_schema():
     bucket = {
         "type": "object",
         "properties": {
@@ -344,9 +348,9 @@ def _pool_desc_schema(type_number):
             "probe_key": {"type": "string"},
             "minio_state": {"type": "string"},
             "minio_reason": {"type": "string"},
-            "expiration_date": {"type": "integer"},
-            "permit_status": {"type": "boolean"},
+            "enable_status": {"type": "boolean"},
             "online_status": {"type": "boolean"},
+            "expiration_time": {"type": "integer"},
             "modification_time": {"type": "integer"},
         },
         "required": [
@@ -356,9 +360,9 @@ def _pool_desc_schema(type_number):
             "buckets_directory",
             "buckets",
             "access_keys",
-            "expiration_date",
-            "permit_status",
+            "enable_status",
             "online_status",
+            "expiration_time",
         ],
         "additionalProperties": False,
     }
@@ -367,7 +371,7 @@ def _pool_desc_schema(type_number):
 
 def check_pool_is_well_formed(pooldesc, user_):
     """Checks a pool description is well-formed for passing to Web-API."""
-    schema = _pool_desc_schema({"type": "string"})
+    schema = _pool_desc_schema()
     jsonschema.validate(instance=pooldesc, schema=schema)
     for bucket in pooldesc.get("buckets", []):
         _check_bkt_policy(bucket["bkt_policy"])

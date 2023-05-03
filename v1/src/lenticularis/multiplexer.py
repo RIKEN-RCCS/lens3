@@ -13,7 +13,6 @@ import posixpath
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 import urllib.parse
-from lenticularis.scheduler import Scheduler
 from lenticularis.poolutil import Api_Error
 from lenticularis.poolutil import Bkt_Policy
 from lenticularis.poolutil import check_bucket_naming
@@ -75,7 +74,7 @@ def _get_pool_of_probe_key(probe_key, access_info):
     """Checks a key is a probe-key, and returns a pool-id for which it is
     created."""
     if (probe_key is not None
-        and probe_key.get("use") == "access_key"
+        and probe_key.get("use") == "key"
         and probe_key.get("secret_key") == ""):
         return probe_key.get("owner")
     else:
@@ -141,7 +140,7 @@ class Multiplexer():
                                                     self._heartbeat_timeout)
 
         self._mux_addrs = self._list_mux_ip_addresses()
-        self.scheduler = Scheduler(tables)
+        # self.scheduler = Scheduler(tables)
         pass
 
     def __del__(self):
@@ -317,11 +316,12 @@ class Multiplexer():
         return (500, None)
 
     def _choose_server_host(self, pool_id):
-        # THIS IS NOT USED NOW.
         """Chooses a host to run a MinIO.  It returns None to mean the
         localhost.
         """
-        (host, port) = self.scheduler.schedule(pool_id)
+        # THIS IS NOT USED NOW.
+        # (host, port) = self.scheduler.schedule(pool_id)
+        (host, port) = (None, None)
         if host is None:
             return None
         elif host == self._mux_host:

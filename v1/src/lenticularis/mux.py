@@ -1,4 +1,4 @@
-"""A Mux-main started as a Gunicorn service."""
+"""Lens3-Mux main started as a Gunicorn service."""
 
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause

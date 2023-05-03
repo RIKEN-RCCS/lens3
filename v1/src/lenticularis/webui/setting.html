@@ -86,6 +86,9 @@
         <span class="label">ACCESS KEYS</span>
       </div>
       <div>
+        <datetime type="datetime" v-model="datetime"></datetime>
+      </div>
+      <div>
         <span class="label">Access keys (rw)</span>
         <button v-on:click="kick_make_secret('readwrite')">New</button>
       </div>

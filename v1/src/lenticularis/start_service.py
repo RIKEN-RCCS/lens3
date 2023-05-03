@@ -63,7 +63,7 @@ def _run_api():
     args = ["--worker-class", "uvicorn.workers.UvicornWorker", "--bind", bind]
     options = _list_gunicorn_command_options(gunicorn_conf)
     args += options
-    args += ["lenticularis.api:app"]
+    args += ["lenticularis.api:app()"]
     _run(servicename, env, cmd, args)
     pass
 

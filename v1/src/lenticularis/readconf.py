@@ -201,7 +201,7 @@ def _api_schema():
             "front_host": {"type": "string"},
             "trusted_proxies": {"type": "array", "items": {"type": "string"}},
             "base_path": {"type": "string"},
-            "claim_to_uid": {"type": "string"},
+            "claim_uid_map": {"type": "string"},
             "probe_access_timeout": {"type": "number"},
             "minio_mc_timeout": {"type": "number"},
             "max_pool_expiry": {"type": "number"},
@@ -211,7 +211,7 @@ def _api_schema():
             "front_host",
             "trusted_proxies",
             "base_path",
-            "claim_to_uid",
+            "claim_uid_map",
             "probe_access_timeout",
             "max_pool_expiry",
             "CSRF_secret_key",
@@ -263,17 +263,17 @@ def _validate_mux_conf(conf):
 
 def _validate_api_conf(conf):
     jsonschema.validate(instance=conf, schema=_api_schema())
-    claim = conf["controller"]["claim_to_uid"]
-    keyset = {"uid", "email-id"}
-    if not claim in keyset:
-        raise Exception(f"api-config: bad claim_to_uid={claim};"
-                        f" it should be one of {keyset}")
+    claim = conf["controller"]["claim_uid_map"]
+    mapset = {"id", "email-name", "map"}
+    if not claim in mapset:
+        raise Exception(f"api-config: bad claim_uid_map={claim};"
+                        f" it should be one of {mapset}")
     pass
 
 
 def _fix_type(data, schema):
-    """Rereads and fixes tokens in yaml to match for json schema.  It
-    passes missing/additional properties, which are checked by json
+    """Rereads tokens in yaml to match for json schema.  It admits
+    missing/additional properties, which will be checked by json
     validation.
     """
     if schema["type"] == "object":

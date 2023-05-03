@@ -6,10 +6,12 @@
 import codecs
 import hashlib
 import json
+import yaml
 import platform
 import random
 import string
 import time
+import math
 import sys
 import socket
 import select
@@ -49,8 +51,8 @@ class HostnameFilter(logging.Filter):
 
 class MicrosecondFilter(logging.Filter):
     def filter(self, record):
-        # record.microsecond = format_rfc3339_z(time.time())
-        setattr(record, "microsecond", format_rfc3339_z(time.time()))
+        # record.microsecond = format_time_z(time.time())
+        setattr(record, "microsecond", format_time_z(time.time()))
         return True
 
     pass
@@ -276,20 +278,12 @@ def remove_trailing_slash(s):
     pass
 
 
-# def format_8601_us(t=None):
-#     """ISO 8601"""
-#     if t is None:
-#         t = time.time()
-#     i = time.strftime("%Y%m%dT%H%M%S", time.gmtime(t))
-#     f = (int)((t % 1) * 1000000)
-#     return f"{i}.{f:06d}Z"
-
-
-def format_rfc3339_z(t):
-    """RFC 3339"""
-    i = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(t))
-    f = (int)((t % 1) * 1000000)
-    return f"{i}.{f:06d}Z"
+def format_time_z(t):
+    """Returns a time string by RFC3339/ISO8601 in millisecond."""
+    f, i = math.modf(t)
+    s = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(i))
+    m = (int)(f * 1000)
+    return f"{s}.{m:03d}Z"
 
 
 def pick_one(m):
@@ -328,8 +322,8 @@ def get_ip_addresses(host):
 
 
 def objdump(obj, order=None):
-    return "".join(dump_object(obj, order=order))
-
+    # return "".join(dump_object(obj, order=order))
+    return yaml.dump(obj, default_flow_style=False)
 
 def dump_object(obj, lv="", array_element=False, order=None):
     r = []
@@ -388,7 +382,7 @@ def uniq_d(lis):
 
 def log_access(status_, client_, user_, method_, url_, *,
                upstream=None, downstream=None):
-    access_time = format_rfc3339_z(time.time())
+    access_time = format_time_z(time.time())
     user_ = user_ if user_ else "-"
     upstream = upstream if upstream else "-"
     downstream = downstream if downstream else "-"

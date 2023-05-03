@@ -41,19 +41,20 @@ $ lens3-admin restore pools.json
 
 ## Administration Command (lens3-admin)
 
-Lens3 provides a lens3-admin command for direct database
+Lens3 provides "lens3-admin" command for direct database
 modifications.  Note that it does not change the status of a MinIO
 instance, and the modifications will be reflected at the next start of
 a MinIO instance.  Moreover, modifications could be inconsistent.
 
-See [lens3-admin.md](lens3-admin.md) for the list of
-commands.
+"lens3-admin" command should typically be run on the same host of
+Lens3-Api.  See a help by running
+"lens3-admin -c api-config.yaml help", for the list of commands.
 
 ## Design Assumptions
 
-* Lens3 assumes an http front-end terminates SSL connections and
-  performs authentications.  It expects to receive a user identity in
-  an http header.
+* Lens3 assumes a proxy (an http front-end) terminates SSL connections
+  and performs authentications.  It expects to receive a user identity
+  in an http header X-REMOTE-USER.
 
 * Lens3 assumes a running environment isolated from users.  MinIO runs
   as a user process and thus a user can kill/stop the process.  It is
@@ -123,3 +124,30 @@ at a shutdown of the lenticularis-mux service.  Please check a MinIO
 process without a manager process and kill it (which has sudo as the
 parent and the sudo's parent is the init), when the lenticularis-mux
 service is frequently started/stopped.
+
+## Troubleshoot
+
+### Early Troubles
+
+First check the systemd logs.  Diagnosing errors in reading
+configuration is a bit tricky.
+
+A log of Lens3-Api may include a string "EXAMINE THE GUNICORN LOG",
+which indicates a Gunicorn process finishes by some reason.  Check the
+logs.
+
+### Clean Start in Troubles
+
+Clear Redis databases.
+
+```
+$ REDISCLI_AUTH=password
+$ redis-cli -p 6378 FLUSHALL
+$ redis-cli -p 6378 --scan --pattern '*'
+```
+
+### Running MinIO by Hand
+
+```
+$ minio server --anonymous --json --address :9001 /home/UUU/pool-directory
+```

@@ -24,8 +24,8 @@ var edit_pool_data = {
   group: "",
   group_choices: [],
 
-  expiration_date: "",
-  permit_status: true,
+  expiration_time: "",
+  enable_status: true,
   online_status: true,
   pool_state: "",
 
@@ -128,16 +128,17 @@ function submit_request(msg, triple, process_response) {
   clear_status_field();
 
   const method = triple.method;
-  const url_path = triple.url_path;
+  const path = triple.path;
   const body = triple.body;
   console.log("method: " + method);
-  console.log("url_path: " + url_path);
+  console.log("path: " + path);
   console.log("body: " + body);
-  const request_options = {
+
+  const options = {
     method: method,
     body: body,
   };
-  fetch(url_path, request_options)
+  fetch(path, options)
     .then((response) => {
       if (!response.ok) {
         response.json().then(
@@ -163,19 +164,18 @@ function submit_request(msg, triple, process_response) {
 function run_get_user_info() {
   const msg = "get user info"
   const method = "GET";
-  const url_path = (base_path + "/user-info");
-  const c = {};
+  const path = (base_path + "/user-info");
   const body = null;
-  const triple = {method, url_path, body};
+  const triple = {method, path, body};
   return submit_request(msg, triple, set_user_info_data);
 }
 
 function run_get_pool_list() {
   const msg = "get pool list"
   const method = "GET";
-  const url_path = (base_path + "/pool");
+  const path = (base_path + "/pool");
   const body = null;
-  const triple = {method, url_path, body};
+  const triple = {method, path, body};
   return submit_request(msg, triple, render_pool_list);
 }
 
@@ -185,12 +185,12 @@ function run_make_pool() {
   const owner_gid = edit_pool_data.group;
   console.log("make_pool: directory=" + directory);
   const method = "POST";
-  const url_path = (base_path + "/pool");
-  const c = {"pool": {"buckets_directory": directory,
-                      "owner_gid": owner_gid}};
-  c["CSRF-Token"] = csrf_token;
-  const body = JSON.stringify(c);
-  const triple = {method, url_path, body};
+  const path = (base_path + "/pool");
+  const data = {"pool": {"buckets_directory": directory,
+                         "owner_gid": owner_gid},
+                "CSRF-Token": csrf_token};
+  const body = JSON.stringify(data);
+  const triple = {method, path, body};
   return submit_request(msg, triple, display_pool_in_edit_pool)
 }
 
@@ -200,11 +200,10 @@ function run_delete_pool(i) {
   const pool_name = pooldesc["pool_name"];
   console.log(`pool_name = ${pool_name}`);
   const method = "DELETE";
-  const url_path = (base_path + "/pool/" + pool_name);
-  const c = {};
-  c["CSRF-Token"] = csrf_token;
-  const body = JSON.stringify(c);
-  const triple = {method, url_path, body};
+  const path = (base_path + "/pool/" + pool_name);
+  const data = {"CSRF-Token": csrf_token};
+  const body = JSON.stringify(data);
+  const triple = {method, path, body};
   return submit_request(msg, triple, (data) => {run_get_pool_list();});
 }
 
@@ -228,12 +227,12 @@ function run_make_bucket() {
   const policy = edit_pool_data.bucket_policy;
   console.log("make_bucket: name=" + name + ", policy=" + policy);
   const method = "PUT";
-  const url_path = (base_path + "/pool/" + edit_pool_data.pool_name
+  const path = (base_path + "/pool/" + edit_pool_data.pool_name
                     + "/bucket");
-  const c = {"bucket": {"name": name, "bkt_policy": policy}};
-  c["CSRF-Token"] = csrf_token;
-  const body = JSON.stringify(c);
-  const triple = {method, url_path, body};
+  const data = {"bucket": {"name": name, "bkt_policy": policy},
+                "CSRF-Token": csrf_token};
+  const body = JSON.stringify(data);
+  const triple = {method, path, body};
   return submit_request(msg, triple, display_pool_in_edit_pool);
 }
 
@@ -241,25 +240,26 @@ function run_delete_bucket(name) {
   const msg = "delete bucket";
   console.log("delete_bucket: name=" + name);
   const method = "DELETE";
-  const url_path = (base_path + "/pool/" + edit_pool_data.pool_name
+  const path = (base_path + "/pool/" + edit_pool_data.pool_name
                     + "/bucket/" + name);
-  const c = {};
-  c["CSRF-Token"] = csrf_token;
-  const body = JSON.stringify(c);
-  const triple = {method, url_path, body};
+  const data = {"CSRF-Token": csrf_token};
+  const body = JSON.stringify(data);
+  const triple = {method, path, body};
   return submit_request(msg, triple, display_pool_in_edit_pool);
 }
 
 function run_make_secret(rw) {
   const msg = "make access-key";
   console.log("make_access_key: " + rw);
+  const expiration = (7 * 24 * 3600);
   const method = "POST";
-  const url_path = (base_path + "/pool/" + edit_pool_data.pool_name
-                    + "/secret");
-  const c = {"key_policy": rw};
-  c["CSRF-Token"] = csrf_token;
-  const body = JSON.stringify(c);
-  const triple = {method, url_path, body};
+  const path = (base_path + "/pool/" + edit_pool_data.pool_name
+                + "/secret");
+  const data = {"key_policy": rw,
+                "expiration_time": expiration,
+                "CSRF-Token": csrf_token};
+  const body = JSON.stringify(data);
+  const triple = {method, path, body};
   return submit_request(msg, triple, display_pool_in_edit_pool);
 }
 
@@ -267,12 +267,11 @@ function run_delete_secret(key) {
   const msg = "delete access-key";
   console.log("delete_access_key: " + key);
   const method = "DELETE";
-  const url_path = (base_path + "/pool/" + edit_pool_data.pool_name
+  const path = (base_path + "/pool/" + edit_pool_data.pool_name
                     + "/secret/" + key);
-  const c = {};
-  c["CSRF-Token"] = csrf_token;
-  const body = JSON.stringify(c);
-  const triple = {method, url_path, body};
+  const data = {"CSRF-Token": csrf_token};
+  const body = JSON.stringify(data);
+  const triple = {method, path, body};
   return submit_request(msg, triple, display_pool_in_edit_pool);
 }
 
@@ -353,10 +352,10 @@ function render_pool_as_ul_entry(pooldesc) {
     {text: {label: "MinIO state",
             value: (pooldesc["minio_state"]
                     + " (reason: " + pooldesc["minio_reason"] + ")")}},
-    {text: {label: "Expiration date", value: format_rfc3339_if_not_zero(pooldesc["expiration_date"])}},
-    {text: {label: "User enabled", value: pooldesc["permit_status"]}},
+    {text: {label: "Expiration date", value: format_time_if_not_zero(pooldesc["expiration_time"])}},
+    {text: {label: "User enabled", value: pooldesc["enable_status"]}},
     {text: {label: "Pool online", value: pooldesc["online_status"]}},
-    {text: {label: "Creation date", value: format_rfc3339_if_not_zero(pooldesc["modification_time"])}},
+    {text: {label: "Creation date", value: format_time_if_not_zero(pooldesc["modification_time"])}},
   ];
 }
 
@@ -385,8 +384,8 @@ function copy_pool_desc_for_edit(pooldesc) {
   edit_pool_data.access_keys_ro = rokeys
   edit_pool_data.access_keys_wo = wokeys
 
-  edit_pool_data.expiration_date = format_rfc3339_if_not_zero(pooldesc["expiration_date"]);
-  edit_pool_data.permit_status = pooldesc["permit_status"];
+  edit_pool_data.expiration_time = format_time_if_not_zero(pooldesc["expiration_time"]);
+  edit_pool_data.enable_status = pooldesc["enable_status"];
   edit_pool_data.online_status = pooldesc["online_status"];
   edit_pool_data.pool_state = pooldesc["minio_state"];
 }
@@ -421,26 +420,27 @@ function show_reason(s) {
 
 function show_duration(s) {
   if (s != null) {
-    show_status_data.time = "Finished at: " + format_rfc3339_if_not_zero(s);
+    show_status_data.time = "Finished at: " + format_time_if_not_zero(s);
   } else {
     show_status_data.time = "";
   }
 }
 
-function parse_rfc3339(s) {
+function parse_time_z(s) {
   return "" + new Date(s).getTime() / 1000;
 }
 
-function format_rfc3339(d) {
+function format_time_z(d) {
+  /* Returns a date+time string by milliseconds. */
   return new Date(d * 1000).toISOString();
 }
 
-function format_rfc3339_if_not_zero(d) {
-  //console.log("format_rfc3339_if_not_zero: " + d);
+function format_time_if_not_zero(d) {
+  //console.log("format_time_if_not_zero: " + d);
   if (d == "0") {
     return "0";
   }
-  return format_rfc3339(d);
+  return format_time_z(d);
 }
 
 function run_debug() {
@@ -467,8 +467,8 @@ function run_debug() {
   //var d2 = date2.getTime() / 1000;
   //console.log("new Date: " + s + " => " + d2);
   const s = "2022-03-31T00:00:00.000Z";
-  const t = parse_rfc3339(s);
-  const u = format_rfc3339(t);
+  const t = parse_time_z(s);
+  const u = format_time_z(t);
   console.log("parse: " + s + " => " + t);
   console.log("unparse: " + t + " => " + u);
 }

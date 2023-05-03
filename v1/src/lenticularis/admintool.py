@@ -24,7 +24,6 @@ from lenticularis.poolutil import check_claim_string
 from lenticularis.poolutil import get_pool_owner_for_messages
 from lenticularis.utility import ERROR_EXIT_READCONF, ERROR_EXIT_EXCEPTION, ERROR_EXIT_ARGUMENT
 from lenticularis.utility import format_time_z
-from lenticularis.utility import objdump
 from lenticularis.utility import random_str
 from lenticularis.utility import rephrase_exception_message
 from lenticularis.utility import logger, openlog
@@ -52,24 +51,6 @@ def _make_time_readable(d, keys):
     pass
 
 
-def _print_json_csv(table_name, c, formatting):
-    if formatting in {"json"}:
-        dump = json.dumps(c)
-        print(f"{dump}")
-    else:
-        print(f"---- {table_name}")
-        with io.StringIO() as out:
-            writer = csv.writer(out)
-            for r in c:
-                writer.writerow(r)
-                pass
-            v = out.getvalue()
-            pass
-        print(f"{v}")
-        pass
-    pass
-
-
 def _print_in_csv(rows):
     with io.StringIO() as os:
         writer = csv.writer(os)
@@ -85,20 +66,6 @@ def _print_in_csv(rows):
 def _print_in_yaml(o):
     s = yaml.dump(o, default_flow_style=False)
     print(f"{s}")
-    pass
-
-
-def _print_json_plain(title, outs, formatting, order=None):
-    if formatting in {"json"}:
-        dump = json.dumps(outs)
-        print(f"{dump}")
-    else:
-        print(f"---- {title}")
-        for d in outs:
-            dump = objdump(d, order=order)
-            print(f"{dump}")
-            pass
-        pass
     pass
 
 

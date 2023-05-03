@@ -176,7 +176,7 @@ class Control_Api():
         duration = self._max_pool_expiry
         return (now + duration)
 
-    def _check_expiration_range(expiration):
+    def _check_expiration_range(self, expiration):
         now = int(time.time())
         return (((now - 10) <= expiration)
                 and (expiration <= (now + self._max_pool_expiry)))
@@ -368,7 +368,7 @@ class Control_Api():
                 expiration = int(tv)
             except ValueError:
                 return (403, f"Bad expiration={tv}", [])
-            if not _check_expiration_range(expiration):
+            if not self._check_expiration_range(expiration):
                 return (403, f"Bad expiration={tv}", [])
         except Exception as e:
             m = rephrase_exception_message(e)

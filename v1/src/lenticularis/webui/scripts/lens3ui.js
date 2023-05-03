@@ -36,6 +36,9 @@ var edit_pool_data = {
   access_keys_rw: [],
   access_keys_ro: [],
   access_keys_wo: [],
+
+  key_expiration_date: "2023-05-01",
+  key_expiration_time: "12:39:41",
 };
 
 var make_new_pool_button_app = new Vue({
@@ -84,6 +87,7 @@ var keys_section_app = new Vue({
   data: edit_pool_data,
   methods: {
     kick_make_secret: run_make_secret,
+    kick_copy_clipboard: copy_clipboard,
     kick_delete_secret: run_delete_secret,
   },
 });
@@ -251,7 +255,7 @@ function run_delete_bucket(name) {
 function run_make_secret(rw) {
   const msg = "make access-key";
   console.log("make_access_key: " + rw);
-  const expiration = (7 * 24 * 3600);
+  const expiration = (7 * 24 * 3600) + Math.floor(Date.now() / 1000);
   const method = "POST";
   const path = (base_path + "/pool/" + edit_pool_data.pool_name
                 + "/secret");
@@ -273,6 +277,10 @@ function run_delete_secret(key) {
   const body = JSON.stringify(data);
   const triple = {method, path, body};
   return submit_request(msg, triple, display_pool_in_edit_pool);
+}
+
+function copy_clipboard(s) {
+  navigator.clipboard.writeText(s);
 }
 
 const bkt_policy_names = ["none", "public", "upload", "download"];

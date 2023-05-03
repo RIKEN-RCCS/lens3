@@ -212,8 +212,7 @@ def generate_secret_key():
 
 
 def copy_minimal_env(oenv):
-    """Copies minimal environ to run services.
-    """
+    """Copies minimal environment to run services."""
     keys = {
         "HOME",
         "LANG",
@@ -279,7 +278,7 @@ def remove_trailing_slash(s):
 
 
 def format_time_z(t):
-    """Returns a time string by RFC3339/ISO8601 in millisecond."""
+    """Returns a time string by RFC3339/ISO8601 in milliseconds."""
     f, i = math.modf(t)
     s = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(i))
     m = (int)(f * 1000)
@@ -319,44 +318,6 @@ def uniform_distribution_jitter():
 def get_ip_addresses(host):
     return [make_typical_ip_address(addr[0])
             for (_, _, _, _, addr) in socket.getaddrinfo(host, None)]
-
-
-def objdump(obj, order=None):
-    # return "".join(dump_object(obj, order=order))
-    return yaml.dump(obj, default_flow_style=False)
-
-def dump_object(obj, lv="", array_element=False, order=None):
-    r = []
-    if isinstance(obj, dict):
-        keys = sorted(list(obj.keys()), key=order)
-        ai = "- " if array_element else ""
-        for k in keys:
-            v = obj[k]
-            if isinstance(v, str) or isinstance(v, int):
-                r += [f"{lv}{ai}{k}: "] + dump_object(v, order=order)
-            elif not array_element and isinstance(v, list):
-                r += [f"{lv}{ai}{k}:\n"] + dump_object(v, lv=lv, order=order)
-            else:
-                r += [f"{lv}{ai}{k}:\n"] + dump_object(v, lv=lv+" "*4, order=order)
-                pass
-            ai = "  " if array_element else ""
-            pass
-        pass
-    elif isinstance(obj, list):
-        if array_element:
-            raise Exception("not implemented")
-        for v in obj:
-            r += dump_object(v, lv=lv, array_element=True, order=order)
-            pass
-        pass
-    else:
-        if array_element:
-            r.append(f"{lv}- {obj}\n")
-        else:
-            r.append(f"{lv}{obj}\n")
-            pass
-        pass
-    return r
 
 
 def host_port(host, port):

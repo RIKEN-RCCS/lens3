@@ -16,13 +16,16 @@ import yaml
 import sys
 import traceback
 from lenticularis.control import Control_Api
-from lenticularis.readconf import read_api_conf
+from lenticularis.control import erase_minio_ep, erase_pool_data, make_new_pool
+from lenticularis.table import read_redis_conf
+from lenticularis.table import set_conf, get_conf
+from lenticularis.yamlconf import read_yaml_conf
 from lenticularis.poolutil import Api_Error
 from lenticularis.poolutil import gather_pool_desc
 from lenticularis.poolutil import check_user_naming
 from lenticularis.poolutil import check_claim_string
 from lenticularis.poolutil import get_pool_owner_for_messages
-from lenticularis.utility import ERROR_EXIT_READCONF, ERROR_EXIT_EXCEPTION, ERROR_EXIT_ARGUMENT
+from lenticularis.utility import ERROR_EXIT_BADCONF, ERROR_EXIT_EXCEPTION, ERROR_EXIT_ARGUMENT
 from lenticularis.utility import format_time_z
 from lenticularis.utility import random_str
 from lenticularis.utility import rephrase_exception_message
@@ -64,7 +67,7 @@ def _print_in_csv(rows):
 
 
 def _print_in_yaml(o):
-    s = yaml.dump(o, default_flow_style=False)
+    s = yaml.dump(o, default_flow_style=False, sort_keys=False, indent=4)
     print(f"{s}")
     pass
 
@@ -96,7 +99,7 @@ def _make_csv_user_list_entry(r):
                 or r[0].upper() == "DELETE"
                 or r[0].upper() == "ENABLE"
                 or r[0].upper() == "DISABLE")
-        pass
+        return {}
     pass
 
 
@@ -108,44 +111,44 @@ def _read_csv_user_list(path):
     pass
 
 
-def _load_user(control, u):
+def _load_user(tables, u):
     # It copies the "enabled" slot and updates the "modification_time" slot.
     now = int(time.time())
     uid = u["uid"]
-    oldu = control.tables.get_user(uid)
+    oldu = tables.get_user(uid)
     if oldu is not None:
         newu = {"uid": uid,
                 "claim": u["claim"],
                 "groups": u["groups"],
                 "enabled": oldu["enabled"],
                 "modification_time": now}
-        control.tables.set_user(newu)
+        tables.set_user(newu)
     else:
         newu = {"uid": uid,
                 "claim": u["claim"],
                 "groups": u["groups"],
                 "enabled": True,
                 "modification_time": now}
-        control.tables.set_user(newu)
+        tables.set_user(newu)
         pass
     pass
 
 
-def _enable_disable_user(control, uid, enabled):
-    u = control.tables.get_user(uid)
+def _enable_disable_user(tables, uid, enabled):
+    u = tables.get_user(uid)
     if u is None:
         raise Api_Error(500, f"Bad user (unknown): {uid}")
     u["enabled"] = enabled
-    control.tables.set_user(u)
+    tables.set_user(u)
     pass
 
 
-def _make_disable_csv_rows(control):
+def _make_disable_csv_rows(tables):
     """Returns rows (though it is a single row) of disabled entries or an
     empty list.  It does not return enabled entries.
     """
-    users = control.tables.list_users()
-    uu = [(uid, control.tables.get_user(uid)["enabled"])
+    users = tables.list_users()
+    uu = [(uid, tables.get_user(uid)["enabled"])
           for uid in users]
     bid = [id for (id, enabled) in uu if enabled]
     ban = [id for (id, enabled) in uu if not enabled]
@@ -232,20 +235,31 @@ def _timestamp_key_order(e):
     return order.index(e) if e in order else len(order)
 
 
+def _determine_expiration_time(maxexpiry):
+    now = int(time.time())
+    duration = maxexpiry
+    return (now + duration)
+
+
 class Command():
     """Administration commands.  Api_Error is used as a placeholder and
     its status code is 500 always.
     """
 
-    def __init__(self, traceid, control, args, rest):
+    def __init__(self, traceid, control, api_conf, args, rest):
         self._traceid = traceid
         self._control = control
+        self._api_conf = api_conf
         self.args = args
         self.rest = rest
         pass
 
     def op_help(self):
-        """Prints help.  Use option -d for debugging lens3-admin."""
+        """Prints help.  Use option -d for debugging lens3-admin.  Most
+        commands needs an Api configuration in Redis, and only
+        "load-conf" works without it (Even help does not work).  Use
+        "load-conf" first at a system (re-)initialization.
+        """
         prog = os.path.basename(sys.argv[0])
         print(f"USAGE")
         for (_, v) in self._command_dict.items():
@@ -255,6 +269,23 @@ class Command():
             print(f"{prog} {args}\n\t{msg}")
             pass
         sys.exit(ERROR_EXIT_ARGUMENT)
+        pass
+
+    def op_load_conf(self, conffile):
+        """Loads a yaml conf file in Redis."""
+        # THIS ENTRY IS A DUMMY, JUST FOR HELPS.  INSTEAD,
+        # _op_load_conf() FUNCTION IS USED.
+        assert False
+        pass
+
+    def op_list_conf(self):
+        """Prints a list of conf data in yaml."""
+        conflist = self._control.tables.dump_conf()
+        for e in conflist:
+            print(f"---")
+            print(f"# Conf {e['subject']}")
+            _print_in_yaml(e)
+            pass
         pass
 
     def op_load_user(self, csvfile):
@@ -280,7 +311,7 @@ class Command():
                 for u in d["uids"]]
         for u in adds:
             print(f"adding a user: {u}")
-            _load_user(self._control, u)
+            _load_user(self._control.tables, u)
             pass
         for u in dels:
             print(f"deleting a user: {u}")
@@ -288,11 +319,11 @@ class Command():
             pass
         for u in enbs:
             print(f"enabling a user: {u}")
-            _enable_disable_user(self._control, u, True)
+            _enable_disable_user(self._control.tables, u, True)
             pass
         for u in diss:
             print(f"disabling a user: {u}")
-            _enable_disable_user(self._control, u, False)
+            _enable_disable_user(self._control.tables, u, False)
             pass
         pass
 
@@ -303,7 +334,7 @@ class Command():
         users = self._control.tables.list_users()
         urows = [_make_user_csv_row(id, self._control.tables.get_user(id))
                  for id in users]
-        drows = _make_disable_csv_rows(self._control)
+        drows = _make_disable_csv_rows(self._control.tables)
         _print_in_csv(urows + drows)
         pass
 
@@ -356,8 +387,10 @@ class Command():
             traceid = self._traceid
             for pid in pool_list:
                 # self._control.do_delete_pool(traceid, pid)
-                self._control.erase_minio_ep(traceid, pid)
-                self._control.erase_pool_data(traceid, pid)
+                # self._control.erase_minio_ep(traceid, pid)
+                # self._control.erase_pool_data(traceid, pid)
+                erase_minio_ep(self._control.tables, traceid, pid)
+                erase_pool_data(self._control.tables, traceid, pid)
                 pass
             pass
         pass
@@ -405,7 +438,7 @@ class Command():
         pools = desc.get("pools", [])
         # Insert users.
         for u in users:
-            _load_user(self._control, u)
+            _load_user(self._control.tables, u)
             pass
         # Insert new pools.
         for pooldesc in pools:
@@ -427,8 +460,12 @@ class Command():
         try:
             # pool_id = self._control.do_make_pool(traceid, user_id,
             #                                      owner_gid, path)
-            pool_id = self._control.make_new_pool(traceid, user_id,
-                                                  owner_gid, path)
+            # pool_id = self._control.make_new_pool(traceid, user_id,
+            #                                       owner_gid, path)
+            maxexp = int(self._api_conf["controller"]["max_pool_expiry"])
+            expiration = _determine_expiration_time(maxexp)
+            pool_id = make_new_pool(self._control.tables, traceid, user_id,
+                                    owner_gid, path, expiration)
             assert pool_id is not None
             pooldesc["pool_name"] = pool_id
         except Exception:
@@ -444,8 +481,10 @@ class Command():
                 self._make_bucket(traceid, pool_id, bucket, bkt_policy)
         except Exception:
             # self._control.do_delete_pool(traceid, pool_id)
-            self._control.erase_minio_ep(traceid, pool_id)
-            self._control.erase_pool_data(traceid, pool_id)
+            # self._control.erase_minio_ep(traceid, pool_id)
+            # self._control.erase_pool_data(traceid, pool_id)
+            erase_minio_ep(self._control.tables, traceid, pool_id)
+            erase_pool_data(self._control.tables, traceid, pool_id)
             raise
         # Add access-keys.
         added = []
@@ -471,8 +510,10 @@ class Command():
                 self._control.tables.delete_id_unconditionally(key)
                 pass
             # self._control.do_delete_pool(traceid, pool_id)
-            self._control.erase_minio_ep(traceid, pool_id)
-            self._control.erase_pool_data(traceid, pool_id)
+            # self._control.erase_minio_ep(traceid, pool_id)
+            # self._control.erase_pool_data(traceid, pool_id)
+            erase_minio_ep(self._control.tables, traceid, pool_id)
+            erase_pool_data(self._control.tables, traceid, pool_id)
             raise
         pass
 
@@ -557,12 +598,6 @@ class Command():
             pass
         pass
 
-    def op_access_mux(self, pool_id):
-        """Accesses Mux for a pool.  It may wake up or stop MinIO."""
-        traceid = self._traceid
-        self._control.access_mux_for_pool(traceid, pool_id)
-        pass
-
     def op_list_db(self):
         """Lists all database keys."""
         self._control.tables.print_all()
@@ -578,8 +613,16 @@ class Command():
             pass
         pass
 
+    def op_access_mux(self, pool_id):
+        """Accesses Mux for a pool.  It may wake up or stop MinIO."""
+        traceid = self._traceid
+        self._control.access_mux_for_pool(traceid, pool_id)
+        pass
+
     command_list = [
         op_help,
+        op_load_conf,
+        op_list_conf,
 
         op_load_user,
         op_list_user,
@@ -648,13 +691,21 @@ class Command():
     pass
 
 
-def main():
-    # _commands = Command.optbl.keys()
+def _op_load_conf(args, rest):
+    assert len(rest) == 1
+    redis = read_redis_conf(args.conf)
+    conf = read_yaml_conf(rest[0])
+    set_conf(conf, redis)
+    pass
 
+
+def main():
+    """It is special for "load-conf" command -- it should work only with a
+    connection to Redis but without a full configuration setting.
+    """
     parser = argparse.ArgumentParser()
-    # parser.add_argument("operation", choices=_commands)
     parser.add_argument("operation")
-    parser.add_argument("--configfile", "-c")
+    parser.add_argument("--conf", "-c")
     parser.add_argument("--everything", type=bool, default=False)
     parser.add_argument("--yes", "-y", default=False,
                         action=argparse.BooleanOptionalAction)
@@ -663,21 +714,26 @@ def main():
     parser.add_argument("--format", "-f", choices=["text", "json"])
     (args, rest) = parser.parse_known_args()
 
+    if args.operation == "load-conf":
+        _op_load_conf(args, rest)
+        return
+
     try:
-        (api_conf, _) = read_api_conf(args.configfile)
+        redis = read_redis_conf(args.conf)
+        api_conf = get_conf("api", redis)
     except Exception as e:
         m = rephrase_exception_message(e)
-        sys.stderr.write(f"Reading a config file failed: exception=({m})\n")
-        sys.exit(ERROR_EXIT_READCONF)
+        sys.stderr.write(f"Getting a conf failed: exception=({m})\n")
+        sys.exit(ERROR_EXIT_BADCONF)
         pass
 
     traceid = random_str(12)
     tracing.set(traceid)
-    openlog(api_conf["log_file"], **api_conf["log_syslog"])
+    # openlog(api_conf["log_file"], **api_conf["log_syslog"])
 
     try:
         control = Control_Api(api_conf)
-        cmd = Command(traceid, control, args, rest)
+        cmd = Command(traceid, control, api_conf, args, rest)
         cmd.make_command_dict()
         cmd.execute_command()
     except Exception as e:

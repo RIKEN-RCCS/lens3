@@ -23,19 +23,25 @@ Note: In the tables below, entries with "(\*)" are set atomically (by
 A date+time is by unix seconds.  Web-API also passes a date+time by
 unix seconds.
 
+Mux, Api, and Managers make (potentially) many connections to Redis,
+because they use multiple databases.
+
 ### Setting-Table (DB=0)
 
 The Setting-Table stores semi-static information.
 
-| Key            | Value      | Notes   |
-| ----           | ----       | ---- |
-| "cf:lens3-api" | api-config | |
-| "cf:lens3-mux" | mux-config | |
-| uu:uid         | user-info  | |
-| um:claim       | uid        | Optional |
+| Key             | Value     | Notes   |
+| ----            | ----      | ---- |
+| "cf:api"        | api-conf  | |
+| "cf:mux"        | mux-conf  | |
+| cf:mux:mux-name | mux-conf  | Optional |
+| uu:uid          | user-info | |
+| um:claim        | uid       | Optional |
 
-__cf:lens3-api__ and __cf:lens3-mux__ entries store the common
-settings in a database.  NOT IMPLEMENTED YET.
+__cf:api__ and __cf:mux__ entries store the settings of services.
+__cf:mux:mux-name__ is used to give a specific setting to each Mux
+service, whose mux-name is given by "LENS3-MUX-NAME" at a start of a
+service in environment variables.
 
 A __uu:uid__ entry is a record of a user-info: {"uid", "groups",
 "claim", "enabled", "modification_time"}, where "groups" is a string
@@ -43,6 +49,9 @@ list, "claim" is a string (maybe empty), and "enabled" is a boolean.
 
 A __um:claim__ entry is a map from a user claim to a uid.  Entries are
 used only when Lens-Api is configured with "claim_uid_map=map".
+
+A partial reason of storing configurations in the database is because
+typo errors are annoying when detected at a start of a service.
 
 ### Storage-Table (DB=1)
 

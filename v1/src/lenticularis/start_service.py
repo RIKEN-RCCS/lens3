@@ -7,8 +7,8 @@ import argparse
 import os
 from subprocess import Popen, PIPE, DEVNULL
 import sys
-from lenticularis.readconf import read_mux_conf
-from lenticularis.readconf import read_api_conf
+from lenticularis.table import read_redis_conf
+from lenticularis.table import get_conf
 from lenticularis.utility import rephrase_exception_message
 from lenticularis.utility import logger, openlog
 from lenticularis.utility import copy_minimal_env
@@ -16,10 +16,11 @@ from lenticularis.utility import copy_minimal_env
 
 def _run_mux():
     try:
-        (mux_conf, configfile) = read_mux_conf()
+        redis = read_redis_conf(None)
+        mux_conf = get_conf("mux", redis)
     except Exception as e:
         m = rephrase_exception_message(e)
-        sys.stderr.write(f"Lens3 reading a config file failed:"
+        sys.stderr.write(f"Lens3 getting a conf failed:"
                          f" exception=({m})\n")
         return
 
@@ -31,7 +32,7 @@ def _run_mux():
     _port = gunicorn_conf["port"]
     bind = f"[::]:{_port}"
     env = copy_minimal_env(os.environ)
-    env["LENS3_MUX_CONFIG"] = configfile
+    assert "LENS3_CONF" in env
     cmd = [sys.executable, "-m", "gunicorn"]
     args = ["--bind", bind]
     options = _list_gunicorn_command_options(gunicorn_conf)
@@ -43,10 +44,11 @@ def _run_mux():
 
 def _run_api():
     try:
-        (api_conf, configfile) = read_api_conf()
+        redis = read_redis_conf(None)
+        api_conf = get_conf("api", redis)
     except Exception as e:
         m = rephrase_exception_message(e)
-        sys.stderr.write(f"Lens3 reading a config file failed:"
+        sys.stderr.write(f"Lens3 getting a conf failed:"
                          f" exception=({m})\n")
         return
 
@@ -58,7 +60,7 @@ def _run_api():
     _port = gunicorn_conf["port"]
     bind = f"[::]:{_port}"
     env = copy_minimal_env(os.environ)
-    env["LENS3_API_CONFIG"] = configfile
+    assert "LENS3_CONF" in env
     cmd = [sys.executable, "-m", "gunicorn"]
     args = ["--worker-class", "uvicorn.workers.UvicornWorker", "--bind", bind]
     options = _list_gunicorn_command_options(gunicorn_conf)

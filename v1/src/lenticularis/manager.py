@@ -17,13 +17,14 @@ import contextlib
 from urllib.request import urlopen
 from urllib.error import HTTPError, URLError
 from lenticularis.mc import Mc, assert_mc_success
-from lenticularis.readconf import read_mux_conf
 from lenticularis.table import get_table
+from lenticularis.table import read_redis_conf
+from lenticularis.table import get_conf
 from lenticularis.poolutil import Pool_State
 from lenticularis.poolutil import gather_buckets, gather_keys
 from lenticularis.poolutil import get_manager_name_for_messages
 from lenticularis.poolutil import tally_manager_expiry
-from lenticularis.utility import ERROR_EXIT_READCONF, ERROR_EXIT_FORK
+from lenticularis.utility import ERROR_EXIT_BADCONF, ERROR_EXIT_FORK
 from lenticularis.utility import generate_access_key
 from lenticularis.utility import generate_secret_key
 from lenticularis.utility import copy_minimal_env, host_port
@@ -113,7 +114,7 @@ class Manager():
         self._bin_minio = minio_param["minio"]
         self._bin_mc = minio_param["mc"]
 
-        self.tables = get_table(mux_conf)
+        self.tables = get_table(mux_conf["redis"])
         pass
 
     def _sigalrm(self, n, stackframe):
@@ -794,9 +795,8 @@ class Manager():
                                     self._minio_root_password):
                 alarm(self._heartbeat_timeout)
                 self._alarm_section = "alarm-set-in-heartbeat-minio"
-                (p_, r) = self._mc.admin_info()
-                assert p_ is None
-                assert_mc_success(r, "mc.admin_info")
+                rr = self._mc.admin_info()
+                assert_mc_success(rr, "mc.admin_info")
                 alarm(0)
                 self._alarm_section = None
                 pass
@@ -823,7 +823,7 @@ def main():
     parser.add_argument("port_min")
     parser.add_argument("port_max")
     parser.add_argument("pool_id")
-    parser.add_argument("--configfile")
+    parser.add_argument("--conf")
     # parser.add_argument("--useTrueAccount", type=bool, default=False,
     #                     action=argparse.BooleanOptionalAction)
     # parser.add_argument("--accessByZoneID", type=bool, default=False,
@@ -834,17 +834,18 @@ def main():
     # pool_id = os.environ.get("LENS3_POOL_ID")
     # if pool_id is None:
     #    sys.stderr.write(f"Manager failed: No pool-ID.\n")
-    #    sys.exit(ERROR_EXIT_READCONF)
+    #    sys.exit(ERROR_EXIT_BADCONF)
     #    pass
 
     pool_id = args.pool_id
     try:
-        (mux_conf, _) = read_mux_conf(args.configfile)
+        redis = read_redis_conf(args.conf)
+        mux_conf = get_conf("mux", redis)
     except Exception as e:
         m = rephrase_exception_message(e)
         sys.stderr.write(f"Manager (pool={pool_id}) failed"
                          f" in reading a config file: exception=({m})\n")
-        sys.exit(ERROR_EXIT_READCONF)
+        sys.exit(ERROR_EXIT_BADCONF)
         pass
 
     tracing.set(args.traceid)

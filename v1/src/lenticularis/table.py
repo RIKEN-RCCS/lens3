@@ -6,10 +6,14 @@ database, while it is implemented by a couple of databases inside.
 # SPDX-License-Identifier: BSD-2-Clause
 
 import time
+import os
 import json
+import jsonschema
 import redis
 from redis import Redis
+from lenticularis.yamlconf import redis_json_schema
 from lenticularis.poolutil import Pool_State
+from lenticularis.utility import rephrase_exception_message
 from lenticularis.utility import generate_access_key
 from lenticularis.utility import logger
 
@@ -21,21 +25,84 @@ _PROCESS_DB = 2
 _ROUTING_DB = 3
 _MONOKEY_DB = 4
 
+_conf_env_name = "LENS3_CONF"
+_mux_name_env_name = "LENS3_MUX_NAME"
 
 _limit_of_id_generation_loop = 30
 
 
-def get_table(mux_conf):
-    redis_conf = mux_conf["redis"]
-    host = redis_conf["host"]
-    port = redis_conf["port"]
-    password = redis_conf["password"]
-    setting = Setting_Table(host, port, _SETTING_DB, password)
-    storage = Storage_Table(host, port, _STORAGE_DB, password)
-    process = Process_Table(host, port, _PROCESS_DB, password)
-    routing = Routing_Table(host, port, _ROUTING_DB, password)
-    monokey = Monokey_Table(host, port, _MONOKEY_DB, password)
+def get_table(redis):
+    """Makes a Redis connection for a Redis endpoint."""
+    # redis_conf = mux_conf["redis"]
+    setting = _Setting_Table(_SETTING_DB, redis)
+    storage = _Storage_Table(_STORAGE_DB, redis)
+    process = _Process_Table(_PROCESS_DB, redis)
+    routing = _Routing_Table(_ROUTING_DB, redis)
+    monokey = _Monokey_Table(_MONOKEY_DB, redis)
     return Table(setting, storage, process, routing, monokey)
+
+
+def set_conf(conf, redis):
+    """Stores a conf in Redis."""
+    setting = _Setting_Table(_SETTING_DB, redis)
+    setting.set_conf(conf)
+    del setting
+    pass
+
+
+def get_conf(sub, redis):
+    """Takes a conf in Redis with regard to a subject.  A sub is "api" or
+    "mux".  It may quaify a key "mux" with a name as "mux:"+mux-name.
+    It raises an exception if a conf does not exist.  (The contents
+    should have been schema checked at an insertion).
+    """
+    if sub == "api":
+        key = "api"
+    elif sub == "mux":
+        e = os.environ.get(_mux_name_env_name)
+        key = "mux" if e is None else ("mux:" + e)
+    else:
+        assert sub in {"api", "mux"}
+        key = "BADKEY"
+        pass
+    setting = _Setting_Table(_SETTING_DB, redis)
+    conf = setting.get_conf(key)
+    del setting
+    if conf is None:
+        raise Exception(f"No {key} conf record in Redis")
+    return conf
+
+
+def read_redis_conf(file):
+    """Reads a conf file and returns a record for a Redis connection.  A
+    file name can be None, then a file name is taken from an
+    environment variable.
+    """
+    if file is None:
+        file = os.environ.get(_conf_env_name)
+    assert file is not None
+    try:
+        with open(file, "r") as f:
+            conf = json.load(f, parse_int=None)
+    except json.JSONDecodeError as e:
+        raise Exception(f"Reading a conf file failed: {file}:"
+                        f" exception=({e})")
+    except Exception as e:
+        m = rephrase_exception_message(e)
+        raise Exception(f"Reading a conf file failed: {file}:"
+                        f" exception=({m})")
+    schema = {
+        "type": "object",
+        "properties": {
+            "redis": redis_json_schema
+        },
+        "required": [
+            "redis",
+        ],
+        "additionalProperties": True,
+    }
+    jsonschema.validate(instance=conf, schema=schema)
+    return conf["redis"]
 
 
 def _print_all(r, name):
@@ -86,6 +153,10 @@ class Table():
         pass
 
     # Setting-Table:
+
+    def dump_conf(self):
+        """Returns a list of conf's"""
+        return self._setting_table._dump_conf()
 
     def set_user(self, userinfo):
         self._setting_table.set_user(userinfo)
@@ -293,8 +364,10 @@ def _wait_for_redis(db):
 
 
 class Table_Common():
-    def __init__(self, host, port, db, password):
-        # self.db = DBase(host, port, db, password)
+    def __init__(self, db, redis):
+        host = redis["host"]
+        port = redis["port"]
+        password = redis["password"]
         self.db = Redis(host=host, port=port, db=db, password=password,
                         charset="utf-8", decode_responses=True)
         _wait_for_redis(self.db)
@@ -303,12 +376,51 @@ class Table_Common():
     pass
 
 
-class Setting_Table(Table_Common):
+class _Setting_Table(Table_Common):
+    _conf_prefix = "cf:"
     _user_info_prefix = "uu:"
     _user_claim_prefix = "um:"
 
     _user_info_keys = {
         "uid", "claim", "groups", "enabled", "modification_time"}
+
+    def _delete_claim(self, uid):
+        """Deletes a claim associated to a uid.  It scans the database to find
+        an entry owned by a uid.
+        """
+        claims = _scan_table(self.db, self._user_claim_prefix, None)
+        for claim in claims:
+            u = self.map_claim_to_uid(claim)
+            if (u is not None and u == uid):
+                key = f"{self._user_claim_prefix}{claim}"
+                self.db.delete(key)
+                pass
+            pass
+        return
+
+    def set_conf(self, conf):
+        assert "subject" in conf
+        sub = conf["subject"]
+        assert (sub == "api" or sub == "mux"
+                or (len(sub) >= 5 and sub[:4] == "mux:"))
+        key = f"{self._conf_prefix}{sub}"
+        v = json.dumps(conf)
+        self.db.set(key, v)
+        pass
+
+    def get_conf(self, sub):
+        assert (sub == "api" or sub == "mux"
+                or (len(sub) >= 5 and sub[:4] == "mux:"))
+        key = f"{self._conf_prefix}{sub}"
+        v = self.db.get(key)
+        return json.loads(v) if v is not None else None
+
+    def _dump_conf(self):
+        keyi = _scan_table(self.db, self._conf_prefix, None)
+        keys = list(keyi)
+        conflist = [v for v in [self.get_conf(k) for k in keys]
+                if v is not None]
+        return conflist
 
     def set_user(self, userinfo):
         assert set(userinfo.keys()) == self._user_info_keys
@@ -327,7 +439,7 @@ class Setting_Table(Table_Common):
     def get_user(self, uid):
         key1 = f"{self._user_info_prefix}{uid}"
         v = self.db.get(key1)
-        return json.loads(v, parse_int=None) if v is not None else None
+        return json.loads(v) if v is not None else None
 
     def map_claim_to_uid(self, claim):
         assert claim != ""
@@ -337,13 +449,14 @@ class Setting_Table(Table_Common):
 
     def delete_user(self, uid):
         key1 = f"{self._user_info_prefix}{uid}"
-        v = self.db.get(key1)
+        v = self.get_user(uid)
         self.db.delete(key1)
         claim = v["claim"] if v is not None else ""
         if claim != "":
             key2 = f"{self._user_claim_prefix}{claim}"
             self.db.delete(key2)
             pass
+        self._delete_claim(uid)
         pass
 
     def list_users(self):
@@ -364,7 +477,7 @@ class Setting_Table(Table_Common):
     pass
 
 
-class Storage_Table(Table_Common):
+class _Storage_Table(Table_Common):
     _pool_desc_prefix = "po:"
     _pool_state_prefix = "ps:"
     _buckets_directory_prefix = "bd:"
@@ -386,7 +499,7 @@ class Storage_Table(Table_Common):
     def get_pool(self, pool_id):
         key = f"{self._pool_desc_prefix}{pool_id}"
         v = self.db.get(key)
-        pooldesc = (json.loads(v, parse_int=None)
+        pooldesc = (json.loads(v)
                     if v is not None else None)
         return pooldesc
 
@@ -405,7 +518,7 @@ class Storage_Table(Table_Common):
     def get_pool_state(self, pool_id):
         key = f"{self._pool_state_prefix}{pool_id}"
         v = self.db.get(key)
-        (s, reason) = (json.loads(v, parse_int=None)
+        (s, reason) = (json.loads(v)
                        if v is not None else (None, None))
         state = Pool_State(s) if s is not None else None
         return (state, reason)
@@ -475,7 +588,7 @@ class Storage_Table(Table_Common):
     pass
 
 
-class Process_Table(Table_Common):
+class _Process_Table(Table_Common):
     _minio_manager_prefix = "ma:"
     _minio_process_prefix = "mn:"
     _mux_desc_prefix = "mx:"
@@ -513,7 +626,7 @@ class Process_Table(Table_Common):
     def get_minio_manager(self, pool_id):
         key = f"{self._minio_manager_prefix}{pool_id}"
         v = self.db.get(key)
-        return json.loads(v, parse_int=None) if v is not None else None
+        return json.loads(v) if v is not None else None
 
     def delete_minio_manager(self, pool_id):
         key = f"{self._minio_manager_prefix}{pool_id}"
@@ -530,7 +643,7 @@ class Process_Table(Table_Common):
     def get_minio_proc(self, pool_id):
         key = f"{self._minio_process_prefix}{pool_id}"
         v = self.db.get(key)
-        return json.loads(v, parse_int=None) if v is not None else None
+        return json.loads(v) if v is not None else None
 
     def delete_minio_proc(self, pool_id):
         key = f"{self._minio_process_prefix}{pool_id}"
@@ -557,7 +670,7 @@ class Process_Table(Table_Common):
     def get_mux(self, mux_ep):
         key = f"{self._mux_desc_prefix}{mux_ep}"
         v = self.db.get(key)
-        return json.loads(v, parse_int=None) if v is not None else None
+        return json.loads(v) if v is not None else None
 
     def delete_mux(self, mux_ep):
         key = f"{self._mux_desc_prefix}{mux_ep}"
@@ -594,7 +707,7 @@ class Process_Table(Table_Common):
     pass
 
 
-class Routing_Table(Table_Common):
+class _Routing_Table(Table_Common):
     _minio_ep_prefix = "ep:"
     _bucket_prefix = "bk:"
     _access_timestamp_prefix = "ts:"
@@ -641,7 +754,7 @@ class Routing_Table(Table_Common):
     def get_bucket(self, bucket):
         key = f"{self._bucket_prefix}{bucket}"
         v = self.db.get(key)
-        return json.loads(v, parse_int=None) if v is not None else None
+        return json.loads(v) if v is not None else None
 
     def delete_bucket(self, bucket):
         key = f"{self._bucket_prefix}{bucket}"
@@ -695,7 +808,7 @@ class Routing_Table(Table_Common):
     pass
 
 
-class Monokey_Table(Table_Common):
+class _Monokey_Table(Table_Common):
     _id_prefix = "id:"
 
     _id_desc_keys = {"pool": {"use", "owner", "modification_time"},
@@ -732,7 +845,7 @@ class Monokey_Table(Table_Common):
     def get_id(self, xid):
         key = f"{self._id_prefix}{xid}"
         v = self.db.get(key)
-        desc = json.loads(v, parse_int=None) if v is not None else None
+        desc = json.loads(v) if v is not None else None
         assert (set(desc.keys()) == self._id_desc_keys[desc["use"]]
                 if desc is not None else True)
         return desc

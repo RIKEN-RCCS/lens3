@@ -8,7 +8,7 @@ Type=simple
 User=lens3
 Group=lens3
 WorkingDirectory=/var/tmp
-Environment=LENS3_MUX_CONFIG=/etc/lenticularis/mux-config.yaml
+Environment=LENS3_CONF=/etc/lenticularis/conf.json
 StandardOutput=journal
 StandardError=journal
 

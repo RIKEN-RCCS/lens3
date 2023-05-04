@@ -242,6 +242,16 @@ Install Apache.
 # ls -lZ /etc/httpd/conf.d/lens3proxy.conf
 ```
 
+A hint for a setting: Since the proxy forwards directory accesses to a
+Lens3-Api, a trailing slash is necessary (in both the pattern part and
+the URL part as noted in the Apache documents).  As a result, accesses
+by "https://lens3.exmaple.com/api" (without a slash) will fail.
+
+```
+ProxyPass /api/ http://localhost:8003/
+ProxyPassReverse /api/ http://localhost:8003/
+```
+
 ## Setup Redis
 
 * Copy the Redis configuration file
@@ -272,24 +282,17 @@ Note: Starting Redis will fail when the file owner of
 # systemctl start lenticularis-redis
 ```
 
+* Copy a Lens3 configuration file.  It holds a Redis connection
+  information.
+
+```
+# cp $TOP/unit-file/conf.json /etc/lenticularis/conf.json
+# vi /etc/lenticularis/conf.json
+# chown lens3:lens3 /etc/lenticularis/conf.json
+# chmod o-rwx /etc/lenticularis/conf.json
+```
+
 ## Setup Lens3-Api (Web-API)
-
-Lens3-Api will be started as a system service with
-uid:gid="lens3":"lens3".  This section prepares for it.
-
-* Copy the Lens3-Api configuration file
-  * Configuration file is: `/etc/lenticularis/api-config.yaml`
-  * Modify it
-  * See [api-config-yaml.md](api-config-yaml.md) for the fields
-  * (Use a random for CSRF_secret_key)
-
-```
-# mkdir -p /etc/lenticularis
-# cp $TOP/unit-file/api/api-config.yaml.in /etc/lenticularis/api-config.yaml
-# vi /etc/lenticularis/api-config.yaml
-# chown lens3:lens3 /etc/lenticularis/api-config.yaml
-# chmod o-rwx /etc/lenticularis/api-config.yaml
-```
 
 * Copy the systemd unit file for Lens3-Api
 
@@ -316,27 +319,38 @@ only allowed to run "/home/lens3/bin/minio".
 
 ## Setup Lens3-Mux (Multiplexer)
 
-Lens3-Mux will be started as a system service with
-uid:gid="lens3":"lens3".  This section prepares for it.
-
-* Copy the Lens3-Mux configuration file
-  * Configuration file is: `/etc/lenticularis/mux-config.yaml`
-  * Modify it
-  * See [mux-config-yaml.md](mux-config-yaml.md) for the fields
-
-```
-# mkdir -p /etc/lenticularis/
-# cp $TOP/unit-file/mux/mux-config.yaml.in /etc/lenticularis/mux-config.yaml
-# vi /etc/lenticularis/mux-config.yaml
-# chown lens3:lens3 /etc/lenticularis/mux-config.yaml
-# chmod o-rwx /etc/lenticularis/mux-config.yaml
-```
-
 * Copy the systemd unit file for Lens3-Mux
   * Modify it if necessary
 
 ```
 # cp $TOP/unit-file/mux/lenticularis-mux.service /usr/lib/systemd/system/
+```
+
+### Load Settings to Redis
+
+Lens3-Api will be started as a system service with
+uid:gid="lens3":"lens3".  This section prepares for it.
+
+* Prepare the Lens3-Api configuration from files somewhere
+  * Copy a configuration files
+  * Modify they
+  * See [api-config-yaml.md](api-config-yaml.md) for the fields
+  * (Use a random for CSRF_secret_key)
+
+```
+lens3-admin$ cp /etc/lenticularis/conf.json .
+lens3-admin$ cp $TOP/unit-file/api/api-config.yaml api-config.yaml
+lens3-admin$ cp $TOP/unit-file/mux/mux-config.yaml mux-config.yaml
+lens3-admin$ vi api-config.yaml
+lens3-admin$ vi mux-config.yaml
+```
+
+* Load the Lens3 configuration from files
+
+```
+lens3-admin$ lens3-admin -c conf.json load-conf api-config.yaml
+lens3-admin$ lens3-admin -c conf.json load-conf mux-config.yaml
+lens3-admin$ lens3-admin -c conf.json list-conf
 ```
 
 ## Start Services (Lens3-Mux and Lens3-Api)

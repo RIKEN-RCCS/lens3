@@ -40,6 +40,121 @@ from lenticularis.utility import rephrase_exception_message
 from lenticularis.utility import logger
 
 
+def erase_minio_ep(tables, traceid, pool_id):
+    # Clears a MinIO endpoint.
+    try:
+        tables.delete_minio_ep(pool_id)
+    except Exception as e:
+        m = rephrase_exception_message(e)
+        logger.info(f"delete_minio_ep failed: exception=({m})")
+        pass
+    try:
+        tables.delete_access_timestamp(pool_id)
+    except Exception as e:
+        m = rephrase_exception_message(e)
+        logger.info(f"delete_access_timestamp failed:"
+                    f" exception=({m})")
+        pass
+    pass
+
+
+def erase_pool_data(tables, traceid, pool_id):
+    # Clears database about the pool.
+    path = tables.get_buckets_directory_of_pool(pool_id)
+    bkts = tables.list_buckets(pool_id)
+    keys = tables.list_access_keys_of_pool(pool_id)
+    logger.debug(f"Deleting buckets-directory (pool={pool_id}): {path}")
+    try:
+        tables.delete_buckets_directory(path)
+    except Exception as e:
+        m = rephrase_exception_message(e)
+        logger.info(f"delete_buckets_directory failed: exception=({m})")
+        pass
+    bktnames = [b["name"] for b in bkts]
+    logger.debug(f"Deleting buckets (pool={pool_id}): {bktnames}")
+    for b in bktnames:
+        try:
+            tables.delete_bucket(b)
+        except Exception as e:
+            m = rephrase_exception_message(e)
+            logger.info(f"delete_bucket failed: exception=({m})")
+            pass
+        pass
+    keynames = [k["access_key"] for k in keys]
+    logger.debug(f"Deleting access-keys pool={pool_id}: {keynames}")
+    for k in keynames:
+        try:
+            tables.delete_id_unconditionally(k)
+        except Exception as e:
+            m = rephrase_exception_message(e)
+            logger.info(f"delete_id_unconditionally failed: exception=({m})")
+            pass
+        pass
+    logger.debug(f"Deleting pool states (pool={pool_id})")
+    try:
+        tables.delete_pool(pool_id)
+    except Exception as e:
+        m = rephrase_exception_message(e)
+        logger.info(f"delete_pool failed: exception=({m})")
+        pass
+    try:
+        tables.delete_pool_state(pool_id)
+    except Exception as e:
+        m = rephrase_exception_message(e)
+        logger.info(f"delete_pool_state failed: exception=({m})")
+        pass
+    try:
+        tables.delete_id_unconditionally(pool_id)
+    except Exception as e:
+        m = rephrase_exception_message(e)
+        logger.info(f"delete_id_unconditionally failed: exception=({m})")
+        pass
+    pass
+
+
+def make_new_pool(tables, traceid, user_id, owner_gid, path, expiration):
+    now = int(time.time())
+    pooldesc = {
+        "pool_name": "(* given-later *)",
+        "owner_uid": user_id,
+        "owner_gid": owner_gid,
+        "buckets_directory": path,
+        "probe_key": "(* given-later *)",
+        "expiration_time": expiration,
+        "online_status": True,
+        "modification_time": now,
+    }
+    pool_id = None
+    probe_key = None
+    try:
+        pool_id = tables.make_unique_id("pool", user_id, {})
+        pooldesc["pool_name"] = pool_id
+        info = {"secret_key": "", "key_policy": "readwrite",
+                "expiration_time": expiration}
+        probe_key = tables.make_unique_id("key", pool_id, info)
+        pooldesc["probe_key"] = probe_key
+        (ok, holder) = tables.set_ex_buckets_directory(path, pool_id)
+        if not ok:
+            owner = get_pool_owner_for_messages(tables, holder)
+            raise Api_Error(400, (f"Buckets-directory is already used:"
+                                  f" path=({path}), holder={owner}"))
+        try:
+            tables.set_pool(pool_id, pooldesc)
+        except Exception:
+            tables.delete_buckets_directory(path)
+            raise
+        pass
+    except Exception:
+        if pool_id is not None:
+            tables.delete_id_unconditionally(pool_id)
+            pass
+        if probe_key is not None:
+            tables.delete_id_unconditionally(probe_key)
+            pass
+        raise
+    return pool_id
+
+
 class Control_Api():
     """Setting Web-API."""
 
@@ -71,7 +186,7 @@ class Control_Api():
         self._env_mc = env
 
         self._bad_response_delay = 1
-        self.tables = get_table(api_conf)
+        self.tables = get_table(api_conf["redis"])
         pass
 
     def _ensure_make_pool_arguments(self, user_id, pooldesc):
@@ -222,14 +337,14 @@ class Control_Api():
             return (200, None, {"pool_list": [t]})
         except Api_Error as e:
             time.sleep(self._bad_response_delay)
-            return (e.code, f"{e}", [])
+            return (e.code, f"{e}", None)
         except Exception as e:
             m = rephrase_exception_message(e)
             logger.error((f"get_user_info failed: user={user_id};"
                           f" exception=({m})"),
                          exc_info=True)
             time.sleep(self._bad_response_delay)
-            return (500, m, [])
+            return (500, m, None)
         pass
 
     # Pools interface.
@@ -241,32 +356,32 @@ class Control_Api():
             return triple
         except Api_Error as e:
             time.sleep(self._bad_response_delay)
-            return (e.code, f"{e}", [])
+            return (e.code, f"{e}", None)
         except Exception as e:
             m = rephrase_exception_message(e)
             logger.error((f"make_pool failed: user={user_id},"
                           f" pool=({pooldesc}); exception=({m})"),
                          exc_info=True)
             time.sleep(self._bad_response_delay)
-            return (500, m, [])
+            return (500, m, None)
         pass
 
     def api_delete_pool(self, traceid, user_id, pool_id):
         try:
             if not check_pool_naming(pool_id):
-                return (403, f"Bad pool={pool_id}", [])
+                return (403, f"Bad pool={pool_id}", None)
             self._api_delete_pool(traceid, user_id, pool_id)
-            return (200, None, [])
+            return (200, None, None)
         except Api_Error as e:
             time.sleep(self._bad_response_delay)
-            return (e.code, f"{e}", [])
+            return (e.code, f"{e}", None)
         except Exception as e:
             m = rephrase_exception_message(e)
             logger.error((f"delete_pool failed: user={user_id},"
                           f" pool={pool_id}; exception=({m})"),
                          exc_info=True)
             time.sleep(self._bad_response_delay)
-            return (500, m, [])
+            return (500, m, None)
         pass
 
     def api_list_pools(self, traceid, user_id, pool_id):
@@ -274,19 +389,19 @@ class Control_Api():
             if pool_id is None:
                 pass
             elif not check_pool_naming(pool_id):
-                return (403, f"Bad pool-id={pool_id}", [])
+                return (403, f"Bad pool-id={pool_id}", None)
             triple = self._api_list_pools(traceid, user_id, pool_id)
             return triple
         except Api_Error as e:
             time.sleep(self._bad_response_delay)
-            return (e.code, f"{e}", [])
+            return (e.code, f"{e}", None)
         except Exception as e:
             m = rephrase_exception_message(e)
             logger.error((f"list_pools failed: user={user_id}, pool={pool_id};"
                           f" exception=({m})"),
                          exc_info=True)
             time.sleep(self._bad_response_delay)
-            return (500, m, [])
+            return (500, m, None)
         pass
 
     # Buckets interface.
@@ -294,14 +409,14 @@ class Control_Api():
     def api_make_bucket(self, traceid, user_id, pool_id, body):
         try:
             if not check_pool_naming(pool_id):
-                return (403, f"Bad pool-id={pool_id}", [])
+                return (403, f"Bad pool-id={pool_id}", None)
             d = body.get("bucket")
             bucket = d.get("name")
             policy = d.get("bkt_policy")
             if not check_bucket_naming(bucket):
-                return (403, f"Bad bucket name={bucket}", [])
+                return (403, f"Bad bucket name={bucket}", None)
             if policy not in {"none", "public", "upload", "download"}:
-                return (403, f"Bad bucket policy={policy}", [])
+                return (403, f"Bad bucket policy={policy}", None)
             # assert name == bucket
         except Exception as e:
             m = rephrase_exception_message(e)
@@ -315,7 +430,7 @@ class Control_Api():
             return triple
         except Api_Error as e:
             time.sleep(self._bad_response_delay)
-            return (e.code, f"{e}", [])
+            return (e.code, f"{e}", None)
         except Exception as e:
             m = rephrase_exception_message(e)
             logger.error((f"make_bucket failed: user={user_id},"
@@ -323,15 +438,15 @@ class Control_Api():
                           f" policy={policy}; exception=({m})"),
                          exc_info=True)
             time.sleep(self._bad_response_delay)
-            return (500, m, [])
+            return (500, m, None)
         pass
 
     def api_delete_bucket(self, traceid, user_id, pool_id, bucket):
         try:
             if not check_pool_naming(pool_id):
-                return (403, f"Bad pool={pool_id}", [])
+                return (403, f"Bad pool={pool_id}", None)
             if not check_bucket_naming(bucket):
-                return (403, f"Bad bucket name={bucket}", [])
+                return (403, f"Bad bucket name={bucket}", None)
         except Exception as e:
             m = rephrase_exception_message(e)
             return (400, m, None)
@@ -341,7 +456,7 @@ class Control_Api():
             return triple
         except Api_Error as e:
             time.sleep(self._bad_response_delay)
-            return (e.code, f"{e}", [])
+            return (e.code, f"{e}", None)
         except Exception as e:
             m = rephrase_exception_message(e)
             logger.error((f"delete_bucket failed: user={user_id}"
@@ -349,7 +464,7 @@ class Control_Api():
                           f" exception=({m})"),
                          exc_info=True)
             time.sleep(self._bad_response_delay)
-            return (500, m, [])
+            return (500, m, None)
         pass
 
     # Secrets interface.
@@ -357,19 +472,19 @@ class Control_Api():
     def api_make_secret(self, traceid, user_id, pool_id, body):
         try:
             if not check_pool_naming(pool_id):
-                return (403, f"Bad pool-id={pool_id}", [])
+                return (403, f"Bad pool-id={pool_id}", None)
             rw = body.get("key_policy")
             if rw not in {"readwrite", "readonly", "writeonly"}:
-                return (403, f"Bad access policy={rw}", [])
+                return (403, f"Bad access policy={rw}", None)
             tv = body.get("expiration_time")
             if tv is None:
-                return (403, f"Bad expiration={tv}", [])
+                return (403, f"Bad expiration={tv}", None)
             try:
                 expiration = int(tv)
             except ValueError:
-                return (403, f"Bad expiration={tv}", [])
+                return (403, f"Bad expiration={tv}", None)
             if not self._check_expiration_range(expiration):
-                return (403, f"Bad expiration={tv}", [])
+                return (403, f"Bad expiration={tv}", None)
         except Exception as e:
             m = rephrase_exception_message(e)
             return (400, m, None)
@@ -379,22 +494,22 @@ class Control_Api():
             return triple
         except Api_Error as e:
             time.sleep(self._bad_response_delay)
-            return (e.code, f"{e}", [])
+            return (e.code, f"{e}", None)
         except Exception as e:
             m = rephrase_exception_message(e)
             logger.error((f"make_secret failed: user={user_id},"
                           f" pool={pool_id}, policy={rw}; exception=({m})"),
                          exc_info=True)
             time.sleep(self._bad_response_delay)
-            return (500, m, [])
+            return (500, m, None)
         pass
 
     def api_delete_secret(self, traceid, user_id, pool_id, access_key):
         try:
             if not check_pool_naming(pool_id):
-                return (403, f"Bad pool-id={pool_id}", [])
+                return (403, f"Bad pool-id={pool_id}", None)
             if not check_pool_naming(access_key):
-                return (403, f"Bad access-key={access_key}", [])
+                return (403, f"Bad access-key={access_key}", None)
         except Exception as e:
             m = rephrase_exception_message(e)
             return (400, m, None)
@@ -405,7 +520,7 @@ class Control_Api():
             return triple
         except Api_Error as e:
             time.sleep(self._bad_response_delay)
-            return (e.code, f"{e}", [])
+            return (e.code, f"{e}", None)
         except Exception as e:
             m = rephrase_exception_message(e)
             logger.error((f"delete_secret failed: user={user_id},"
@@ -413,7 +528,7 @@ class Control_Api():
                           f" exception=({m})"),
                          exc_info=True)
             time.sleep(self._bad_response_delay)
-            return (500, m, [])
+            return (500, m, None)
         pass
 
     # API implementation.
@@ -456,13 +571,14 @@ class Control_Api():
         pass
 
     def do_make_pool(self, traceid, user_id, owner_gid, path):
-        pool_id = self.make_new_pool(traceid, user_id, owner_gid, path)
+        expiration = self._determine_expiration_time()
+        # pool_id = self.make_new_pool(tables, traceid, user_id, owner_gid, path, expiration)
+        pool_id = make_new_pool(self.tables, traceid, user_id, owner_gid, path, expiration)
         self._activate_pool(traceid, pool_id)
         return pool_id
 
-    def make_new_pool(self, traceid, user_id, owner_gid, path):
+    def make_new_pool__(self, traceid, user_id, owner_gid, path, expiration):
         now = int(time.time())
-        expiration = self._determine_expiration_time()
         pooldesc = {
             "pool_name": "(* given-later *)",
             "owner_uid": user_id,
@@ -540,12 +656,14 @@ class Control_Api():
         ensure_pool_owner(self.tables, pool_id, user_id)
         # ensure_pool_state(self.tables, pool_id)
         ok = self.do_delete_pool(traceid, pool_id)
-        return (200, None, {})
+        return (200, None, None)
 
     def do_delete_pool(self, traceid, pool_id):
         self._clean_minio(traceid, pool_id)
-        self.erase_minio_ep(traceid, pool_id)
-        self.erase_pool_data(traceid, pool_id)
+        # self.erase_minio_ep(traceid, pool_id)
+        # self.erase_pool_data(traceid, pool_id)
+        erase_minio_ep(self.tables, traceid, pool_id)
+        erase_pool_data(self.tables, traceid, pool_id)
         return True
 
     def _clean_minio(self, traceid, pool_id):
@@ -565,7 +683,7 @@ class Control_Api():
             pass
         pass
 
-    def erase_minio_ep(self, traceid, pool_id):
+    def erase_minio_ep__(self, traceid, pool_id):
         # Clears a MinIO endpoint.
         try:
             self.tables.delete_minio_ep(pool_id)
@@ -582,7 +700,7 @@ class Control_Api():
             pass
         pass
 
-    def erase_pool_data(self, traceid, pool_id):
+    def erase_pool_data__(self, traceid, pool_id):
         # Clears database about the pool.
         path = self.tables.get_buckets_directory_of_pool(pool_id)
         bkts = self.tables.list_buckets(pool_id)

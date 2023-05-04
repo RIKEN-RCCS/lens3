@@ -18,8 +18,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi_csrf_protect import CsrfProtect
 from fastapi_csrf_protect.exceptions import CsrfProtectError
 from lenticularis.control import Control_Api
-from lenticularis.readconf import read_api_conf
-from lenticularis.utility import ERROR_EXIT_READCONF
+from lenticularis.table import read_redis_conf
+from lenticularis.table import get_conf
+from lenticularis.utility import ERROR_EXIT_BADCONF
 from lenticularis.utility import make_typical_ip_address
 from lenticularis.utility import rephrase_exception_message
 from lenticularis.utility import log_access
@@ -39,14 +40,14 @@ def _make_app():
     assert _api is None
 
     try:
-        (_api_conf, _) = read_api_conf()
+        redis = read_redis_conf(None)
+        _api_conf = get_conf("api", redis)
     except Exception as e:
         m = rephrase_exception_message(e)
-        sys.stderr.write(f"Lens3 reading a config file failed:"
+        sys.stderr.write(f"Lens3 reading a conf file failed:"
                          f" exception=({m})\n")
-        # sys.exit(ERROR_EXIT_READCONF)
-        # pass
-        return None
+        sys.exit(ERROR_EXIT_BADCONF)
+        pass
 
     openlog(_api_conf["log_file"], **_api_conf["log_syslog"])
     logger.info("START Api.")

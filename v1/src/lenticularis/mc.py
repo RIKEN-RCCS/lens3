@@ -103,6 +103,13 @@ def _simplify_messages_in_mc_error(ee):
     return (True, ee)
 
 
+def _get_message_in_mc_error(e):
+    try:
+        return e["error"]["message"]
+    except Exception:
+        return "(unknown error)"
+
+
 class Mc():
     """MC command envirionment.  It works as a context in Python, but a
     context is created at alias_set().  It uses a pool-id+random as an
@@ -155,105 +162,93 @@ class Mc():
         url = f"http://{self._minio_ep}"
         self._config_dir = tempfile.TemporaryDirectory()
         self._alias = f"{self._pool_id}{random_str(12).lower()}"
-        (p, r) = self._execute_cmd("alias_set", False,
-                                   "alias", "set", self._alias, url,
-                                   root_user, root_secret,
-                                   "--api", "S3v4")
-        assert p is None
-        if r[0]["status"] != "success":
+        rr = self._execute_cmd("alias_set",
+                               ["alias", "set", self._alias, url,
+                                root_user, root_secret,
+                                "--api", "S3v4"])
+        if rr[0]["status"] != "success":
             self._alias = None
-            raise Exception(r[0]["error"]["message"])
+            raise Exception(_get_message_in_mc_error(rr[0]))
         return self
 
     def alias_remove(self):
-        (p, r) = self._execute_cmd("alias_remove", False,
-                                   "alias", "remove", self._alias)
-        assert p is None
+        rr = self._execute_cmd("alias_remove",
+                               ["alias", "remove", self._alias])
         self._alias = None
-        if r[0]["status"] != "success":
-            raise Exception(r[0]["error"]["message"])
+        if rr[0]["status"] != "success":
+            raise Exception(_get_message_in_mc_error(rr[0]))
         pass
 
     def admin_info(self):
-        return self._execute_cmd("admin_info", False,
-                                 "admin", "info", self._alias)
+        rr = self._execute_cmd("admin_info",
+                               ["admin", "info", self._alias])
+        return rr
 
     def admin_policy_set(self, access_key, policy):
-        (p, v) = self._execute_cmd("admin_policy_set", False,
-                                   "admin", "policy", "set", self._alias,
-                                   policy, f"user={access_key}")
-        assert p is None
-        return v
+        rr = self._execute_cmd("admin_policy_set",
+                               ["admin", "policy", "set", self._alias,
+                                policy, f"user={access_key}"])
+        return rr
 
     def admin_service_stop(self):
-        (p, v) = self._execute_cmd("admin_service_stop", False,
-                                   "admin", "service", "stop", self._alias)
-        assert p is None
-        return v
+        rr = self._execute_cmd("admin_service_stop",
+                               ["admin", "service", "stop", self._alias])
+        return rr
 
     def admin_user_add(self, access_key, secret_access_key):
-        (p, v) = self._execute_cmd("admin_user_add", False,
-                                   "admin", "user", "add", self._alias,
-                                   access_key, secret_access_key)
-        assert p is None
-        return v
+        rr = self._execute_cmd("admin_user_add",
+                               ["admin", "user", "add", self._alias,
+                                access_key, secret_access_key])
+        return rr
 
     def admin_user_disable(self, access_key):
-        (p, v) = self._execute_cmd("admin_user_disable", False,
-                                   "admin", "user", "disable", self._alias,
-                                   access_key)
-        assert p is None
-        return v
+        rr = self._execute_cmd("admin_user_disable",
+                               ["admin", "user", "disable", self._alias,
+                                access_key])
+        return rr
 
     def admin_user_enable(self, access_key):
-        (p, v) = self._execute_cmd("admin_user_enable", False,
-                                   "admin", "user", "enable", self._alias,
-                                   access_key)
-        assert p is None
-        return v
+        rr = self._execute_cmd("admin_user_enable",
+                               ["admin", "user", "enable", self._alias,
+                                access_key])
+        return rr
 
     def admin_user_list(self):
-        (p, v) = self._execute_cmd("admin_user_list", False,
-                                   "admin", "user", "list", self._alias)
-        assert p is None
-        return v
+        rr = self._execute_cmd("admin_user_list",
+                               ["admin", "user", "list", self._alias])
+        return rr
 
     def admin_user_remove(self, access_key):
         assert isinstance(access_key, str)
-        (p, v) = self._execute_cmd("admin_user_remove", False,
-                                   "admin", "user", "remove", self._alias,
-                                   access_key)
-        assert p is None
-        return v
+        rr = self._execute_cmd("admin_user_remove",
+                               ["admin", "user", "remove", self._alias,
+                                access_key])
+        return rr
 
     def list_buckets(self):
-        (p, v) = self._execute_cmd("list_buckets", False,
-                                   "ls", f"{self._alias}")
-        assert p is None
-        return v
+        rr = self._execute_cmd("list_buckets",
+                               ["ls", f"{self._alias}"])
+        return rr
 
     def make_bucket(self, bucket):
-        (p, v) = self._execute_cmd("make_bucket", False,
-                                   "mb", f"{self._alias}/{bucket}")
-        assert p is None
-        return v
+        rr = self._execute_cmd("make_bucket",
+                               ["mb", f"{self._alias}/{bucket}"])
+        return rr
 
     def remove_bucket(self, bucket):
         # NEVER USE THIS; The MC-rb command removes the bucket contents.
         assert False
-        (p, v) = self._execute_cmd("remove_bucket", False,
-                                   "rb", f"{self._alias}/{bucket}")
-        assert p is None
-        return v
+        rr = self._execute_cmd("remove_bucket",
+                               ["rb", f"{self._alias}/{bucket}"])
+        return rr
 
     def policy_set(self, bucket, policy):
-        (p, v) = self._execute_cmd("policy_set", False,
-                                   "policy", "set", policy,
-                                   f"{self._alias}/{bucket}")
-        assert p is None
-        return v
+        rr = self._execute_cmd("policy_set",
+                               ["policy", "set", policy,
+                                f"{self._alias}/{bucket}"])
+        return rr
 
-    def _execute_cmd(self, name, no_wait, *args):
+    def _execute_cmd(self, name, args):
         # (Currently, it does not check the exit code of MC command.)
         assert self._alias is not None and self._config_dir is not None
         cmd = ([self.mc, "--json", f"--config-dir={self._config_dir.name}"]
@@ -262,8 +257,8 @@ class Mc():
         try:
             p = Popen(cmd, stdin=DEVNULL, stdout=PIPE, stderr=PIPE,
                       env=self.env)
-            if no_wait:
-                return (p, None)
+            # if no_wait:
+            #     return (p, None)
             with p:
                 (outs, errs) = p.communicate(timeout=self._mc_timeout)
                 p_status = p.poll()
@@ -275,8 +270,8 @@ class Mc():
                 if p_status is None:
                     logger.debug(f"Running MC command failed: cmd={cmd};"
                                  f" command does not finish.")
-                    r = [_make_mc_error(f"Unfinished MC: ({outs})")]
-                    return (None, r)
+                    rr = [_make_mc_error(f"Unfinished MC: ({outs})")]
+                    return rr
                 try:
                     ss = outs.split(b"\n")
                     ee = [json.loads(e, parse_int=None)
@@ -291,20 +286,20 @@ class Mc():
                         logger.debug(f"Running MC command failed: cmd={cmd};"
                                      f" error={rr}")
                         pass
-                    return (None, rr)
+                    return rr
                 except Exception as e:
                     m = rephrase_exception_message(e)
                     logger.error(f"json.loads failed: exception=({m})",
                                  exc_info=True)
-                    r = [_make_mc_error(f"Bad output from MC: ({outs})")]
-                    return (None, r)
+                    rr = [_make_mc_error(f"Bad output from MC: ({outs})")]
+                    return rr
                 pass
         except Exception as e:
             m = rephrase_exception_message(e)
             logger.error(f"Popen failed: cmd={cmd}; exception=({m})")
-            r = [_make_mc_error(f"Executing MC command failed:"
+            rr = [_make_mc_error(f"Executing MC command failed:"
                                 f" exception=({m})")]
-            return (None, r)
+            return rr
         pass
 
     # MC COMMAND UTILITIES (Combinations).

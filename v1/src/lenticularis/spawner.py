@@ -17,9 +17,9 @@ class Spawner():
 
     _manager_command = "lenticularis.manager"
 
-    def __init__(self, mux_conf, tables, configfile, host, port):
+    def __init__(self, mux_conf, tables, conf, host, port):
         self.tables = tables
-        self.configfile = configfile
+        self.conf = conf
         self._mux_host = host
         self._mux_port = port
         self.executable = sys.executable
@@ -48,7 +48,7 @@ class Spawner():
         cmd = [self.executable, "-m", self._manager_command]
         args = [self._mux_host, str(self._mux_port),
                 str(self.port_min), str(self.port_max),
-                pool_id, "--configfile", self.configfile]
+                pool_id, "--conf", self.conf]
         env = copy_minimal_env(os.environ)
         if traceid is not None:
             args.append(f"--traceid={traceid}")

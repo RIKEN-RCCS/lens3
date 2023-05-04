@@ -28,7 +28,7 @@ tracing = contextvars.ContextVar("tracing")
 
 ERROR_EXIT_EXCEPTION = 120
 ERROR_EXIT_START_MINIO = 123
-ERROR_EXIT_READCONF = 124
+ERROR_EXIT_BADCONF = 124
 ERROR_EXIT_FORK = 125
 ERROR_EXIT_ARGUMENT = 126
 
@@ -212,7 +212,9 @@ def generate_secret_key():
 
 
 def copy_minimal_env(oenv):
-    """Copies minimal environment to run services."""
+    """Copies minimal environment variables to run services.  It includes
+    Lens3 specific variables.
+    """
     keys = {
         "HOME",
         "LANG",
@@ -222,6 +224,9 @@ def copy_minimal_env(oenv):
         "SHELL",
         "USER",
         "USERNAME",
+        "LENS3_CONF",
+        "LENS3_MUX_NAME",
+        "LENS3_MUX_NODE",
     }
     return {key: val for key, val in oenv.items() if key in keys}
 

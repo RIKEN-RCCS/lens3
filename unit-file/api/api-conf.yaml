@@ -5,7 +5,7 @@ aws_signature: "AWS4-HMAC-SHA256"
 redis:
     host: localhost
     port: 6378
-    password: ZXjmrOLwQ8Ri51pb5FI79z51gAHfIQ4oMvtWrG8q
+    password: "long-string-for-redis-password"
 
 gunicorn:
     port: 8003

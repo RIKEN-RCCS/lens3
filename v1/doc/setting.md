@@ -1,4 +1,4 @@
-# Setup of Lenticularis-S3 (Minimal)
+# Setup Lenticularis-S3 (Minimal)
 
 ## Outline
 
@@ -292,15 +292,21 @@ Note: Starting Redis will fail when the file owner of
 # chmod o-rwx /etc/lenticularis/conf.json
 ```
 
-## Setup Lens3-Api (Web-API)
+## Setup Lens3-Api (Web-API) and Lens3-Mux (Multiplexer)
 
 * Copy the systemd unit file for Lens3-Api
+  * Modify it if necessary
 
 ```
 # cp $TOP/unit-file/api/lenticularis-api.service /usr/lib/systemd/system/
 ```
 
-* Modify it if necessary
+* Copy the systemd unit file for Lens3-Mux
+  * Modify it if necessary
+
+```
+# cp $TOP/unit-file/mux/lenticularis-mux.service /usr/lib/systemd/system/
+```
 
 ## Setup sudoers for Lens3-Mux
 
@@ -317,16 +323,7 @@ only allowed to run "/home/lens3/bin/minio".
 # chmod o-rwx /etc/sudoers.d/lenticularis-sudoers
 ```
 
-## Setup Lens3-Mux (Multiplexer)
-
-* Copy the systemd unit file for Lens3-Mux
-  * Modify it if necessary
-
-```
-# cp $TOP/unit-file/mux/lenticularis-mux.service /usr/lib/systemd/system/
-```
-
-### Load Settings to Redis
+## Load Settings to Redis
 
 Lens3-Api will be started as a system service with
 uid:gid="lens3":"lens3".  This section prepares for it.

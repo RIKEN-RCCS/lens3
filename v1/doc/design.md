@@ -114,6 +114,8 @@ A __bk:bucket-name__ entry is a record of a bucket-description:
 public R/W status of a bucket: {"none", "upload", "download",
 "public"}, whose names are borrowed from MinIO.
 
+A __ts:pool-id__ entry is a last access timestamp of a pool.
+
 ### Monokey-Table (DB=4)
 
 | Key           | Value           | Notes   |

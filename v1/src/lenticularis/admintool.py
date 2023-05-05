@@ -69,7 +69,7 @@ def _print_in_csv(rows):
 
 def _print_in_yaml(o):
     s = yaml.dump(o, default_flow_style=False, sort_keys=False, indent=4)
-    print(f"{s}")
+    print(f"{s}", end='', flush=True)
     pass
 
 
@@ -380,27 +380,28 @@ class Command():
             pass
         pass
 
-    def op_list_bucket(self, *pool_id):
-        """Prints buckets of pools."""
-        pool_list = list(pool_id)
-        if pool_list == []:
-            bkts = self._tables.list_buckets(None)
-        else:
-            bkts = [b for pid in pool_list
-                    for b in self._tables.list_buckets(pid)]
-            pass
+    def op_list_bucket(self):
+        """Prints all buckets and all buckets-directories of pools."""
+        # pool_list = list(pool_id)
+        # if pool_list == []:
+        #     bkts = self._tables.list_buckets(None)
+        # else:
+        #     bkts = [b for pid in pool_list
+        #             for b in self._tables.list_buckets(pid)]
+        #     pass
+        # List Buckets.
+        allbkts = self._tables.list_buckets(None)
         bkts = [{d["name"]: {"pool": d["pool"], "bkt_policy": d["bkt_policy"]}}
-                for d in bkts]
+                for d in allbkts]
+        print("---")
         print("# Buckets")
         for o in bkts:
             _print_in_yaml(o)
             pass
-        pass
-
-    def op_list_directory(self):
-        """Lists all buckets-directories of pools."""
-        dirs = self._tables.list_buckets_directories()
-        dirs = [{d["pool"]: d} for d in dirs]
+        # List Buckets-Directories.
+        alldirs = self._tables.list_buckets_directories()
+        dirs = [{d["pool"]: d} for d in alldirs]
+        print("---")
         print("# Buckets-Directories")
         for o in dirs:
             _print_in_yaml(o)
@@ -413,6 +414,7 @@ class Command():
         muxs = self._tables.list_muxs()
         muxs = sorted(list(muxs))
         outs = [_format_mux(m, self.args.format) for m in muxs]
+        print("---")
         print("# Lens3-Mux")
         for o in outs:
             _print_in_yaml(o)
@@ -420,6 +422,7 @@ class Command():
         # MinIO.
         eps = self._tables.list_minio_ep()
         eps = [{ep: {"pool": pid}} for (pid, ep) in eps]
+        print("---")
         print("# MinIO")
         for o in eps:
             _print_in_yaml(o)
@@ -427,7 +430,7 @@ class Command():
         pass
 
     def op_list_ts(self):
-        """Shows timestamps."""
+        """Shows last access timestamps of pools."""
         stamps = self._tables.list_access_timestamps()
         stamps = [{d["pool"]:
                    {"timestamp": format_time_z(float(d["timestamp"]))}}
@@ -638,7 +641,6 @@ class Command():
 
         op_list_pool,
         op_list_bucket,
-        op_list_directory,
         op_list_minio,
         op_list_ep,
         op_list_ts,
@@ -679,11 +681,11 @@ class Command():
         pass
 
     def execute_command(self):
-        # fn = Command.optbl.get(self.args.operation)
-        ent = self._command_dict.get(self.args.operation)
+        # fn = Command.optbl.get(self.args.command)
+        ent = self._command_dict.get(self.args.command)
         # if fn is None:
         if ent is None:
-            raise Exception(f"undefined operation: {self.args.operation}")
+            raise Exception(f"undefined command: {self.args.command}")
         (fn, _, _) = ent
         (nparams, varargs) = _get_nparams_of_fn(fn)
         if not varargs and len(self.rest) != nparams:
@@ -702,11 +704,11 @@ class Command():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("operation")
+    parser.add_argument("command")
     parser.add_argument("--conf", "-c")
-    parser.add_argument("--everything", type=bool, default=False)
     parser.add_argument("--yes", "-y", default=False,
                         action=argparse.BooleanOptionalAction)
+    parser.add_argument("--everything", type=bool, default=False)
     parser.add_argument("--debug", "-d", default=False,
                         action=argparse.BooleanOptionalAction)
     parser.add_argument("--format", "-f", choices=["text", "json"])

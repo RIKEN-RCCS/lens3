@@ -12,15 +12,15 @@ aws_signature: "AWS4-HMAC-SHA256"
 
 Do not change these lines.
 
-The subject name can be something like "mux:__mux-name__".  It is used
-to store different settings, when it is necessary run it parallel with
+The subject name can be something like "mux:**mux-name**".  It is used
+to store multiple settings, when it is necessary run it parallel with
 different settings.  A mux-name can be specified by an environment
 variable "LENS3_MUX_NAME" set in the service script
 "lenticularis-mux.service".
 
 ## Redis Part
 
-They specify connection to Redis.
+They specify a connection to Redis.
 
 ```
 redis:

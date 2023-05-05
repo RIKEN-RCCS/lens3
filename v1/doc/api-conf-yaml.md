@@ -13,7 +13,7 @@ Do not change these lines.
 
 ## Redis Part
 
-They specify connection to Redis.
+They specify a connection to Redis.
 
 ```
 redis:

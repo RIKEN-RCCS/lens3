@@ -247,7 +247,7 @@ Install Apache.
 Hints for setting: Since a proxy forwards directory accesses to
 Lens3-Api, a trailing slash is necessary (in both the pattern part and
 the URL part as noted in the Apache documents).  As a result, accesses
-by "https://lens3.exmaple.com/api" (without a slash) will fail.
+by `https://lens3.exmaple.com/api` (without a slash) will fail.
 
 ```
 ProxyPass /api/ http://localhost:8003/

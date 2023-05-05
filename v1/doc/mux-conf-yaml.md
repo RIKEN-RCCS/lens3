@@ -20,8 +20,6 @@ variable "LENS3_MUX_NAME" set in the service script
 
 ## Redis Part
 
-They specify a connection to Redis.
-
 ```
 redis:
     host: localhost
@@ -29,9 +27,9 @@ redis:
     password: "long-string-for-redis-password"
 ```
 
-## Gunicorn Part
+They specify a connection to Redis.
 
-See the documents of Gunicorn.
+## Gunicorn Part
 
 ```
 gunicorn:
@@ -45,6 +43,8 @@ gunicorn:
     log_level: debug
     #log_syslog_facility: LOCAL7
 ```
+
+See the documents of Gunicorn.
 
 ## Lens3-Mux Part
 
@@ -121,13 +121,13 @@ minio_manager:
 
 ## MinIO Part
 
-These specify commands of MinIO.
-
 ```
 minio:
     minio: /home/lens3/bin/minio
     mc: /home/lens3/bin/mc
 ```
+
+These specify commands of MinIO.
 
 ## Logging Part
 

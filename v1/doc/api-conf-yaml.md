@@ -13,8 +13,6 @@ Do not change these lines.
 
 ## Redis Part
 
-They specify a connection to Redis.
-
 ```
 redis:
     host: localhost
@@ -22,9 +20,9 @@ redis:
     password: "long-string-for-redis-password"
 ```
 
-## Gunicorn Part
+They specify a connection to Redis.
 
-See the documents of Gunicorn.
+## Gunicorn Part
 
 ```
 gunicorn:
@@ -37,6 +35,8 @@ gunicorn:
     #log_syslog_facility: LOCAL8
     reload: yes
 ```
+
+See the documents of Gunicorn.
 
 ## Lens3-Api Part
 
@@ -55,13 +55,13 @@ controller:
 
 ## MinIO Part
 
-These specify commands of MinIO.
-
 ```
 minio:
     minio: /home/lens3/bin/minio
     mc: /home/lens3/bin/mc
 ```
+
+These specify commands of MinIO.
 
 ## Logging Part
 

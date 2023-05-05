@@ -15,9 +15,13 @@ from lenticularis.utility import copy_minimal_env
 
 
 def _run_mux():
+    assert os.environ.get("LENS3_CONF") is not None
+    conf_file = os.environ.get("LENS3_CONF")
+    mux_name = os.environ.get("LENS3_MUX_NAME")
+
     try:
-        redis = read_redis_conf(None)
-        mux_conf = get_conf("mux", redis)
+        redis = read_redis_conf(conf_file)
+        mux_conf = get_conf("mux", mux_name, redis)
     except Exception as e:
         m = rephrase_exception_message(e)
         sys.stderr.write(f"Lens3 getting a conf failed:"
@@ -43,9 +47,12 @@ def _run_mux():
 
 
 def _run_api():
+    assert os.environ.get("LENS3_CONF") is not None
+    conf_file = os.environ.get("LENS3_CONF")
+
     try:
-        redis = read_redis_conf(None)
-        api_conf = get_conf("api", redis)
+        redis = read_redis_conf(conf_file)
+        api_conf = get_conf("api", None, redis)
     except Exception as e:
         m = rephrase_exception_message(e)
         sys.stderr.write(f"Lens3 getting a conf failed:"
@@ -142,10 +149,10 @@ def _run(servicename, env, cmd, args):
         logger.error(f"{servicename} exited: status={p_status};"
                      f" EXAMINE THE GUNICORN LOG;"
                      f" stdout=({outs}), stderr=({errs})")
-        if p_status is None or p_status < 0:
-            sys.exit(1)
-        else:
+        if p_status is not None and p_status > 0:
             sys.exit(p_status)
+        else:
+            sys.exit(1)
             pass
         pass
     pass

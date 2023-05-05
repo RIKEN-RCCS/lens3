@@ -75,14 +75,14 @@ def _manager_info_string(desc):
 
 
 class Manager():
-    """A sentinel for a MinIO process.  It is started by a Controller as a
-    daemon (and exits immediately), and it informs the caller about a
-    successful start-up of a MinIO by placing a one line message on
-    stdout.  A Redis key for a manager record is used as a mutex with
-    expiry, which protects the activity of a manager.
+    """A sentinel for a MinIO process.  It is started as a daemon by a
+    Spawner, and a Spawner exits immediately.  It informs the caller
+    about a successful start-up of a MinIO by placing a one line
+    message on stdout.  A Redis key for a manager record is used as a
+    mutex with expiry, which protects the activity of a manager.
     """
 
-    def __init__(self, pool_id, args, mux_conf):
+    def __init__(self, pool_id, args, mux_conf, redis):
         self._verbose = False
         self._alarm_section = None
 
@@ -114,7 +114,8 @@ class Manager():
         self._bin_minio = minio_param["minio"]
         self._bin_mc = minio_param["mc"]
 
-        self.tables = get_table(mux_conf["redis"])
+        # self.tables = get_table(mux_conf["redis"])
+        self.tables = get_table(redis)
         pass
 
     def _sigalrm(self, n, stackframe):
@@ -837,10 +838,16 @@ def main():
     #    sys.exit(ERROR_EXIT_BADCONF)
     #    pass
 
+    assert os.environ.get("LENS3_CONF") is not None
+    conf_file = os.environ.get("LENS3_CONF")
+    mux_name = os.environ.get("LENS3_MUX_NAME")
+
+    assert(conf_file == args.conf)
+
     pool_id = args.pool_id
     try:
-        redis = read_redis_conf(args.conf)
-        mux_conf = get_conf("mux", redis)
+        redis = read_redis_conf(conf_file)
+        mux_conf = get_conf("mux", mux_name, redis)
     except Exception as e:
         m = rephrase_exception_message(e)
         sys.stderr.write(f"Manager (pool={pool_id}) failed"
@@ -877,7 +884,7 @@ def main():
                      f" {os.strerror(e.errno)}")
         pass
 
-    manager = Manager(pool_id, args, mux_conf)
+    manager = Manager(pool_id, args, mux_conf, redis)
     ok = False
     try:
         ok = manager.manager_main()

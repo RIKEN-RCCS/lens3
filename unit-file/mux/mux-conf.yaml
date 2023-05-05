@@ -26,6 +26,7 @@ multiplexer:
     forwarding_timeout: 60
     probe_access_timeout: 60
     bad_response_delay: 1
+    mux_node_name: ""
 
 minio_manager:
     sudo: /usr/bin/sudo

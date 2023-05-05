@@ -114,6 +114,7 @@ def _mux_schema():
             "forwarding_timeout": {"type": "number"},
             "probe_access_timeout": {"type": "number"},
             "bad_response_delay": {"type": "number"},
+            "mux_node_name": {"type": "string"},
         },
         "required": [
             "front_host",

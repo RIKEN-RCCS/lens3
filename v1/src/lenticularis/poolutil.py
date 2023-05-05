@@ -5,6 +5,7 @@
 
 import re
 import enum
+import time
 import jsonschema
 from urllib.request import Request, urlopen
 import urllib.error
@@ -141,12 +142,15 @@ def ensure_secret_owner(tables, access_key, pool_id):
     """Checks a key owner is a pool.  It accepts no access-key."""
     if access_key is None:
         return
-    desc = tables.get_id(access_key)
-    if desc is None:
+    keydesc = tables.get_id(access_key)
+    if keydesc is None:
         raise Api_Error(403, f"Non-existing access-key: {access_key}")
-    if not (desc.get("use") == "key"
-            and desc.get("owner") == pool_id):
+    if not (keydesc.get("use") == "key"
+            and keydesc.get("owner") == pool_id):
         raise Api_Error(403, f"Wrong access-key: {access_key}")
+    now = int(time.time())
+    if keydesc.get("expiration_time") < now:
+        raise Api_Error(403, f"Expired access-key: {access_key}")
     pass
 
 

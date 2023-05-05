@@ -19,9 +19,13 @@ from lenticularis.utility import logger, openlog
 
 
 def app():
+    assert os.environ.get("LENS3_CONF") is not None
+    conf_file = os.environ.get("LENS3_CONF")
+    mux_name = os.environ.get("LENS3_MUX_NAME")
+
     try:
-        redis = read_redis_conf(None)
-        mux_conf = get_conf("mux", redis)
+        redis = read_redis_conf(conf_file)
+        mux_conf = get_conf("mux", mux_name, redis)
     except Exception as e:
         m = rephrase_exception_message(e)
         sys.stderr.write(f"Lens3 reading a config file failed:"
@@ -31,13 +35,10 @@ def app():
     openlog(mux_conf["log_file"], **mux_conf["log_syslog"])
     logger.info("START Mux.")
 
-    tables = get_table(mux_conf["redis"])
+    tables = get_table(redis)
 
-    conf = os.environ.get("LENS3_CONF")
-    assert conf is not None
-
-    mux_host = os.environ.get("LENS3_MUX_NODE")
-    if not mux_host:
+    mux_host = mux_conf["multiplexer"]["mux_node_name"]
+    if mux_host is None or len(mux_host) == 0:
         mux_host = platform.node()
         pass
 
@@ -46,7 +47,7 @@ def app():
     ep = host_port(mux_host, mux_port)
     logger.info(f"Mux is running on a host=({ep})")
 
-    spawner = Spawner(mux_conf, tables, conf, mux_host, mux_port)
+    spawner = Spawner(mux_conf, tables, conf_file, mux_host, mux_port)
     mux = Multiplexer(mux_conf, tables, spawner, mux_host, mux_port)
 
     atexit.register((lambda: mux.__del__()))

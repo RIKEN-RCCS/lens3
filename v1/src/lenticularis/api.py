@@ -39,9 +39,12 @@ def _make_app():
     global _app, _api,  _api_conf
     assert _api is None
 
+    assert os.environ.get("LENS3_CONF") is not None
+    conf_file = os.environ.get("LENS3_CONF")
+
     try:
-        redis = read_redis_conf(None)
-        _api_conf = get_conf("api", redis)
+        redis = read_redis_conf(conf_file)
+        _api_conf = get_conf("api", None, redis)
     except Exception as e:
         m = rephrase_exception_message(e)
         sys.stderr.write(f"Lens3 reading a conf file failed:"
@@ -52,7 +55,7 @@ def _make_app():
     openlog(_api_conf["log_file"], **_api_conf["log_syslog"])
     logger.info("START Api.")
 
-    _api = Control_Api(_api_conf)
+    _api = Control_Api(_api_conf, redis)
 
     _app = FastAPI()
     _app.mount("/scripts/",

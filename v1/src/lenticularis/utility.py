@@ -226,7 +226,6 @@ def copy_minimal_env(oenv):
         "USERNAME",
         "LENS3_CONF",
         "LENS3_MUX_NAME",
-        "LENS3_MUX_NODE",
     }
     return {key: val for key, val in oenv.items() if key in keys}
 

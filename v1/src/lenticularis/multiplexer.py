@@ -1,6 +1,5 @@
-"""Multiplexer.  It is a reverse-proxy and forwards a request/response
-from/to MinIO.  It is a Gunicorn app.
-
+"""Lens3-Mux implementation.  It is a reverse-proxy and forwards a
+request/response from/to MinIO.  It is a Gunicorn app.
 """
 
 # Copyright (c) 2022 RIKEN R-CCS
@@ -315,7 +314,7 @@ class Multiplexer():
                        f" failed in waiting for service starts.")
         return (500, None)
 
-    def _choose_server_host(self, pool_id):
+    def _choose_server_host__(self, pool_id):
         """Chooses a host to run a MinIO.  It returns None to mean the
         localhost.
         """
@@ -402,11 +401,11 @@ class Multiplexer():
             try:
                 probe_key = None
                 bucket = _pick_bucket_in_path(path, access_info)
-                desc = self.tables.get_bucket(bucket)
-                if desc is None:
+                bktdesc = self.tables.get_bucket(bucket)
+                if bktdesc is None:
                     log_access("404", *access_info)
                     raise Api_Error(404, f"Bad URL, no bucket: {bucket}")
-                pool_id = desc["pool"]
+                pool_id = bktdesc["pool"]
                 pooldesc = self.tables.get_pool(pool_id)
                 assert pooldesc is not None
                 user_id = pooldesc.get("owner_uid")
@@ -415,7 +414,7 @@ class Multiplexer():
                 ensure_pool_state(self.tables, pool_id)
                 # ensure_bucket_owner(self.tables, bucket, pool_id)
                 ensure_secret_owner(self.tables, access_key, pool_id)
-                ensure_bucket_policy(bucket, desc, access_key)
+                ensure_bucket_policy(bucket, bktdesc, access_key)
             except Api_Error as e:
                 # Reraise an error with a less-informative message.
                 logger.debug(f"Mux (port={self._mux_port}) access check"

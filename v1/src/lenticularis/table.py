@@ -25,10 +25,35 @@ _PROCESS_DB = 2
 _ROUTING_DB = 3
 _MONOKEY_DB = 4
 
-_conf_env_name = "LENS3_CONF"
-_mux_name_env_name = "LENS3_MUX_NAME"
-
 _limit_of_id_generation_loop = 30
+
+
+def read_redis_conf(conf_file):
+    """Reads conf.json file and returns a record for a Redis connection.
+    """
+    assert conf_file is not None
+    try:
+        with open(conf_file, "r") as f:
+            conf = json.load(f, parse_int=None)
+    except json.JSONDecodeError as e:
+        raise Exception(f"Reading a conf file failed: {conf_file}:"
+                        f" exception=({e})")
+    except Exception as e:
+        m = rephrase_exception_message(e)
+        raise Exception(f"Reading a conf file failed: {conf_file}:"
+                        f" exception=({m})")
+    schema = {
+        "type": "object",
+        "properties": {
+            "redis": redis_json_schema
+        },
+        "required": [
+            "redis",
+        ],
+        "additionalProperties": True,
+    }
+    jsonschema.validate(instance=conf, schema=schema)
+    return conf["redis"]
 
 
 def get_table(redis):
@@ -50,17 +75,20 @@ def set_conf(conf, redis):
     pass
 
 
-def get_conf(sub, redis):
-    """Takes a conf in Redis with regard to a subject.  A sub is "api" or
-    "mux".  It may quaify a key "mux" with a name as "mux:"+mux-name.
-    It raises an exception if a conf does not exist.  (The contents
-    should have been schema checked at an insertion).
+def get_conf(sub, suffix, redis):
+    """Takes a conf in Redis with regard to a subject, sub="api" or
+    sub="mux".  It may quaify a key "mux" with a suffix as
+    "mux:"+suffix.  It raises an exception if a conf does not exist.
+    (The contents should have been schema checked at an insertion).
     """
     if sub == "api":
         key = "api"
     elif sub == "mux":
-        e = os.environ.get(_mux_name_env_name)
-        key = "mux" if e is None else ("mux:" + e)
+        if suffix is None:
+            key = "mux"
+        else:
+            key = ("mux:" + suffix) if len(suffix) > 0 else "mux"
+            pass
     else:
         assert sub in {"api", "mux"}
         key = "BADKEY"
@@ -73,40 +101,9 @@ def get_conf(sub, redis):
     return conf
 
 
-def read_redis_conf(file):
-    """Reads a conf file and returns a record for a Redis connection.  A
-    file name can be None, then a file name is taken from an
-    environment variable.
-    """
-    if file is None:
-        file = os.environ.get(_conf_env_name)
-    assert file is not None
-    try:
-        with open(file, "r") as f:
-            conf = json.load(f, parse_int=None)
-    except json.JSONDecodeError as e:
-        raise Exception(f"Reading a conf file failed: {file}:"
-                        f" exception=({e})")
-    except Exception as e:
-        m = rephrase_exception_message(e)
-        raise Exception(f"Reading a conf file failed: {file}:"
-                        f" exception=({m})")
-    schema = {
-        "type": "object",
-        "properties": {
-            "redis": redis_json_schema
-        },
-        "required": [
-            "redis",
-        ],
-        "additionalProperties": True,
-    }
-    jsonschema.validate(instance=conf, schema=schema)
-    return conf["redis"]
-
-
 def _print_all(r, name):
-    print(f"---- {name}")
+    print(f"---")
+    print(f"# {name}")
     for key in r.scan_iter("*"):
         print(f"{key}")
         pass
@@ -467,11 +464,12 @@ class _Setting_Table(Table_Common):
         if everything:
             _delete_all(self.db, self._user_info_prefix)
             _delete_all(self.db, self._user_claim_prefix)
+            _delete_all(self.db, self._conf_prefix)
             pass
         pass
 
     def print_all(self):
-        _print_all(self.db, "setting")
+        _print_all(self.db, "Setting")
         pass
 
     pass
@@ -582,7 +580,7 @@ class _Storage_Table(Table_Common):
         pass
 
     def print_all(self):
-        _print_all(self.db, "storage")
+        _print_all(self.db, "Storage")
         pass
 
     pass
@@ -701,7 +699,7 @@ class _Process_Table(Table_Common):
         pass
 
     def print_all(self):
-        _print_all(self.db, "process")
+        _print_all(self.db, "Process")
         pass
 
     pass
@@ -802,7 +800,7 @@ class _Routing_Table(Table_Common):
         pass
 
     def print_all(self):
-        _print_all(self.db, "routing")
+        _print_all(self.db, "Routing")
         pass
 
     pass
@@ -872,7 +870,7 @@ class _Monokey_Table(Table_Common):
         pass
 
     def print_all(self):
-        _print_all(self.db, "monokey")
+        _print_all(self.db, "Monokey")
         pass
 
     pass

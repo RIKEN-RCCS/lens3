@@ -116,8 +116,7 @@ an environment isolated from users.
 
 __Mux Node Name__: Lens3-Mux registers its endpoint obtained by
 platform.node() to the database, but it should be explicitly given
-when it is inappropriate.  Set the environment variable
-"LENS3_MUX_NODE" in "lenticularis-mux.service".
+when it is inappropriate.  Set the "mux_node_name" in "mux_conf.yaml".
 
 __Failing Proper Shutdown__: A MinIO instance sometimes may stay alive
 at a shutdown of the lenticularis-mux service.  Please check a MinIO

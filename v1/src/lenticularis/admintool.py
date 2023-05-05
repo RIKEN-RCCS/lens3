@@ -18,6 +18,7 @@ import traceback
 from lenticularis.control import Control_Api
 from lenticularis.control import erase_minio_ep, erase_pool_data, make_new_pool
 from lenticularis.table import read_redis_conf
+from lenticularis.table import get_table
 from lenticularis.table import set_conf, get_conf
 from lenticularis.yamlconf import read_yaml_conf
 from lenticularis.poolutil import Api_Error
@@ -246,19 +247,19 @@ class Command():
     its status code is 500 always.
     """
 
-    def __init__(self, traceid, control, api_conf, args, rest):
+    def __init__(self, traceid, redis, args, rest):
         self._traceid = traceid
-        self._control = control
-        self._api_conf = api_conf
+        self._redis = redis
         self.args = args
         self.rest = rest
+        self._tables = get_table(redis)
+        # self._api_conf = get_conf("api", None, redis)
         pass
 
     def op_help(self):
-        """Prints help.  Use option -d for debugging lens3-admin.  Most
-        commands needs an Api configuration in Redis, and only
-        "load-conf" works without it (Even help does not work).  Use
-        "load-conf" first at a system (re-)initialization.
+        """Prints help.  Use option -d for debugging lens3-admin.  Some
+        commands needs an Api configuration in Redis.  Use "load-conf"
+        first at a system (re-)initialization.
         """
         prog = os.path.basename(sys.argv[0])
         print(f"USAGE")
@@ -271,16 +272,17 @@ class Command():
         sys.exit(ERROR_EXIT_ARGUMENT)
         pass
 
-    def op_load_conf(self, conffile):
-        """Loads a yaml conf file in Redis."""
-        # THIS ENTRY IS A DUMMY, JUST FOR HELPS.  INSTEAD,
-        # _op_load_conf() FUNCTION IS USED.
-        assert False
+    def op_load_conf(self, yamlfile):
+        """Loads a yaml conf file in Redis.  (There is no command to delete a
+        conf, currenly).
+        """
+        conf = read_yaml_conf(yamlfile)
+        set_conf(conf, self._redis)
         pass
 
     def op_list_conf(self):
         """Prints a list of conf data in yaml."""
-        conflist = self._control.tables.dump_conf()
+        conflist = self._tables.dump_conf()
         for e in conflist:
             print(f"---")
             print(f"# Conf {e['subject']}")
@@ -311,19 +313,19 @@ class Command():
                 for u in d["uids"]]
         for u in adds:
             print(f"adding a user: {u}")
-            _load_user(self._control.tables, u)
+            _load_user(self._tables, u)
             pass
         for u in dels:
             print(f"deleting a user: {u}")
-            self._control.tables.delete_user(u)
+            self._tables.delete_user(u)
             pass
         for u in enbs:
             print(f"enabling a user: {u}")
-            _enable_disable_user(self._control.tables, u, True)
+            _enable_disable_user(self._tables, u, True)
             pass
         for u in diss:
             print(f"disabling a user: {u}")
-            _enable_disable_user(self._control.tables, u, False)
+            _enable_disable_user(self._tables, u, False)
             pass
         pass
 
@@ -331,22 +333,22 @@ class Command():
         """Prints a user list in CSV.  It lists ADD rows first, and then
         a DISABLE row.
         """
-        users = self._control.tables.list_users()
-        urows = [_make_user_csv_row(id, self._control.tables.get_user(id))
+        users = self._tables.list_users()
+        urows = [_make_user_csv_row(id, self._tables.get_user(id))
                  for id in users]
-        drows = _make_disable_csv_rows(self._control.tables)
+        drows = _make_disable_csv_rows(self._tables)
         _print_in_csv(urows + drows)
         pass
 
-    def op_show_pool(self, *pool_id):
-        """Shows pools.  It shows all pools without arguments."""
+    def op_list_pool(self, *pool_id):
+        """Prints pools.  It shows all pools without arguments."""
         pool_list = list(pool_id)
         if pool_list == []:
-            pool_list = self._control.tables.list_pools(None)
+            pool_list = self._tables.list_pools(None)
             pass
         pools = []
         for pid in pool_list:
-            pooldesc = gather_pool_desc(self._control.tables, pid)
+            pooldesc = gather_pool_desc(self._tables, pid)
             if pooldesc is None:
                 print(f"No pool found for {pid}")
                 continue
@@ -357,23 +359,6 @@ class Command():
             pools.append({pid: pooldesc})
             pass
         for o in pools:
-            _print_in_yaml(o)
-            pass
-        pass
-
-    def op_show_minio(self, pool_id):
-        """Shows a MinIO process and a Manager of a pool."""
-        proc_list = self._control.tables.list_minio_procs(pool_id)
-        proc_list = sorted(list(proc_list))
-        outs = [{pool: process} for (pool, process) in proc_list]
-        print("# MinIO")
-        for o in outs:
-            _print_in_yaml(o)
-            pass
-        ma = self._control.tables.get_minio_manager(pool_id)
-        outs = [{pool_id: ma}] if ma is not None else []
-        print("# Manager")
-        for o in outs:
             _print_in_yaml(o)
             pass
         pass
@@ -389,22 +374,97 @@ class Command():
                 # self._control.do_delete_pool(traceid, pid)
                 # self._control.erase_minio_ep(traceid, pid)
                 # self._control.erase_pool_data(traceid, pid)
-                erase_minio_ep(self._control.tables, traceid, pid)
-                erase_pool_data(self._control.tables, traceid, pid)
+                erase_minio_ep(self._tables, traceid, pid)
+                erase_pool_data(self._tables, traceid, pid)
                 pass
+            pass
+        pass
+
+    def op_list_bucket(self, *pool_id):
+        """Prints buckets of pools."""
+        pool_list = list(pool_id)
+        if pool_list == []:
+            bkts = self._tables.list_buckets(None)
+        else:
+            bkts = [b for pid in pool_list
+                    for b in self._tables.list_buckets(pid)]
+            pass
+        bkts = [{d["name"]: {"pool": d["pool"], "bkt_policy": d["bkt_policy"]}}
+                for d in bkts]
+        print("# Buckets")
+        for o in bkts:
+            _print_in_yaml(o)
+            pass
+        pass
+
+    def op_list_directory(self):
+        """Lists all buckets-directories of pools."""
+        dirs = self._tables.list_buckets_directories()
+        dirs = [{d["pool"]: d} for d in dirs]
+        print("# Buckets-Directories")
+        for o in dirs:
+            _print_in_yaml(o)
+            pass
+        pass
+
+    def op_list_ep(self):
+        """Lists endpoints of Mux and MinIO."""
+        # Mux.
+        muxs = self._tables.list_muxs()
+        muxs = sorted(list(muxs))
+        outs = [_format_mux(m, self.args.format) for m in muxs]
+        print("# Lens3-Mux")
+        for o in outs:
+            _print_in_yaml(o)
+            pass
+        # MinIO.
+        eps = self._tables.list_minio_ep()
+        eps = [{ep: {"pool": pid}} for (pid, ep) in eps]
+        print("# MinIO")
+        for o in eps:
+            _print_in_yaml(o)
+            pass
+        pass
+
+    def op_list_ts(self):
+        """Shows timestamps."""
+        stamps = self._tables.list_access_timestamps()
+        stamps = [{d["pool"]:
+                   {"timestamp": format_time_z(float(d["timestamp"]))}}
+                  for d in stamps]
+        print("# Timestamps")
+        for o in stamps:
+            _print_in_yaml(o)
+            pass
+        pass
+
+    def op_list_minio(self, pool_id):
+        """Prints a MinIO process and a Manager of a pool."""
+        proc_list = self._tables.list_minio_procs(pool_id)
+        proc_list = sorted(list(proc_list))
+        outs = [{pool: process} for (pool, process) in proc_list]
+        print("# MinIO")
+        for o in outs:
+            _print_in_yaml(o)
+            pass
+        ma = self._tables.get_minio_manager(pool_id)
+        outs = [{pool_id: ma}] if ma is not None else []
+        print("# Manager")
+        for o in outs:
+            _print_in_yaml(o)
             pass
         pass
 
     def op_dump(self, users_or_pools):
         """Dumps users or pools.  Specify users or pools."""
         if users_or_pools.upper() == "USERS":
-            user_list = self._control.tables.list_users()
-            users = [self._control.tables.get_user(id) for id in user_list]
+            user_list = self._tables.list_users()
+            users = [self._tables.get_user(id) for id in user_list]
             data = json.dumps({"users": users})
             print(data)
         elif users_or_pools.upper() == "POOLS":
-            pool_list = self._control.tables.list_pools(None)
-            pools = [gather_pool_desc(self._control.tables, id)
+            pool_list = self._tables.list_pools(None)
+            pools = [gather_pool_desc(self._tables, id)
                      for id in pool_list]
             data = json.dumps({"pools": pools})
             print(data)
@@ -438,7 +498,7 @@ class Command():
         pools = desc.get("pools", [])
         # Insert users.
         for u in users:
-            _load_user(self._control.tables, u)
+            _load_user(self._tables, u)
             pass
         # Insert new pools.
         for pooldesc in pools:
@@ -447,11 +507,13 @@ class Command():
         pass
 
     def _restore_pool(self, traceid, pooldesc):
+        api_conf = get_conf("api", None, self._redis)
+        assert api_conf is not None
         now = int(time.time())
         user_id = pooldesc["owner_uid"]
         owner_gid = pooldesc["owner_gid"]
         path = pooldesc["buckets_directory"]
-        u = self._control.tables.get_user(user_id)
+        u = self._tables.get_user(user_id)
         if u is None:
             raise Api_Error(500, f"Bad user (unknown): {user_id}")
         if owner_gid not in u["groups"]:
@@ -462,9 +524,9 @@ class Command():
             #                                      owner_gid, path)
             # pool_id = self._control.make_new_pool(traceid, user_id,
             #                                       owner_gid, path)
-            maxexp = int(self._api_conf["controller"]["max_pool_expiry"])
+            maxexp = int(api_conf["controller"]["max_pool_expiry"])
             expiration = _determine_expiration_time(maxexp)
-            pool_id = make_new_pool(self._control.tables, traceid, user_id,
+            pool_id = make_new_pool(self._tables, traceid, user_id,
                                     owner_gid, path, expiration)
             assert pool_id is not None
             pooldesc["pool_name"] = pool_id
@@ -483,8 +545,8 @@ class Command():
             # self._control.do_delete_pool(traceid, pool_id)
             # self._control.erase_minio_ep(traceid, pool_id)
             # self._control.erase_pool_data(traceid, pool_id)
-            erase_minio_ep(self._control.tables, traceid, pool_id)
-            erase_pool_data(self._control.tables, traceid, pool_id)
+            erase_minio_ep(self._tables, traceid, pool_id)
+            erase_pool_data(self._tables, traceid, pool_id)
             raise
         # Add access-keys.
         added = []
@@ -499,7 +561,7 @@ class Command():
                 desc["use"] = "key"
                 desc["owner"] = pool_id
                 desc["modification_time"] = now
-                ok = self._control.tables.set_ex_id(key, desc)
+                ok = self._tables.set_ex_key(key, desc)
                 if not ok:
                     raise Api_Error(500, "Duplicate access-key: {key}")
                 added.append(key)
@@ -507,13 +569,13 @@ class Command():
                 #                                key, secret, key_policy)
         except Exception:
             for key in added:
-                self._control.tables.delete_id_unconditionally(key)
+                self._tables.delete_id_unconditionally(key)
                 pass
             # self._control.do_delete_pool(traceid, pool_id)
             # self._control.erase_minio_ep(traceid, pool_id)
             # self._control.erase_pool_data(traceid, pool_id)
-            erase_minio_ep(self._control.tables, traceid, pool_id)
-            erase_pool_data(self._control.tables, traceid, pool_id)
+            erase_minio_ep(self._tables, traceid, pool_id)
+            erase_pool_data(self._tables, traceid, pool_id)
             raise
         pass
 
@@ -521,68 +583,10 @@ class Command():
         now = int(time.time())
         desc = {"pool": pool_id, "bkt_policy": bkt_policy,
                 "modification_time": now}
-        (ok, holder) = self._control.tables.set_ex_bucket(bucket, desc)
+        (ok, holder) = self._tables.set_ex_bucket(bucket, desc)
         if not ok:
-            owner = get_pool_owner_for_messages(self._control.tables, holder)
+            owner = get_pool_owner_for_messages(self._tables, holder)
             raise Api_Error(403, f"Bucket name taken: owner={owner}")
-        pass
-
-    def op_list_bucket(self, *pool_id):
-        """Shows buckets of pools."""
-        pool_list = list(pool_id)
-        if pool_list == []:
-            bkts = self._control.tables.list_buckets(None)
-        else:
-            bkts = [b for pid in pool_list
-                    for b in self._control.tables.list_buckets(pid)]
-            pass
-        bkts = [{d["name"]: {"pool": d["pool"], "bkt_policy": d["bkt_policy"]}}
-                for d in bkts]
-        print("# Buckets")
-        for o in bkts:
-            _print_in_yaml(o)
-            pass
-        pass
-
-    def op_list_dir(self):
-        """Lists buckets-directories of pools."""
-        dirs = self._control.tables.list_buckets_directories()
-        dirs = [{d["pool"]: d} for d in dirs]
-        print("# Buckets-Directories")
-        for o in dirs:
-            _print_in_yaml(o)
-            pass
-        pass
-
-    def op_list_ep(self):
-        """Lists endpoints of Mux and MinIO."""
-        # Mux.
-        muxs = self._control.tables.list_muxs()
-        muxs = sorted(list(muxs))
-        outs = [_format_mux(m, self.args.format) for m in muxs]
-        print("# Lens3-Mux")
-        for o in outs:
-            _print_in_yaml(o)
-            pass
-        # MinIO.
-        eps = self._control.tables.list_minio_ep()
-        eps = [{ep: {"pool": pid}} for (pid, ep) in eps]
-        print("# MinIO")
-        for o in eps:
-            _print_in_yaml(o)
-            pass
-        pass
-
-    def op_list_timestamp(self):
-        """Shows timestamps."""
-        stamps = self._control.tables.list_access_timestamps()
-        stamps = [{d["pool"]:
-                   {"timestamp": format_time_z(float(d["timestamp"]))}}
-                  for d in stamps]
-        print("# Timestamps")
-        for o in stamps:
-            _print_in_yaml(o)
-            pass
         pass
 
     def op_delete_ep(self, *pool_id):
@@ -592,47 +596,52 @@ class Command():
         """
         pool_list = list(pool_id)
         for pid in pool_list:
-            self._control.tables.delete_minio_manager(pid)
-            self._control.tables.delete_minio_proc(pid)
-            self._control.tables.delete_minio_ep(pid)
+            self._tables.delete_minio_manager(pid)
+            self._tables.delete_minio_proc(pid)
+            self._tables.delete_minio_ep(pid)
             pass
         pass
 
     def op_list_db(self):
         """Lists all database keys."""
-        self._control.tables.print_all()
+        self._tables.print_all()
         pass
 
     def op_reset_db(self):
         """Clears all records in the database."""
         if not self.args.yes:
-            print("Need yes (-y) for action.")
+            print("Need -y (yes) for action.")
         else:
-            everything = self.args.everything
-            self._control.tables.clear_all(everything=everything)
+            self._tables.clear_all(everything=self.args.everything)
             pass
         pass
 
+    # THE COMMANDS FROM HERE BELOW USE ROUTINES IN THE CONTROL.  The
+    # commands above only access Redis.
+
     def op_access_mux(self, pool_id):
         """Accesses Mux for a pool.  It may wake up or stop MinIO."""
+        api_conf = get_conf("api", None, self._redis)
+        assert api_conf is not None
         traceid = self._traceid
-        self._control.access_mux_for_pool(traceid, pool_id)
+        control = Control_Api(api_conf, self._redis)
+        control.access_mux_for_pool(traceid, pool_id)
         pass
 
     command_list = [
         op_help,
+
         op_load_conf,
         op_list_conf,
-
         op_load_user,
         op_list_user,
 
-        op_show_pool,
-        op_show_minio,
+        op_list_pool,
         op_list_bucket,
-        op_list_dir,
+        op_list_directory,
+        op_list_minio,
         op_list_ep,
-        op_list_timestamp,
+        op_list_ts,
 
         op_delete_pool,
         # op_delete_ep,
@@ -691,18 +700,7 @@ class Command():
     pass
 
 
-def _op_load_conf(args, rest):
-    assert len(rest) == 1
-    redis = read_redis_conf(args.conf)
-    conf = read_yaml_conf(rest[0])
-    set_conf(conf, redis)
-    pass
-
-
 def main():
-    """It is special for "load-conf" command -- it should work only with a
-    connection to Redis but without a full configuration setting.
-    """
     parser = argparse.ArgumentParser()
     parser.add_argument("operation")
     parser.add_argument("--conf", "-c")
@@ -714,13 +712,8 @@ def main():
     parser.add_argument("--format", "-f", choices=["text", "json"])
     (args, rest) = parser.parse_known_args()
 
-    if args.operation == "load-conf":
-        _op_load_conf(args, rest)
-        return
-
     try:
         redis = read_redis_conf(args.conf)
-        api_conf = get_conf("api", redis)
     except Exception as e:
         m = rephrase_exception_message(e)
         sys.stderr.write(f"Getting a conf failed: exception=({m})\n")
@@ -732,8 +725,7 @@ def main():
     # openlog(api_conf["log_file"], **api_conf["log_syslog"])
 
     try:
-        control = Control_Api(api_conf)
-        cmd = Command(traceid, control, api_conf, args, rest)
+        cmd = Command(traceid, redis, args, rest)
         cmd.make_command_dict()
         cmd.execute_command()
     except Exception as e:

@@ -158,7 +158,7 @@ def make_new_pool(tables, traceid, user_id, owner_gid, path, expiration):
 class Control_Api():
     """Setting Web-API."""
 
-    def __init__(self, api_conf):
+    def __init__(self, api_conf, redis):
         self._api_conf = api_conf
         assert api_conf["version"] == "v1.2"
         self._api_version = "v1.2"
@@ -186,7 +186,7 @@ class Control_Api():
         self._env_mc = env
 
         self._bad_response_delay = 1
-        self.tables = get_table(api_conf["redis"])
+        self.tables = get_table(redis)
         pass
 
     def _ensure_make_pool_arguments(self, user_id, pooldesc):

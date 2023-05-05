@@ -18,7 +18,7 @@ different settings.  A mux-name can be specified by an environment
 variable "LENS3_MUX_NAME" set in the service script
 "lenticularis-mux.service".
 
-## Redis Part
+## Redis Part (required but not used)
 
 ```
 redis:
@@ -26,8 +26,6 @@ redis:
     port: 6378
     password: "long-string-for-redis-password"
 ```
-
-They specify a connection to Redis.
 
 ## Gunicorn Part
 
@@ -57,6 +55,7 @@ multiplexer:
     forwarding_timeout: 60
     probe_access_timeout: 60
     bad_response_delay: 1
+    mux_node_name: ""
 ```
 
 * FRONT_HOST is a host name of a proxy.  It is used when a Lens3-Mux
@@ -76,6 +75,10 @@ multiplexer:
 
 * BAD_RESPONSE_DELAY is a wait to avoid denial attacks,
   when an error response is going to be returned.
+
+* __mux_node_name__ is optional.  It is used as a host name on which
+  Lens3-Mux is running, when a host name the system returns is not
+  appropriate.
 
 ## Manager Part
 

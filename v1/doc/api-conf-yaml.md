@@ -11,7 +11,7 @@ aws_signature: "AWS4-HMAC-SHA256"
 ```
 Do not change these lines.
 
-## Redis Part
+## Redis Part (required but not used)
 
 ```
 redis:
@@ -19,8 +19,6 @@ redis:
     port: 6378
     password: "long-string-for-redis-password"
 ```
-
-They specify a connection to Redis.
 
 ## Gunicorn Part
 

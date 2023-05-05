@@ -164,24 +164,24 @@ def _drop_non_ui_info_from_keys(access_key):
 
 def gather_buckets(tables, pool_id):
     """Gathers buckets in the pool.  It drops unnecessary slots."""
-    bkts = tables.list_buckets(pool_id)
-    bkts = [{k: v for (k, v) in d.items()
-             if k not in {"pool", "modification_time"}}
-            for d in bkts]
-    bkts = sorted(bkts, key=lambda k: k["name"])
-    return bkts
+    bkts1 = tables.list_buckets(pool_id)
+    # bkts2 = [{k: v for (k, v) in d.items()
+    #         if k not in {"pool", "modification_time"}}
+    #         for d in bkts1]
+    bkts3 = sorted(bkts1, key=lambda k: k["name"])
+    return bkts3
 
 
 def gather_keys(tables, pool_id):
     """Gathers keys in the pool, but drops a probe-key and slots
     uninteresting to Web-API.
     """
-    keys = tables.list_access_keys_of_pool(pool_id)
-    keys = sorted(keys, key=lambda k: k["modification_time"])
-    keys = [k for k in keys
-            if (k is not None and k.get("secret_key") != "")]
-    keys = [_drop_non_ui_info_from_keys(k) for k in keys]
-    return keys
+    keys1 = tables.list_access_keys_of_pool(pool_id)
+    keys2 = sorted(keys1, key=lambda k: k["modification_time"])
+    keys3 = [k for k in keys2
+             if (k is not None and k.get("secret_key") != "")]
+    # keys4 = [_drop_non_ui_info_from_keys(k) for k in keys3]
+    return keys3
 
 
 def gather_pool_desc(tables, pool_id):
@@ -190,21 +190,23 @@ def gather_pool_desc(tables, pool_id):
     if pooldesc is None:
         return None
     bd = tables.get_buckets_directory_of_pool(pool_id)
-    pooldesc["buckets_directory"] = bd
+    assert pooldesc["pool_name"] == pool_id
+    assert pooldesc["buckets_directory"] == bd
     assert pooldesc["buckets_directory"] is not None
+    #
     # Gather buckets.
+    #
     bkts = gather_buckets(tables, pool_id)
     pooldesc["buckets"] = bkts
-    # Gather keys.
+    #
+    # Gather access-keys.
+    #
     keys = gather_keys(tables, pool_id)
     pooldesc["access_keys"] = keys
-    # pooldesc.pop("probe_key")
     pooldesc["pool_name"] = pool_id
     (poolstate, reason) = tables.get_pool_state(pool_id)
     pooldesc["minio_state"] = str(poolstate)
     pooldesc["minio_reason"] = str(reason)
-    # pooldesc["expiration_time"]
-    # pooldesc["online_status"]
     user_id = pooldesc["owner_uid"]
     u = tables.get_user(user_id)
     pooldesc["enable_status"] = u["enabled"]
@@ -317,6 +319,9 @@ def _pool_desc_schema():
         "properties": {
             "name": {"type": "string"},
             "bkt_policy": {"type": "string"},
+            # (These should be required, later).
+            "pool": {"type": "string"},
+            "modification_time": {"type": "integer"},
         },
         "required": [
             "name",
@@ -331,6 +336,12 @@ def _pool_desc_schema():
             "access_key": {"type": "string"},
             "secret_key": {"type": "string"},
             "key_policy": {"type": "string"},
+            # (These should be required, later).
+            "use": {"type": "string"},
+            "owner": {"type": "string"},
+            "expiration_time": {"type": "integer"},
+            "modification_time": {"type": "integer"},
+
         },
         "required": [
             "access_key",
@@ -428,3 +439,111 @@ def access_mux(traceid, ep, access_key, front_hostname, front_host_ip,
         pass
     logger.debug(f"urlopen to Mux: status={status}")
     return status
+
+
+def dump_db(tables):
+    """Returns a record of confs, users, and pools for restoring."""
+    # Confs:
+    confs = tables.list_confs()
+    # Users:
+    user_list = tables.list_users()
+    users = [tables.get_user(id) for id in user_list]
+    # Pools:
+    pool_list = tables.list_pools(None)
+    pools = [gather_pool_desc(tables, id) for id in pool_list]
+    return {"confs": confs, "users": users, "pools": pools}
+
+
+def restore_db(tables, record):
+    """Restores confs, users and pools from a dump file.  Note that the
+    dumper uses gather_pool_desc() and the restorer performs the
+    reverse in _restore_pool().  It does not restore MinIO state of a
+    pool ("minio_state" and "minio_reason").  Call after resetting a
+    database.  It is an error if some entries are already occupied: a
+    buckets-directory, bucket names, and access-keys, (or etc.).
+    Pools are given new pool-ids.
+    """
+    confs = record.get("confs", [])
+    users = record.get("users", [])
+    pools = record.get("pools", [])
+    # Restore Confs.
+    for e in confs:
+        tables.set_conf(e)
+        pass
+    # Restore Users.
+    for e in users:
+        tables.set_user(e)
+        pass
+    # Restore Pools.
+    for pooldesc in pools:
+        _restore_pool(tables, pooldesc)
+        pass
+    pass
+
+
+def _restore_pool(tables, pooldesc):
+    """Restores pools.  Call after restoring users."""
+    now = int(time.time())
+    user_id = pooldesc["owner_uid"]
+    owner_gid = pooldesc["owner_gid"]
+    u = tables.get_user(user_id)
+    if u is None:
+        raise Api_Error(500, f"Bad user (unknown): {user_id}")
+    if owner_gid not in u["groups"]:
+        raise Api_Error(500, f"Bad group for a user: {owner_gid}")
+    #
+    # Restore a pool.
+    #
+    pool_id = pooldesc["pool_name"]
+    entry1 = {
+        "pool_name": pooldesc["pool_name"],
+        "owner_uid": pooldesc["owner_uid"],
+        "owner_gid": pooldesc["owner_gid"],
+        "buckets_directory": pooldesc["buckets_directory"],
+        "probe_key": pooldesc["probe_key"],
+        "expiration_time": pooldesc["expiration_time"],
+        "online_status": pooldesc["online_status"],
+        "modification_time": pooldesc["modification_time"],
+    }
+    tables.set_pool(pool_id, entry1)
+    # tables.set_pool_state(pool_id, state, reason)
+    #
+    # Restore a buckets-directory.
+    #
+    path = pooldesc["buckets_directory"]
+    tables.set_ex_buckets_directory(path, pool_id)
+    #
+    # Restore buckets.
+    #
+    bkts = pooldesc["buckets"]
+    for b in bkts:
+        bucket = b["name"];
+        entry2 = {
+            "pool": b["pool"],
+            "bkt_policy": b["bkt_policy"],
+            "modification_time": b["modification_time"],
+        }
+        (ok, holder) = tables.set_ex_bucket(bucket, entry2)
+        if not ok:
+            owner = get_pool_owner_for_messages(tables, holder)
+            raise Api_Error(403, f"Bucket name taken: owner={owner}")
+        pass
+    #
+    # Restore access-keys.
+    #
+    keys = pooldesc["access_keys"]
+    for k in keys:
+        xid = k["access_key"]
+        entry3 = {
+            "use": k["use"],
+            "owner": k["owner"],
+            "secret_key": k["secret_key"],
+            "key_policy": k["key_policy"],
+            "expiration_time": k["expiration_time"],
+            "modification_time": k["modification_time"],
+        }
+        ok = tables.set_ex_id(xid, "key", entry3)
+        if not ok:
+            raise Api_Error(500, "Duplicate access-key: {key}")
+        pass
+    pass

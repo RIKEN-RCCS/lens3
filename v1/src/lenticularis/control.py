@@ -40,7 +40,7 @@ from lenticularis.utility import rephrase_exception_message
 from lenticularis.utility import logger
 
 
-def erase_minio_ep(tables, traceid, pool_id):
+def erase_minio_ep(tables, pool_id):
     # Clears a MinIO endpoint.
     try:
         tables.delete_minio_ep(pool_id)
@@ -58,7 +58,7 @@ def erase_minio_ep(tables, traceid, pool_id):
     pass
 
 
-def erase_pool_data(tables, traceid, pool_id):
+def erase_pool_data(tables, pool_id):
     # Clears database about the pool.
     path = tables.get_buckets_directory_of_pool(pool_id)
     bkts = tables.list_buckets(pool_id)
@@ -112,7 +112,7 @@ def erase_pool_data(tables, traceid, pool_id):
     pass
 
 
-def make_new_pool(tables, traceid, user_id, owner_gid, path, expiration):
+def make_new_pool(tables, user_id, owner_gid, path, expiration):
     now = int(time.time())
     pooldesc = {
         "pool_name": "(* given-later *)",
@@ -572,8 +572,8 @@ class Control_Api():
 
     def do_make_pool(self, traceid, user_id, owner_gid, path):
         expiration = self._determine_expiration_time()
-        # pool_id = self.make_new_pool(tables, traceid, user_id, owner_gid, path, expiration)
-        pool_id = make_new_pool(self.tables, traceid, user_id, owner_gid, path, expiration)
+        # pool_id = self.make_new_pool(tables, user_id, owner_gid, path, expiration)
+        pool_id = make_new_pool(self.tables, user_id, owner_gid, path, expiration)
         self._activate_pool(traceid, pool_id)
         return pool_id
 
@@ -660,10 +660,8 @@ class Control_Api():
 
     def do_delete_pool(self, traceid, pool_id):
         self._clean_minio(traceid, pool_id)
-        # self.erase_minio_ep(traceid, pool_id)
-        # self.erase_pool_data(traceid, pool_id)
-        erase_minio_ep(self.tables, traceid, pool_id)
-        erase_pool_data(self.tables, traceid, pool_id)
+        erase_minio_ep(self.tables, pool_id)
+        erase_pool_data(self.tables, pool_id)
         return True
 
     def _clean_minio(self, traceid, pool_id):

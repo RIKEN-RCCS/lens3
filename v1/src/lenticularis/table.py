@@ -151,9 +151,13 @@ class Table():
 
     # Setting-Table:
 
-    def dump_conf(self):
-        """Returns a list of conf's"""
-        return self._setting_table._dump_conf()
+    def set_conf(self, conf):
+        """Stores a conf.  It is the same as the module function."""
+        return self._setting_table.set_conf(conf)
+
+    def list_confs(self):
+        """Returns a list of confs"""
+        return self._setting_table._list_confs()
 
     def set_user(self, userinfo):
         self._setting_table.set_user(userinfo)
@@ -312,8 +316,9 @@ class Table():
     def make_unique_id(self, usage, owner, info):
         return self._monokey_table.make_unique_id(usage, owner, info)
 
-    def set_ex_key(self, accesskey, desc):
-        return self._monokey_table.set_ex_key(accesskey, desc)
+    def set_ex_id(self, xid, usage, desc):
+        """Inserts an id, used at database restoring."""
+        return self._monokey_table.set_ex_id(xid, usage, desc)
 
     def get_id(self, uid):
         return self._monokey_table.get_id(uid)
@@ -412,7 +417,7 @@ class _Setting_Table(Table_Common):
         v = self.db.get(key)
         return json.loads(v) if v is not None else None
 
-    def _dump_conf(self):
+    def _list_confs(self):
         keyi = _scan_table(self.db, self._conf_prefix, None)
         keys = list(keyi)
         conflist = [v for v in [self.get_conf(k) for k in keys]
@@ -833,9 +838,10 @@ class _Monokey_Table(Table_Common):
         assert False
         pass
 
-    def set_ex_key(self, accesskey, desc):
-        assert set(desc.keys()) == self._id_desc_keys["key"]
-        key = f"{self._id_prefix}{accesskey}"
+    def set_ex_id(self, xid, usage, desc):
+        assert usage in {"pool", "key"}
+        assert set(desc.keys()) == self._id_desc_keys[usage]
+        key = f"{self._id_prefix}{xid}"
         v = json.dumps(desc)
         ok = self.db.setnx(key, v)
         return ok

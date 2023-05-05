@@ -26,6 +26,7 @@ from lenticularis.poolutil import gather_pool_desc
 from lenticularis.poolutil import check_user_naming
 from lenticularis.poolutil import check_claim_string
 from lenticularis.poolutil import get_pool_owner_for_messages
+from lenticularis.poolutil import dump_db, restore_db
 from lenticularis.utility import ERROR_EXIT_BADCONF, ERROR_EXIT_EXCEPTION, ERROR_EXIT_ARGUMENT
 from lenticularis.utility import format_time_z
 from lenticularis.utility import random_str
@@ -282,7 +283,7 @@ class Command():
 
     def op_list_conf(self):
         """Prints a list of conf data in yaml."""
-        conflist = self._tables.dump_conf()
+        conflist = self._tables.list_confs()
         for e in conflist:
             print(f"---")
             print(f"# Conf {e['subject']}")
@@ -371,11 +372,8 @@ class Command():
             pool_list = list(pool_id)
             traceid = self._traceid
             for pid in pool_list:
-                # self._control.do_delete_pool(traceid, pid)
-                # self._control.erase_minio_ep(traceid, pid)
-                # self._control.erase_pool_data(traceid, pid)
-                erase_minio_ep(self._tables, traceid, pid)
-                erase_pool_data(self._tables, traceid, pid)
+                erase_minio_ep(self._tables, pid)
+                erase_pool_data(self._tables, pid)
                 pass
             pass
         pass
@@ -458,140 +456,6 @@ class Command():
             pass
         pass
 
-    def op_dump(self, users_or_pools):
-        """Dumps users or pools.  Specify users or pools."""
-        if users_or_pools.upper() == "USERS":
-            user_list = self._tables.list_users()
-            users = [self._tables.get_user(id) for id in user_list]
-            data = json.dumps({"users": users})
-            print(data)
-        elif users_or_pools.upper() == "POOLS":
-            pool_list = self._tables.list_pools(None)
-            pools = [gather_pool_desc(self._tables, id)
-                     for id in pool_list]
-            data = json.dumps({"pools": pools})
-            print(data)
-        else:
-            print(f"users-or_pools is either users or pools")
-            pass
-        pass
-
-    def op_restore(self, jsonfile):
-        """Restores users and pools from a file.  Pools are given new
-        pool-ids.  It is an error if some entries are already
-        occupied: a buckets-directory, bucket names, and access-keys,
-        (or etc.).  Records of a file is {users: [...], pools: [...]}.
-        """
-        try:
-            with open(jsonfile) as f:
-                s = f.read()
-                pass
-        except OSError as e:
-            sys.stderr.write(f"Reading a file failed: ({jsonfile});"
-                             f" {os.strerror(e.errno)}\n")
-            return
-        except Exception as e:
-            m = rephrase_exception_message(e)
-            sys.stderr.write(f"Reading a file failed: ({jsonfile});"
-                             f" exception={m}\n")
-            traceback.print_exc()
-            return
-        desc = json.loads(s, parse_int=None)
-        users = desc.get("users", [])
-        pools = desc.get("pools", [])
-        # Insert users.
-        for u in users:
-            _load_user(self._tables, u)
-            pass
-        # Insert new pools.
-        for pooldesc in pools:
-            self._restore_pool(self._traceid, pooldesc)
-            pass
-        pass
-
-    def _restore_pool(self, traceid, pooldesc):
-        api_conf = get_conf("api", None, self._redis)
-        assert api_conf is not None
-        now = int(time.time())
-        user_id = pooldesc["owner_uid"]
-        owner_gid = pooldesc["owner_gid"]
-        path = pooldesc["buckets_directory"]
-        u = self._tables.get_user(user_id)
-        if u is None:
-            raise Api_Error(500, f"Bad user (unknown): {user_id}")
-        if owner_gid not in u["groups"]:
-            raise Api_Error(500, f"Bad group for a user: {owner_gid}")
-        # Add a new pool.
-        try:
-            # pool_id = self._control.do_make_pool(traceid, user_id,
-            #                                      owner_gid, path)
-            # pool_id = self._control.make_new_pool(traceid, user_id,
-            #                                       owner_gid, path)
-            maxexp = int(api_conf["controller"]["max_pool_expiry"])
-            expiration = _determine_expiration_time(maxexp)
-            pool_id = make_new_pool(self._tables, traceid, user_id,
-                                    owner_gid, path, expiration)
-            assert pool_id is not None
-            pooldesc["pool_name"] = pool_id
-        except Exception:
-            raise
-        # Add buckets.
-        try:
-            bkts = pooldesc["buckets"]
-            for desc in bkts:
-                bucket = desc["name"]
-                bkt_policy = desc["bkt_policy"]
-                # self._control.do_make_bucket(traceid, pool_id,
-                #                              bucket, bkt_policy)
-                self._make_bucket(traceid, pool_id, bucket, bkt_policy)
-        except Exception:
-            # self._control.do_delete_pool(traceid, pool_id)
-            # self._control.erase_minio_ep(traceid, pool_id)
-            # self._control.erase_pool_data(traceid, pool_id)
-            erase_minio_ep(self._tables, traceid, pool_id)
-            erase_pool_data(self._tables, traceid, pool_id)
-            raise
-        # Add access-keys.
-        added = []
-        try:
-            keys = pooldesc["access_keys"]
-            for k in keys:
-                key = k["access_key"]
-                secret = k["secret_key"]
-                key_policy = k["key_policy"]
-                desc = k.copy()
-                desc.pop("access_key")
-                desc["use"] = "key"
-                desc["owner"] = pool_id
-                desc["modification_time"] = now
-                ok = self._tables.set_ex_key(key, desc)
-                if not ok:
-                    raise Api_Error(500, "Duplicate access-key: {key}")
-                added.append(key)
-                # self._control.do_record_secret(traceid, pool_id,
-                #                                key, secret, key_policy)
-        except Exception:
-            for key in added:
-                self._tables.delete_id_unconditionally(key)
-                pass
-            # self._control.do_delete_pool(traceid, pool_id)
-            # self._control.erase_minio_ep(traceid, pool_id)
-            # self._control.erase_pool_data(traceid, pool_id)
-            erase_minio_ep(self._tables, traceid, pool_id)
-            erase_pool_data(self._tables, traceid, pool_id)
-            raise
-        pass
-
-    def _make_bucket(self, traceid, pool_id, bucket, bkt_policy):
-        now = int(time.time())
-        desc = {"pool": pool_id, "bkt_policy": bkt_policy,
-                "modification_time": now}
-        (ok, holder) = self._tables.set_ex_bucket(bucket, desc)
-        if not ok:
-            owner = get_pool_owner_for_messages(self._tables, holder)
-            raise Api_Error(403, f"Bucket name taken: owner={owner}")
-        pass
-
     def op_delete_ep(self, *pool_id):
         """Deletes endpoint entires from a database.  Entries of
         MinIO-managers (ma:pool-id), MinIO-processes (mn:pool-id), and
@@ -603,6 +467,48 @@ class Command():
             self._tables.delete_minio_proc(pid)
             self._tables.delete_minio_ep(pid)
             pass
+        pass
+
+    def op_dump_db(self, jsonfile):
+        """Dumps confs, users and pools for restoring."""
+        record = dump_db(self._tables)
+        try:
+            with open(jsonfile, 'w') as f:
+                record = json.dump(record, f)
+                pass
+        except OSError as e:
+            sys.stderr.write(f"Writing a file failed: ({jsonfile});"
+                             f" {os.strerror(e.errno)}\n")
+            return
+        except Exception as e:
+            m = rephrase_exception_message(e)
+            sys.stderr.write(f"Writing a file failed: ({jsonfile});"
+                             f" exception={m}\n")
+            traceback.print_exc()
+            return
+        pass
+
+    def op_restore_db(self, jsonfile):
+        """Restores confs, users and pools from a dump.  It should be worked
+        on an empty database.  It is an error if some entries are
+        already occupied.  Errors are fatal, that is, Redis gets
+        partially modified.
+        """
+        try:
+            with open(jsonfile) as f:
+                record = json.load(f)
+                pass
+        except OSError as e:
+            sys.stderr.write(f"Reading a file failed: ({jsonfile});"
+                             f" {os.strerror(e.errno)}\n")
+            return
+        except Exception as e:
+            m = rephrase_exception_message(e)
+            sys.stderr.write(f"Reading a file failed: ({jsonfile});"
+                             f" exception={m}\n")
+            traceback.print_exc()
+            return
+        restore_db(self._tables, record)
         pass
 
     def op_list_db(self):
@@ -647,10 +553,10 @@ class Command():
 
         op_delete_pool,
         # op_delete_ep,
-        op_dump,
-        op_restore,
         op_access_mux,
 
+        op_dump_db,
+        op_restore_db,
         op_list_db,
         op_reset_db,
     ]

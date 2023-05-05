@@ -1,15 +1,30 @@
-# api-config.yaml
+# api-conf.yaml
+
+This is for Lens3 version v1.2.  Time values are all in seconds.
+
+## Header Part
+
+```
+subject: "api"
+version: "v1.2"
+aws_signature: "AWS4-HMAC-SHA256"
+```
+Do not change these lines.
 
 ## Redis Part
+
+They specify connection to Redis.
 
 ```
 redis:
     host: localhost
     port: 6378
-    password: ZXjmrOLwQ8Ri51pb5FI79z51gAHfIQ4oMvtWrG8q
+    password: "long-string-for-redis-password"
 ```
 
 ## Gunicorn Part
+
+See the documents of Gunicorn.
 
 ```
 gunicorn:
@@ -23,43 +38,29 @@ gunicorn:
     reload: yes
 ```
 
-## AWS-Signature Part
+## Lens3-Api Part
 
 ```
-aws_signature: "AWS4-HMAC-SHA256"
-```
-
-## Mux Part
-
-```
-multiplexer:
-    front_host: fgkvm-010-128-008-026.fdcs.r-ccs.riken.jp
+controller:
+    front_host: lens3.example.com
+    trusted_proxies:
+        - localhost
+    base_path: "/api"
+    claim_uid_map: email-name
     probe_access_timeout: 60
-```
-
-## MinIO-Manager Part
-
-```
-minio_manager:
     minio_mc_timeout: 10
+    max_pool_expiry: 630720000
+    CSRF_secret_key: xyzzy
 ```
 
 ## MinIO Part
+
+These specify commands of MinIO.
 
 ```
 minio:
     minio: /home/lens3/bin/minio
     mc: /home/lens3/bin/mc
-```
-
-## Web-API Part
-
-```
-system:
-    trusted_proxies:
-        - localhost
-    max_pool_expiry: 630720000
-    CSRF_secret_key: xyzzy
 ```
 
 ## Logging Part

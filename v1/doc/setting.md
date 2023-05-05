@@ -10,7 +10,7 @@ This document describes minimal setting for Lenticularis-S3 (Lens3).
 
 The steps are:
 * Prepare prerequisite software and install Lens3
-* Setup a reverse-proxy
+* Set up a (reverse) proxy
 * Start Redis
 * Start Lens3-Mux (a Multiplexer service)
 * Start Lens3-Api (a Web-API service)
@@ -18,14 +18,15 @@ The steps are:
 
 ## Assumptions
 
-Some services are needed to use Lens3 as shown in the configuration
-figure above.  In this setup, we assume NGINX as a reverse-proxy.
+Some services are needed to run Lens3 as depicted in the configuration
+figure above.  In this setup, we assume NGINX as a (reverse) proxy.
 Lens3-Mux and Lens3-Api are Gunicorn services, and we assume Lens3-Mux
-runs at port=8004 and Lens3-Api at port=8003.  A reverse-proxy should
-be setup for Lens3-Mux and Lens3-Api ports.  In addition, Redis is
-needed and Redis runs at port=6378.  A pseudo user "lens3" is used for
-the owner of the daemons/services.  We also assume RedHat8.5 and
-Python3.9 at this writing (in March 2022).
+runs at port=8004 and Lens3-Api at port=8003.  A proxy should be set
+up for Mux and Api ports.  In addition, Redis is needed running at
+port=6378.  A pseudo user "lens3" is the owner of the
+daemons/services.  Also, "lens3-admin" sometimes represents an
+administrator, anyone who can access the configuration files.  We
+assume RedHat8.5 and Python3.9 at this writing (in May 2023).
 
 * Python
   * 3.9 and later
@@ -34,31 +35,28 @@ Python3.9 at this writing (in March 2022).
   * Lenticularis Lens3-Mux
   * Lenticularis Lens3-Api
   * Redis (port=6378)
-  * Reverse-proxy
+  * proxy
 
 * Related user IDs
   * `nginx`
   * `lens3:lens3` -- a pseudo user for services
-  * `lens3-admin:lens3` -- a pseudo user for administration
+  * `lens3-admin:lens3` -- a pseudo administrator user
 
 * Used files and directories
   * /usr/lib/systemd/system/lenticularis-api.service
   * /usr/lib/systemd/system/lenticularis-mux.service
   * /usr/lib/systemd/system/lenticularis-redis.service
-  * /etc/lenticularis/api-config.yaml
-  * /etc/lenticularis/mux-config.yaml
+  * /etc/lenticularis/conf.json
   * /etc/lenticularis/redis.conf
   * /run/lenticularis-redis (temporary)
   * /etc/nginx/conf.d/lens3proxy.conf
   * /etc/nginx/private/htpasswd
 
-## Setup Pseudo-users for Services
+## Set up Pseudo-users for Services
 
 ```
 # groupadd -K GID_MIN=100 -K GID_MAX=499 lens3
 # useradd -m -K UID_MIN=100 -K UID_MAX=499 -g lens3 lens3
-# useradd -m -U lens3-admin
-# usermod -a -G lens3 lens3-admin
 ```
 
 ## Install Prerequisites
@@ -68,8 +66,8 @@ hosts.
 
 ```
 # dnf groupinstall "Development Tools"
-# dnf install redis
 # dnf install python39
+# dnf install redis
 ```
 
 Install MinIO binaries minio and mc from min.io.
@@ -91,7 +89,7 @@ $ curl https://dl.min.io/client/mc/release/linux-amd64/mc -o /tmp/mc
 Install Python packages and Lens3.  Installation should be run in the
 "v1" directory.
 
-* Do as the user "lens3"
+* Run as the user "lens3"
 
 ```
 # su - lens3
@@ -99,9 +97,11 @@ $ cd $TOP/v1
 $ pip3 install --user -r requirements.txt
 ```
 
+Or, run `make install` in the "v1" directory.
+
 ## Prepare a Log-file Directory
 
-* Create a directory for logging (as root)
+* Create a directory for logging
 
 ```
 # mkdir /var/tmp/lenticularis
@@ -110,7 +110,8 @@ $ pip3 install --user -r requirements.txt
 # ls -dlZ /var/tmp/lenticularis
 ```
 
-It is expected ls will show ... "system_u:object_r:tmp_t:s0".
+It is expected the directory has the security attributes
+"system_u:object_r:tmp_t:s0".
 
 ## Enable Local http Connections
 
@@ -124,24 +125,25 @@ It is expected ls will show ... "system_u:object_r:tmp_t:s0".
 # setsebool -P httpd_can_network_connect 1
 ```
 
-## Start a Reverse-Proxy
+## Start a Proxy
 
 It is highly site dependent.
 
+### Required Headers
+
+Lens3-Api requires {"X-Remote-User"}, which holds an authenticated
+user claim.  Lens3-Api trusts the "X-Remote-User" header passed by a
+proxy.  Make sure the header is properly prepared by a proxy and not
+faked.
+
 The following headers are passed to the Lens3-Mux and Lens3-Api by a
-proxy.  Lens3-Api requires {"X-Remote-User"}, which holds a UID of an
-authenticated user (Unix UID).  Lens3-Mux requires {"Host",
-"X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Server",
-"X-Forwarded-Proto", "X-Real-IP"}.  "Connection" (for keep-alive) is
-forced unset for Lens3-Mux.  These are all practically standard headers.
+proxy.  Lens3-Mux requires {"Host", "X-Forwarded-For",
+"X-Forwarded-Host", "X-Forwarded-Server", "X-Forwarded-Proto",
+"X-Real-IP"}.  "Connection" (for keep-alive) is forced unset for
+Lens3-Mux.  These are all practically standard headers.
 
 Note {"X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Server"} are
-set implicitly by a proxy in Apache.
-
-### An Authenticated User
-
-Lens3-Api trusts the "X-Remote-User" header passed by the proxy.  Make
-sure the header is properly prepared by the proxy and not faked.
+implicitly set by an Apache proxy.
 
 ### Proxy by NGINX
 
@@ -202,8 +204,8 @@ CLI has parameters for file transfers "multipart_threshold"
 (default=8MB) and "multipart_chunksize" (default=8MB).  Especially,
 "multipart_chunksize" has the minimum 5MB.
 
-It is recommended to check the limits of the reverse-proxy when
-encountering a 413 error (Request Entity Too Large).
+It is recommended to check the limits of a proxy when encountering a
+413 error (Request Entity Too Large).
 
 NGINX parameters are specified in the server section (or in the http
 section).  Refer to "lens3proxy.conf".  The "client_max_body_size" is
@@ -242,7 +244,7 @@ Install Apache.
 # ls -lZ /etc/httpd/conf.d/lens3proxy.conf
 ```
 
-A hint for a setting: Since the proxy forwards directory accesses to a
+Hints for setting: Since a proxy forwards directory accesses to
 Lens3-Api, a trailing slash is necessary (in both the pattern part and
 the URL part as noted in the Apache documents).  As a result, accesses
 by "https://lens3.exmaple.com/api" (without a slash) will fail.
@@ -252,11 +254,11 @@ ProxyPass /api/ http://localhost:8003/
 ProxyPassReverse /api/ http://localhost:8003/
 ```
 
-## Setup Redis
+## Set up Redis
 
 * Copy the Redis configuration file
   * Configuration file is: `/etc/lenticularis/redis.conf`
-* Change the fields of redis.conf.
+* Edit the fields of redis.conf.
   * bind: Network interfaces; localhost by default
   * port: A port for Redis
   * requirepass: A passhprase for Redis
@@ -282,8 +284,8 @@ Note: Starting Redis will fail when the file owner of
 # systemctl start lenticularis-redis
 ```
 
-* Copy a Lens3 configuration file.  It holds a Redis connection
-  information.
+* Copy and edit a Lens3 configuration file.  It shoul hold a Redis
+  connection information.
 
 ```
 # cp $TOP/unit-file/conf.json /etc/lenticularis/conf.json
@@ -292,65 +294,70 @@ Note: Starting Redis will fail when the file owner of
 # chmod o-rwx /etc/lenticularis/conf.json
 ```
 
-## Setup Lens3-Api (Web-API) and Lens3-Mux (Multiplexer)
+## Set up Lens3-Api and Lens3-Mux
 
-* Copy the systemd unit file for Lens3-Api
-  * Modify it if necessary
+* Copy (and edit) the systemd unit file for Lens3-Api
 
 ```
 # cp $TOP/unit-file/api/lenticularis-api.service /usr/lib/systemd/system/
 ```
 
-* Copy the systemd unit file for Lens3-Mux
-  * Modify it if necessary
+* Copy (and edit) the systemd unit file for Lens3-Mux
 
 ```
 # cp $TOP/unit-file/mux/lenticularis-mux.service /usr/lib/systemd/system/
 ```
 
-## Setup sudoers for Lens3-Mux
+## Set up sudoers for Lens3-Mux
 
-Lens3 runs MinIO as a usual user process, and thus, it uses sudo to
+Lens3 runs MinIO as a non-root process, and thus, it uses sudo to
 start MinIO.  The provided example setting is that the user "lens3" is
 only allowed to run "/home/lens3/bin/minio".
 
-* Copy a sudoers entry in /etc/sudoers.d
-  * Modify it if necessary
+* Copy and edit a sudoers entry in /etc/sudoers.d
 
 ```
 # cp $TOP/unit-file/mux/lenticularis-sudoers /etc/sudoers.d/
+# vi /etc/sudoers.d/lenticularis-sudoers
 # chmod -w /etc/sudoers.d/lenticularis-sudoers
 # chmod o-rwx /etc/sudoers.d/lenticularis-sudoers
 ```
 
 ## Load Settings to Redis
 
-Lens3-Api will be started as a system service with
-uid:gid="lens3":"lens3".  This section prepares for it.
+Lens3-Mux and Lens3-Api load configurations from Redis.  This section
+prepares for it.  See [api-conf-yaml.md](api-conf-yaml.md) and
+[api-conf-yaml.md](api-conf-yaml.md) for the description of the
+fields.  Probably, it is better to run `lens3-admin` on the same node
+running Lens3-Api.
 
 * Prepare the Lens3-Api configuration from files somewhere
-  * Copy a configuration files
-  * Modify they
-  * See [api-config-yaml.md](api-config-yaml.md) for the fields
+  * Copy and edit configuration files
   * (Use a random for CSRF_secret_key)
 
 ```
-lens3-admin$ cp /etc/lenticularis/conf.json .
-lens3-admin$ cp $TOP/unit-file/api/api-config.yaml api-config.yaml
-lens3-admin$ cp $TOP/unit-file/mux/mux-config.yaml mux-config.yaml
-lens3-admin$ vi api-config.yaml
-lens3-admin$ vi mux-config.yaml
+# cp /etc/lenticularis/conf.json /home/lens3/conf.json
+# chown lens3-admin /home/lens3/conf.json
+# su - lens3
+$ cd ~
+lens3$ cp $TOP/unit-file/api/api-conf.yaml api-conf.yaml
+lens3$ cp $TOP/unit-file/mux/mux-conf.yaml mux-conf.yaml
+lens3$ vi api-conf.yaml
+lens3$ vi mux-conf.yaml
 ```
 
 * Load the Lens3 configuration from files
 
 ```
-lens3-admin$ lens3-admin -c conf.json load-conf api-config.yaml
-lens3-admin$ lens3-admin -c conf.json load-conf mux-config.yaml
-lens3-admin$ lens3-admin -c conf.json list-conf
+lens3$ lens3-admin -c conf.json load-conf api-conf.yaml
+lens3$ lens3-admin -c conf.json load-conf mux-conf.yaml
+lens3$ lens3-admin -c conf.json list-conf
 ```
 
 ## Start Services (Lens3-Mux and Lens3-Api)
+
+Lens3-Mux and Lens3-Api will be started as a system service with
+uid:gid="lens3":"lens3".
 
 ```
 # systemctl daemon-reload
@@ -364,38 +371,41 @@ lens3-admin$ lens3-admin -c conf.json list-conf
 
 Lens3 has its own a list of users (with uid+gid) and a list of
 enablement status of the users.  It does not look at the databases of
-the underlying OS whereas it uses uid+gid of the system.
+the underlying system whereas it uses uid+gid of the system.
 
 See [Administration Guide](admin-guide.md#).
 
-* Prepare a list of users in a CSV file
-  * An entry is a user name and a list of groups
+Lens3 stores user information from a CSV file.  An entry in CSV is a
+"ADD" keyword, a uid, a (maybe empty) claim string, and a list of
+groups
+
+* Prepare a list of users in a CSV file.
 
 ```
-ADD,user1,group1a,group1b,group1c, ...
-ADD,user2,group2a,group2b,group2c, ...
+ADD,user1,,group1a,group1b,group1c, ...
+ADD,user2,,group2a,group2b,group2c, ...
 ...
 ```
 
-* Register users to Lens3 by `lens3-admin` command
+* Register users by `lens3-admin` command
 
 ```
-lens3-admin$ lens3-admin -c api-config.yaml load-user {csv-file}
-lens3-admin$ lens3-admin -c api-config.yaml list-user
+lens3$ lens3-admin -c conf.json load-user {csv-file}
+lens3$ lens3-admin -c conf.json list-user
 ```
 
 * (Optionally) Prepare a list of users enabled to access
-  * An entry is a "enable" prefix and a list of user names
+  * An entry is a "enable" prefix and a list of uid's
 
 ```
 ENABLE,user1,user2,user3, ...
 ```
 
-* Register permit-list to Lens3 by `lens3-admin` command.
+* Register an enabled-user list by `lens3-admin` command
 
 ```
-lens3-admin$ lens3-admin -c api-config.yaml load-permit {csv-file}
-lens3-admin$ lens3-admin -c api-config.yaml list-permit
+lens3$ lens3-admin -c conf.json load-user {csv-file}
+lens3$ lens3-admin -c conf.json list-user
 ```
 
 ## Check the Status
@@ -412,17 +422,14 @@ $ systemctl status nginx
 $ systemctl status lenticularis-redis
 ```
 
-* Lens3-Mux (Multiplexer) status
+* Lens3-Mux status and Lens3-Api status
 
 ```
-$ systemctl status lenticularis-mux
-lens3-admin$ lens3-admin -c api-config.yaml show-muxs
-```
-
-* Lens3-Api (Web-API) status
-
-```
-$ systemctl status lenticularis-api
+# systemctl status lenticularis-mux
+# systemctl status lenticularis-api
+# su - lens3
+lens3$ cd ~
+lens3$ lens3-admin -c conf.json show-muxs
 ```
 
 ## Test Accesses

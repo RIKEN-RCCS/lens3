@@ -326,7 +326,7 @@ only allowed to run "/home/lens3/bin/minio".
 ## Load Settings to Redis
 
 Lens3-Mux and Lens3-Api load configurations from Redis.  This section
-prepares for it.  See [api-conf-yaml.md](api-conf-yaml.md) and
+prepares for it.  See [mux-conf-yaml.md](mux-conf-yaml.md) and
 [api-conf-yaml.md](api-conf-yaml.md) for the description of the
 fields.  Probably, it is better to run `lens3-admin` on the same node
 running Lens3-Api.

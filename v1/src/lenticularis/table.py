@@ -12,7 +12,7 @@ import jsonschema
 import redis
 from redis import Redis
 from lenticularis.yamlconf import redis_json_schema
-from lenticularis.poolutil import Pool_State
+from lenticularis.pooldata import Pool_State
 from lenticularis.utility import rephrase_exception_message
 from lenticularis.utility import generate_access_key
 from lenticularis.utility import logger

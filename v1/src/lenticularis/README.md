@@ -18,7 +18,7 @@
 
 * [readconf.py](readconf.py)
 * [mc.py](mc.py)
-* [poolutil.py](poolutil.py)
+* [pooldata.py](pooldata.py)
 * [table.py](table.py)
 * [utility.py](utility.py)
 

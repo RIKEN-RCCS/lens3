@@ -20,10 +20,10 @@ from lenticularis.mc import Mc, assert_mc_success
 from lenticularis.table import get_table
 from lenticularis.table import read_redis_conf
 from lenticularis.table import get_conf
-from lenticularis.poolutil import Pool_State
-from lenticularis.poolutil import gather_buckets, gather_keys
-from lenticularis.poolutil import get_manager_name_for_messages
-from lenticularis.poolutil import tally_manager_expiry
+from lenticularis.pooldata import Pool_State
+from lenticularis.pooldata import gather_buckets, gather_keys
+from lenticularis.pooldata import get_manager_name_for_messages
+from lenticularis.pooldata import tally_manager_expiry
 from lenticularis.utility import ERROR_EXIT_BADCONF, ERROR_EXIT_FORK
 from lenticularis.utility import generate_access_key
 from lenticularis.utility import generate_secret_key

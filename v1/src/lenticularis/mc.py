@@ -9,7 +9,7 @@
 import tempfile
 import json
 from subprocess import Popen, DEVNULL, PIPE
-from lenticularis.poolutil import Api_Error
+from lenticularis.pooldata import Api_Error
 from lenticularis.utility import remove_trailing_slash
 from lenticularis.utility import list_diff3
 from lenticularis.utility import rephrase_exception_message

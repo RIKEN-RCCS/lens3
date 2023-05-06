@@ -21,12 +21,12 @@ from lenticularis.table import read_redis_conf
 from lenticularis.table import get_table
 from lenticularis.table import set_conf, get_conf
 from lenticularis.yamlconf import read_yaml_conf
-from lenticularis.poolutil import Api_Error
-from lenticularis.poolutil import gather_pool_desc
-from lenticularis.poolutil import check_user_naming
-from lenticularis.poolutil import check_claim_string
-from lenticularis.poolutil import get_pool_owner_for_messages
-from lenticularis.poolutil import dump_db, restore_db
+from lenticularis.pooldata import Api_Error
+from lenticularis.pooldata import gather_pool_desc
+from lenticularis.pooldata import check_user_naming
+from lenticularis.pooldata import check_claim_string
+from lenticularis.pooldata import get_pool_owner_for_messages
+from lenticularis.pooldata import dump_db, restore_db
 from lenticularis.utility import ERROR_EXIT_BADCONF, ERROR_EXIT_EXCEPTION, ERROR_EXIT_ARGUMENT
 from lenticularis.utility import format_time_z
 from lenticularis.utility import random_str

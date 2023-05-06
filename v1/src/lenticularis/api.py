@@ -81,8 +81,9 @@ def app():
     return _app
 
 
-def _make_json_response(status_code, reason, values, csrf_protect,
-                        client_addr, user_id, request):
+def _make_json_response(triple, user_id, client_addr, request, csrf_protect):
+    """Makes a response.  triple=(code, reason, values)."""
+    (status_code, reason, values) = triple
     if reason is not None:
         content = {"status": "error", "reason": reason}
     else:
@@ -135,11 +136,10 @@ def csrf_protect_exception_handler(request : Request, exc : CsrfProtectError):
 @_app.middleware("http")
 async def validate_session(request : Request, call_next):
     peer_addr = make_typical_ip_address(str(request.client.host))
-    claim = request.headers.get("X-REMOTE-USER")
+    x_remote_user = request.headers.get("X-REMOTE-USER")
     client_addr = request.headers.get("X-REAL-IP")
-    user_id = _api.map_claim_to_uid(claim)
+    user_id = _api.map_claim_to_uid(x_remote_user)
     now = int(time.time())
-
     if peer_addr not in _api.trusted_proxies:
         logger.error(f"Untrusted proxy: {peer_addr};"
                      f" Check configuration")
@@ -163,7 +163,7 @@ async def validate_session(request : Request, call_next):
 
 @_app.get("/csrftoken/")
 async def get_csrf_token(csrf_protect : CsrfProtect = Depends()):
-    response = JSONResponse(status_code=200, content={'csrf_token': 'cookie'})
+    response = JSONResponse(status_code=200, content={"csrf_token": "cookie"})
     csrf_protect.set_csrf_cookie(response)
     return response
 
@@ -196,14 +196,14 @@ async def app_get_get_user_info(
         x_real_ip : Union[str, None] = Header(default=None),
         x_traceid : Union[str, None] = Header(default=None),
         csrf_protect : CsrfProtect = Depends()):
-    """Returns a user information for Web-API."""
+    """Returns a user information."""
     logger.debug(f"APP.GET /user-info")
     tracing.set(x_traceid)
     user_id = _api.map_claim_to_uid(x_remote_user)
     client_addr = x_real_ip
-    (code, reason, values) = _api.api_return_user_info(x_traceid, user_id)
-    response = _make_json_response(code, reason, values, csrf_protect,
-                                   client_addr, user_id, request)
+    triple = _api.api_get_user_info(x_traceid, user_id)
+    response = _make_json_response(triple, user_id, client_addr, request,
+                                   csrf_protect)
     return response
 
 
@@ -218,9 +218,9 @@ async def app_get_list_pools(
     tracing.set(x_traceid)
     user_id = _api.map_claim_to_uid(x_remote_user)
     client_addr = x_real_ip
-    (code, reason, values) = _api.api_list_pools(x_traceid, user_id, None)
-    response = _make_json_response(code, reason, values, csrf_protect,
-                                   client_addr, user_id, request)
+    triple = _api.api_list_pools(x_traceid, user_id, None)
+    response = _make_json_response(triple, user_id, client_addr, request,
+                                   csrf_protect)
     return response
 
 
@@ -236,9 +236,9 @@ async def app_get_get_pool(
     tracing.set(x_traceid)
     user_id = _api.map_claim_to_uid(x_remote_user)
     client_addr = x_real_ip
-    (code, reason, values) = _api.api_list_pools(x_traceid, user_id, pool_id)
-    response = _make_json_response(code, reason, values, csrf_protect,
-                                   client_addr, user_id, request)
+    triple = _api.api_list_pools(x_traceid, user_id, pool_id)
+    response = _make_json_response(triple, user_id, client_addr, request,
+                                   csrf_protect)
     return response
 
 
@@ -256,9 +256,9 @@ async def app_post_make_pool(
     body = await _get_request_body(request)
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
-    (code, reason, values) = _api.api_make_pool(x_traceid, user_id, body)
-    response = _make_json_response(code, reason, values, csrf_protect,
-                                   client_addr, user_id, request)
+    triple = _api.api_make_pool(x_traceid, user_id, body)
+    response = _make_json_response(triple, user_id, client_addr, request,
+                                   csrf_protect)
     return response
 
 
@@ -275,11 +275,11 @@ async def app_delete_delete_pool(
     user_id = _api.map_claim_to_uid(x_remote_user)
     client_addr = x_real_ip
     body = await _get_request_body(request)
-    csrf_token = body.get("CSRF-Token")
-    csrf_protect.validate_csrf(csrf_token)
-    (code, reason, values) = _api.api_delete_pool(x_traceid, user_id, pool_id)
-    response = _make_json_response(code, reason, values, csrf_protect,
-                                   client_addr, user_id, request)
+    token = body.get("CSRF-Token")
+    csrf_protect.validate_csrf(token)
+    triple = _api.api_delete_pool(x_traceid, user_id, pool_id)
+    response = _make_json_response(triple, user_id, client_addr, request,
+                                   csrf_protect)
     return response
 
 
@@ -298,9 +298,9 @@ async def app_put_make_bucket(
     body = await _get_request_body(request)
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
-    (code, reason, values) = _api.api_make_bucket(x_traceid, user_id, pool_id, body)
-    response = _make_json_response(code, reason, values, csrf_protect,
-                                   client_addr, user_id, request)
+    triple = _api.api_make_bucket(x_traceid, user_id, pool_id, body)
+    response = _make_json_response(triple, user_id, client_addr, request,
+                                   csrf_protect)
     return response
 
 
@@ -320,9 +320,9 @@ async def app_delete_delete_bucket(
     body = await _get_request_body(request)
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
-    (code, reason, values) = _api.api_delete_bucket(x_traceid, user_id, pool_id, bucket)
-    response = _make_json_response(code, reason, values, csrf_protect,
-                                   client_addr, user_id, request)
+    triple = _api.api_delete_bucket(x_traceid, user_id, pool_id, bucket)
+    response = _make_json_response(triple, user_id, client_addr, request,
+                                   csrf_protect)
     return response
 
 
@@ -341,9 +341,9 @@ async def app_post_make_secret(
     body = await _get_request_body(request)
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
-    (code, reason, values) = _api.api_make_secret(x_traceid, user_id, pool_id, body)
-    response = _make_json_response(code, reason, values, csrf_protect,
-                                   client_addr, user_id, request)
+    triple = _api.api_make_secret(x_traceid, user_id, pool_id, body)
+    response = _make_json_response(triple, user_id, client_addr, request,
+                                   csrf_protect)
     return response
 
 
@@ -363,7 +363,7 @@ async def app_delete_delete_secret(
     body = await _get_request_body(request)
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
-    (code, reason, values) = _api.api_delete_secret(x_traceid, user_id, pool_id, access_key)
-    response = _make_json_response(code, reason, values, csrf_protect,
-                                   client_addr, user_id, request)
+    triple = _api.api_delete_secret(x_traceid, user_id, pool_id, access_key)
+    response = _make_json_response(triple, user_id, client_addr, request,
+                                   csrf_protect)
     return response

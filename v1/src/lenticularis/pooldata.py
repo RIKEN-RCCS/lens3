@@ -548,7 +548,7 @@ def _restore_pool(tables, pooldesc):
             "expiration_time": k["expiration_time"],
             "modification_time": k["modification_time"],
         }
-        ok = tables.set_ex_id(xid, "akey", entry3)
+        ok = tables.set_ex_xid(xid, "akey", entry3)
         if not ok:
             raise Api_Error(500, "Duplicate access-key: {key}")
         pass

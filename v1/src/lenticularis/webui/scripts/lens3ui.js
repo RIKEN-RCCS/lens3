@@ -24,21 +24,19 @@ var edit_pool_data = {
   group: "",
   group_choices: [],
 
-  expiration_time: "",
-  user_enabled_status: true,
-  online_status: true,
-  pool_state: "",
+  //expiration_time: "",
+  //user_enabled_status: true,
+  //online_status: true,
+  //pool_state: "",
 
   list_of_buckets: [],
   bucket_name: "",
   bucket_policy: "none",
 
+  key_expiration_time: "1970-01-01T2:00:00Z",
   access_keys_rw: [],
   access_keys_ro: [],
   access_keys_wo: [],
-
-  key_expiration_date: "2023-05-01",
-  key_expiration_time: "12:39:41",
 };
 
 var make_new_pool_button_app = new Vue({
@@ -46,7 +44,7 @@ var make_new_pool_button_app = new Vue({
   methods: {
     kick_add_new_pool: () => {
       edit_pool_data.make_pool_mode = true;
-      run_get_user_info();
+      api_get_user_info();
     },
   },
 });
@@ -57,7 +55,7 @@ var show_pool_list_button_app = new Vue({
   methods: {
     kick_show_pool_list: () => {
       edit_pool_data.make_pool_mode = false;
-      run_get_pool_list();
+      api_list_pools();
     },
   },
 });
@@ -68,7 +66,7 @@ var pool_section_app = new Vue({
   methods: {
     kick_make_pool: () => {
       edit_pool_data.make_pool_mode = false;
-      run_make_pool();
+      api_make_pool();
     },
   },
 });
@@ -77,8 +75,8 @@ var buckets_section_app = new Vue({
   el: "#buckets_section",
   data: edit_pool_data,
   methods: {
-    kick_make_bucket: run_make_bucket,
-    kick_delete_bucket: run_delete_bucket,
+    kick_make_bucket: api_make_bucket,
+    kick_delete_bucket: api_delete_bucket,
   },
 });
 
@@ -86,9 +84,9 @@ var keys_section_app = new Vue({
   el: "#keys_section",
   data: edit_pool_data,
   methods: {
-    kick_make_secret: run_make_secret,
+    kick_make_secret: api_make_secret,
     kick_copy_to_clipboard: copy_to_clipboard,
-    kick_delete_secret: run_delete_secret,
+    kick_delete_secret: api_delete_secret,
   },
 });
 
@@ -103,7 +101,7 @@ var pool_list_section_app = new Vue({
   data: pool_list_section_data,
   methods: {
     kick_edit_pool: run_edit_pool,
-    kick_delete_pool: run_delete_pool,
+    kick_delete_pool: api_delete_pool,
   }
 });
 
@@ -120,12 +118,10 @@ var show_status_app = new Vue({
   el: "#show_status",
   data: show_status_data,
   methods: {
-    kick_show_pool_list: run_get_pool_list,
+    kick_show_pool_list: api_list_pools,
     kick_debug: run_debug,
   },
 });
-
-/* FUNCTIONS */
 
 function submit_request(msg, triple, process_response) {
   show_message(msg + " ...");
@@ -165,7 +161,7 @@ function submit_request(msg, triple, process_response) {
     });
 }
 
-function run_get_user_info() {
+function api_get_user_info() {
   const msg = "get user info"
   const method = "GET";
   const path = (base_path + "/user-info");
@@ -174,8 +170,8 @@ function run_get_user_info() {
   return submit_request(msg, triple, set_user_info_data);
 }
 
-function run_get_pool_list() {
-  const msg = "get pool list"
+function api_list_pools() {
+  const msg = "list pools"
   const method = "GET";
   const path = (base_path + "/pool");
   const body = null;
@@ -183,7 +179,7 @@ function run_get_pool_list() {
   return submit_request(msg, triple, render_pool_list);
 }
 
-function run_make_pool() {
+function api_make_pool() {
   const msg = "make pool";
   const directory = edit_pool_data.buckets_directory;
   const owner_gid = edit_pool_data.group;
@@ -198,7 +194,7 @@ function run_make_pool() {
   return submit_request(msg, triple, display_pool_in_edit_pool)
 }
 
-function run_delete_pool(i) {
+function api_delete_pool(i) {
   const msg = "delete pool";
   const pooldesc = pool_list_section_data.pool_desc_list[i]
   const pool_name = pooldesc["pool_name"];
@@ -208,31 +204,34 @@ function run_delete_pool(i) {
   const data = {"CSRF-Token": csrf_token};
   const body = JSON.stringify(data);
   const triple = {method, path, body};
-  return submit_request(msg, triple, (data) => {run_get_pool_list();});
+  return submit_request(msg, triple, (data) => {api_list_pools();});
 }
 
 function run_edit_pool(i) {
+  const expiration = Math.floor(Date.now() / 1000) + (7 * 24 * 3600);
+  edit_pool_data.key_expiration_time = format_time_z(expiration);
+
   pooldesc = pool_list_section_data.pool_desc_list[i]
-  const data = {"pool_list": [pooldesc]}
+  const data = {"pool_desc": pooldesc}
   display_pool_in_edit_pool(data)
 }
 
 function display_pool_in_edit_pool(data) {
-  pooldesc = data["pool_list"][0]
+  pooldesc = data["pool_desc"]
   copy_pool_desc_for_edit(pooldesc);
   edit_pool_data.pool_name_visible = true;
   edit_pool_data.edit_pool_visible = true;
   pool_list_section_data.pool_data_visible = false;
 }
 
-function run_make_bucket() {
+function api_make_bucket() {
   const msg = "make bucket";
   const name = edit_pool_data.bucket_name;
   const policy = edit_pool_data.bucket_policy;
   console.log("make_bucket: name=" + name + ", policy=" + policy);
   const method = "PUT";
   const path = (base_path + "/pool/" + edit_pool_data.pool_name
-                    + "/bucket");
+                + "/bucket");
   const data = {"bucket": {"name": name, "bkt_policy": policy},
                 "CSRF-Token": csrf_token};
   const body = JSON.stringify(data);
@@ -240,22 +239,22 @@ function run_make_bucket() {
   return submit_request(msg, triple, display_pool_in_edit_pool);
 }
 
-function run_delete_bucket(name) {
+function api_delete_bucket(name) {
   const msg = "delete bucket";
   console.log("delete_bucket: name=" + name);
   const method = "DELETE";
   const path = (base_path + "/pool/" + edit_pool_data.pool_name
-                    + "/bucket/" + name);
+                + "/bucket/" + name);
   const data = {"CSRF-Token": csrf_token};
   const body = JSON.stringify(data);
   const triple = {method, path, body};
   return submit_request(msg, triple, display_pool_in_edit_pool);
 }
 
-function run_make_secret(rw) {
+function api_make_secret(rw) {
   const msg = "make access-key";
   console.log("make_access_key: " + rw);
-  const expiration = (7 * 24 * 3600) + Math.floor(Date.now() / 1000);
+  const expiration = parse_time_z(edit_pool_data.key_expiration_time);
   const method = "POST";
   const path = (base_path + "/pool/" + edit_pool_data.pool_name
                 + "/secret");
@@ -267,12 +266,12 @@ function run_make_secret(rw) {
   return submit_request(msg, triple, display_pool_in_edit_pool);
 }
 
-function run_delete_secret(key) {
+function api_delete_secret(key) {
   const msg = "delete access-key";
   console.log("delete_access_key: " + key);
   const method = "DELETE";
   const path = (base_path + "/pool/" + edit_pool_data.pool_name
-                    + "/secret/" + key);
+                + "/secret/" + key);
   const data = {"CSRF-Token": csrf_token};
   const body = JSON.stringify(data);
   const triple = {method, path, body};
@@ -287,8 +286,8 @@ const bkt_policy_names = ["none", "public", "upload", "download"];
 const key_policy_names = ["readwrite", "readonly", "writeonly"];
 
 function set_user_info_data(data) {
-  const pool_desc_list = data["pool_list"];
-  const desc = pool_desc_list[0];
+  console.assert(data && data["user_info"]);
+  const desc = data["user_info"];
   console.assert(desc["api_version"] == "v1.2", "Lens3 api mismatch");
   copy_user_info_for_edit(desc);
   edit_pool_data.pool_name_visible = true;
@@ -328,7 +327,7 @@ function render_pool_as_ul_entry(pooldesc) {
     {text: {label: "Public download buckets", value: bkts_download}},
     {text: {label: "Public upload buckets", value: bkts_upload}},
   ];
-
+  /*
   const keys = pooldesc["access_keys"];
   const rwkeys = keys.filter(d => d["key_policy"] == "readwrite")
   const rokeys = keys.filter(d => d["key_policy"] == "readonly")
@@ -347,29 +346,27 @@ function render_pool_as_ul_entry(pooldesc) {
       {text: {label: "Secret key", value: d["secret_key"]}},
     ]), []),
   ];
-
+  */
   return [
     {text: {label: "Buckets directory", value: pooldesc["buckets_directory"]}},
     {text: {label: "Unix user", value: pooldesc["owner_uid"]}},
     {text: {label: "Unix group", value: pooldesc["owner_gid"]}},
     ... bkt_entries,
-    ... key_entries,
-    //{text: {label: "Endpoint-URL", value: pooldesc["endpoint_url"]}},
+    /* ... key_entries, */
     {text: {label: "Pool-ID", value: pooldesc["pool_name"]}},
-    //{text: {label: "Direct hostname", value: pooldesc["direct_hostnames"].join(" ")}},
     {text: {label: "MinIO state",
             value: (pooldesc["minio_state"]
                     + " (reason: " + pooldesc["minio_reason"] + ")")}},
-    {text: {label: "Expiration date", value: format_time_if_not_zero(pooldesc["expiration_time"])}},
+    {text: {label: "Expiration date", value: format_time_z(pooldesc["expiration_time"])}},
     {text: {label: "User enabled", value: pooldesc["user_enabled_status"]}},
     {text: {label: "Pool online", value: pooldesc["online_status"]}},
-    {text: {label: "Creation date", value: format_time_if_not_zero(pooldesc["modification_time"])}},
+    {text: {label: "Creation date", value: format_time_z(pooldesc["modification_time"])}},
   ];
 }
 
 function copy_user_info_for_edit(desc) {
-  edit_pool_data.user = desc["owner_uid"];
-  edit_pool_data.group = desc["owner_gid"];
+  edit_pool_data.user = desc["uid"];
+  edit_pool_data.group = desc["groups"][0];
   edit_pool_data.group_choices = desc["groups"];
 }
 
@@ -388,14 +385,21 @@ function copy_pool_desc_for_edit(pooldesc) {
   const rwkeys = keys.filter(d => d["key_policy"] == "readwrite")
   const rokeys = keys.filter(d => d["key_policy"] == "readonly")
   const wokeys = keys.filter(d => d["key_policy"] == "writeonly")
-  edit_pool_data.access_keys_rw = rwkeys
-  edit_pool_data.access_keys_ro = rokeys
-  edit_pool_data.access_keys_wo = wokeys
+  edit_pool_data.access_keys_rw = format_time_in_keys(rwkeys)
+  edit_pool_data.access_keys_ro = format_time_in_keys(rokeys)
+  edit_pool_data.access_keys_wo = format_time_in_keys(wokeys)
 
-  edit_pool_data.expiration_time = format_time_if_not_zero(pooldesc["expiration_time"]);
-  edit_pool_data.user_enabled_status = pooldesc["user_enabled_status"];
-  edit_pool_data.online_status = pooldesc["online_status"];
-  edit_pool_data.pool_state = pooldesc["minio_state"];
+  //edit_pool_data.user_enabled_status = pooldesc["user_enabled_status"];
+  //edit_pool_data.online_status = pooldesc["online_status"];
+  //edit_pool_data.pool_state = pooldesc["minio_state"];
+}
+
+function format_time_in_keys(keys) {
+  return keys.map((k) => {
+    return {"access_key": k["access_key"],
+            "secret_key": k["secret_key"],
+            "expiration_time": format_time_z(k["expiration_time"])};
+  });
 }
 
 function show_message(s) {
@@ -410,9 +414,11 @@ function render_response_status(data) {
   if (data["CSRF-Token"] != null) {
     csrf_token = data["CSRF-Token"];
   }
+  /*
   if (data["pool_list"] != null && data["pool_list"][0] != null) {
     edit_pool_data.pool_state = data["pool_list"][0]["minio_state"];
   }
+  */
   show_status(data["status"])
   show_reason(data["reason"])
   show_duration(data["time"])
@@ -428,7 +434,7 @@ function show_reason(s) {
 
 function show_duration(s) {
   if (s != null) {
-    show_status_data.time = "Finished at: " + format_time_if_not_zero(s);
+    show_status_data.time = "Finished at: " + format_time_z(s);
   } else {
     show_status_data.time = "";
   }
@@ -439,16 +445,12 @@ function parse_time_z(s) {
 }
 
 function format_time_z(d) {
-  /* Returns a date+time string by milliseconds. */
-  return new Date(d * 1000).toISOString();
-}
-
-function format_time_if_not_zero(d) {
-  //console.log("format_time_if_not_zero: " + d);
+  /* Returns a date+time string with milliseconds. */
   if (d == "0") {
     return "0";
+  } else {
+    return new Date(d * 1000).toISOString();
   }
-  return format_time_z(d);
 }
 
 function run_debug() {

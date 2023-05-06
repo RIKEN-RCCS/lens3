@@ -84,10 +84,10 @@ def erase_pool_data(tables, pool_id):
     logger.debug(f"Deleting access-keys pool={pool_id}: {keynames}")
     for k in keynames:
         try:
-            tables.delete_id_unconditionally("akey", k)
+            tables.delete_xid_unconditionally("akey", k)
         except Exception as e:
             m = rephrase_exception_message(e)
-            logger.info(f"delete_id_unconditionally failed: exception=({m})")
+            logger.info(f"delete_xid_unconditionally failed: exception=({m})")
             pass
         pass
     logger.debug(f"Deleting pool states (pool={pool_id})")
@@ -104,10 +104,10 @@ def erase_pool_data(tables, pool_id):
         logger.info(f"delete_pool_state failed: exception=({m})")
         pass
     try:
-        tables.delete_id_unconditionally("pool", pool_id)
+        tables.delete_xid_unconditionally("pool", pool_id)
     except Exception as e:
         m = rephrase_exception_message(e)
-        logger.info(f"delete_id_unconditionally failed: exception=({m})")
+        logger.info(f"delete_xid_unconditionally failed: exception=({m})")
         pass
     pass
 
@@ -146,10 +146,10 @@ def make_new_pool(tables, user_id, owner_gid, path, expiration):
         pass
     except Exception:
         if pool_id is not None:
-            tables.delete_id_unconditionally("pool", pool_id)
+            tables.delete_xid_unconditionally("pool", pool_id)
             pass
         if probe_key is not None:
-            tables.delete_id_unconditionally("akey", probe_key)
+            tables.delete_xid_unconditionally("akey", probe_key)
             pass
         raise
     return pool_id
@@ -329,12 +329,12 @@ class Control_Api():
         logger.debug(f"Access Mux for pool={pool_id}: status={status}")
         return status
 
-    # API interfaces.
+    # Query interface.
 
-    def api_return_user_info(self, traceid, user_id):
+    def api_get_user_info(self, traceid, user_id):
         try:
-            t = self._return_user_info(user_id)
-            return (200, None, {"pool_list": [t]})
+            info = self._api_get_user_info(user_id)
+            return (200, None, info)
         except Api_Error as e:
             time.sleep(self._bad_response_delay)
             return (e.code, f"{e}", None)
@@ -348,6 +348,27 @@ class Control_Api():
         pass
 
     # Pools interface.
+
+    def api_list_pools(self, traceid, user_id, pool_id):
+        """It lists all pools of the user when pool-id is None."""
+        try:
+            if pool_id is None:
+                pass
+            elif not check_pool_naming(pool_id):
+                return (403, f"Bad pool-id={pool_id}", None)
+            triple = self._api_list_pools(traceid, user_id, pool_id)
+            return triple
+        except Api_Error as e:
+            time.sleep(self._bad_response_delay)
+            return (e.code, f"{e}", None)
+        except Exception as e:
+            m = rephrase_exception_message(e)
+            logger.error((f"list_pools failed: user={user_id}, pool={pool_id};"
+                          f" exception=({m})"),
+                         exc_info=True)
+            time.sleep(self._bad_response_delay)
+            return (500, m, None)
+        pass
 
     def api_make_pool(self, traceid, user_id, body):
         pooldesc = body.get("pool")
@@ -367,6 +388,9 @@ class Control_Api():
         pass
 
     def api_delete_pool(self, traceid, user_id, pool_id):
+        """Deletes a pool.  It clears buckets and access-keys set in MinIO.
+        It can delete despite of the ensure_pool_state() state.
+        """
         try:
             if not check_pool_naming(pool_id):
                 return (403, f"Bad pool={pool_id}", None)
@@ -379,26 +403,6 @@ class Control_Api():
             m = rephrase_exception_message(e)
             logger.error((f"delete_pool failed: user={user_id},"
                           f" pool={pool_id}; exception=({m})"),
-                         exc_info=True)
-            time.sleep(self._bad_response_delay)
-            return (500, m, None)
-        pass
-
-    def api_list_pools(self, traceid, user_id, pool_id):
-        try:
-            if pool_id is None:
-                pass
-            elif not check_pool_naming(pool_id):
-                return (403, f"Bad pool-id={pool_id}", None)
-            triple = self._api_list_pools(traceid, user_id, pool_id)
-            return triple
-        except Api_Error as e:
-            time.sleep(self._bad_response_delay)
-            return (e.code, f"{e}", None)
-        except Exception as e:
-            m = rephrase_exception_message(e)
-            logger.error((f"list_pools failed: user={user_id}, pool={pool_id};"
-                          f" exception=({m})"),
                          exc_info=True)
             time.sleep(self._bad_response_delay)
             return (500, m, None)
@@ -442,6 +446,9 @@ class Control_Api():
         pass
 
     def api_delete_bucket(self, traceid, user_id, pool_id, bucket):
+        """Deletes a bucket.  Deleting ignores errors occur in MC commands in
+        favor of disabling accesses to buckets.
+        """
         try:
             if not check_pool_naming(pool_id):
                 return (403, f"Bad pool={pool_id}", None)
@@ -484,7 +491,7 @@ class Control_Api():
             except ValueError:
                 return (403, f"Bad expiration={tv}", None)
             if not self._check_expiration_range(expiration):
-                return (403, f"Bad expiration={tv}", None)
+                return (403, f"Bad range expiration={tv}", None)
         except Exception as e:
             m = rephrase_exception_message(e)
             return (400, m, None)
@@ -505,6 +512,9 @@ class Control_Api():
         pass
 
     def api_delete_secret(self, traceid, user_id, pool_id, access_key):
+        """Deletes a secret.  Deleting will fail when errors occur in MC
+        commands.
+        """
         try:
             if not check_pool_naming(pool_id):
                 return (403, f"Bad pool-id={pool_id}", None)
@@ -516,7 +526,7 @@ class Control_Api():
         try:
             logger.debug(f"Deleting a secret: {access_key}")
             triple = self._api_delete_secret(traceid, user_id, pool_id,
-                                                    access_key)
+                                             access_key)
             return triple
         except Api_Error as e:
             time.sleep(self._bad_response_delay)
@@ -533,19 +543,17 @@ class Control_Api():
 
     # API implementation.
 
-    def _return_user_info(self, user_id):
-        """Returns basic information on the user needed by Web-API."""
+    def _api_get_user_info(self, user_id):
         ensure_user_is_authorized(self.tables, user_id)
         u = self.tables.get_user(user_id)
         assert u is not None
         groups = u.get("groups")
-        template = {
+        info = {
             "api_version": self._api_version,
-            "owner_uid": user_id,
-            "owner_gid": groups[0],
+            "uid": user_id,
             "groups": groups,
         }
-        return template
+        return {"user_info": info}
 
     # Pools handling implementation.
 
@@ -611,10 +619,10 @@ class Control_Api():
             pass
         except Exception:
             if pool_id is not None:
-                self.tables.delete_id_unconditionally("pool", pool_id)
+                self.tables.delete_xid_unconditionally("pool", pool_id)
                 pass
             if probe_key is not None:
-                self.tables.delete_id_unconditionally("akey", probe_key)
+                self.tables.delete_xid_unconditionally("akey", probe_key)
                 pass
             raise
         return pool_id
@@ -648,9 +656,6 @@ class Control_Api():
         pass
 
     def _api_delete_pool(self, traceid, user_id, pool_id):
-        """Deletes a pool.  It clears buckets and access-keys set in MinIO.
-        It can delete despite of the ensure_pool_state() state.
-        """
         ensure_mux_is_running(self.tables)
         ensure_user_is_authorized(self.tables, user_id)
         ensure_pool_owner(self.tables, pool_id, user_id)
@@ -724,10 +729,10 @@ class Control_Api():
         logger.debug(f"Deleting access-keys pool={pool_id}: {keynames}")
         for k in keynames:
             try:
-                self.tables.delete_id_unconditionally("akey", k)
+                self.tables.delete_xid_unconditionally("akey", k)
             except Exception as e:
                 m = rephrase_exception_message(e)
-                logger.info(f"delete_id_unconditionally failed: exception=({m})")
+                logger.info(f"delete_xid_unconditionally failed: exception=({m})")
                 pass
             pass
         logger.debug(f"Deleting pool states (pool={pool_id})")
@@ -744,15 +749,14 @@ class Control_Api():
             logger.info(f"delete_pool_state failed: exception=({m})")
             pass
         try:
-            self.tables.delete_id_unconditionally("pool", pool_id)
+            self.tables.delete_xid_unconditionally("pool", pool_id)
         except Exception as e:
             m = rephrase_exception_message(e)
-            logger.info(f"delete_id_unconditionally failed: exception=({m})")
+            logger.info(f"delete_xid_unconditionally failed: exception=({m})")
             pass
         pass
 
     def _api_list_pools(self, traceid, user_id, pool_id):
-        """It lists all pools of the user when pool-id is None."""
         ensure_mux_is_running(self.tables)
         ensure_user_is_authorized(self.tables, user_id)
         pool_list = []
@@ -777,8 +781,8 @@ class Control_Api():
         ensure_pool_owner(self.tables, pool_id, user_id)
         ensure_pool_state(self.tables, pool_id)
         self.do_make_bucket(traceid, pool_id, bucket, policy)
-        pooldesc1 = gather_pool_desc(self.tables, pool_id)
-        return (200, None, {"pool_list": [pooldesc1]})
+        pooldesc = gather_pool_desc(self.tables, pool_id)
+        return (200, None, {"pool_desc": pooldesc})
 
     def do_make_bucket(self, traceid, pool_id, bucket, bkt_policy):
         now = int(time.time())
@@ -800,16 +804,13 @@ class Control_Api():
         pass
 
     def _api_delete_bucket(self, traceid, user_id, pool_id, bucket):
-        """Deletes a bucket.  Deleting ignores errors occur in MC commands in
-        favor of disabling accesses to buckets.
-        """
         ensure_mux_is_running(self.tables)
         ensure_user_is_authorized(self.tables, user_id)
         ensure_pool_owner(self.tables, pool_id, user_id)
         ensure_pool_state(self.tables, pool_id)
         ensure_bucket_owner(self.tables, bucket, pool_id)
-        pooldesc1 = self.do_delete_bucket(traceid, pool_id, bucket)
-        return (200, None, {"pool_list": [pooldesc1]})
+        pooldesc = self.do_delete_bucket(traceid, pool_id, bucket)
+        return (200, None, {"pool_desc": pooldesc})
 
     def do_delete_bucket(self, traceid, pool_id, bucket):
         try:
@@ -850,9 +851,9 @@ class Control_Api():
         info = {"secret_key": secret, "key_policy": key_policy,
                 "expiration_time": expiration}
         key = self.tables.make_unique_xid("akey", pool_id, info)
-        pooldesc1 = self.do_record_secret(traceid, pool_id,
-                                          key, secret, key_policy)
-        return (200, None, {"pool_list": [pooldesc1]})
+        pooldesc = self.do_record_secret(traceid, pool_id,
+                                         key, secret, key_policy)
+        return (200, None, {"pool_desc": pooldesc})
 
     def do_record_secret(self, traceid, pool_id, key, secret, key_policy):
         try:
@@ -867,22 +868,19 @@ class Control_Api():
                 assert_mc_success(r, "mc.admin_user_enable")
             pass
         except Exception:
-            self.tables.delete_id_unconditionally("akey", key)
+            self.tables.delete_xid_unconditionally("akey", key)
             raise
         pooldesc1 = gather_pool_desc(self.tables, pool_id)
         return pooldesc1
 
     def _api_delete_secret(self, traceid, user_id, pool_id, access_key):
-        """Deletes a secret.  Deleting will fail when errors occur in MC
-        commands.
-        """
         ensure_mux_is_running(self.tables)
         ensure_user_is_authorized(self.tables, user_id)
         ensure_pool_owner(self.tables, pool_id, user_id)
         ensure_pool_state(self.tables, pool_id)
         ensure_secret_owner(self.tables, access_key, pool_id)
-        pooldesc1 = self.do_delete_secret(traceid, pool_id, access_key)
-        return (200, None, {"pool_list": [pooldesc1]})
+        pooldesc = self.do_delete_secret(traceid, pool_id, access_key)
+        return (200, None, {"pool_desc": pooldesc})
 
     def do_delete_secret(self, traceid, pool_id, access_key):
         try:
@@ -903,7 +901,7 @@ class Control_Api():
                     assert_mc_success(r, "mc.admin_user_remove")
                     pass
                 pass
-            self.tables.delete_id_unconditionally("akey", access_key)
+            self.tables.delete_xid_unconditionally("akey", access_key)
         except Exception:
             raise
         pooldesc1 = gather_pool_desc(self.tables, pool_id)

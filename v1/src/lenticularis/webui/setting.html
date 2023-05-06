@@ -23,27 +23,40 @@
       <div>
         <span class="label">POOL</span>
       </div>
-      <div>
-        <span class="label">User:</span>
-        <input v-model="user" size="64" disabled />
-      </div>
       <div v-if="!make_pool_mode">
-        <span class="label">Group:</span>
-        <input v-model="group" size="64" disabled />
+        <div>
+          <span class="label">Buckets directory (absolute path):</span>
+          <input v-model="buckets_directory" size="30" disabled />
+        </div>
+        <div>
+          <span class="label">User:</span>
+          <input v-model="user" size="30" disabled />
+        </div>
+        <div>
+          <span class="label">Group:</span>
+          <input v-model="group" size="30" disabled />
+        </div>
       </div>
       <div v-if="make_pool_mode">
-        <span class="label">Group:</span>
-        <select v-model="group" required="true">
-          <option v-for="(g, i) in group_choices" v-bind:selected="i == 0">
-            {{ g }}
-          </option>
-         </select>
-      </div>
-      <div>
-        <span class="label">Buckets directory (absolute path):</span>
-        <input v-model="buckets_directory" size="64" :disabled="!make_pool_mode" /></div>
-      <div v-if="make_pool_mode">
-        <button v-on:click="kick_make_pool">Create</button>
+        <div>
+          <span class="label">Buckets directory (absolute path):</span>
+          <input v-model="buckets_directory" size="30" />
+        </div>
+        <div>
+          <span class="label">User:</span>
+          <input v-model="user" size="30" disabled />
+        </div>
+        <div>
+          <span class="label">Group:</span>
+          <select v-model="group" required="true">
+            <option v-for="(g, i) in group_choices" v-bind:selected="i == 0">
+              {{ g }}
+            </option>
+          </select>
+          <div>
+            <button v-on:click="kick_make_pool">Create</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -83,7 +96,7 @@
       </div>
       <div>
         <span class="label">Expiration:</span>
-        <input type="datetime-local" step=3600 v-model="key_expiration_time" />
+        <input type="date" v-model="key_expiration_time" />
         <span class="label">UTC</span>
       </div>
       <div>
@@ -96,7 +109,7 @@
         <input v-model="k.secret_key" size="50" disabled />
         <button v-on:click="kick_copy_to_clipboard(k.secret_key)">Copy</button>
         <span>Expires:</span>
-        <input type="datetime-local" v-model="k.expiration_time" disabled />
+        <input type="datetime" v-model="k.expiration_time" disabled />
         <button v-on:click="kick_delete_secret(k.access_key)">Delete key</button>
       </div>
 
@@ -110,7 +123,7 @@
         <input v-model="k.secret_key" size="50" disabled />
         <button v-on:click="kick_copy_to_clipboard(k.secret_key)">Copy</button>
         <span>Expires:</span>
-        <input type="datetime-local" v-model="k.expiration_time" disabled />
+        <input type="datetime" v-model="k.expiration_time" disabled />
         <button v-on:click="kick_delete_secret(k.access_key)">Delete key</button>
       </div>
 
@@ -124,7 +137,7 @@
         <input v-model="k.secret_key" size="50" disabled />
         <button v-on:click="kick_copy_to_clipboard(k.secret_key)">Copy</button>
         <span>Expires:</span>
-        <input type="datetime-local" v-model="k.expiration_time" disabled />
+        <input type="datetime" v-model="k.expiration_time" disabled />
         <button v-on:click="kick_delete_secret(k.access_key)">Delete key</button>
       </div>
     </div>

@@ -316,15 +316,15 @@ class Table():
     def make_unique_xid(self, usage, owner, info):
         return self._monokey_table.make_unique_xid(usage, owner, info)
 
-    def set_ex_id(self, xid, usage, desc):
+    def set_ex_xid(self, xid, usage, desc):
         """Inserts an id, used at database restoring."""
-        return self._monokey_table.set_ex_id(xid, usage, desc)
+        return self._monokey_table.set_ex_xid(xid, usage, desc)
 
     def get_xid(self, usage, xid):
         return self._monokey_table.get_xid(usage, xid)
 
-    def delete_id_unconditionally(self, usage, xid):
-        self._monokey_table.delete_id_unconditionally(usage, xid)
+    def delete_xid_unconditionally(self, usage, xid):
+        self._monokey_table.delete_xid_unconditionally(usage, xid)
         pass
 
     def list_access_keys_of_pool(self, pool_id):
@@ -863,7 +863,7 @@ class _Monokey_Table(Table_Common):
         assert False
         pass
 
-    def set_ex_id(self, xid, usage, desc):
+    def set_ex_xid(self, xid, usage, desc):
         assert usage in self._usage_keys
         (prefix, desckeys) = self._choose_prefix_by_usage(usage)
         assert set(desc.keys()) == desckeys
@@ -882,7 +882,7 @@ class _Monokey_Table(Table_Common):
                 if desc is not None else True)
         return desc
 
-    def delete_id_unconditionally(self, usage, xid):
+    def delete_xid_unconditionally(self, usage, xid):
         assert usage in self._usage_keys
         (prefix, desckeys) = self._choose_prefix_by_usage(usage)
         key = f"{prefix}{xid}"

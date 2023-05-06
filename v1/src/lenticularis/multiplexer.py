@@ -69,13 +69,13 @@ def _check_url_error_is_connection_errors(x):
         return 0
 
 
-def _get_pool_of_probe_key(probe_key, access_info):
-    """Checks a key is a probe-key, and returns a pool-id for which it is
-    created."""
-    if (probe_key is not None
-        and probe_key.get("use") == "key"
-        and probe_key.get("secret_key") == ""):
-        return probe_key.get("owner")
+def _get_pool_of_probe_key(keydesc, access_info):
+    """Checks a keydesc is a probe-key and returns a pool-id for which it
+    is created.
+    """
+    if (keydesc is not None
+        and keydesc.get("secret_key") == ""):
+        return keydesc.get("owner")
     else:
         return None
     pass
@@ -386,12 +386,12 @@ class Multiplexer():
             # Access to "/" is prohibited but for a probe-access from Api.
             if access_key is None:
                 log_access("401", *access_info)
-                raise Api_Error(401, f"Bad access to the root path")
-            probe_key = self.tables.get_id(access_key)
+                raise Api_Error(401, "Bad access to /: (no access-key)")
+            probe_key = self.tables.get_xid("akey", access_key)
             pool_id = _get_pool_of_probe_key(probe_key, access_info)
             if pool_id is None:
                 log_access("401", *access_info)
-                raise Api_Error(401, f"Bad access to the root path")
+                raise Api_Error(401, "Bad access to /: (not a probe-key)")
             assert probe_key is not None
             if self._verbose:
                 logger.debug(f"Mux (port={self._mux_port}) probe-access"

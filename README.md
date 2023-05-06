@@ -53,17 +53,15 @@ code was reviewed by zzmatu and remaining bugs are his responsibility.
 Lens3 utilizes third-party open source software, which is listed in
 [acknowledgement](v1/ACKNOWLEDGEMENT.txt).  The directory
 "test/s3-benchmark" is a third-party benchmark program, which is
-copyrighted by wasabi-tech and is licensed with LGPL.
+copyrighted by Wasabi-Tech and is licensed with LGPL.
 
-Files.
+## Directories
 
 ```
-v1/doc           documents
-v1/src/lenticularis source code
-unit-file/api    daemon configuration templates
-unit-file/mux    daemon configuration templates
-unit-file/redis  daemon configuration templates
-nginx            example templates of reverse-proxy configuration
-apache           example templates of reverse-proxy configuration
-test             test code
+v1/doc               documents
+v1/src/lenticularis  source code
+unit-file            configuration and systemd templates
+nginx                example settings of a proxy
+apache               example settings of a proxy
+test                 test code
 ```

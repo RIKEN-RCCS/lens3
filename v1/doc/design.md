@@ -17,8 +17,8 @@ Lens3 uses a couple of Redis databases (by database numbers), but the
 division is arbitrary as the distinct prefixes are used.  Most of the
 entries are json records, and others are simple strings.
 
-Note: In the tables below, entries with "(\*)" are set atomically (by
-"setnx"), and entries with "(\*\*)" are with expiry.
+Note: In the tables below, entries with "\*1" are set atomically (by
+"setnx"), and entries with "\*2" are with expiry.
 
 A date+time is by unix seconds.  Web-API also passes a date+time by
 unix seconds.
@@ -28,8 +28,6 @@ because they use multiple databases.
 
 ### Setting-Table (DB=0)
 
-The Setting-Table stores semi-static information.
-
 | Key             | Value     | Notes   |
 | ----            | ----      | ---- |
 | "cf:api"        | api-conf  | |
@@ -38,10 +36,12 @@ The Setting-Table stores semi-static information.
 | uu:uid          | user-info | |
 | um:claim        | uid       | Optional |
 
-__cf:api__ and __cf:mux__ entries store the settings of services.
-__cf:mux:mux-name__ is used to give a specific setting to each Mux
-service, whose mux-name is given by "LENS3-MUX-NAME" at a start of a
-service in environment variables.
+The Setting-Table stores semi-static information.
+
+__cf:api__ and __cf:mux__ (literal strings) entries store the settings
+of services.  __cf:mux:mux-name__ is used to give a specific setting
+to each Mux service, whose mux-name is given by "LENS3_MUX_NAME" at a
+start of a service in environment variables.
 
 A __uu:uid__ entry is a record of a user-info: {"uid", "groups",
 "claim", "enabled", "modification_time"}, where "groups" is a string
@@ -50,7 +50,7 @@ list, "claim" is a string (maybe empty), and "enabled" is a boolean.
 A __um:claim__ entry is a map from a user claim to a uid.  Entries are
 used only when Lens-Api is configured with "claim_uid_map=map".
 
-A partial reason of storing configurations in the database is because
+Partial reasons of storing configurations in the database is because
 typo errors are annoying when detected at a start of a service.
 
 ### Storage-Table (DB=1)
@@ -59,7 +59,7 @@ typo errors are annoying when detected at a start of a service.
 | ----          | ----          | ---- |
 | po:pool-id    | pool-description | |
 | ps:pool-id    | pool-state    | |
-| bd:directory  | pool-id       | A bucket-directory (path string) (\*) |
+| bd:directory  | pool-id       | A bucket-directory (path string) \*1 |
 
 A __po:pool-id__ entry is a pool description: {"pool_name",
 "owner_uid", "owner_gid", "buckets_directory", "probe_key",
@@ -78,9 +78,9 @@ run in a transient state at a race in starting/stopping an instance.
 
 | Key             | Value           | Notes   |
 | ----            | ----            | ---- |
-| ma:pool-id      | MinIO-manager   | (\*, \*\*)|
+| ma:pool-id      | MinIO-manager   | \*1, \*2 |
 | mn:pool-id      | MinIO-process   | |
-| mx:mux-endpoint | Mux-description | (\*\*) |
+| mx:mux-endpoint | Mux-description | \*2 |
 
 An __ma:pool-id__ entry holds a MinIO-manager under which a MinIO
 process runs.  It is a record: {"mux_host", "mux_port", "start_time"}.
@@ -104,7 +104,7 @@ when an entry is gone by expiry.
 | Key            | Value              | Notes   |
 | ----           | ----               | ---- |
 | ep:pool-id     | MinIO-endpoint     | |
-| bk:bucket-name | bucket-description | A mapping by a bucket-name (\*) |
+| bk:bucket-name | bucket-description | A mapping by a bucket-name \*1 |
 | ts:pool-id     | timestamp          | Timestamp on the last access (string) |
 
 An __ep:pool-id__ entry is a MinIO-endpoint (a host:port string).
@@ -120,19 +120,19 @@ A __ts:pool-id__ entry is a last access timestamp of a pool.
 
 | Key           | Value           | Notes   |
 | ----          | ----            | ---- |
-| id:random     | key-description | An entry to keep uniqueness (*) |
+| pi:random     | key-description | \*1 |
+| ky:random     | key-description | \*1 |
 
-An id:random entry stores a generated random for a pool-id or an
-access-key.  The "use" field distinguishes these, "use"="pool" or
-"use"="key".
+This table stores generated randoms for a pool-id or an access-key.
+An entry is inserted to keep its uniqueness.
 
-A "pool" description is a record: {"use"="pool", "owner",
+A __pi:random__ entry is a pool-id and it is a record: {"owner",
 "modification_time"}, where an owner is a uid.
 
-A "key" description is a record: {"use"="key", "owner", "secret_key",
-"key_policy", "expiration_time", "modification_time"}, where an owner
-is a pool-id.  A key-policy is one of {"readwrite", "readonly",
-"writeonly"}, whose names are borrowed from MinIO.
+A __ky:random__ entry is an access-key and it is a record: {"owner",
+"secret_key", "key_policy", "expiration_time", "modification_time"},
+where an owner is a pool-id.  A key-policy is one of {"readwrite",
+"readonly", "writeonly"}, whose names are borrowed from MinIO.
 
 ## Bucket policy
 

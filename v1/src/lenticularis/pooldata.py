@@ -1,4 +1,4 @@
-"""Small utility."""
+"""Pool data small utility."""
 
 # Copyright (c) 2022 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
@@ -36,20 +36,6 @@ class Pool_State(enum.Enum):
     pass
 
 
-class ID_Use(enum.Enum):
-    """A usage of an ID entry in the table.  The "id:" entries are either
-    pool-ids or access-keys.
-    """
-    # (NOT USED YET).
-    POOL = "pool"
-    KEY = "key"
-
-    def __str__(self):
-        return self.value
-
-    pass
-
-
 class Key_Policy(enum.Enum):
     """A policy to an access-key; names are taken from MinIO."""
     # (NOT USED YET).
@@ -75,6 +61,92 @@ class Bkt_Policy(enum.Enum):
         return self.value
 
     pass
+
+
+def _pool_desc_schema():
+    """A pool record schema.  A pool record is used by Web-API
+    and database dumps.  A record of a pool is reconstructed.  See
+    gather_pool_desc().
+    """
+    bucket_schema = {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string"},
+            "pool": {"type": "string"},
+            "bkt_policy": {
+                "type": "string",
+                "enum": ["none", "upload", "download", "public"],
+            },
+            "modification_time": {"type": "integer"},
+        },
+        "required": [
+            "name",
+            "pool",
+            "bkt_policy",
+            "modification_time",
+        ],
+        "additionalProperties": False,
+    }
+
+    access_key_schema = {
+        "type": "object",
+        "properties": {
+            "access_key": {"type": "string"},
+            "secret_key": {"type": "string"},
+            "key_policy": {
+                "type": "string",
+                "enum": ["readwrite", "readonly", "writeonly"],
+            },
+            "owner": {"type": "string"},
+            "expiration_time": {"type": "integer"},
+            "modification_time": {"type": "integer"},
+        },
+        "required": [
+            "access_key",
+            "secret_key",
+            "key_policy",
+            "owner",
+            "expiration_time",
+            "modification_time",
+        ],
+        "additionalProperties": False,
+    }
+
+    schema = {
+        "type": "object",
+        "properties": {
+            "pool_name": {"type": "string"},
+            "owner_uid": {"type": "string"},
+            "owner_gid": {"type": "string"},
+            "buckets_directory": {"type": "string"},
+            "buckets": {"type": "array", "items": bucket_schema},
+            "access_keys": {"type": "array", "items": access_key_schema},
+            "probe_key": {"type": "string"},
+            "expiration_time": {"type": "integer"},
+            "online_status": {"type": "boolean"},
+            "user_enabled_status": {"type": "boolean"},
+            "minio_state": {"type": "string"},
+            "minio_reason": {"type": "string"},
+            "modification_time": {"type": "integer"},
+        },
+        "required": [
+            "pool_name",
+            "owner_uid",
+            "owner_gid",
+            "buckets_directory",
+            "buckets",
+            "access_keys",
+            "probe_key",
+            "expiration_time",
+            "online_status",
+            "user_enabled_status",
+            "minio_state",
+            "minio_reason",
+            "modification_time",
+        ],
+        "additionalProperties": False,
+    }
+    return schema
 
 
 def ensure_bucket_policy(bucket, desc, access_key):
@@ -142,11 +214,10 @@ def ensure_secret_owner(tables, access_key, pool_id):
     """Checks a key owner is a pool.  It accepts no access-key."""
     if access_key is None:
         return
-    keydesc = tables.get_id(access_key)
+    keydesc = tables.get_xid("akey", access_key)
     if keydesc is None:
         raise Api_Error(403, f"Non-existing access-key: {access_key}")
-    if not (keydesc.get("use") == "key"
-            and keydesc.get("owner") == pool_id):
+    if not (keydesc.get("owner") == pool_id):
         raise Api_Error(403, f"Wrong access-key: {access_key}")
     now = int(time.time())
     if keydesc.get("expiration_time") < now:
@@ -154,64 +225,12 @@ def ensure_secret_owner(tables, access_key, pool_id):
     pass
 
 
-def _drop_non_ui_info_from_keys(access_key):
-    """Drops unnecessary info to pass access-key info to Web-API.  That is,
-    they are {"use", "owner", "modification_time"}.
-    """
-    needed = {"access_key", "secret_key", "key_policy"}
-    return {k: v for (k, v) in access_key.items() if k in needed}
-
-
-def gather_buckets(tables, pool_id):
-    """Gathers buckets in the pool.  It drops unnecessary slots."""
-    bkts1 = tables.list_buckets(pool_id)
-    # bkts2 = [{k: v for (k, v) in d.items()
-    #         if k not in {"pool", "modification_time"}}
-    #         for d in bkts1]
-    bkts3 = sorted(bkts1, key=lambda k: k["name"])
-    return bkts3
-
-
-def gather_keys(tables, pool_id):
-    """Gathers keys in the pool, but drops a probe-key and slots
-    uninteresting to Web-API.
-    """
-    keys1 = tables.list_access_keys_of_pool(pool_id)
-    keys2 = sorted(keys1, key=lambda k: k["modification_time"])
-    keys3 = [k for k in keys2
-             if (k is not None and k.get("secret_key") != "")]
-    # keys4 = [_drop_non_ui_info_from_keys(k) for k in keys3]
-    return keys3
-
-
-def gather_pool_desc(tables, pool_id):
-    """Returns a pool description for displaying by Web-API."""
-    pooldesc = tables.get_pool(pool_id)
-    if pooldesc is None:
-        return None
-    bd = tables.get_buckets_directory_of_pool(pool_id)
-    assert pooldesc["pool_name"] == pool_id
-    assert pooldesc["buckets_directory"] == bd
-    assert pooldesc["buckets_directory"] is not None
-    #
-    # Gather buckets.
-    #
-    bkts = gather_buckets(tables, pool_id)
-    pooldesc["buckets"] = bkts
-    #
-    # Gather access-keys.
-    #
-    keys = gather_keys(tables, pool_id)
-    pooldesc["access_keys"] = keys
-    pooldesc["pool_name"] = pool_id
-    (poolstate, reason) = tables.get_pool_state(pool_id)
-    pooldesc["minio_state"] = str(poolstate)
-    pooldesc["minio_reason"] = str(reason)
-    user_id = pooldesc["owner_uid"]
-    u = tables.get_user(user_id)
-    pooldesc["enable_status"] = u["enabled"]
-    check_pool_is_well_formed(pooldesc, None)
-    return pooldesc
+# def _drop_non_ui_info_from_keys(access_key):
+#     """Drops unnecessary info to pass access-key info to Web-API.  That is,
+#     they are {"use", "owner", "modification_time"}.
+#     """
+#     needed = {"access_key", "secret_key", "key_policy"}
+#     return {k: v for (k, v) in access_key.items() if k in needed}
 
 
 def get_pool_owner_for_messages(tables, pool_id):
@@ -237,14 +256,14 @@ def tally_manager_expiry(tolerance, interval, timeout):
     return ((tolerance + 1 + 2) * (interval + timeout))
 
 
-def _check_bkt_policy(bkt_policy):
-    assert bkt_policy in {"none", "upload", "download", "public"}
-    pass
+# def _check_bkt_policy(bkt_policy):
+#     assert bkt_policy in {"none", "upload", "download", "public"}
+#     pass
 
 
-def _check_key_policy(key_policy):
-    assert key_policy in {"readwrite", "readonly", "writeonly"}
-    pass
+# def _check_key_policy(key_policy):
+#     assert key_policy in {"readwrite", "readonly", "writeonly"}
+#     pass
 
 
 def check_user_naming(user_id):
@@ -313,94 +332,25 @@ def parse_s3_auth(authorization):
     return None
 
 
-def _pool_desc_schema():
-    bucket = {
-        "type": "object",
-        "properties": {
-            "name": {"type": "string"},
-            "bkt_policy": {"type": "string"},
-            # (These should be required, later).
-            "pool": {"type": "string"},
-            "modification_time": {"type": "integer"},
-        },
-        "required": [
-            "name",
-            "bkt_policy",
-        ],
-        "additionalProperties": False,
-    }
-
-    access_key = {
-        "type": "object",
-        "properties": {
-            "access_key": {"type": "string"},
-            "secret_key": {"type": "string"},
-            "key_policy": {"type": "string"},
-            # (These should be required, later).
-            "use": {"type": "string"},
-            "owner": {"type": "string"},
-            "expiration_time": {"type": "integer"},
-            "modification_time": {"type": "integer"},
-
-        },
-        "required": [
-            "access_key",
-            "secret_key",
-            "key_policy",
-        ],
-        "additionalProperties": False,
-    }
-
-    schema = {
-        "type": "object",
-        "properties": {
-            "pool_name": {"type": "string"},
-            "owner_uid": {"type": "string"},
-            "owner_gid": {"type": "string"},
-            "buckets_directory": {"type": "string"},
-            "buckets": {"type": "array", "items": bucket},
-            "access_keys": {"type": "array", "items": access_key},
-            "probe_key": {"type": "string"},
-            "minio_state": {"type": "string"},
-            "minio_reason": {"type": "string"},
-            "enable_status": {"type": "boolean"},
-            "online_status": {"type": "boolean"},
-            "expiration_time": {"type": "integer"},
-            "modification_time": {"type": "integer"},
-        },
-        "required": [
-            # "pool_name",
-            "owner_uid",
-            "owner_gid",
-            "buckets_directory",
-            "buckets",
-            "access_keys",
-            "enable_status",
-            "online_status",
-            "expiration_time",
-        ],
-        "additionalProperties": False,
-    }
-    return schema
-
-
 def check_pool_is_well_formed(pooldesc, user_):
-    """Checks a pool description is well-formed for passing to Web-API."""
+    """Checks a pool record is well-formed."""
     schema = _pool_desc_schema()
     jsonschema.validate(instance=pooldesc, schema=schema)
-    for bucket in pooldesc.get("buckets", []):
-        _check_bkt_policy(bucket["bkt_policy"])
-        pass
-    for accessKey in pooldesc.get("access_keys", []):
-        _check_key_policy(accessKey["key_policy"])
-        pass
+    # for bucket in pooldesc.get("buckets", []):
+    #     _check_bkt_policy(bucket["bkt_policy"])
+    #     pass
+    # for accessKey in pooldesc.get("access_keys", []):
+    #     _check_key_policy(accessKey["key_policy"])
+    #     pass
     pass
 
 
 def access_mux(traceid, ep, access_key, front_hostname, front_host_ip,
                timeout):
-    # Mux requires several http-headers, especially including
-    # "X-REAL-IP".  See the code of Mux.
+    """Tries to access Mux.  See access_mux_for_pool(), this is used in
+    it.  Mux requires several http headers, especially including
+    "X-REAL-IP".  Check the code of Mux.
+    """
     proto = "http"
     url = f"{proto}://{ep}/"
     headers = {}
@@ -441,14 +391,71 @@ def access_mux(traceid, ep, access_key, front_hostname, front_host_ip,
     return status
 
 
+def gather_pool_desc(tables, pool_id):
+    """Returns a pool record.  It reconstructs a record by gathering
+    data scattered in the database.
+    """
+    pooldesc = tables.get_pool(pool_id)
+    if pooldesc is None:
+        return None
+    bd = tables.get_buckets_directory_of_pool(pool_id)
+    assert pooldesc["pool_name"] == pool_id
+    assert pooldesc["buckets_directory"] == bd
+    assert pooldesc["buckets_directory"] is not None
+    #
+    # Gather buckets.
+    #
+    bkts = gather_buckets(tables, pool_id)
+    pooldesc["buckets"] = bkts
+    #
+    # Gather access-keys.
+    #
+    keys = gather_keys(tables, pool_id)
+    pooldesc["access_keys"] = keys
+    #
+    # Gather dynamic states.
+    #
+    (poolstate, reason) = tables.get_pool_state(pool_id)
+    pooldesc["minio_state"] = str(poolstate)
+    pooldesc["minio_reason"] = str(reason)
+    user_id = pooldesc["owner_uid"]
+    u = tables.get_user(user_id)
+    pooldesc["user_enabled_status"] = u["enabled"]
+    check_pool_is_well_formed(pooldesc, None)
+    return pooldesc
+
+
+def gather_buckets(tables, pool_id):
+    """Gathers buckets in a pool.  A returned list is sorted for
+    displaying."""
+    bkts1 = tables.list_buckets(pool_id)
+    # bkts2 = [{k: v for (k, v) in d.items()
+    #         if k not in {"pool", "modification_time"}}
+    #         for d in bkts1]
+    bkts3 = sorted(bkts1, key=lambda k: k["name"])
+    return bkts3
+
+
+def gather_keys(tables, pool_id):
+    """Gathers access-keys in a pool.  A returned list is sorted for
+    displaying.  It excludes a probe-key (which is internally used).
+    """
+    keys1 = tables.list_access_keys_of_pool(pool_id)
+    keys2 = sorted(keys1, key=lambda k: k["modification_time"])
+    keys3 = [k for k in keys2
+             if (k is not None and k.get("secret_key") != "")]
+    # keys4 = [_drop_non_ui_info_from_keys(k) for k in keys3]
+    return keys3
+
+
 def dump_db(tables):
     """Returns a record of confs, users, and pools for restoring."""
-    # Confs:
+    # Collect confs:
     confs = tables.list_confs()
-    # Users:
+    # Collect users:
     user_list = tables.list_users()
     users = [tables.get_user(id) for id in user_list]
-    # Pools:
+    # Collect pools:
     pool_list = tables.list_pools(None)
     pools = [gather_pool_desc(tables, id) for id in pool_list]
     return {"confs": confs, "users": users, "pools": pools}
@@ -482,7 +489,7 @@ def restore_db(tables, record):
 
 
 def _restore_pool(tables, pooldesc):
-    """Restores pools.  Call after restoring users."""
+    """Restores a pool.  Call this after restoring users."""
     now = int(time.time())
     user_id = pooldesc["owner_uid"]
     owner_gid = pooldesc["owner_gid"]
@@ -535,14 +542,13 @@ def _restore_pool(tables, pooldesc):
     for k in keys:
         xid = k["access_key"]
         entry3 = {
-            "use": k["use"],
             "owner": k["owner"],
             "secret_key": k["secret_key"],
             "key_policy": k["key_policy"],
             "expiration_time": k["expiration_time"],
             "modification_time": k["modification_time"],
         }
-        ok = tables.set_ex_id(xid, "key", entry3)
+        ok = tables.set_ex_id(xid, "akey", entry3)
         if not ok:
             raise Api_Error(500, "Duplicate access-key: {key}")
         pass

@@ -84,7 +84,7 @@ def erase_pool_data(tables, pool_id):
     logger.debug(f"Deleting access-keys pool={pool_id}: {keynames}")
     for k in keynames:
         try:
-            tables.delete_id_unconditionally(k)
+            tables.delete_id_unconditionally("akey", k)
         except Exception as e:
             m = rephrase_exception_message(e)
             logger.info(f"delete_id_unconditionally failed: exception=({m})")
@@ -104,7 +104,7 @@ def erase_pool_data(tables, pool_id):
         logger.info(f"delete_pool_state failed: exception=({m})")
         pass
     try:
-        tables.delete_id_unconditionally(pool_id)
+        tables.delete_id_unconditionally("pool", pool_id)
     except Exception as e:
         m = rephrase_exception_message(e)
         logger.info(f"delete_id_unconditionally failed: exception=({m})")
@@ -127,11 +127,11 @@ def make_new_pool(tables, user_id, owner_gid, path, expiration):
     pool_id = None
     probe_key = None
     try:
-        pool_id = tables.make_unique_id("pool", user_id, {})
+        pool_id = tables.make_unique_xid("pool", user_id, {})
         pooldesc["pool_name"] = pool_id
         info = {"secret_key": "", "key_policy": "readwrite",
                 "expiration_time": expiration}
-        probe_key = tables.make_unique_id("key", pool_id, info)
+        probe_key = tables.make_unique_xid("akey", pool_id, info)
         pooldesc["probe_key"] = probe_key
         (ok, holder) = tables.set_ex_buckets_directory(path, pool_id)
         if not ok:
@@ -146,10 +146,10 @@ def make_new_pool(tables, user_id, owner_gid, path, expiration):
         pass
     except Exception:
         if pool_id is not None:
-            tables.delete_id_unconditionally(pool_id)
+            tables.delete_id_unconditionally("pool", pool_id)
             pass
         if probe_key is not None:
-            tables.delete_id_unconditionally(probe_key)
+            tables.delete_id_unconditionally("akey", probe_key)
             pass
         raise
     return pool_id
@@ -592,11 +592,11 @@ class Control_Api():
         pool_id = None
         probe_key = None
         try:
-            pool_id = self.tables.make_unique_id("pool", user_id, {})
+            pool_id = self.tables.make_unique_xid("pool", user_id, {})
             pooldesc["pool_name"] = pool_id
             info = {"secret_key": "", "key_policy": "readwrite",
                     "expiration_time": expiration}
-            probe_key = self.tables.make_unique_id("key", pool_id, info)
+            probe_key = self.tables.make_unique_xid("akey", pool_id, info)
             pooldesc["probe_key"] = probe_key
             (ok, holder) = self.tables.set_ex_buckets_directory(path, pool_id)
             if not ok:
@@ -611,10 +611,10 @@ class Control_Api():
             pass
         except Exception:
             if pool_id is not None:
-                self.tables.delete_id_unconditionally(pool_id)
+                self.tables.delete_id_unconditionally("pool", pool_id)
                 pass
             if probe_key is not None:
-                self.tables.delete_id_unconditionally(probe_key)
+                self.tables.delete_id_unconditionally("akey", probe_key)
                 pass
             raise
         return pool_id
@@ -724,7 +724,7 @@ class Control_Api():
         logger.debug(f"Deleting access-keys pool={pool_id}: {keynames}")
         for k in keynames:
             try:
-                self.tables.delete_id_unconditionally(k)
+                self.tables.delete_id_unconditionally("akey", k)
             except Exception as e:
                 m = rephrase_exception_message(e)
                 logger.info(f"delete_id_unconditionally failed: exception=({m})")
@@ -744,7 +744,7 @@ class Control_Api():
             logger.info(f"delete_pool_state failed: exception=({m})")
             pass
         try:
-            self.tables.delete_id_unconditionally(pool_id)
+            self.tables.delete_id_unconditionally("pool", pool_id)
         except Exception as e:
             m = rephrase_exception_message(e)
             logger.info(f"delete_id_unconditionally failed: exception=({m})")
@@ -849,7 +849,7 @@ class Control_Api():
         secret = generate_secret_key()
         info = {"secret_key": secret, "key_policy": key_policy,
                 "expiration_time": expiration}
-        key = self.tables.make_unique_id("key", pool_id, info)
+        key = self.tables.make_unique_xid("akey", pool_id, info)
         pooldesc1 = self.do_record_secret(traceid, pool_id,
                                           key, secret, key_policy)
         return (200, None, {"pool_list": [pooldesc1]})
@@ -867,7 +867,7 @@ class Control_Api():
                 assert_mc_success(r, "mc.admin_user_enable")
             pass
         except Exception:
-            self.tables.delete_id_unconditionally(key)
+            self.tables.delete_id_unconditionally("akey", key)
             raise
         pooldesc1 = gather_pool_desc(self.tables, pool_id)
         return pooldesc1
@@ -903,7 +903,7 @@ class Control_Api():
                     assert_mc_success(r, "mc.admin_user_remove")
                     pass
                 pass
-            self.tables.delete_id_unconditionally(access_key)
+            self.tables.delete_id_unconditionally("akey", access_key)
         except Exception:
             raise
         pooldesc1 = gather_pool_desc(self.tables, pool_id)

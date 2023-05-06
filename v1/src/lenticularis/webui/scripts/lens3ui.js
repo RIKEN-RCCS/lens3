@@ -25,7 +25,7 @@ var edit_pool_data = {
   group_choices: [],
 
   expiration_time: "",
-  enable_status: true,
+  user_enabled_status: true,
   online_status: true,
   pool_state: "",
 
@@ -361,7 +361,7 @@ function render_pool_as_ul_entry(pooldesc) {
             value: (pooldesc["minio_state"]
                     + " (reason: " + pooldesc["minio_reason"] + ")")}},
     {text: {label: "Expiration date", value: format_time_if_not_zero(pooldesc["expiration_time"])}},
-    {text: {label: "User enabled", value: pooldesc["enable_status"]}},
+    {text: {label: "User enabled", value: pooldesc["user_enabled_status"]}},
     {text: {label: "Pool online", value: pooldesc["online_status"]}},
     {text: {label: "Creation date", value: format_time_if_not_zero(pooldesc["modification_time"])}},
   ];
@@ -393,7 +393,7 @@ function copy_pool_desc_for_edit(pooldesc) {
   edit_pool_data.access_keys_wo = wokeys
 
   edit_pool_data.expiration_time = format_time_if_not_zero(pooldesc["expiration_time"]);
-  edit_pool_data.enable_status = pooldesc["enable_status"];
+  edit_pool_data.user_enabled_status = pooldesc["user_enabled_status"];
   edit_pool_data.online_status = pooldesc["online_status"];
   edit_pool_data.pool_state = pooldesc["minio_state"];
 }

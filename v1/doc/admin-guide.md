@@ -140,7 +140,7 @@ logs.
 Clear Redis databases.
 
 ```
-$ REDISCLI_AUTH=password
+$ export REDISCLI_AUTH=password
 $ redis-cli -p 6378 FLUSHALL
 $ redis-cli -p 6378 --scan --pattern '*'
 ```

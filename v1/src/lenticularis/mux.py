@@ -33,7 +33,7 @@ def app():
         return None
 
     openlog(mux_conf["log_file"], **mux_conf["log_syslog"])
-    logger.info("START Mux.")
+    logger.info(f"START Mux ({mux_name or ''}).")
 
     tables = get_table(redis)
 

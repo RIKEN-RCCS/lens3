@@ -25,7 +25,7 @@ _PROCESS_DB = 2
 _ROUTING_DB = 3
 _MONOKEY_DB = 4
 
-_limit_of_id_generation_loop = 30
+_limit_of_xid_generation_loop = 30
 
 
 def read_redis_conf(conf_file):
@@ -313,18 +313,18 @@ class Table():
 
     # Monokey-Table:
 
-    def make_unique_id(self, usage, owner, info):
-        return self._monokey_table.make_unique_id(usage, owner, info)
+    def make_unique_xid(self, usage, owner, info):
+        return self._monokey_table.make_unique_xid(usage, owner, info)
 
     def set_ex_id(self, xid, usage, desc):
         """Inserts an id, used at database restoring."""
         return self._monokey_table.set_ex_id(xid, usage, desc)
 
-    def get_id(self, uid):
-        return self._monokey_table.get_id(uid)
+    def get_xid(self, usage, xid):
+        return self._monokey_table.get_xid(usage, xid)
 
-    def delete_id_unconditionally(self, uid):
-        self._monokey_table.delete_id_unconditionally(uid)
+    def delete_id_unconditionally(self, usage, xid):
+        self._monokey_table.delete_id_unconditionally(usage, xid)
         pass
 
     def list_access_keys_of_pool(self, pool_id):
@@ -812,50 +812,80 @@ class _Routing_Table(Table_Common):
 
 
 class _Monokey_Table(Table_Common):
-    _id_prefix = "id:"
+    _usage_keys = {"pool", "akey"}
 
-    _id_desc_keys = {"pool": {"use", "owner", "modification_time"},
-                     "key": {"use", "owner", "secret_key", "key_policy",
-                             "expiration_time", "modification_time"}}
+    _pid_prefix = "pi:"
+    _key_prefix = "ky:"
 
-    def make_unique_id(self, usage, owner, info):
-        """Makes a unique key for a pool-id or an access-key."""
-        assert usage in {"pool", "key"}
+    _pid_desc_keys = {"owner", "modification_time"}
+    _key_desc_keys = {"owner", "secret_key", "key_policy",
+                      "expiration_time", "modification_time"}
+
+    def _choose_prefix_by_usage(self, usage):
+        if usage == "pool":
+            return (self._pid_prefix, self._pid_desc_keys)
+        elif usage == "akey":
+            return (self._key_prefix, self._key_desc_keys)
+        else:
+            assert usage in self._usage_keys
+            return (None, None)
+        pass
+
+    def make_unique_xid(self, usage, owner, info):
+        """Makes a random unique id for a pool-id (usage="pool") or an
+        access-key (usage="akey").
+        """
+        assert usage in self._usage_keys
+        (prefix, desckeys) = self._choose_prefix_by_usage(usage)
         now = int(time.time())
-        desc = {"use": usage, "owner": owner, **info, "modification_time": now}
-        assert set(desc.keys()) == self._id_desc_keys[usage]
+        if usage == "pool":
+            assert len(info) == 0
+            desc = {"owner": owner, "modification_time": now}
+        elif usage == "akey":
+            assert len(info) > 0
+            desc = {"owner": owner, **info, "modification_time": now}
+        else:
+            assert usage in self._usage_keys
+            desc = {}
+            pass
+        assert set(desc.keys()) == desckeys
         v = json.dumps(desc)
-        id_generation_loops = 0
+        xid_generation_loops = 0
         while True:
             xid = generate_access_key()
-            key = f"{self._id_prefix}{xid}"
+            key = f"{prefix}{xid}"
             ok = self.db.setnx(key, v)
             if ok:
                 return xid
-            id_generation_loops += 1
-            assert id_generation_loops < _limit_of_id_generation_loop
+            xid_generation_loops += 1
+            assert xid_generation_loops < _limit_of_xid_generation_loop
             pass
         assert False
         pass
 
     def set_ex_id(self, xid, usage, desc):
-        assert usage in {"pool", "key"}
-        assert set(desc.keys()) == self._id_desc_keys[usage]
-        key = f"{self._id_prefix}{xid}"
+        assert usage in self._usage_keys
+        (prefix, desckeys) = self._choose_prefix_by_usage(usage)
+        assert set(desc.keys()) == desckeys
+        key = f"{prefix}{xid}"
         v = json.dumps(desc)
         ok = self.db.setnx(key, v)
         return ok
 
-    def get_id(self, xid):
-        key = f"{self._id_prefix}{xid}"
+    def get_xid(self, usage, xid):
+        assert usage in self._usage_keys
+        (prefix, desckeys) = self._choose_prefix_by_usage(usage)
+        key = f"{prefix}{xid}"
         v = self.db.get(key)
         desc = json.loads(v) if v is not None else None
-        assert (set(desc.keys()) == self._id_desc_keys[desc["use"]]
+        assert (set(desc.keys()) == desckeys
                 if desc is not None else True)
         return desc
 
-    def delete_id_unconditionally(self, xid):
-        key = f"{self._id_prefix}{xid}"
+    def delete_id_unconditionally(self, usage, xid):
+        assert usage in self._usage_keys
+        (prefix, desckeys) = self._choose_prefix_by_usage(usage)
+        key = f"{prefix}{xid}"
         self.db.delete(key)
         pass
 
@@ -863,16 +893,15 @@ class _Monokey_Table(Table_Common):
         """Lists access-keys of a pool.  It includes an probe-key.  A
         probe-key is an access-key but has no corresponding secret-key.
         """
-        keyi = _scan_table(self.db, self._id_prefix, None)
+        keyi = _scan_table(self.db, self._key_prefix, None)
         keys = [{"access_key": i, **d}
-                for (i, d) in [(i, self.get_id(i)) for i in keyi]
-                if (d is not None
-                    and d["use"] == "key"
-                    and d["owner"] == pool_id)]
+                for (i, d) in [(i, self.get_xid("akey", i)) for i in keyi]
+                if (d is not None and d["owner"] == pool_id)]
         return keys
 
     def clear_all(self, everything):
-        _delete_all(self.db, self._id_prefix)
+        _delete_all(self.db, self._pid_prefix)
+        _delete_all(self.db, self._key_prefix)
         pass
 
     def print_all(self):

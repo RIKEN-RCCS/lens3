@@ -1,7 +1,7 @@
 """A conf file reader.  Conf files are in yaml, and they are read
 and checked against json schema."""
 
-# Copyright (c) 2022 RIKEN R-CCS
+# Copyright (c) 2022-2023 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
 import sys

@@ -1,12 +1,11 @@
 """Small functions."""
 
-# Copyright (c) 2022 RIKEN R-CCS
+# Copyright (c) 2022-2023 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
 import codecs
 import hashlib
 import json
-import yaml
 import platform
 import random
 import string

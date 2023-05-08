@@ -1,7 +1,7 @@
 """A sentinel process for a MinIO process.  It is also responsible to
 transition of the pool state."""
 
-# Copyright (c) 2022 RIKEN R-CCS
+# Copyright (c) 2022-2023 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
 import argparse

@@ -1,4 +1,4 @@
-# Copyright (c) 2022 RIKEN R-CCS
+# Copyright (c) 2022-2023 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
 PYCODESTYLE=pycodestyle --max-line-length=120

@@ -1,6 +1,6 @@
 """Tests on S3 Accesses thru Lens3."""
 
-# Copyright (c) 2022 RIKEN R-CCS
+# Copyright (c) 2022-2023 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
 import enum

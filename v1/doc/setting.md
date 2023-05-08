@@ -458,3 +458,8 @@ $ aws --endpoint-url https://lens3.example.com s3 cp s3://bkt1/somefile1 -
 ```
 
 Note that Lens3 does not support listing of buckets by `aws s3 ls`.
+
+## Memo on Python Modules
+
+"FastAPI" uses "Starlette".  There are no direct uses of "Starlette"
+in the source code .

@@ -1,6 +1,3 @@
-# Copyright (c) 2022 RIKEN R-CCS.
-# SPDX-License-Identifier: BSD-2-Clause
-
 import argparse
 import datetime
 from common import rconf

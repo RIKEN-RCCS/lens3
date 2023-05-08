@@ -1,6 +1,6 @@
 """Lens3-Api main started as a Gunicorn + Uvicorn + FastAPI service."""
 
-# Copyright (c) 2022 RIKEN R-CCS
+# Copyright (c) 2022-2023 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
 # NOTE: Maybe, consider adding a "Retry-After" header for 503 error.
@@ -11,7 +11,6 @@ import time
 import json
 from typing import Union
 from pydantic import BaseModel
-import starlette
 from fastapi import FastAPI, Request, Header, Depends, status
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -81,7 +80,7 @@ def app():
     return _app
 
 
-def _make_json_response(triple, user_id, client_addr, request, csrf_protect):
+def _make_json_response(triple, user_id, client, request, csrf_protect):
     """Makes a response.  triple=(code, reason, values)."""
     (status_code, reason, values) = triple
     if reason is not None:
@@ -97,7 +96,7 @@ def _make_json_response(triple, user_id, client_addr, request, csrf_protect):
     if csrf_protect:
         content["CSRF-Token"] = csrf_protect.generate_csrf()
         pass
-    log_access(f"{status_code}", client_addr, user_id, request.method, request.url)
+    log_access(f"{status_code}", client, user_id, request.method, request.url)
     response = JSONResponse(status_code=status_code, content=content)
     # logger.debug(f"Api RESPONSE.CONTENT={content}")
     return response
@@ -127,8 +126,8 @@ def csrf_protect_exception_handler(request : Request, exc : CsrfProtectError):
     logger.error(f"CSRF error detected: {exc.message}")
     content = {"detail": exc.message}
     user_id = request.headers.get("X-REMOTE-USER")
-    client_addr = request.headers.get("X-REAL-IP")
-    log_access(f"{exc.status_code}", client_addr, user_id, request.method, request.url)
+    client = request.headers.get("X-REAL-IP")
+    log_access(f"{exc.status_code}", client, user_id, request.method, request.url)
     response = JSONResponse(status_code=exc.status_code, content=content)
     return response
 
@@ -137,7 +136,7 @@ def csrf_protect_exception_handler(request : Request, exc : CsrfProtectError):
 async def validate_session(request : Request, call_next):
     peer_addr = make_typical_ip_address(str(request.client.host))
     x_remote_user = request.headers.get("X-REMOTE-USER")
-    client_addr = request.headers.get("X-REAL-IP")
+    client = request.headers.get("X-REAL-IP")
     user_id = _api.map_claim_to_uid(x_remote_user)
     now = int(time.time())
     if peer_addr not in _api.trusted_proxies:
@@ -148,14 +147,14 @@ async def validate_session(request : Request, call_next):
                    "time": str(now)}
         status_code = status.HTTP_403_FORBIDDEN
         # Access log contains client_addr but peer_addr.
-        log_access(f"{status_code}", client_addr, user_id, request.method, request.url)
+        log_access(f"{status_code}", client, user_id, request.method, request.url)
         return JSONResponse(status_code=status_code, content=content)
     if (not _api.check_user_is_registered(user_id)):
         logger.info(f"Accessing Api by a bad user: ({user_id})")
         content = {"status": "error", "reason": f"Bad user: ({user_id})",
                    "time": str(now)}
         status_code = status.HTTP_401_UNAUTHORIZED
-        log_access(f"{status_code}", client_addr, user_id, request.method, request.url)
+        log_access(f"{status_code}", client, user_id, request.method, request.url)
         return JSONResponse(status_code=status_code, content=content)
     response = await call_next(request)
     return response
@@ -169,7 +168,7 @@ async def get_csrf_token(csrf_protect : CsrfProtect = Depends()):
 
 
 @_app.get("/")
-async def app_get_show_ui(
+async def app_get_ui(
         request : Request,
         x_remote_user : Union[str, None] = Header(default=None),
         x_real_ip : Union[str, None] = Header(default=None),
@@ -177,15 +176,47 @@ async def app_get_show_ui(
     logger.debug(f"APP.GET /")
     tracing.set(x_traceid)
     user_id = _api.map_claim_to_uid(x_remote_user)
-    client_addr = x_real_ip
+    client = x_real_ip
+    response = _app_get_ui("setting.html", request, user_id, client)
+    return response
+
+@_app.get("/setting.html")
+async def app_get_ui(
+        request : Request,
+        x_remote_user : Union[str, None] = Header(default=None),
+        x_real_ip : Union[str, None] = Header(default=None),
+        x_traceid : Union[str, None] = Header(default=None)):
+    logger.debug(f"APP.GET /setting.html")
+    tracing.set(x_traceid)
+    user_id = _api.map_claim_to_uid(x_remote_user)
+    client = x_real_ip
+    response = _app_get_ui("setting.html", request, user_id, client)
+    return response
+
+
+@_app.get("/setting-debug.html")
+async def app_get_debug_ui(
+        request : Request,
+        x_remote_user : Union[str, None] = Header(default=None),
+        x_real_ip : Union[str, None] = Header(default=None),
+        x_traceid : Union[str, None] = Header(default=None)):
+    logger.debug(f"APP.GET /setting-debug.html")
+    tracing.set(x_traceid)
+    user_id = _api.map_claim_to_uid(x_remote_user)
+    client = x_real_ip
+    response = _app_get_ui("setting-debug.html", request, user_id, client)
+    return response
+
+
+def _app_get_ui(file, request, user_id, client):
     code = status.HTTP_200_OK
-    log_access(f"{code}", client_addr, user_id, request.method, request.url)
-    with open(os.path.join(_api.webui_dir, "setting.html")) as f:
+    log_access(f"{code}", client, user_id, request.method, request.url)
+    with open(os.path.join(_api.webui_dir, "setting-debug.html")) as f:
         parameters = ('<script type="text/javascript">const base_path="'
-                  + _api.base_path + '";</script>')
-        _setting_html_nocache = f.read().replace("PLACE_PARAMETERS_HERE", parameters)
+                      + _api.base_path + '";</script>')
+        html = f.read().replace("PLACE_PARAMETERS_HERE", parameters)
         pass
-    response = HTMLResponse(status_code=code, content=_setting_html_nocache)
+    response = HTMLResponse(status_code=code, content=html)
     return response
 
 
@@ -200,9 +231,9 @@ async def app_get_get_user_info(
     logger.debug(f"APP.GET /user-info")
     tracing.set(x_traceid)
     user_id = _api.map_claim_to_uid(x_remote_user)
-    client_addr = x_real_ip
+    client = x_real_ip
     triple = _api.api_get_user_info(x_traceid, user_id)
-    response = _make_json_response(triple, user_id, client_addr, request,
+    response = _make_json_response(triple, user_id, client, request,
                                    csrf_protect)
     return response
 
@@ -217,9 +248,9 @@ async def app_get_list_pools(
     logger.debug(f"APP.GET /pool")
     tracing.set(x_traceid)
     user_id = _api.map_claim_to_uid(x_remote_user)
-    client_addr = x_real_ip
+    client = x_real_ip
     triple = _api.api_list_pools(x_traceid, user_id, None)
-    response = _make_json_response(triple, user_id, client_addr, request,
+    response = _make_json_response(triple, user_id, client, request,
                                    csrf_protect)
     return response
 
@@ -235,9 +266,9 @@ async def app_get_get_pool(
     logger.debug(f"APP.GET /pool/{pool_id}")
     tracing.set(x_traceid)
     user_id = _api.map_claim_to_uid(x_remote_user)
-    client_addr = x_real_ip
+    client = x_real_ip
     triple = _api.api_list_pools(x_traceid, user_id, pool_id)
-    response = _make_json_response(triple, user_id, client_addr, request,
+    response = _make_json_response(triple, user_id, client, request,
                                    csrf_protect)
     return response
 
@@ -252,12 +283,12 @@ async def app_post_make_pool(
     logger.debug(f"APP.POST /pool")
     tracing.set(x_traceid)
     user_id = _api.map_claim_to_uid(x_remote_user)
-    client_addr = x_real_ip
+    client = x_real_ip
     body = await _get_request_body(request)
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
     triple = _api.api_make_pool(x_traceid, user_id, body)
-    response = _make_json_response(triple, user_id, client_addr, request,
+    response = _make_json_response(triple, user_id, client, request,
                                    csrf_protect)
     return response
 
@@ -273,12 +304,12 @@ async def app_delete_delete_pool(
     logger.debug(f"APP.DELETE /pool/{pool_id}")
     tracing.set(x_traceid)
     user_id = _api.map_claim_to_uid(x_remote_user)
-    client_addr = x_real_ip
+    client = x_real_ip
     body = await _get_request_body(request)
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
     triple = _api.api_delete_pool(x_traceid, user_id, pool_id)
-    response = _make_json_response(triple, user_id, client_addr, request,
+    response = _make_json_response(triple, user_id, client, request,
                                    csrf_protect)
     return response
 
@@ -294,12 +325,12 @@ async def app_put_make_bucket(
     logger.debug(f"APP.PUT /pool/{pool_id}/bucket")
     tracing.set(x_traceid)
     user_id = _api.map_claim_to_uid(x_remote_user)
-    client_addr = x_real_ip
+    client = x_real_ip
     body = await _get_request_body(request)
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
     triple = _api.api_make_bucket(x_traceid, user_id, pool_id, body)
-    response = _make_json_response(triple, user_id, client_addr, request,
+    response = _make_json_response(triple, user_id, client, request,
                                    csrf_protect)
     return response
 
@@ -316,12 +347,12 @@ async def app_delete_delete_bucket(
     logger.debug(f"APP.DELETE /pool/{pool_id}/bucket/{bucket}")
     tracing.set(x_traceid)
     user_id = _api.map_claim_to_uid(x_remote_user)
-    client_addr = x_real_ip
+    client = x_real_ip
     body = await _get_request_body(request)
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
     triple = _api.api_delete_bucket(x_traceid, user_id, pool_id, bucket)
-    response = _make_json_response(triple, user_id, client_addr, request,
+    response = _make_json_response(triple, user_id, client, request,
                                    csrf_protect)
     return response
 
@@ -337,12 +368,12 @@ async def app_post_make_secret(
     logger.debug(f"APP.POST /pool/{pool_id}/secret")
     tracing.set(x_traceid)
     user_id = _api.map_claim_to_uid(x_remote_user)
-    client_addr = x_real_ip
+    client = x_real_ip
     body = await _get_request_body(request)
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
     triple = _api.api_make_secret(x_traceid, user_id, pool_id, body)
-    response = _make_json_response(triple, user_id, client_addr, request,
+    response = _make_json_response(triple, user_id, client, request,
                                    csrf_protect)
     return response
 
@@ -359,11 +390,11 @@ async def app_delete_delete_secret(
     logger.debug(f"APP.DELETE /pool/{pool_id}/secret/{access_key}")
     tracing.set(x_traceid)
     user_id = _api.map_claim_to_uid(x_remote_user)
-    client_addr = x_real_ip
+    client = x_real_ip
     body = await _get_request_body(request)
     token = body.get("CSRF-Token")
     csrf_protect.validate_csrf(token)
     triple = _api.api_delete_secret(x_traceid, user_id, pool_id, access_key)
-    response = _make_json_response(triple, user_id, client_addr, request,
+    response = _make_json_response(triple, user_id, client, request,
                                    csrf_protect)
     return response

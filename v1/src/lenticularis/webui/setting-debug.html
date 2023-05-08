@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta name="generator" content="HTML Tidy for HTML5 for Linux version 5.2.0" />
+    <meta charset="utf-8" />
+    <style type="text/css">.label {
+    width: 20em !important;
+    display: inline-block;
+  }
+  </style>
+    <title>Manage Pools</title>
+  </head>
+  <body>
+    <div id="make_new_pool_button">
+      <button v-on:click="kick_add_new_pool">New bucket pool</button>
+    </div>
+    <div id="show_pool_list_button">
+      <button v-on:click="kick_show_pool_list">Show bucket pools</button>
+    </div>
+
+    <div id="pool_section" v-if="pool_name_visible">
+      <hr />
+      <div>
+        <span class="label">POOL</span>
+      </div>
+      <div v-if="!make_pool_mode">
+        <div>
+          <span class="label">Buckets directory (absolute path):</span>
+          <input v-model="buckets_directory" size="30" disabled />
+        </div>
+        <div>
+          <span class="label">User:</span>
+          <input v-model="user" size="30" disabled />
+        </div>
+        <div>
+          <span class="label">Group:</span>
+          <input v-model="group" size="30" disabled />
+        </div>
+      </div>
+      <div v-if="make_pool_mode">
+        <div>
+          <span class="label">Buckets directory (absolute path):</span>
+          <input v-model="buckets_directory" size="30" />
+        </div>
+        <div>
+          <span class="label">User:</span>
+          <input v-model="user" size="30" disabled />
+        </div>
+        <div>
+          <span class="label">Group:</span>
+          <select v-model="group" required="true">
+            <option v-for="(g, i) in group_choices" v-bind:selected="i == 0">
+              {{ g }}
+            </option>
+          </select>
+          <div>
+            <button v-on:click="kick_make_pool">Create</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="buckets_section" v-if="edit_pool_visible">
+      <hr />
+      <div>
+        <span class="label">BUCKETS</span>
+      </div>
+      <div>
+        <span class="label">New bucket:</span>
+        <span>Bucket name:</span>
+        <input v-model="bucket_name" size="30" placeholder="bucket name" />
+        <span>Bucket policy for public access:</span>
+        <select v-model="bucket_policy" v-bind:required="true">
+          <option selected>none</option>
+          <option>public</option>
+          <option>upload</option>
+          <option>download</option>
+        </select>
+        <button v-on:click="kick_make_bucket">Add bucket</button>
+      </div>
+
+      <div>
+        <span class="label">Existing buckets and policies</span>
+        <div v-for="b in list_of_buckets">
+          <input v-model="b.name" size="30" disabled />
+          <input v-model="b.bkt_policy" size="10" disabled />
+          <button v-on:click="kick_delete_bucket(b.name)">Delete bucket</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="keys_section" v-if="edit_pool_visible">
+      <hr />
+      <div>
+        <span class="label">ACCESS KEYS</span>
+      </div>
+      <div>
+        <span class="label">Expiration:</span>
+        <input type="date" v-model="key_expiration_time" />
+        <span class="label">UTC</span>
+      </div>
+      <div>
+        <span class="label">Access keys (rw)</span>
+        <button v-on:click="kick_make_secret('readwrite')">Create key</button>
+      </div>
+      <div v-for="k in access_keys_rw">
+        <input v-model="k.access_key" size="22" disabled />
+        <button v-on:click="kick_copy_to_clipboard(k.access_key)">Copy</button>
+        <input v-model="k.secret_key" size="50" disabled />
+        <button v-on:click="kick_copy_to_clipboard(k.secret_key)">Copy</button>
+        <span>Expires:</span>
+        <input type="datetime" v-model="k.expiration_time" disabled />
+        <button v-on:click="kick_delete_secret(k.access_key)">Delete key</button>
+      </div>
+
+      <div>
+        <span class="label">Access keys (ro)</span>
+        <button v-on:click="kick_make_secret('readonly')">Create key</button>
+      </div>
+      <div v-for="k in access_keys_ro">
+        <input v-model="k.access_key" size="22" disabled />
+        <button v-on:click="kick_copy_to_clipboard(k.access_key)">Copy</button>
+        <input v-model="k.secret_key" size="50" disabled />
+        <button v-on:click="kick_copy_to_clipboard(k.secret_key)">Copy</button>
+        <span>Expires:</span>
+        <input type="datetime" v-model="k.expiration_time" disabled />
+        <button v-on:click="kick_delete_secret(k.access_key)">Delete key</button>
+      </div>
+
+      <div>
+        <span class="label">Access keys (wo)</span>
+        <button v-on:click="kick_make_secret('writeonly')">Create key</button>
+      </div>
+      <div v-for="k in access_keys_wo">
+        <input v-model="k.access_key" size="22" disabled />
+        <button v-on:click="kick_copy_to_clipboard(k.access_key)">Copy</button>
+        <input v-model="k.secret_key" size="50" disabled />
+        <button v-on:click="kick_copy_to_clipboard(k.secret_key)">Copy</button>
+        <span>Expires:</span>
+        <input type="datetime" v-model="k.expiration_time" disabled />
+        <button v-on:click="kick_delete_secret(k.access_key)">Delete key</button>
+      </div>
+    </div>
+
+    <div id="pool_list_section" v-if="pool_data_visible">
+      <div v-for="(_, p) in pool_li_list.length">
+        <hr />
+        <input v-on:click="kick_edit_pool(p)" type="button" class="button" value="Edit" />
+        <input v-on:click="kick_delete_pool(p)" type="button" class="button" value="Delete" />
+        <ul style="list-style: none;">
+          <li v-for="item in pool_li_list[p]">
+            <span class="label"> {{ item.text.label }}: </span>
+            {{ item.text.value }}
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div>
+      <hr />
+      <div>
+        <span class="label">WEB-UI STATUS</span>
+      </div>
+      <div id="show_status">
+        <div>{{status}}</div>
+        <div>{{reason}}</div>
+        <div>{{message}}</div>
+        <div>{{time}}</div>
+        <button v-on:click="kick_debug">Debug</button> (dump internal
+        data on javascript console)
+      </div>
+    </div>
+
+    PLACE_PARAMETERS_HERE
+    <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+    <script src="scripts/lens3ui_debug.js"></script>
+    <div hidden>Lens3 v1.2 2022-07-10</div>
+  </body>
+</html>

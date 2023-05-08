@@ -60,7 +60,7 @@ multiplexer:
 ```
 
 * __front_host__ is a host name of a proxy.  It is used as a HOST
-  header when a Lens3-Mux accesses the other Mux's.
+  header when a Lens3-Mux accesses other Mux's.
 
 * __trusted_proxies__ lists names of the proxies.  The ip-addresses of
   them are checked when Lens3 receives a request.
@@ -74,12 +74,12 @@ multiplexer:
 * (__probe_access_timeout__) IS NOT USED.  It is a tolerance when
   Lens3-Mux starts a MinIO instance on a remote node.
 
-* __bad_response_delay__ is a wait to avoid denial attacks, when an
-  error response is going to be returned.
+* __bad_response_delay__ is an added wait when an error response is to
+  be returned.  It is to avoid denial attacks.
 
 * __mux_node_name__ is optional.  It is used as a host name on which
-  Lens3-Mux is running, when a host name the system returns is not
-  appropriate.
+  Lens3-Mux is running.  It needs to be set when a host name that the
+  system returns is not appropriate.
 
 ## Manager Part
 

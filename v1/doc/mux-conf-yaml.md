@@ -58,23 +58,23 @@ multiplexer:
     mux_node_name: ""
 ```
 
-* FRONT_HOST is a host name of a proxy.  It is used when a Lens3-Mux
-  accesses the other Mux's.
+* __front_host__ is a host name of a proxy.  It is used as a HOST
+  header when a Lens3-Mux accesses the other Mux's.
 
-* TRUSTED_PROXIES lists names of the proxies.  The ip-addresses of
-  them are checked when Lens3-Mux receives a request.
+* __trusted_proxies__ lists names of the proxies.  The ip-addresses of
+  them are checked when Lens3 receives a request.
 
-* MUX_EP_UPDATE_INTERVAL is an interval that Lens3-Mux tells its
+* __mux_ep_update_interval__ is an interval that Lens3-Mux tells its
   end-point in Redis.
 
-* FORWARDING_TIMEOUT is a tolerance when Lens3-Mux forwards a request
-  to MinIO and waits for the reply.
+* __forwarding_timeout__ is a tolerance when Lens3-Mux forwards a
+  request to MinIO and waits for the reply.
 
-* (PROBE_ACCESS_TIMEOUT) IS NOT USED.  It is a tolerance when Lens3-Mux
-  starts a MinIO instance on a remote node.
+* (__probe_access_timeout__) IS NOT USED.  It is a tolerance when
+  Lens3-Mux starts a MinIO instance on a remote node.
 
-* BAD_RESPONSE_DELAY is a wait to avoid denial attacks,
-  when an error response is going to be returned.
+* __bad_response_delay__ is a wait to avoid denial attacks, when an
+  error response is going to be returned.
 
 * __mux_node_name__ is optional.  It is used as a host name on which
   Lens3-Mux is running, when a host name the system returns is not
@@ -98,28 +98,29 @@ minio_manager:
     minio_mc_timeout: 10
 ```
 
-* SUDO is a path of the sudo command.
+* __sudo__ is a path of the sudo command.
 
-* PORT_MIN and PORT_MAX specifies the port range used to run a
+* __port_min__ and __port_max__ specifies the port range used to run a
   Manager.
 
-* MINIO_AWAKE_DURATION specifies a duration until an MinIO instance
-  will be shutdown.
+* __minio_awake_duration__ specifies a duration until an MinIO
+  instance will be shutdown.
 
-* MINIO_SETUP_AT_RESTART specifies to reinitialized an MinIO instance.
-  If it is true, bucket settings are reinitialized as to the states
-  known to Lens3 service.
+* __minio_setup_at_restart__ specifies to reinitialized an MinIO
+  instance.  If it is true, bucket settings are reinitialized as to
+  the states known to Lens3 service.
 
-* HEARTBEAT_INTERVAL and HEARTBEAT_MISS_TOLERANCE specify an interval
-  and a count of a heartbeat failure.  HEARTBEAT_TIMEOUT is a
-  tolerance when a Manager sends a request to a MinIO instance as a
-  heartbeat.
+* __heartbeat_interval__ and __heartbeat_miss_tolerance__ specify an
+  interval and a count of a heartbeat failure.
 
-* MINIO_START_TIMEOUT, MINIO_SETUP_TIMEOUT, and MINIO_STOP_TIMEOUT
-  specifies timeout values when a Manager starts or stops a MinIO
-  instance.
+* __heartbeat_timeout__ is a tolerance when a Manager sends a request
+  to a MinIO instance as a heartbeat.
 
-* MINIO_MC_TIMEOUT specifies a timeout when a Manager sends a MC
+* __minio_start_timeout__, __minio_setup_timeout__, and
+  __minio_stop_timeout__ specifies timeout values when a Manager
+  starts or stops a MinIO instance.
+
+* __minio_mc_timeout__ specifies a timeout when a Manager sends a MC
   command to a MinIO instance.
 
 ## MinIO Part

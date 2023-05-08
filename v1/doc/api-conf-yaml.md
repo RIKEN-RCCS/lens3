@@ -51,6 +51,31 @@ controller:
     CSRF_secret_key: xyzzy
 ```
 
+* __front_host__ is a host name of a proxy.  It is used as a HOST
+  header when a Lens3-Api accesses Mux.
+
+* __trusted_proxies__ is host names of the proxies.  The ip-addresses
+  of them are checked when Lens3 receives a request.
+
+* __base_path__ is a base-URL.  It is used when a proxy drops paths.
+  It can be "".  Do not add a trailing slash.
+
+* __claim_uid_map__ is one of "id", "email-name", "map".  It specifies
+  a mapping of a claim (an X-REMOTE-USER) to an uid.  "id" means
+  unchanged, "email-name" takes a name part of an email (before "@"),
+  and "map" is a mapping which is defined in the configuration.
+
+* __probe_access_timeout__: is a tolerance when Lens3-Api accesses a
+  Mux.
+
+* __minio_mc_timeout__ is a tolerance when Lens3-Api issues an MC
+  command.
+
+* __max_pool_expiry__ is a time limit of a pool is active.  630720000
+  is 10 years.
+
+* __CSRF_secret_key__: is a key used by fastapi_csrf_protect module.
+
 ## MinIO Part
 
 ```

@@ -225,14 +225,14 @@ old Lens3-Mux + MinIO pair.
 
 ## Short Term TODO, or Deficiency
 
-* Add control on the pool statuses "online" and "expiration" via
-  Web-API.  They are of fixed values currently.
 * Start MinIO with the --json option.  It will make parsing the output
   reliable.
 * Rewrite in Go-lang.  The code will be in Go in the next release.
 * Make access-key generation of Web-API behave like STS.
+* Add control on the pool status "online" via Web-API.  It is fixed
+  currently.
 * Make starting a MinIO instance via the frontend proxy.  Currently,
-  an arbitrary Mux is chosen, but the proxy can balance loads.
+  an arbitrary Mux is chosen, but the proxy can balance the loads.
 
 ## Security
 

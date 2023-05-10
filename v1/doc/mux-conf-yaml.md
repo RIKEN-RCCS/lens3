@@ -19,15 +19,6 @@ variable "LENS3_MUX_NAME" which is set in the service script
 "lenticularis-mux.service".  For example, LENS3_MUX_NAME="mux1" will
 choose the setting with subject="mux:mux1".
 
-## Redis Part (required but not used)
-
-```
-redis:
-    host: localhost
-    port: 6378
-    password: "long-string-for-redis-password"
-```
-
 ## Gunicorn Part
 
 ```
@@ -43,7 +34,8 @@ gunicorn:
     #log_syslog_facility: LOCAL7
 ```
 
-See the documents of Gunicorn.
+See the documents of Gunicorn.  Entires other than __port__ are
+optional.
 
 ## Lens3-Mux Part
 
@@ -56,7 +48,7 @@ multiplexer:
     forwarding_timeout: 60
     probe_access_timeout: 60
     bad_response_delay: 1
-    mux_node_name: ""
+    # mux_node_name: ""
 ```
 
 * __front_host__ is a host name of a proxy.  It is used as a HOST
@@ -142,3 +134,5 @@ log_syslog:
     facility: LOCAL7
     priority: DEBUG
 ```
+
+* __log_file__ entry is optional.

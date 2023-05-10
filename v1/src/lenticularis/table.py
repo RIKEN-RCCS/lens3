@@ -159,15 +159,15 @@ class Table():
         """Returns a list of confs"""
         return self._setting_table._list_confs()
 
-    def set_user(self, userinfo):
-        self._setting_table.set_user(userinfo)
+    def add_user(self, userinfo):
+        self._setting_table.add_user(userinfo)
         pass
 
     def get_user(self, uid):
         return self._setting_table.get_user(uid)
 
-    def map_claim_to_uid(self, claim):
-        return self._setting_table.map_claim_to_uid(claim)
+    def get_claim_user(self, claim):
+        return self._setting_table.get_claim_user(claim)
 
     def delete_user(self, uid):
         self._setting_table.delete_user(uid)
@@ -221,17 +221,17 @@ class Table():
 
     # Process-Table:
 
-    def set_ex_minio_manager(self, pool_id, desc):
-        return self._process_table.set_ex_minio_manager(pool_id, desc)
+    def set_ex_manager(self, pool_id, desc):
+        return self._process_table.set_ex_manager(pool_id, desc)
 
-    def set_minio_manager_expiry(self, pool_id, timeout):
-        return self._process_table.set_minio_manager_expiry(pool_id, timeout)
+    def set_manager_expiry(self, pool_id, timeout):
+        return self._process_table.set_manager_expiry(pool_id, timeout)
 
-    def get_minio_manager(self, pool_id):
-        return self._process_table.get_minio_manager(pool_id)
+    def get_manager(self, pool_id):
+        return self._process_table.get_manager(pool_id)
 
-    def delete_minio_manager(self, pool_id):
-        self._process_table.delete_minio_manager(pool_id)
+    def delete_manager(self, pool_id):
+        self._process_table.delete_manager(pool_id)
         pass
 
     def set_minio_proc(self, pool_id, procdesc):
@@ -311,6 +311,9 @@ class Table():
     def list_access_timestamps(self):
         return self._routing_table.list_access_timestamps()
 
+    def set_user_timestamp(self, user_id):
+        return self._routing_table.set_user_timestamp(user_id)
+
     # Monokey-Table:
 
     def make_unique_xid(self, usage, owner, info):
@@ -388,12 +391,13 @@ class _Setting_Table(Table_Common):
 
     def _delete_claim(self, uid):
         """Deletes a claim associated to a uid.  It scans the database to find
-        an entry owned by a uid.
+        an entry associated to a uid.  (This is paranoiac because it
+        is called after deleting a claim entry).
         """
         claims = _scan_table(self.db, self._user_claim_prefix, None)
         for claim in claims:
-            u = self.map_claim_to_uid(claim)
-            if (u is not None and u == uid):
+            xid = self.get_claim_user(claim)
+            if (xid is not None and xid == uid):
                 key = f"{self._user_claim_prefix}{claim}"
                 self.db.delete(key)
                 pass
@@ -424,12 +428,31 @@ class _Setting_Table(Table_Common):
                 if v is not None]
         return conflist
 
-    def set_user(self, userinfo):
+    def add_user(self, userinfo):
+        """Adds a user and adds its claim entry.  A duplicate claim is an
+        error.  It deletes an old entry first if exits.
+        """
         assert set(userinfo.keys()) == self._user_info_keys
         uid = userinfo["uid"]
         assert uid is not None and uid != ""
-        key1 = f"{self._user_info_prefix}{uid}"
+        claim = userinfo["claim"]
+        assert claim is not None
+        if claim != "":
+            key2 = f"{self._user_claim_prefix}{claim}"
+            xid = self.db.get(key2)
+            if xid is not None and uid == xid:
+                raise Exception(f"A claim for {uid} conflicts with {xid}")
+            pass
+        self.delete_user(uid)
+        self._set_user(userinfo)
+        pass
+
+    def _set_user(self, userinfo):
+        """(Use add_user() instead)."""
+        uid = userinfo["uid"]
+        assert uid is not None and uid != ""
         v = json.dumps(userinfo)
+        key1 = f"{self._user_info_prefix}{uid}"
         self.db.set(key1, v)
         claim = userinfo["claim"]
         if claim != "":
@@ -443,13 +466,16 @@ class _Setting_Table(Table_Common):
         v = self.db.get(key1)
         return json.loads(v) if v is not None else None
 
-    def map_claim_to_uid(self, claim):
+    def get_claim_user(self, claim):
+        """Maps a claim to a uid, or returns None."""
         assert claim != ""
         key2 = f"{self._user_claim_prefix}{claim}"
         v = self.db.get(key2)
         return v
 
     def delete_user(self, uid):
+        """Deletes a user and its associated claim entry.
+        """
         key1 = f"{self._user_info_prefix}{uid}"
         v = self.get_user(uid)
         self.db.delete(key1)
@@ -606,7 +632,7 @@ class _Process_Table(Table_Common):
     _mux_desc_keys = {
         "host", "port", "start_time", "modification_time"}
 
-    def set_ex_minio_manager(self, pool_id, desc):
+    def set_ex_manager(self, pool_id, desc):
         """Registers atomically a manager process.  It returns OK/NG, paired
         with a manager that took the role earlier when it fails.  At
         a failure, a returned current owner information can be None due
@@ -618,20 +644,22 @@ class _Process_Table(Table_Common):
         ok = self.db.setnx(key, v)
         if ok:
             return (True, None)
-        # Race, returns failure.
-        o = self.get_minio_manager(pool_id)
-        return (False, o if o is not None else None)
+        else:
+            # Race, returns failure.
+            o = self.get_manager(pool_id)
+            return (False, o if o is not None else None)
+        pass
 
-    def set_minio_manager_expiry(self, pool_id, timeout):
+    def set_manager_expiry(self, pool_id, timeout):
         key = f"{self._minio_manager_prefix}{pool_id}"
         return self.db.expire(key, timeout)
 
-    def get_minio_manager(self, pool_id):
+    def get_manager(self, pool_id):
         key = f"{self._minio_manager_prefix}{pool_id}"
         v = self.db.get(key)
         return json.loads(v) if v is not None else None
 
-    def delete_minio_manager(self, pool_id):
+    def delete_manager(self, pool_id):
         key = f"{self._minio_manager_prefix}{pool_id}"
         self.db.delete(key)
         pass
@@ -714,6 +742,7 @@ class _Routing_Table(Table_Common):
     _minio_ep_prefix = "ep:"
     _bucket_prefix = "bk:"
     _access_timestamp_prefix = "ts:"
+    _user_timestamp_prefix = "us:"
 
     _bucket_desc_keys = {"pool", "bkt_policy", "modification_time"}
 
@@ -798,10 +827,19 @@ class _Routing_Table(Table_Common):
                   if ts is not None]
         return stamps
 
+    def set_user_timestamp(self, user_id):
+        if user_id is not None:
+            key = f"{self._user_timestamp_prefix}{user_id}"
+            ts = int(time.time())
+            self.db.set(key, f"{ts}")
+            pass
+        pass
+
     def clear_all(self, everything):
         _delete_all(self.db, self._minio_ep_prefix)
         _delete_all(self.db, self._bucket_prefix)
         _delete_all(self.db, self._access_timestamp_prefix)
+        _delete_all(self.db, self._user_timestamp_prefix)
         pass
 
     def print_all(self):

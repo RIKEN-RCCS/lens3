@@ -21,8 +21,6 @@ from lenticularis.pooldata import ensure_bucket_policy
 from lenticularis.pooldata import ensure_user_is_authorized
 from lenticularis.pooldata import ensure_mux_is_running
 from lenticularis.pooldata import ensure_pool_state
-from lenticularis.pooldata import ensure_pool_owner
-from lenticularis.pooldata import ensure_bucket_owner
 from lenticularis.pooldata import ensure_secret_owner
 from lenticularis.pooldata import get_manager_name_for_messages
 from lenticularis.pooldata import tally_manager_expiry
@@ -113,8 +111,8 @@ class Multiplexer():
         self._mux_version = "v1.2"
 
         mux_param = mux_conf["multiplexer"]
-        self._front_hostname = mux_param["front_host"].lower()
-        self._front_host_ip = get_ip_addresses(self._front_hostname)[0]
+        self._front_host = mux_param["front_host"].lower()
+        self._front_host_ip = get_ip_addresses(self._front_host)[0]
         proxies = mux_param["trusted_proxies"]
         self._trusted_proxies = {addr for h in proxies
                                  for addr in get_ip_addresses(h)}
@@ -244,18 +242,17 @@ class Multiplexer():
             return True
         return False
 
-    def _start_service(self, traceid, pool_id, probe_key):
+    def _start_service(self, pool_id, probing):
         """Runs a MinIO service.  It returns 200 and an endpoint, or 500 when
-        starting a service fails.  It waits for a service to start
-        when multiple accesses happen simultaneously.  Use of probe_key
-        forces to run on a local host.  Otherwise, the chooser chooses
-        a host to run.
+        starting a service fails.  It waits until a service to start
+        when multiple accesses happen simultaneously.  That is,
+        starting a service has a race when multiple accesses come here
+        at the same time.  And then, it excludes others by registering
+        a manager entry.  When probing=True, it forces to run a
+        service on the local host.  Otherwise, the chooser chooses a
+        host to run.
         """
         # CURRENTLY, IT STARTS A SERVICE ON A LOCAL HOST.
-
-        # Starting a service has a race when multiple accesses come
-        # here simultaneously.  Exclude others by registering a
-        # manager entry.
 
         now = int(time.time())
         ma = {
@@ -264,36 +261,41 @@ class Multiplexer():
             "start_time": now
         }
         self._minio_manager = ma
-        (ok, _) = self.tables.set_ex_minio_manager(pool_id, ma)
+        (ok, _) = self.tables.set_ex_manager(pool_id, ma)
         if not ok:
             (code, ep0) = self._wait_for_service_starts(pool_id)
             return (code, ep0)
 
         # This request takes the role to start a manager.
 
-        ok = self.tables.set_minio_manager_expiry(pool_id, self._manager_expiry)
+        ok = self.tables.set_manager_expiry(pool_id, self._manager_expiry)
         if not ok:
             logger.warning(f"Manager (pool={pool_id}) failed to set expiry.")
             pass
 
-        if probe_key is not None:
+        pooldesc = self.tables.get_pool(pool_id)
+        user_id = pooldesc.get("owner_uid")
+        self.tables.set_user_timestamp(user_id)
+
+        if probing:
             ep = None
         else:
             # ep = self._choose_server_host(pool_id)
             ep = None
             pass
+
         if ep is None:
             # Run MinIO on a local host.
-            (code, ep0) = self._spawner.start(traceid, pool_id, probe_key)
+            (code, ep0) = self._spawner.start_spawner(pool_id)
             return (code, ep0)
         else:
             # THIS PART IS NOT USED NOW.
             # Run MinIO on a remote host.
-            assert probe_key is None
+            assert probing == False
             pooldesc = self.tables.get_pool(pool_id)
             probe_key = pooldesc["probe_key"]
-            code = access_mux(traceid, ep, probe_key,
-                              self._front_hostname, self._front_host_ip,
+            code = access_mux(ep, probe_key,
+                              self._front_host, self._front_host_ip,
                               self._probe_access_timeout)
             return (code, ep)
         pass
@@ -413,7 +415,7 @@ class Multiplexer():
                 ensure_user_is_authorized(self.tables, user_id)
                 ensure_pool_state(self.tables, pool_id)
                 # ensure_bucket_owner(self.tables, bucket, pool_id)
-                ensure_secret_owner(self.tables, access_key, pool_id)
+                ensure_secret_owner(self.tables, access_key, pool_id, True)
                 ensure_bucket_policy(bucket, bktdesc, access_key)
             except Api_Error as e:
                 # Reraise an error with a less-informative message.
@@ -435,7 +437,7 @@ class Multiplexer():
 
         minio_ep = self.tables.get_minio_ep(pool_id)
         if minio_ep is None:
-            (code, ep0) = self._start_service(traceid, pool_id, probe_key)
+            (code, ep0) = self._start_service(pool_id, True)
             if code == 200:
                 assert ep0 is not None
                 minio_ep = ep0

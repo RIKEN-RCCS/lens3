@@ -105,7 +105,9 @@ when an entry is gone by expiry.
 | ----           | ----               | ---- |
 | ep:pool-id     | MinIO-endpoint     | |
 | bk:bucket-name | bucket-description | A mapping by a bucket-name \*1 |
-| ts:pool-id     | timestamp          | Timestamp on the last access (string) |
+| ts:pool-id     | timestamp          | Timestamp on an access (string) |
+| us:uid         | timestamp          | Timestamp on a user access (string) |
+
 
 An __ep:pool-id__ entry is a MinIO-endpoint (a host:port string).
 
@@ -114,7 +116,11 @@ A __bk:bucket-name__ entry is a record of a bucket-description:
 public R/W status of a bucket: {"none", "upload", "download",
 "public"}, whose names are borrowed from MinIO.
 
-A __ts:pool-id__ entry is a last access timestamp of a pool.
+A __ts:pool-id__ entry is a last access timestamp of a pool.  It is
+used to decide whether to stop a MinIO instance.
+
+A __us:uid__ is an access timestamp of a user.  It is just a record.
+It is to check inactive users.
 
 ### Monokey-Table (DB=4)
 

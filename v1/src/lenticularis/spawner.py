@@ -6,10 +6,11 @@
 import os
 from subprocess import Popen, DEVNULL, PIPE, TimeoutExpired
 import sys
-from lenticularis.utility import copy_minimal_env
+from lenticularis.utility import copy_minimal_environ
 from lenticularis.utility import wait_one_line_on_stdout
 from lenticularis.utility import rephrase_exception_message
 from lenticularis.utility import logger
+from lenticularis.utility import tracing
 
 
 class Spawner():
@@ -29,11 +30,11 @@ class Spawner():
         self._extra_timeout = 15
         pass
 
-    def start(self, traceid, pool_id, probe_key):
+    def start_spawner(self, pool_id):
         """Runs a MinIO on a local host.  It returns 200 and an endpoint, or
         500 on failure.
         """
-        ok = self._start_manager(traceid, pool_id)
+        ok = self._start_manager(pool_id)
         if not ok:
             return (500, None)
         ep = self.tables.get_minio_ep(pool_id)
@@ -41,7 +42,7 @@ class Spawner():
             return (500, None)
         return (200, ep)
 
-    def _start_manager(self, traceid, pool_id):
+    def _start_manager(self, pool_id):
         """Starts a MinIO under a manager process.  It waits for a manager to
         write a message host:port on stdout.
         """
@@ -49,7 +50,8 @@ class Spawner():
         args = [self._mux_host, str(self._mux_port),
                 str(self.port_min), str(self.port_max),
                 pool_id, "--conf", self.conf]
-        env = copy_minimal_env(os.environ)
+        env = copy_minimal_environ(os.environ)
+        traceid = tracing.get()
         if traceid is not None:
             args.append(f"--traceid={traceid}")
             pass

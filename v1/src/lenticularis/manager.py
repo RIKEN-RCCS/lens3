@@ -27,7 +27,7 @@ from lenticularis.pooldata import tally_manager_expiry
 from lenticularis.utility import ERROR_EXIT_BADCONF, ERROR_EXIT_FORK
 from lenticularis.utility import generate_access_key
 from lenticularis.utility import generate_secret_key
-from lenticularis.utility import copy_minimal_env, host_port
+from lenticularis.utility import copy_minimal_environ, host_port
 from lenticularis.utility import uniform_distribution_jitter
 from lenticularis.utility import wait_one_line_on_stdout
 from lenticularis.utility import rephrase_exception_message
@@ -254,7 +254,7 @@ class Manager():
 
         # Record a manager entry of this manager.
 
-        ma = self.tables.get_minio_manager(pool_id)
+        ma = self.tables.get_manager(pool_id)
         if ma is None:
             logger.error(f"Manager (pool={pool_id}) failed: no manager entry")
             return False
@@ -270,7 +270,7 @@ class Manager():
         #     "modification_time": now
         # }
         # self._minio_manager = ma
-        # (ok, holder) = self.tables.set_ex_minio_manager(pool_id, ma)
+        # (ok, holder) = self.tables.set_ex_manager(pool_id, ma)
         # if not ok:
         #     muxep0 = host_port(self._mux_host, self._mux_port)
         #     muxep1 = get_manager_name_for_messages(holder)
@@ -280,7 +280,7 @@ class Manager():
         #
         # This manager takes the role.
         #
-        # ok = self.tables.set_minio_manager_expiry(pool_id, self._manager_expiry)
+        # ok = self.tables.set_manager_expiry(pool_id, self._manager_expiry)
         # if not ok:
         #     logger.warning(f"Manager (pool={pool_id}) failed to set expiry.")
         #     pass
@@ -289,9 +289,9 @@ class Manager():
             self._deregister_minio_process(clean_stale_record=True)
             ok = self._manage_minio()
         finally:
-            ma = self.tables.get_minio_manager(pool_id)
+            ma = self.tables.get_manager(pool_id)
             if ma == self._minio_manager:
-                self.tables.delete_minio_manager(pool_id)
+                self.tables.delete_manager(pool_id)
             else:
                 active = self._minio_manager
                 stored = ma
@@ -318,7 +318,7 @@ class Manager():
 
         self._minio_root_user = generate_access_key()
         self._minio_root_password = generate_secret_key()
-        env = copy_minimal_env(os.environ)
+        env = copy_minimal_environ(os.environ)
         self._env_minio = env
         self._env_mc = env.copy()
         self._env_minio["MINIO_ROOT_USER"] = self._minio_root_user
@@ -592,11 +592,11 @@ class Manager():
     def _check_record_expiry(self):
         # It may happen to extend expiry for other managers (ignored).
         pool_id = self._pool_id
-        ok = self.tables.set_minio_manager_expiry(pool_id, self._manager_expiry)
+        ok = self.tables.set_manager_expiry(pool_id, self._manager_expiry)
         if not ok:
             logger.warning(f"Manager (pool={pool_id}) failed to set expiry.")
             pass
-        ma = self.tables.get_minio_manager(pool_id)
+        ma = self.tables.get_manager(pool_id)
         if ma == self._minio_manager:
             pass
         elif ma is None:

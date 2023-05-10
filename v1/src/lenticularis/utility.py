@@ -210,7 +210,7 @@ def generate_secret_key():
     return random_str(SECRET_ACCESS_KEY_LEN)
 
 
-def copy_minimal_env(oenv):
+def copy_minimal_environ(oenv):
     """Copies minimal environment variables to run services.  It includes
     Lens3 specific variables.
     """

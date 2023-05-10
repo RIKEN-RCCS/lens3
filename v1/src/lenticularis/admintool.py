@@ -124,14 +124,14 @@ def _load_user(tables, u):
                 "groups": u["groups"],
                 "enabled": oldu["enabled"],
                 "modification_time": now}
-        tables.set_user(newu)
+        tables.add_user(newu)
     else:
         newu = {"uid": uid,
                 "claim": u["claim"],
                 "groups": u["groups"],
                 "enabled": True,
                 "modification_time": now}
-        tables.set_user(newu)
+        tables.add_user(newu)
         pass
     pass
 
@@ -141,7 +141,7 @@ def _enable_disable_user(tables, uid, enabled):
     if u is None:
         raise Api_Error(500, f"Bad user (unknown): {uid}")
     u["enabled"] = enabled
-    tables.set_user(u)
+    tables.add_user(u)
     pass
 
 
@@ -248,8 +248,7 @@ class Command():
     its status code is 500 always.
     """
 
-    def __init__(self, traceid, redis, args, rest):
-        self._traceid = traceid
+    def __init__(self, redis, args, rest):
         self._redis = redis
         self.args = args
         self.rest = rest
@@ -281,7 +280,7 @@ class Command():
         set_conf(conf, self._redis)
         pass
 
-    def op_list_conf(self):
+    def op_show_conf(self):
         """Prints a list of conf data in yaml."""
         conflist = self._tables.list_confs()
         for e in conflist:
@@ -330,7 +329,7 @@ class Command():
             pass
         pass
 
-    def op_list_user(self):
+    def op_show_user(self):
         """Prints a user list in CSV.  It lists ADD rows first, and then
         a DISABLE row.
         """
@@ -341,7 +340,7 @@ class Command():
         _print_in_csv(urows + drows)
         pass
 
-    def op_list_pool(self, *pool_id):
+    def op_show_pool(self, *pool_id):
         """Prints pools.  It shows all pools without arguments."""
         pool_list = list(pool_id)
         if pool_list == []:
@@ -370,7 +369,6 @@ class Command():
             print("Need yes (-y) for action.")
         else:
             pool_list = list(pool_id)
-            traceid = self._traceid
             for pid in pool_list:
                 erase_minio_ep(self._tables, pid)
                 erase_pool_data(self._tables, pid)
@@ -378,7 +376,7 @@ class Command():
             pass
         pass
 
-    def op_list_bucket(self):
+    def op_show_bucket(self):
         """Prints all buckets and all buckets-directories of pools."""
         # pool_list = list(pool_id)
         # if pool_list == []:
@@ -406,7 +404,7 @@ class Command():
             pass
         pass
 
-    def op_list_ep(self):
+    def op_show_ep(self):
         """Lists endpoints of Mux and MinIO."""
         # Mux.
         muxs = self._tables.list_muxs()
@@ -427,7 +425,7 @@ class Command():
             pass
         pass
 
-    def op_list_ts(self):
+    def op_show_ts(self):
         """Shows last access timestamps of pools."""
         stamps = self._tables.list_access_timestamps()
         stamps = [{d["pool"]:
@@ -439,7 +437,7 @@ class Command():
             pass
         pass
 
-    def op_list_minio(self, pool_id):
+    def op_show_minio(self, pool_id):
         """Prints a MinIO process and a Manager of a pool."""
         proc_list = self._tables.list_minio_procs(pool_id)
         proc_list = sorted(list(proc_list))
@@ -448,7 +446,7 @@ class Command():
         for o in outs:
             _print_in_yaml(o)
             pass
-        ma = self._tables.get_minio_manager(pool_id)
+        ma = self._tables.get_manager(pool_id)
         outs = [{pool_id: ma}] if ma is not None else []
         print("# Manager")
         for o in outs:
@@ -463,7 +461,7 @@ class Command():
         """
         pool_list = list(pool_id)
         for pid in pool_list:
-            self._tables.delete_minio_manager(pid)
+            self._tables.delete_manager(pid)
             self._tables.delete_minio_proc(pid)
             self._tables.delete_minio_ep(pid)
             pass
@@ -511,7 +509,7 @@ class Command():
         restore_db(self._tables, record)
         pass
 
-    def op_list_db(self):
+    def op_show_db(self):
         """Lists all database keys."""
         self._tables.print_all()
         pass
@@ -532,24 +530,23 @@ class Command():
         """Accesses Mux for a pool.  It may wake up or stop MinIO."""
         api_conf = get_conf("api", None, self._redis)
         assert api_conf is not None
-        traceid = self._traceid
         control = Control_Api(api_conf, self._redis)
-        control.access_mux_for_pool(traceid, pool_id)
+        control.access_mux_for_pool(pool_id)
         pass
 
     command_list = [
         op_help,
 
         op_load_conf,
-        op_list_conf,
+        op_show_conf,
         op_load_user,
-        op_list_user,
+        op_show_user,
 
-        op_list_pool,
-        op_list_bucket,
-        op_list_minio,
-        op_list_ep,
-        op_list_ts,
+        op_show_pool,
+        op_show_bucket,
+        op_show_minio,
+        op_show_ep,
+        op_show_ts,
 
         op_delete_pool,
         # op_delete_ep,
@@ -557,14 +554,14 @@ class Command():
 
         op_dump_db,
         op_restore_db,
-        op_list_db,
+        op_show_db,
         op_reset_db,
     ]
 
     def make_command_entry(self, fn, _):
         """Makes a command entry from a function by registering in the
         command_dict.  It makes a command by converting a function
-        name "op_list_user" to a command "list-user" and so on.
+        name "op_show_user" to a command "show-user" and so on.
         """
         # sig.parameters=['self', 'csvfile']
         (_, varargs) = _get_nparams_of_fn(fn)
@@ -628,12 +625,12 @@ def main():
         sys.exit(ERROR_EXIT_BADCONF)
         pass
 
+    # openlog(api_conf["log_file"], **api_conf["log_syslog"])
     traceid = random_str(12)
     tracing.set(traceid)
-    # openlog(api_conf["log_file"], **api_conf["log_syslog"])
 
     try:
-        cmd = Command(traceid, redis, args, rest)
+        cmd = Command(redis, args, rest)
         cmd.make_command_dict()
         cmd.execute_command()
     except Exception as e:

@@ -2,20 +2,15 @@ subject: "api"
 version: "v1.2"
 aws_signature: "AWS4-HMAC-SHA256"
 
-redis:
-    host: localhost
-    port: 6378
-    password: "long-string-for-redis-password"
-
 gunicorn:
     port: 8003
     workers: 2
     timeout: 120
+    reload: yes
     access_logfile: "/var/tmp/lenticularis/lens3-gunicorn-api-access-log"
     log_file: "/var/tmp/lenticularis/lens3-gunicorn-api-log"
     log_level: debug
     #log_syslog_facility: LOCAL8
-    reload: yes
 
 controller:
     front_host: lens3.example.com
@@ -26,7 +21,7 @@ controller:
     probe_access_timeout: 60
     minio_mc_timeout: 10
     max_pool_expiry: 630720000
-    CSRF_secret_key: xyzzy
+    csrf_secret_key: xyzxyz
 
 minio:
     minio: /home/lens3/bin/minio

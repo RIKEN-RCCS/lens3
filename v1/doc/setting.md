@@ -70,6 +70,12 @@ hosts.
 # dnf install redis
 ```
 
+Ensure using Python3.9, if necessary.
+
+```
+# update-alternatives --config python3
+```
+
 Install MinIO binaries minio and mc from min.io.
 
 * Download files as the user "lens3"
@@ -253,6 +259,10 @@ by `https://lens3.exmaple.com/api` (without a slash) will fail.
 ProxyPass /api/ http://localhost:8003/
 ProxyPassReverse /api/ http://localhost:8003/
 ```
+
+A good tutorial exists for setting OIDC in Apache.  See below.
+
+[3. Configure OnDemand to authenticate with Keycloak](https://osc.github.io/ood-documentation/latest/authentication/tutorial-oidc-keycloak-rhel7/install_mod_auth_openidc.html)
 
 ## Set up Redis
 

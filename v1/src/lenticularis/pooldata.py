@@ -12,6 +12,7 @@ import urllib.error
 from lenticularis.utility import host_port
 from lenticularis.utility import rephrase_exception_message
 from lenticularis.utility import logger
+from lenticularis.utility import tracing
 
 
 class Api_Error(Exception):
@@ -210,8 +211,10 @@ def ensure_bucket_owner(tables, bucket, pool_id):
     pass
 
 
-def ensure_secret_owner(tables, access_key, pool_id):
-    """Checks a key owner is a pool.  It accepts no access-key."""
+def ensure_secret_owner(tables, access_key, pool_id, check_expiration):
+    """Checks a key belongs to a given pool, and also checks a key is
+    not-expired.  Note that it accepts access-key=None.
+    """
     if access_key is None:
         return
     keydesc = tables.get_xid("akey", access_key)
@@ -219,9 +222,11 @@ def ensure_secret_owner(tables, access_key, pool_id):
         raise Api_Error(403, f"Non-existing access-key: {access_key}")
     if not (keydesc.get("owner") == pool_id):
         raise Api_Error(403, f"Wrong access-key: {access_key}")
-    now = int(time.time())
-    if keydesc.get("expiration_time") < now:
-        raise Api_Error(403, f"Expired access-key: {access_key}")
+    if check_expiration:
+        now = int(time.time())
+        if keydesc.get("expiration_time") < now:
+            raise Api_Error(403, f"Expired access-key: {access_key}")
+        pass
     pass
 
 
@@ -345,8 +350,7 @@ def check_pool_is_well_formed(pooldesc, user_):
     pass
 
 
-def access_mux(traceid, ep, access_key, front_hostname, front_host_ip,
-               timeout):
+def access_mux(ep, access_key, front_host, front_host_ip, timeout):
     """Tries to access Mux.  See access_mux_for_pool(), this is used in
     it.  Mux requires several http headers, especially including
     "X-REAL-IP".  Check the code of Mux.
@@ -354,11 +358,12 @@ def access_mux(traceid, ep, access_key, front_hostname, front_host_ip,
     proto = "http"
     url = f"{proto}://{ep}/"
     headers = {}
-    headers["HOST"] = front_hostname
+    headers["HOST"] = front_host
     headers["X-REAL-IP"] = front_host_ip
     authorization = forge_s3_auth(access_key)
     headers["AUTHORIZATION"] = authorization
     headers["X-FORWARDED-PROTO"] = proto
+    traceid = tracing.get()
     if traceid is not None:
         headers["X-TRACEID"] = traceid
         pass

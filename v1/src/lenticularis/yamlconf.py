@@ -29,12 +29,12 @@ def read_yaml_conf(file):
                         f" missing subject")
     sub = yamlconf["subject"]
     if sub == "api":
-        schema = _api_schema()
+        schema = _api_conf_schema()
         conf = _fix_type(yamlconf, schema)
         jsonschema.validate(instance=conf, schema=schema)
         return conf
     elif sub[:3] == "mux":
-        schema = _mux_schema()
+        schema = _mux_conf_schema()
         conf = _fix_type(yamlconf, schema)
         jsonschema.validate(instance=conf, schema=schema)
         return conf
@@ -67,10 +67,10 @@ _gunicorn_json_schema = {
         "threads": {"type": "number"},
         "timeout": {"type": "number"},
         "access_logfile": {"type": "string"},
+        "reload": {"type": "string"},
         "log_file": {"type": "string"},
         "log_level": {"type": "string"},
         "log_syslog_facility": {"type": "string"},
-        "reload": {"type": "string"},
     },
     "required": [
         "port",
@@ -104,7 +104,8 @@ _minio_json_schema = {
     "additionalProperties": False,
 }
 
-def _mux_schema():
+def _mux_conf_schema():
+    """mux_node_name and log_file are optional."""
     multiplexer = {
         "type": "object",
         "properties": {
@@ -164,7 +165,6 @@ def _mux_schema():
             "subject": {"type": "string"},
             "version": {"type": "string"},
             "aws_signature": {"type": "string"},
-            "redis": redis_json_schema,
             "gunicorn": _gunicorn_json_schema,
             "multiplexer": multiplexer,
             "minio_manager": minio_manager,
@@ -176,7 +176,6 @@ def _mux_schema():
             "subject",
             "version",
             "aws_signature",
-            "redis",
             "gunicorn",
             "multiplexer",
             "minio_manager",
@@ -188,7 +187,8 @@ def _mux_schema():
     return _schema
 
 
-def _api_schema():
+def _api_conf_schema():
+    """log_file is optional."""
     controller = {
         "type": "object",
         "properties": {
@@ -200,7 +200,7 @@ def _api_schema():
             "probe_access_timeout": {"type": "number"},
             "minio_mc_timeout": {"type": "number"},
             "max_pool_expiry": {"type": "number"},
-            "CSRF_secret_key": {"type": "string"},
+            "csrf_secret_key": {"type": "string"},
         },
         "required": [
             "front_host",
@@ -208,8 +208,9 @@ def _api_schema():
             "base_path",
             "claim_uid_map",
             "probe_access_timeout",
+            "minio_mc_timeout",
             "max_pool_expiry",
-            "CSRF_secret_key",
+            "csrf_secret_key",
         ],
         "additionalProperties": False,
     }
@@ -219,7 +220,6 @@ def _api_schema():
             "subject": {"type": "string"},
             "version": {"type": "string"},
             "aws_signature": {"type": "string"},
-            "redis": redis_json_schema,
             "gunicorn": _gunicorn_json_schema,
             "controller": controller,
             "minio": _minio_json_schema,
@@ -230,7 +230,6 @@ def _api_schema():
             "subject",
             "version",
             "aws_signature",
-            "redis",
             "gunicorn",
             "controller",
             "minio",

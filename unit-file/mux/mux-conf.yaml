@@ -2,11 +2,6 @@ subject: "mux"
 version: "v1.2"
 aws_signature: "AWS4-HMAC-SHA256"
 
-redis:
-    host: localhost
-    port: 6378
-    password: "long-string-for-redis-password"
-
 gunicorn:
     port: 8004
     workers: 4

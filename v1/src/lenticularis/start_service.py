@@ -11,7 +11,7 @@ from lenticularis.table import read_redis_conf
 from lenticularis.table import get_conf
 from lenticularis.utility import rephrase_exception_message
 from lenticularis.utility import logger, openlog
-from lenticularis.utility import copy_minimal_env
+from lenticularis.utility import copy_minimal_environ
 
 
 def _run_mux():
@@ -35,7 +35,7 @@ def _run_mux():
     gunicorn_conf = mux_conf["gunicorn"]
     _port = gunicorn_conf["port"]
     bind = f"[::]:{_port}"
-    env = copy_minimal_env(os.environ)
+    env = copy_minimal_environ(os.environ)
     assert "LENS3_CONF" in env
     cmd = [sys.executable, "-m", "gunicorn"]
     args = ["--bind", bind]
@@ -66,7 +66,7 @@ def _run_api():
     gunicorn_conf = api_conf["gunicorn"]
     _port = gunicorn_conf["port"]
     bind = f"[::]:{_port}"
-    env = copy_minimal_env(os.environ)
+    env = copy_minimal_environ(os.environ)
     assert "LENS3_CONF" in env
     cmd = [sys.executable, "-m", "gunicorn"]
     args = ["--worker-class", "uvicorn.workers.UvicornWorker", "--bind", bind]

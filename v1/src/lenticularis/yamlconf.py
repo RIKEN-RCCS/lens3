@@ -62,7 +62,7 @@ redis_json_schema = {
 _gunicorn_json_schema = {
     "type": "object",
     "properties": {
-        "port": {"type": "string"},
+        "port": {"type": "number"},
         "workers": {"type": "number"},
         "threads": {"type": "number"},
         "timeout": {"type": "number"},

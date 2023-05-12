@@ -296,6 +296,11 @@ class Command():
             pass
         pass
 
+    def op_delete_conf(self, conf):
+        """Deletes a conf in Redis."""
+        self._tables.delete_conf(conf)
+        pass
+
     def op_load_user(self, csvfile):
         """Adds or deletes users from a CSV file.  It reads a CSV file with
         rows starting with one of: "ADD", "DELETE", "ENABLE", or
@@ -552,6 +557,7 @@ class Command():
 
         op_load_conf,
         op_show_conf,
+        op_delete_conf,
         op_load_user,
         op_show_user,
 

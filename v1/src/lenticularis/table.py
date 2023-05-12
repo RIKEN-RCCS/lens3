@@ -152,12 +152,13 @@ class Table():
     # Setting-Table:
 
     def set_conf(self, conf):
-        """Stores a conf.  It is the same as the module function."""
         return self._setting_table.set_conf(conf)
 
+    def delete_conf(self, sub):
+        return self._setting_table.delete_conf(sub)
+
     def list_confs(self):
-        """Returns a list of confs"""
-        return self._setting_table._list_confs()
+        return self._setting_table.list_confs()
 
     def add_user(self, userinfo):
         self._setting_table.add_user(userinfo)
@@ -430,7 +431,15 @@ class _Setting_Table(Table_Common):
         v = self.db.get(key)
         return json.loads(v) if v is not None else None
 
-    def _list_confs(self):
+    def delete_conf(self, sub):
+        assert (sub == "api" or sub == "mux"
+                or (len(sub) >= 5 and sub[:4] == "mux:"))
+        key = f"{self._conf_prefix}{sub}"
+        v = self.db.delete(key)
+        pass
+
+    def list_confs(self):
+        """Returns a list of confs"""
         keyi = _scan_table(self.db, self._conf_prefix, None)
         conflist = [v for v in [self.get_conf(i) for i in keyi]
                     if v is not None]

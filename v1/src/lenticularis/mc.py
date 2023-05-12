@@ -274,7 +274,7 @@ class Mc():
                     return rr
                 try:
                     ss = outs.split(b"\n")
-                    ee = [json.loads(e, parse_int=None)
+                    ee = [json.loads(e)
                           for e in ss if e != b""]
                     (ok, rr) = _simplify_messages_in_mc_error(ee)
                     if ok:

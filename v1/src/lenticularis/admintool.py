@@ -16,7 +16,7 @@ import yaml
 import sys
 import traceback
 from lenticularis.control import Control_Api
-from lenticularis.control import erase_minio_ep, erase_pool_data, make_new_pool
+from lenticularis.control import erase_minio_ep, erase_pool_data
 from lenticularis.table import read_redis_conf
 from lenticularis.table import get_table
 from lenticularis.table import set_conf, get_conf
@@ -133,6 +133,12 @@ def _load_user(tables, u):
                 "modification_time": now}
         tables.add_user(newu)
         pass
+    pass
+
+
+def _delete_user(tables, uid):
+    tables.delete_user(uid)
+    tables.delete_user_timestamp(uid)
     pass
 
 
@@ -317,7 +323,7 @@ class Command():
             pass
         for u in dels:
             print(f"deleting a user: {u}")
-            self._tables.delete_user(u)
+            _delete_user(self._tables, u)
             pass
         for u in enbs:
             print(f"enabling a user: {u}")
@@ -426,19 +432,17 @@ class Command():
         pass
 
     def op_show_ts(self):
-        """Shows last access timestamps of pools."""
-        stamps = self._tables.list_access_timestamps()
-        stamps = [{d["pool"]:
-                   {"timestamp": format_time_z(float(d["timestamp"]))}}
-                  for d in stamps]
+        """Shows last access timestamps of pools and users."""
+        pstamps = self._tables.list_access_timestamps()
+        ustamps = self._tables.list_user_timestamps()
+        stamps = [{e[0]: e[1], "timestamp": format_time_z(float(e[2]))}
+                  for e in (pstamps + ustamps)]
         print("# Timestamps")
-        for o in stamps:
-            _print_in_yaml(o)
-            pass
+        _print_in_yaml(stamps)
         pass
 
     def op_show_minio(self, pool_id):
-        """Prints a MinIO process and a Manager of a pool."""
+        """Shows a MinIO process and a Manager of a pool."""
         proc_list = self._tables.list_minio_procs(pool_id)
         proc_list = sorted(list(proc_list))
         outs = [{pool: process} for (pool, process) in proc_list]
@@ -510,7 +514,7 @@ class Command():
         pass
 
     def op_show_db(self):
-        """Lists all database keys."""
+        """Shows all database keys."""
         self._tables.print_all()
         pass
 

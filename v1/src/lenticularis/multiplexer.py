@@ -67,7 +67,7 @@ def _check_url_error_is_connection_errors(x):
         return 0
 
 
-def _get_pool_of_probe_key(keydesc, access_info):
+def _get_pool_of_probe_key(keydesc, access_synopsis):
     """Checks a keydesc is a probe-key and returns a pool-id for which it
     is created.
     """
@@ -79,18 +79,18 @@ def _get_pool_of_probe_key(keydesc, access_info):
     pass
 
 
-def _pick_bucket_in_path(path, access_info):
-    request_url = access_info[3]
+def _pick_bucket_in_path(path, access_synopsis):
+    request_url = access_synopsis[3]
     assert path.startswith("/")
     pathc = path.split("/")
     pathc.pop(0)
     bucket = pathc[0]
     # Check a bucket name.
     if bucket == "":
-        log_access("404", *access_info)
+        log_access("404", *access_synopsis)
         raise Api_Error(404, f"Bad URL, accessing the root: url={request_url}")
     if not check_bucket_naming(bucket):
-        log_access("400", *access_info)
+        log_access("400", *access_synopsis)
         raise Api_Error(400, f"Bad URL, bad bucket: url={request_url}")
     return bucket
 
@@ -371,7 +371,7 @@ class Multiplexer():
         u = urllib.parse.urlparse(request_url)
         path = posixpath.normpath(u.path)
 
-        access_info = [client_addr, fake_user, request_method, request_url]
+        access_synopsis = [client_addr, fake_user, request_method, request_url]
         failure_message = f"Bad URL, bad bucket: url={request_url}"
 
         logger.debug(f"Mux (port={self._mux_port}) got a request:"
@@ -381,18 +381,18 @@ class Multiplexer():
         if not self._check_forwarding_host_trusted(peer_addr):
             logger.error(f"Untrusted proxy or unknonwn Mux: {peer_addr};"
                          f" Check configuration")
-            log_access("403", *access_info)
+            log_access("403", *access_synopsis)
             raise Api_Error(403, f"Bad access from remote={client_addr}")
 
         if path == "/":
             # Access to "/" is prohibited but for a probe-access from Api.
             if access_key is None:
-                log_access("401", *access_info)
+                log_access("401", *access_synopsis)
                 raise Api_Error(401, "Bad access to /: (no access-key)")
             probe_key = self.tables.get_xid("akey", access_key)
-            pool_id = _get_pool_of_probe_key(probe_key, access_info)
+            pool_id = _get_pool_of_probe_key(probe_key, access_synopsis)
             if pool_id is None:
-                log_access("401", *access_info)
+                log_access("401", *access_synopsis)
                 raise Api_Error(401, "Bad access to /: (not a probe-key)")
             assert probe_key is not None
             if self._verbose:
@@ -402,26 +402,24 @@ class Multiplexer():
         else:
             try:
                 probe_key = None
-                bucket = _pick_bucket_in_path(path, access_info)
-                bktdesc = self.tables.get_bucket(bucket)
-                if bktdesc is None:
-                    log_access("404", *access_info)
+                bucket = _pick_bucket_in_path(path, access_synopsis)
+                bucketdesc = self.tables.get_bucket(bucket)
+                if bucketdesc is None:
+                    log_access("404", *access_synopsis)
                     raise Api_Error(404, f"Bad URL, no bucket: {bucket}")
-                pool_id = bktdesc["pool"]
+                pool_id = bucketdesc["pool"]
                 pooldesc = self.tables.get_pool(pool_id)
                 assert pooldesc is not None
                 user_id = pooldesc.get("owner_uid")
-                # ensure_mux_is_running(self.tables)
                 ensure_user_is_authorized(self.tables, user_id)
                 ensure_pool_state(self.tables, pool_id)
-                # ensure_bucket_owner(self.tables, bucket, pool_id)
-                ensure_secret_owner(self.tables, access_key, pool_id, True)
-                ensure_bucket_policy(bucket, bktdesc, access_key)
+                ensure_secret_owner(self.tables, access_key, pool_id)
+                ensure_bucket_policy(bucket, bucketdesc, access_key)
             except Api_Error as e:
                 # Reraise an error with a less-informative message.
                 logger.debug(f"Mux (port={self._mux_port}) access check"
                              f" failed: exception=({e})")
-                log_access("401", *access_info)
+                log_access("401", *access_synopsis)
                 raise Api_Error(e.code, failure_message)
             if self._verbose:
                 logger.debug(f"Mux (port={self._mux_port}) access"
@@ -443,7 +441,7 @@ class Multiplexer():
                 minio_ep = ep0
             else:
                 assert code == 500
-                log_access("404", *access_info)
+                log_access("404", *access_synopsis)
                 raise Api_Error(404, failure_message)
                 pass
             pass
@@ -452,7 +450,7 @@ class Multiplexer():
         # enabled/disabled state of the pool is not checked here.
 
         assert minio_ep is not None
-        # log_access("404", *access_info)
+        # log_access("404", *access_synopsis)
         # raise Api_Error(404, failure_message)
 
         if probe_key is not None:
@@ -512,7 +510,7 @@ class Multiplexer():
 
         content_length_downstream = next((v for (k, v) in r_headers if k.lower() == "content-length"), None)
 
-        log_access(status, *access_info,
+        log_access(status, *access_synopsis,
                    upstream=content_length,
                    downstream=content_length_downstream)
 

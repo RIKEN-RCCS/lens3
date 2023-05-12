@@ -260,9 +260,10 @@ ProxyPass /api/ http://localhost:8003/
 ProxyPassReverse /api/ http://localhost:8003/
 ```
 
-A good tutorial exists for setting OIDC in Apache.  See below.
+There is a good tutorial for setting Apache with Keyclock --
+"3. Configure OnDemand to authenticate with Keycloak".  See below.
 
-[3. Configure OnDemand to authenticate with Keycloak](https://osc.github.io/ood-documentation/latest/authentication/tutorial-oidc-keycloak-rhel7/install_mod_auth_openidc.html)
+[https://osc.github.io/ood-documentation/.../install_mod_auth_openidc.html](https://osc.github.io/ood-documentation/latest/authentication/tutorial-oidc-keycloak-rhel7/install_mod_auth_openidc.html)
 
 ## Set up Redis
 

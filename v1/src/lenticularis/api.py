@@ -103,11 +103,20 @@ def _make_json_response(triple, user_id, client, request, csrf_protect):
 
 
 async def _get_request_body(request):
-    body = b""
+    """Returns a request body as a pair (body, token), where a body is a
+       dict and a token is a csrf-token.  It removes a csrf-token from
+       the body.
+    """
+    buf = b""
     async for chunk in request.stream():
-        body += chunk
+        buf += chunk
         pass
-    return json.loads(body, parse_int=None)
+    body = json.loads((buf or "{}"))
+    token = body.get("CSRF-Token")
+    if token is not None:
+        del body["CSRF-Token"]
+        pass
+    return (body, token)
 
 
 class CsrfSettings(BaseModel):
@@ -284,8 +293,7 @@ async def app_post_make_pool(
     tracing.set(x_traceid)
     user_id = _api.map_claim_to_uid(x_remote_user)
     client = x_real_ip
-    body = await _get_request_body(request)
-    token = body.get("CSRF-Token")
+    (body, token) = await _get_request_body(request)
     csrf_protect.validate_csrf(token)
     triple = _api.api_make_pool(user_id, body)
     response = _make_json_response(triple, user_id, client, request,
@@ -305,8 +313,7 @@ async def app_delete_delete_pool(
     tracing.set(x_traceid)
     user_id = _api.map_claim_to_uid(x_remote_user)
     client = x_real_ip
-    body = await _get_request_body(request)
-    token = body.get("CSRF-Token")
+    (body, token) = await _get_request_body(request)
     csrf_protect.validate_csrf(token)
     triple = _api.api_delete_pool(user_id, pool_id)
     response = _make_json_response(triple, user_id, client, request,
@@ -326,8 +333,7 @@ async def app_put_make_bucket(
     tracing.set(x_traceid)
     user_id = _api.map_claim_to_uid(x_remote_user)
     client = x_real_ip
-    body = await _get_request_body(request)
-    token = body.get("CSRF-Token")
+    (body, token) = await _get_request_body(request)
     csrf_protect.validate_csrf(token)
     triple = _api.api_make_bucket(user_id, pool_id, body)
     response = _make_json_response(triple, user_id, client, request,
@@ -348,8 +354,7 @@ async def app_delete_delete_bucket(
     tracing.set(x_traceid)
     user_id = _api.map_claim_to_uid(x_remote_user)
     client = x_real_ip
-    body = await _get_request_body(request)
-    token = body.get("CSRF-Token")
+    (body, token) = await _get_request_body(request)
     csrf_protect.validate_csrf(token)
     triple = _api.api_delete_bucket(user_id, pool_id, bucket)
     response = _make_json_response(triple, user_id, client, request,
@@ -369,8 +374,7 @@ async def app_post_make_secret(
     tracing.set(x_traceid)
     user_id = _api.map_claim_to_uid(x_remote_user)
     client = x_real_ip
-    body = await _get_request_body(request)
-    token = body.get("CSRF-Token")
+    (body, token) = await _get_request_body(request)
     csrf_protect.validate_csrf(token)
     triple = _api.api_make_secret(user_id, pool_id, body)
     response = _make_json_response(triple, user_id, client, request,
@@ -391,8 +395,7 @@ async def app_delete_delete_secret(
     tracing.set(x_traceid)
     user_id = _api.map_claim_to_uid(x_remote_user)
     client = x_real_ip
-    body = await _get_request_body(request)
-    token = body.get("CSRF-Token")
+    (body, token) = await _get_request_body(request)
     csrf_protect.validate_csrf(token)
     triple = _api.api_delete_secret(user_id, pool_id, access_key)
     response = _make_json_response(triple, user_id, client, request,

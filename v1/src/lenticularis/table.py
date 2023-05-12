@@ -118,11 +118,11 @@ def _delete_all(r, match):
 
 
 def _scan_table(r, prefix, target):
-    """Returns an iterator to scan keys in the table for a prefix+target
-    pattern, where target is * if it is None.  It drops the prefix
-    from the returned key.  Note it is always necessary a null-ness
-    check when getting a value, because a deletion can intervene
-    scanning a key and getting a value.
+    """Returns an iterator of keys for a prefix+target pattern in the
+    database, where a target is * if it is None.  It drops the prefix
+    from the returned keys.  Note always check a null-ness when
+    getting a value, because a deletion can intervene scanning a key
+    and getting a value.
     """
     target = target if target else "*"
     pattern = f"{prefix}{target}"
@@ -314,6 +314,15 @@ class Table():
     def set_user_timestamp(self, user_id):
         return self._routing_table.set_user_timestamp(user_id)
 
+    def get_user_timestamp(self, pool_id):
+        return self._routing_table.get_user_timestamp(pool_id)
+
+    def delete_user_timestamp(self, user_id):
+        return self._routing_table.delete_user_timestamp(user_id)
+
+    def list_user_timestamps(self):
+        return self._routing_table.list_user_timestamps()
+
     # Monokey-Table:
 
     def make_unique_xid(self, usage, owner, info):
@@ -394,11 +403,11 @@ class _Setting_Table(Table_Common):
         an entry associated to a uid.  (This is paranoiac because it
         is called after deleting a claim entry).
         """
-        claims = _scan_table(self.db, self._user_claim_prefix, None)
-        for claim in claims:
-            xid = self.get_claim_user(claim)
+        keyi = _scan_table(self.db, self._user_claim_prefix, None)
+        for i in keyi:
+            xid = self.get_claim_user(i)
             if (xid is not None and xid == uid):
-                key = f"{self._user_claim_prefix}{claim}"
+                key = f"{self._user_claim_prefix}{i}"
                 self.db.delete(key)
                 pass
             pass
@@ -423,9 +432,8 @@ class _Setting_Table(Table_Common):
 
     def _list_confs(self):
         keyi = _scan_table(self.db, self._conf_prefix, None)
-        keys = list(keyi)
-        conflist = [v for v in [self.get_conf(k) for k in keys]
-                if v is not None]
+        conflist = [v for v in [self.get_conf(i) for i in keyi]
+                    if v is not None]
         return conflist
 
     def add_user(self, userinfo):
@@ -599,8 +607,8 @@ class _Storage_Table(Table_Common):
     def list_buckets_directories(self):
         keyi = _scan_table(self.db, self._buckets_directory_prefix, None)
         bkts = [{"directory": i, "pool": v}
-                for (i, v) in ((i, self.get_buckets_directory(i))
-                               for i in keyi)
+                for (i, v)
+                in ((i, self.get_buckets_directory(i)) for i in keyi)
                 if v is not None]
         return bkts
 
@@ -683,7 +691,9 @@ class _Process_Table(Table_Common):
 
     def list_minio_procs(self, pool_id):
         keyi = _scan_table(self.db, self._minio_process_prefix, pool_id)
-        vv = [(i, v) for (i, v) in ((i, self.get_minio_proc(i)) for i in keyi)
+        vv = [(i, v)
+              for (i, v)
+              in ((i, self.get_minio_proc(i)) for i in keyi)
               if v is not None]
         return vv
 
@@ -710,7 +720,9 @@ class _Process_Table(Table_Common):
 
     def list_muxs(self):
         keyi = _scan_table(self.db, self._mux_desc_prefix, None)
-        vv = [(i, v) for (i, v) in ((i, self.get_mux(i)) for i in keyi)
+        vv = [(i, v)
+              for (i, v)
+              in ((i, self.get_mux(i)) for i in keyi)
               if v is not None]
         return vv
 
@@ -763,7 +775,9 @@ class _Routing_Table(Table_Common):
 
     def list_minio_ep(self):
         keyi = _scan_table(self.db, self._minio_ep_prefix, None)
-        vv = [(i, v) for (i, v) in ((i, self.get_minio_ep(i)) for i in keyi)
+        vv = [(i, v)
+              for (i, v)
+              in ((i, self.get_minio_ep(i)) for i in keyi)
               if v is not None]
         return vv
 
@@ -797,7 +811,7 @@ class _Routing_Table(Table_Common):
         keyi = _scan_table(self.db, self._bucket_prefix, None)
         bkts = [{"name": name, **d}
                 for (name, d)
-                in [(name, self.get_bucket(name)) for name in keyi]
+                in [(i, self.get_bucket(i)) for i in keyi]
                 if (d is not None
                     and (pool_id is None or d.get("pool") == pool_id))]
         return bkts
@@ -820,10 +834,11 @@ class _Routing_Table(Table_Common):
         pass
 
     def list_access_timestamps(self):
+        """Returns a list of ["pool", pool_id, ts]."""
         keyi = _scan_table(self.db, self._access_timestamp_prefix, None)
-        stamps = [{"pool": pid, "timestamp": ts}
+        stamps = [["pool", pid, ts]
                   for (pid, ts)
-                  in [(pid, self.get_access_timestamp(pid)) for pid in keyi]
+                  in [(i, self.get_access_timestamp(i)) for i in keyi]
                   if ts is not None]
         return stamps
 
@@ -834,6 +849,25 @@ class _Routing_Table(Table_Common):
             self.db.set(key, f"{ts}")
             pass
         pass
+
+    def get_user_timestamp(self, user_id):
+        key = f"{self._user_timestamp_prefix}{user_id}"
+        v = self.db.get(key)
+        return int(v) if v is not None else None
+
+    def delete_user_timestamp(self, user_id):
+        key = f"{self._user_timestamp_prefix}{user_id}"
+        self.db.delete(key)
+        pass
+
+    def list_user_timestamps(self):
+        """Returns a list of ["user", user_id, ts]."""
+        keyi = _scan_table(self.db, self._user_timestamp_prefix, None)
+        stamps = [["user", uid, ts]
+                  for (uid, ts)
+                  in [(i, self.get_user_timestamp(i)) for i in keyi]
+                  if ts is not None]
+        return stamps
 
     def clear_all(self, everything):
         _delete_all(self.db, self._minio_ep_prefix)

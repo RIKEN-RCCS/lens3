@@ -117,9 +117,9 @@ def _pool_desc_schema():
         "type": "object",
         "properties": {
             "pool_name": {"type": "string"},
+            "buckets_directory": {"type": "string"},
             "owner_uid": {"type": "string"},
             "owner_gid": {"type": "string"},
-            "buckets_directory": {"type": "string"},
             "buckets": {"type": "array", "items": bucket_schema},
             "access_keys": {"type": "array", "items": access_key_schema},
             "probe_key": {"type": "string"},
@@ -211,10 +211,22 @@ def ensure_bucket_owner(tables, bucket, pool_id):
     pass
 
 
-def ensure_secret_owner(tables, access_key, pool_id, check_expiration):
-    """Checks a key belongs to a given pool, and also checks a key is
-    not-expired.  Note that it accepts access-key=None.
+def ensure_secret_owner(tables, access_key, pool_id):
+    """Checks a key belongs to a given pool, and also checks a key is not
+    expired.  Note that it accepts access-key=None.
     """
+    _ensure_secret_owner(tables, access_key, pool_id, True)
+    pass
+
+
+def ensure_secret_owner_only(tables, access_key, pool_id):
+    """Checks a key belongs to a given pool regardless of its expiration.
+    """
+    _ensure_secret_owner(tables, access_key, pool_id, False)
+    pass
+
+
+def _ensure_secret_owner(tables, access_key, pool_id, check_expiration):
     if access_key is None:
         return
     keydesc = tables.get_xid("akey", access_key)

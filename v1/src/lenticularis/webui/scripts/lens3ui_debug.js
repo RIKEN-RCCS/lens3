@@ -186,10 +186,10 @@ function api_make_pool() {
   console.log("make_pool: directory=" + directory);
   const method = "POST";
   const path = (base_path + "/pool");
-  const data = {"pool": {"buckets_directory": directory,
-                         "owner_gid": owner_gid},
+  const args = {"buckets_directory": directory,
+                "owner_gid": owner_gid,
                 "CSRF-Token": csrf_token};
-  const body = JSON.stringify(data);
+  const body = JSON.stringify(args);
   const triple = {method, path, body};
   return submit_request(msg, triple, display_pool_in_edit_pool)
 }
@@ -201,8 +201,8 @@ function api_delete_pool(i) {
   console.log(`pool_name = ${pool_name}`);
   const method = "DELETE";
   const path = (base_path + "/pool/" + pool_name);
-  const data = {"CSRF-Token": csrf_token};
-  const body = JSON.stringify(data);
+  const args = {"CSRF-Token": csrf_token};
+  const body = JSON.stringify(args);
   const triple = {method, path, body};
   return submit_request(msg, triple, (data) => {api_list_pools();});
 }
@@ -232,9 +232,10 @@ function api_make_bucket() {
   const method = "PUT";
   const path = (base_path + "/pool/" + edit_pool_data.pool_name
                 + "/bucket");
-  const data = {"bucket": {"name": name, "bkt_policy": policy},
+  const args = {"name": name,
+                "bkt_policy": policy,
                 "CSRF-Token": csrf_token};
-  const body = JSON.stringify(data);
+  const body = JSON.stringify(args);
   const triple = {method, path, body};
   return submit_request(msg, triple, display_pool_in_edit_pool);
 }
@@ -245,8 +246,8 @@ function api_delete_bucket(name) {
   const method = "DELETE";
   const path = (base_path + "/pool/" + edit_pool_data.pool_name
                 + "/bucket/" + name);
-  const data = {"CSRF-Token": csrf_token};
-  const body = JSON.stringify(data);
+  const args = {"CSRF-Token": csrf_token};
+  const body = JSON.stringify(args);
   const triple = {method, path, body};
   return submit_request(msg, triple, display_pool_in_edit_pool);
 }
@@ -258,10 +259,10 @@ function api_make_secret(rw) {
   const method = "POST";
   const path = (base_path + "/pool/" + edit_pool_data.pool_name
                 + "/secret");
-  const data = {"key_policy": rw,
+  const args = {"key_policy": rw,
                 "expiration_time": expiration,
                 "CSRF-Token": csrf_token};
-  const body = JSON.stringify(data);
+  const body = JSON.stringify(args);
   const triple = {method, path, body};
   return submit_request(msg, triple, display_pool_in_edit_pool);
 }
@@ -272,8 +273,8 @@ function api_delete_secret(key) {
   const method = "DELETE";
   const path = (base_path + "/pool/" + edit_pool_data.pool_name
                 + "/secret/" + key);
-  const data = {"CSRF-Token": csrf_token};
-  const body = JSON.stringify(data);
+  const args = {"CSRF-Token": csrf_token};
+  const body = JSON.stringify(args);
   const triple = {method, path, body};
   return submit_request(msg, triple, display_pool_in_edit_pool);
 }
@@ -292,7 +293,7 @@ function set_user_info_data(data) {
   copy_user_info_for_edit(desc);
   edit_pool_data.pool_name_visible = true;
   edit_pool_data.edit_pool_visible = false;
-  pool_list_section_data.pool_data_visible = false;
+  pool_list_section_data.pool_args_visible = false;
 }
 
 function render_pool_list(data) {

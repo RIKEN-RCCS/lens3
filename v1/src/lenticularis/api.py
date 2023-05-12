@@ -82,23 +82,24 @@ def app():
 
 def _make_json_response(triple, user_id, client, request, csrf_protect):
     """Makes a response.  triple=(code, reason, values)."""
-    (status_code, reason, values) = triple
+    access_synopsis = [client, user_id, request.method, request.url]
+    (code, reason, values) = triple
+    log_access(f"{code}", *access_synopsis)
     if reason is not None:
-        content = {"status": "error", "reason": reason}
+        body = {"status": "error", "reason": reason}
     else:
-        content = {"status": "success"}
+        body = {"status": "success"}
         pass
     if values is not None:
-        # Append values to content.
-        content.update(values)
+        # Append values to the content.
+        body.update(values)
         pass
-    content["time"] = str(int(time.time()))
+    body["time"] = str(int(time.time()))
     if csrf_protect:
-        content["CSRF-Token"] = csrf_protect.generate_csrf()
+        body["CSRF-Token"] = csrf_protect.generate_csrf()
         pass
-    log_access(f"{status_code}", client, user_id, request.method, request.url)
-    response = JSONResponse(status_code=status_code, content=content)
-    # logger.debug(f"Api RESPONSE.CONTENT={content}")
+    response = JSONResponse(status_code=code, content=body)
+    # logger.debug(f"Api RESPONSE.CONTENT={body}")
     return response
 
 
@@ -133,38 +134,54 @@ def get_csrf_config():
 @_app.exception_handler(CsrfProtectError)
 def csrf_protect_exception_handler(request : Request, exc : CsrfProtectError):
     logger.error(f"CSRF error detected: {exc.message}")
-    content = {"detail": exc.message}
-    user_id = request.headers.get("X-REMOTE-USER")
+    x_remote_user = request.headers.get("X-REMOTE-USER")
+    user_id = _api.map_claim_to_uid(x_remote_user)
     client = request.headers.get("X-REAL-IP")
-    log_access(f"{exc.status_code}", client, user_id, request.method, request.url)
-    response = JSONResponse(status_code=exc.status_code, content=content)
+    access_synopsis = [client, user_id, request.method, request.url]
+    now = int(time.time())
+    code = exc.status_code
+    body = {"status": "error",
+            "reason": f"CSRF protection error",
+            "time": str(now)}
+    log_access(f"{code}", *access_synopsis)
+    time.sleep(_api._bad_response_delay)
+    response = JSONResponse(status_code=code, content=body)
     return response
 
 
 @_app.middleware("http")
 async def validate_session(request : Request, call_next):
+    """Validates a session early.  (Note it performs mapping of a user-id
+    twice, once here and once later).
+    """
     peer_addr = make_typical_ip_address(str(request.client.host))
     x_remote_user = request.headers.get("X-REMOTE-USER")
-    client = request.headers.get("X-REAL-IP")
     user_id = _api.map_claim_to_uid(x_remote_user)
+    client = request.headers.get("X-REAL-IP")
+    access_synopsis = [client, user_id, request.method, request.url]
     now = int(time.time())
     if peer_addr not in _api.trusted_proxies:
-        logger.error(f"Untrusted proxy: {peer_addr};"
-                     f" Check configuration")
-        content = {"status": "error",
-                   "reason": f"Configuration error (check trusted_proxies)",
-                   "time": str(now)}
-        status_code = status.HTTP_403_FORBIDDEN
-        # Access log contains client_addr but peer_addr.
-        log_access(f"{status_code}", client, user_id, request.method, request.url)
-        return JSONResponse(status_code=status_code, content=content)
-    if (not _api.check_user_is_registered(user_id)):
-        logger.info(f"Accessing Api by a bad user: ({user_id})")
-        content = {"status": "error", "reason": f"Bad user: ({user_id})",
-                   "time": str(now)}
-        status_code = status.HTTP_401_UNAUTHORIZED
-        log_access(f"{status_code}", client, user_id, request.method, request.url)
-        return JSONResponse(status_code=status_code, content=content)
+        logger.error(f"Untrusted proxy: proxy={peer_addr};"
+                     f" Check trusted_proxies in configuration")
+        body = {"status": "error",
+                "reason": f"Configuration error (call administrator)",
+                "time": str(now)}
+        code = status.HTTP_403_FORBIDDEN
+        log_access(f"{code}", *access_synopsis)
+        time.sleep(_api._bad_response_delay)
+        response = JSONResponse(status_code=code, content=body)
+        return response
+    if not _api.check_user_is_registered(user_id):
+        logger.error(f"Access by an unregistered user:"
+                     f" uid={user_id}, x_remote_user={x_remote_user}")
+        body = {"status": "error",
+                "reason": f"Unregistered user: user={user_id}",
+                "time": str(now)}
+        code = status.HTTP_401_UNAUTHORIZED
+        log_access(f"{code}", *access_synopsis)
+        time.sleep(_api._bad_response_delay)
+        response = JSONResponse(status_code=code, content=body)
+        return response
     response = await call_next(request)
     return response
 
@@ -186,8 +203,9 @@ async def app_get_index(
     tracing.set(x_traceid)
     user_id = _api.map_claim_to_uid(x_remote_user)
     client = x_real_ip
-    response = _app_get_ui("setting.html", request, user_id, client)
+    response = _api_get_ui("setting.html", client, user_id, request)
     return response
+
 
 @_app.get("/setting.html")
 async def app_get_ui(
@@ -199,7 +217,7 @@ async def app_get_ui(
     tracing.set(x_traceid)
     user_id = _api.map_claim_to_uid(x_remote_user)
     client = x_real_ip
-    response = _app_get_ui("setting.html", request, user_id, client)
+    response = _api_get_ui("setting.html", client, user_id, request)
     return response
 
 
@@ -213,20 +231,33 @@ async def app_get_debug_ui(
     tracing.set(x_traceid)
     user_id = _api.map_claim_to_uid(x_remote_user)
     client = x_real_ip
-    response = _app_get_ui("setting-debug.html", request, user_id, client)
+    response = _api_get_ui("setting-debug.html", client, user_id, request)
     return response
 
 
-def _app_get_ui(file, request, user_id, client):
-    code = status.HTTP_200_OK
-    log_access(f"{code}", client, user_id, request.method, request.url)
-    with open(os.path.join(_api.webui_dir, "setting-debug.html")) as f:
-        parameters = ('<script type="text/javascript">const base_path="'
-                      + _api.base_path + '";</script>')
-        html = f.read().replace("PLACE_PARAMETERS_HERE", parameters)
-        pass
-    response = HTMLResponse(status_code=code, content=html)
-    return response
+def _api_get_ui(file, client, user_id, request):
+    access_synopsis = [client, user_id, request.method, request.url]
+    try:
+        with open(os.path.join(_api.webui_dir, file)) as f:
+            parameters = ('<script type="text/javascript">const base_path="'
+                          + _api.base_path + '";</script>')
+            html = f.read().replace("PLACE_PARAMETERS_HERE", parameters)
+            pass
+        code = status.HTTP_200_OK
+        log_access(f"{code}", *access_synopsis)
+        response = HTMLResponse(status_code=code, content=html)
+        return response
+    except Exception as e:
+        m = rephrase_exception_message(e)
+        code = 500
+        body = {"status": "error", "reason": m}
+        logger.error(f"get_ui failed: user={user_id}; exception=({m})",
+                     exc_info=True)
+        log_access(f"{code}", *access_synopsis)
+        time.sleep(_api._bad_response_delay)
+        response = JSONResponse(status_code=code, content=body)
+        return response
+    pass
 
 
 @_app.get("/user-info")

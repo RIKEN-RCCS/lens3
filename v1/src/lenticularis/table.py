@@ -836,7 +836,7 @@ class _Routing_Table(Table_Common):
     def list_access_timestamps(self):
         """Returns a list of ["pool", pool_id, ts]."""
         keyi = _scan_table(self.db, self._access_timestamp_prefix, None)
-        stamps = [["pool", pid, ts]
+        stamps = [(pid, ts)
                   for (pid, ts)
                   in [(i, self.get_access_timestamp(i)) for i in keyi]
                   if ts is not None]
@@ -863,7 +863,7 @@ class _Routing_Table(Table_Common):
     def list_user_timestamps(self):
         """Returns a list of ["user", user_id, ts]."""
         keyi = _scan_table(self.db, self._user_timestamp_prefix, None)
-        stamps = [["user", uid, ts]
+        stamps = [(uid, ts)
                   for (uid, ts)
                   in [(i, self.get_user_timestamp(i)) for i in keyi]
                   if ts is not None]

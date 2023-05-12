@@ -433,12 +433,21 @@ class Command():
 
     def op_show_ts(self):
         """Shows last access timestamps of pools and users."""
-        pstamps = self._tables.list_access_timestamps()
-        ustamps = self._tables.list_user_timestamps()
-        stamps = [{e[0]: e[1], "timestamp": format_time_z(float(e[2]))}
-                  for e in (pstamps + ustamps)]
-        print("# Timestamps")
-        _print_in_yaml(stamps)
+        pstamps1 = self._tables.list_access_timestamps()
+        pstamps2 = [{f"{e[0]}": {"timestamp": format_time_z(float(e[1]))}}
+                    for e in pstamps1]
+        ustamps1 = self._tables.list_user_timestamps()
+        ustamps2 = [{f"{e[0]}": {"timestamp": format_time_z(float(e[1]))}}
+                    for e in ustamps1]
+        print("# Timestamps (pool)")
+        for o in pstamps2:
+            _print_in_yaml(o)
+            pass
+        print("---")
+        print("# Timestamps (user)")
+        for o in ustamps2:
+            _print_in_yaml(o)
+            pass
         pass
 
     def op_show_minio(self, pool_id):

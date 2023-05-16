@@ -1,16 +1,27 @@
 <template>
   <v-app-bar flat>
+    <v-app-bar-nav-icon>
+          <v-icon icon="mdi-menu" />
+    </v-app-bar-nav-icon>
+
     <v-app-bar-title>
       <v-icon icon="mdi-cog" />
       Lens3 Pool Setting
     </v-app-bar-title>
     <v-spacer></v-spacer>
-    <v-col md="2">
-      <v-switch v-model="dark" label="Dark mode" @change="() => change_theme(dark)"></v-switch>
-    </v-col>
-    <v-app-bar-nav-icon>
-          <v-icon icon="mdi-menu" />
-    </v-app-bar-nav-icon>
+
+    <v-divider inset vertical></v-divider>
+
+    <v-toolbar-items>
+      <v-switch v-model="dark" flat
+                prepend-icon="mdi-white-balance-sunny"
+                append-icon="mdi-moon-waning-crescent"
+                @change="() => change_theme(dark)"></v-switch>
+    </v-toolbar-items>
+
+    <template v-slot:append>
+      <v-btn icon="mdi-dots-vertical"></v-btn>
+    </template>
   </v-app-bar>
 </template>
 

@@ -2,7 +2,7 @@
   <v-container class="fill-height">
     <v-col>
 
-    <div class="text-body-2 align-center text-center">Make new bucket pool</div>
+    <div class="text-body-2 align-center text-center">Make a new pool</div>
     <div>
       <span class="label">Buckets directory (absolute path): </span>
       <input v-model="pool_data.buckets_directory" size="30" />
@@ -19,7 +19,7 @@
         </option>
       </select>
       <div>
-        <v-btn v-on:click="pool_data.kick_make_pool">Create</v-btn>
+        <v-btn v-on:click="kick_make_pool">Create</v-btn>
       </div>
     </div>
 
@@ -28,6 +28,7 @@
 </template>
 
 <script lang="ts">
+//import {api_get_user_info} from "@/lens3c";
 export default {
   //props: ["pool_data"],
   props: {
@@ -37,10 +38,19 @@ export default {
     },
   },
   data() {
-    console.log("PoolMake.vue: this.pool_data=" + typeof (this.pool_data))
+    this.pool_data.api_get_user_info();
+    console.log("PoolMake.vue: this.pool_data=" + typeof (this.pool_data));
     console.log(this.pool_data);
     return {
     }
   },
+  methods: {
+    kick_make_pool() {
+      console.log("make_pool: this.pool_data=" + typeof (this.pool_data));
+      console.log(this.pool_data);
+      this.pool_data.api_make_pool();
+    }
+  },
+
 }
 </script>

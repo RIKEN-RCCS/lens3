@@ -33,7 +33,7 @@ export default {
     return {
       theme,
       dark: false,
-      change_theme: (d) => {
+      change_theme: (d : any) => {
         theme.global.name.value = d ? 'dark' : 'light';
       },
     }

@@ -2,13 +2,14 @@
   <v-row>
     <PoolMake v-bind:pool_data="pool_data" />
   </v-row>
+  <v-row>
+    <PoolList v-bind:pool_data="pool_data" />
+  </v-row>
 </template>
 
 <script lang="ts" setup>
-//import {reactive, computed} from "vue";
 import PoolMake from '@/components/PoolMake.vue';
-//import PoolList from '@/components/PoolList.vue';
+import PoolList from '@/components/PoolList.vue';
 //import PoolView from '@/components/PoolView.vue';
-//import {pool_data as pool_data_} from "@/lens3c";
 import {pool_data} from "@/lens3c";
 </script>

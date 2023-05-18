@@ -42,7 +42,7 @@ export default {
     console.log("PoolMake.vue: this.pool_data=" + typeof (this.pool_data));
     console.log(this.pool_data);
     return {
-    }
+    };
   },
   methods: {
     kick_make_pool() {
@@ -51,6 +51,5 @@ export default {
       this.pool_data.api_make_pool();
     }
   },
-
 }
 </script>

@@ -38,25 +38,7 @@ const pool_data_ = {
     {name: "Creation date", calories: "2023-05-06T07:18:24.000Z"},
   ],
 
-  pool_list: [
-    {
-      desserts: [
-        {name: "Buckets directory", calories: "/home/users/m-matsuda/pool-a"},
-        {name: "Unix user", calories: "m-matsuda"},
-        {name: "Unix group", calories: "m-matsuda"},
-        {name: "Private buckets", calories: "bkt0 bkt1 bkt3"},
-        {name: "Public buckets", calories: ""},
-        {name: "Public download buckets", calories: ""},
-        {name: "Public upload buckets", calories: ""},
-        {name: "Pool-ID", calories: "UFW3ZA6tYEQ2jqV3QmUU"},
-        {name: "MinIO state", calories: "ready (reason: -)"},
-        {name: "Expiration date", calories: "2043-05-01T07:18:24.000Z"},
-        {name: "User enabled", calories: "true"},
-        {name: "Pool online", calories: "true"},
-        {name: "Creation date", calories: "2023-05-06T07:18:24.000Z"},
-      ],
-    },
-  ],
+  pool_list: [],
 
   api_get_user_info() {
     const msg = "get_user_info"
@@ -65,6 +47,15 @@ const pool_data_ = {
     const body = null;
     const triple = {method, path, body};
     submit_request(msg, triple, set_user_info_data);
+  },
+
+  api_list_pools() {
+    const msg = "list pools"
+    const method = "GET";
+    const path = (base_path + "/pool");
+    const body = null;
+    const triple = {method, path, body};
+    return submit_request(msg, triple, set_pool_list);
   },
 
   api_make_pool() {
@@ -81,7 +72,7 @@ const pool_data_ = {
     const body = JSON.stringify(args);
     const triple = {method, path, body};
     return submit_request(msg, triple, set_pool_data)
-  }
+  },
 
 };
 
@@ -98,6 +89,26 @@ function set_user_info_data(data : any) {
   pool_data.pool_name_visible = true;
   pool_data.edit_pool_visible = false;
   pool_data.pool_args_visible = false;
+}
+
+function set_pool_list(data) {
+  console.assert(data && data["pool_list"]);
+  const dd = data["pool_list"]
+  console.log("pool_list=" + dd.length);
+  console.log(dd);
+  for (let i in dd) {
+    console.log("pool=" + i);
+    console.log(dd[i]);
+  }
+  pool_data.pool_list = dd;
+
+  /*
+  const pool_li_items = new Array();
+  for (var k = 0; k < pool_desc_list.length; k++) {
+    const pooldesc = pool_desc_list[k];
+    pool_li_items.push(render_pool_as_ul_entry(pooldesc));
+  }
+  */
 }
 
 function set_pool_data(data) {
@@ -135,18 +146,6 @@ function format_time_in_keys(keys) {
             "secret_key": k["secret_key"],
             "expiration_time": format_time_z(k["expiration_time"])};
   });
-}
-
-function api_list_pools() {
-  const msg = "list pools";
-  const method = "GET";
-  const path = (base_path + "/pool");
-  const body = null;
-  const triple = {method, path, body};
-  submit_request(msg, triple, render_pool_list);
-}
-
-function render_pool_list(data : any) {
 }
 
 function submit_request(msg : string, triple : any, process_response : (data :any) => void) {

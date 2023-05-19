@@ -2,7 +2,7 @@
   <v-container class="fill-height">
     <v-col>
 
-    <div class="text-body-2 align-center text-center">Make a new pool</div>
+    <div class="text-body-2 align-center text-center">New pool</div>
     <div>
       <span class="label">Buckets directory (absolute path): </span>
       <input v-model="pool_data.buckets_directory" size="30" />
@@ -19,7 +19,7 @@
         </option>
       </select>
       <div>
-        <v-btn v-on:click="kick_make_pool">Create</v-btn>
+        <v-btn v-on:click="kick_make_pool" rounded="xl">Create</v-btn>
       </div>
     </div>
 
@@ -34,7 +34,7 @@ export default {
   props: {
     pool_data: {
       type: Object,
-      default: () => ({})
+      default: () => ({}),
     },
   },
   data() {
@@ -49,7 +49,7 @@ export default {
       console.log("make_pool: this.pool_data=" + typeof (this.pool_data));
       console.log(this.pool_data);
       this.pool_data.api_make_pool();
-    }
+    },
   },
 }
 </script>

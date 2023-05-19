@@ -6,19 +6,14 @@
         <v-slide-group v-model="pool_data.pool_list" center-active>
           <v-slide-group-item
             v-for="(_, n) in pool_data.pool_list.length"
-            v-bind:key="n" >
-            <v-sheet class="pa-3 ma-3">
+            v-bind:key="n">
+            <v-card outlined class="ma-4">
+              <v-card-item>
+                <v-card-title>Directory: {{pool_data.pool_list[n]["buckets_directory"]}}</v-card-title>
+                <v-card-subtitle>This is a subtitle</v-card-subtitle>
+              </v-card-item>
               <v-table height="30ex">
                 <tbody>
-                  <tr>
-                    <td>index: </td>
-                    <td>{{n}}</td>
-                  </tr>
-
-                  <tr>
-                    <td>name: </td>
-                    <td>{{pool_data.pool_list[n]["pool_name"]}}</td>
-                  </tr>
                   <tr>
                     <td>Directory: </td>
                     <td>{{pool_data.pool_list[n]["buckets_directory"]}}</td>
@@ -30,6 +25,10 @@
                   <tr>
                     <td>gid: </td>
                     <td>{{pool_data.pool_list[n]["owner_gid"]}}</td>
+                  </tr>
+                  <tr>
+                    <td>name: </td>
+                    <td>{{pool_data.pool_list[n]["pool_name"]}}</td>
                   </tr>
                   <tr>
                     <td>online_status: </td>
@@ -59,7 +58,7 @@
                 <v-btn v-on:click="kick_delete_pool(n)" rounded="xl">Delete</v-btn>
                 <v-spacer></v-spacer>
               </v-row>
-            </v-sheet>
+            </v-card>
           </v-slide-group-item>
         </v-slide-group>
       </v-col>
@@ -72,13 +71,26 @@ export default {
   props: {
     pool_data: {
       type: Object,
-      default: () => ({})
+      default: () => ({}),
     },
   },
   data() {
     this.pool_data.api_list_pools();
     return {};
   },
-  methods: {},
+  methods: {
+    kick_edit_pool(i : bigint) {
+      console.log("edit_pool: this.pool_data=" + typeof (this.pool_data));
+      console.log(this.pool_data);
+      this.pool_data.edit_pool(i);
+    },
+    kick_delete_pool(i : bigint) {
+      console.log("delete_pool: this.pool_data=" + typeof (this.pool_data));
+      console.log(this.pool_data);
+      const d = this.pool_data.pool_list[i]
+      console.log("delete_pool: i=" + i + " id=" + d["pool_name"]);
+      this.pool_data.api_delete_pool(d["pool_name"]);
+    },
+  },
 }
 </script>

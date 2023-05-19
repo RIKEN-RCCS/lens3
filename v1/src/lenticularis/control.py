@@ -565,7 +565,7 @@ class Control_Api():
         assert pooldesc1 is not None
         try:
             check_pool_is_well_formed(pooldesc1, None)
-            return (200, None, {"pool_list": [pooldesc1]})
+            return (200, None, {"pool_desc": pooldesc1})
         except Exception as e:
             m = rephrase_exception_message(e)
             logger.error(f"Created pool is not well-formed (internal error):"

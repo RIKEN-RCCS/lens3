@@ -2,16 +2,16 @@
   <v-container class="fill-height">
     <v-responsive class="d-flex align-center text-center fill-height">
       <div class="text-body-2 font-weight-light mb-n1">Edit pool</div>
-      <v-sheet class="pa-3 ma-3">
+      <v-sheet class="pa-3 ma-3" v-if="pool_data.edit_pool_visible">
 
         <div>
           <span class="label">BUCKETS</span>
         </div>
         <div>
-          <span class="label">New bucket:</span>
-          <span>Bucket name:</span>
+          <span class="label">New bucket: </span>
+          <span>Bucket name: </span>
           <input v-model="bucket_name" size="30" placeholder="bucket name" />
-          <span>Bucket policy for public access:</span>
+          <span>Bucket policy for public access: </span>
           <select v-model="bucket_policy" v-bind:required="true">
             <option selected>none</option>
             <option>public</option>
@@ -23,7 +23,7 @@
 
         <div>
           <span class="label">Existing buckets and policies</span>
-          <div v-for="b in list_of_buckets">
+          <div v-for="b in pool_data.buckets">
             <input v-model="b.name" size="30" disabled />
             <input v-model="b.bkt_policy" size="10" disabled />
             <button v-on:click="kick_delete_bucket(b.name)">Delete bucket</button>
@@ -42,7 +42,7 @@
           <span class="label">Access keys (rw)</span>
           <button v-on:click="kick_make_secret('readwrite')">Create key</button>
         </div>
-        <div v-for="k in access_keys_rw">
+        <div v-for="k in pool_data.access_keys_rw">
           <input v-model="k.access_key" size="22" disabled />
           <button v-on:click="kick_copy_to_clipboard(k.access_key)">Copy</button>
           <input v-model="k.secret_key" size="50" disabled />
@@ -56,7 +56,7 @@
           <span class="label">Access keys (ro)</span>
           <button v-on:click="kick_make_secret('readonly')">Create key</button>
         </div>
-        <div v-for="k in access_keys_ro">
+        <div v-for="k in pool_data.access_keys_ro">
           <input v-model="k.access_key" size="22" disabled />
           <button v-on:click="kick_copy_to_clipboard(k.access_key)">Copy</button>
           <input v-model="k.secret_key" size="50" disabled />
@@ -70,7 +70,7 @@
           <span class="label">Access keys (wo)</span>
           <button v-on:click="kick_make_secret('writeonly')">Create key</button>
         </div>
-        <div v-for="k in access_keys_wo">
+        <div v-for="k in pool_data.access_keys_wo">
           <input v-model="k.access_key" size="22" disabled />
           <button v-on:click="kick_copy_to_clipboard(k.access_key)">Copy</button>
           <input v-model="k.secret_key" size="50" disabled />
@@ -92,36 +92,50 @@
 
 <script lang="ts">
 export default {
-  data () {
-    return {
-      access_keys_rw:
-[{access_key: "99999", secret_key: "88888", expiration_time: "1970-10-10"},
- {access_key: "99999", secret_key: "88888", expiration_time: "1970-10-10"},
- {access_key: "99999", secret_key: "88888", expiration_time: "1970-10-10"},
- {access_key: "99999", secret_key: "88888", expiration_time: "1970-10-10"},
- {access_key: "99999", secret_key: "88888", expiration_time: "1970-10-10"},
-],
-      access_keys_ro:
-[{access_key: "99999", secret_key: "88888", expiration_time: "1970-10-10"},
- {access_key: "99999", secret_key: "88888", expiration_time: "1970-10-10"},
- {access_key: "99999", secret_key: "88888", expiration_time: "1970-10-10"},
- {access_key: "99999", secret_key: "88888", expiration_time: "1970-10-10"},
- {access_key: "99999", secret_key: "88888", expiration_time: "1970-10-10"},
-],
-      access_keys_wo:
-[{access_key: "99999", secret_key: "88888", expiration_time: "1970-10-10"},
- {access_key: "99999", secret_key: "88888", expiration_time: "1970-10-10"},
- {access_key: "99999", secret_key: "88888", expiration_time: "1970-10-10"},
- {access_key: "99999", secret_key: "88888", expiration_time: "1970-10-10"},
- {access_key: "99999", secret_key: "88888", expiration_time: "1970-10-10"},
-],
-      list_of_buckets: [],
-      bucket_name: "bucket0?",
-      bucket_policy: "policy-rw?",
-      key_expiration_time: "1970-10-12",
-    }
+  props: {
+    pool_data: {
+      type: Object,
+      default: () => ({}),
+    },
+  },
+  data() {
+    this.pool_data.api_list_pools();
+    return {};
+  },
+  methods: {
+    kick_make_bucket() {
+      console.log("make_bucket: this.pool_data=" + typeof (this.pool_data));
+      console.log(this.pool_data);
+      const pool = this.pool_data.pool_name;
+      const name = this.pool_data.bucket_name;
+      const policy = this.pool_data.bucket_policy;
+      this.pool_data.api_make_bucket(pool, name, policy);
+    },
+
+    kick_delete_bucket(name : string) {
+      console.log("delete_bucket: this.pool_data=" + typeof (this.pool_data));
+      console.log(this.pool_data);
+      const pool = this.pool_data.pool_name;
+      this.pool_data.api_delete_bucket(pool, name);
+    },
+
+    kick_make_secret(rw : string) {
+      console.log("make_secret: this.pool_data=" + typeof (this.pool_data));
+      console.log(this.pool_data);
+      const pool = this.pool_data.pool_name;
+      this.pool_data.api_make_secret(pool, rw);
+    },
+
+    kick_delete_secret(key : string) {
+      console.log("delete_secret: this.pool_data=" + typeof (this.pool_data));
+      console.log(this.pool_data);
+      const pool = this.pool_data.pool_name;
+      this.pool_data.api_delete_secret(pool, key);
+    },
+
+    kick_copy_to_clipboard(v : string) {
+      navigator.clipboard.writeText(s);
+    },
   },
 }
-
-function kick_make_bucket() {}
 </script>

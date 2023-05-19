@@ -8,59 +8,69 @@ import {reactive, computed} from "vue";
 let csrf_token;
 const base_path = "";
 
-/* Editor Data */
+/* Editor State. */
 
 const pool_data_ = {
+  /* Entries for PoolMake. */
+
   buckets_directory: "",
   user: "",
   group: "",
   group_choices: [],
 
-  pool_name_visible: true,
-  edit_pool_visible: false,
-  pool_args_visible: false,
-
-  make_pool_mode: false,
-
-  desserts: [
-    {name: "Buckets directory", calories: "/home/users/m-matsuda/pool-a"},
-    {name: "Unix user", calories: "m-matsuda"},
-    {name: "Unix group", calories: "m-matsuda"},
-    {name: "Private buckets", calories: "bkt0 bkt1 bkt3"},
-    {name: "Public buckets", calories: ""},
-    {name: "Public download buckets", calories: ""},
-    {name: "Public upload buckets", calories: ""},
-    {name: "Pool-ID", calories: "UFW3ZA6tYEQ2jqV3QmUU"},
-    {name: "MinIO state", calories: "ready (reason: -)"},
-    {name: "Expiration date", calories: "2043-05-01T07:18:24.000Z"},
-    {name: "User enabled", calories: "true"},
-    {name: "Pool online", calories: "true"},
-    {name: "Creation date", calories: "2023-05-06T07:18:24.000Z"},
-  ],
+  /* Entries for PoolList. */
 
   pool_list: [],
 
+  /* Entries for PoolView. */
+
+  buckets: [],
+  access_keys: [],
+  probe_key: "",
+  expiration_time: "",
+  online_status: "",
+  user_enabled_status: "",
+  minio_state: "",
+  minio_reason: "",
+  modification_time: "",
+
+  access_keys_rw: [],
+  access_keys_ro: [],
+  access_keys_wo: [],
+
+  pool_name: "",
+  bucket_name: "",
+  bucket_policy: "",
+
+  edit_pool_visible: false,
+  //pool_name_visible: true,
+  //pool_args_visible: false,
+  //make_pool_mode: false,
+
+  edit_pool(i : bigint) {
+    const d = this.pool_list[i]
+    const data = {"pool_desc": d};
+    set_pool_data(data);
+  },
+
   api_get_user_info() {
-    const msg = "get_user_info"
     const method = "GET";
     const path = (base_path + "/user-info");
     const body = null;
     const triple = {method, path, body};
-    submit_request(msg, triple, set_user_info_data);
+    submit_request("get_user_info", triple, set_user_info_data);
   },
 
   api_list_pools() {
-    const msg = "list pools"
     const method = "GET";
     const path = (base_path + "/pool");
     const body = null;
     const triple = {method, path, body};
-    return submit_request(msg, triple, set_pool_list);
+    return submit_request("list_pools", triple, set_pool_list);
   },
 
   api_make_pool() {
     console.log("make_pool: this=" + this);
-    const msg = "make_pool";
     const directory = this.buckets_directory;
     const gid = this.group;
     console.log("make_pool: directory=" + directory + ", group=" + gid);
@@ -71,7 +81,69 @@ const pool_data_ = {
                   "CSRF-Token": csrf_token};
     const body = JSON.stringify(args);
     const triple = {method, path, body};
-    return submit_request(msg, triple, set_pool_data)
+    return submit_request("make_pool", triple, 
+                          (data) => {this.api_list_pools();});
+  },
+
+  api_delete_pool(pool : string) {
+    console.log("delete_pool: id=" + pool);
+    const method = "DELETE";
+    const path = (base_path + "/pool/" + pool);
+    const args = {"CSRF-Token": csrf_token};
+    const body = JSON.stringify(args);
+    const triple = {method, path, body};
+    return submit_request("delete_pool", triple,
+                          (data) => {this.api_list_pools();});
+  },
+
+  api_make_bucket(pool : string, name : string, policy : string) {
+    console.log("make_bucket: name=" + name + ", policy=" + policy);
+    const method = "PUT";
+    const path = (base_path + "/pool/" + pool + "/bucket");
+    const args = {"name": name,
+                  "bkt_policy": policy,
+                  "CSRF-Token": csrf_token};
+    const body = JSON.stringify(args);
+    const triple = {method, path, body};
+    return submit_request("make_bucket", triple, set_pool_data);
+  },
+
+  api_delete_bucket(pool : string, name : string) {
+    const msg = "delete_bucket";
+    console.log("delete_bucket: name=" + name);
+    const method = "DELETE";
+    const path = (base_path + "/pool/" + pool_data.pool_name
+                  + "/bucket/" + name);
+    const args = {"CSRF-Token": csrf_token};
+    const body = JSON.stringify(args);
+    const triple = {method, path, body};
+    return submit_request(msg, triple, set_pool_data);
+  },
+
+  api_make_secret(pool : string, rw : string) {
+    console.log("make_secret: " + rw);
+    const expiration = parse_time_z(edit_pool_data.key_expiration_time);
+    const method = "POST";
+    const path = (base_path + "/pool/" + edit_pool_data.pool_name
+                  + "/secret");
+    const args = {"key_policy": rw,
+                  "expiration_time": expiration,
+                  "CSRF-Token": csrf_token};
+    const body = JSON.stringify(args);
+    const triple = {method, path, body};
+    return submit_request("make_secret", triple, set_pool_data);
+  },
+
+  api_delete_secret(pool : string, key : string) {
+    const msg = "delete_secret";
+    console.log("delete_secret: " + key);
+    const method = "DELETE";
+    const path = (base_path + "/pool/" + edit_pool_data.pool_name
+                  + "/secret/" + key);
+    const args = {"CSRF-Token": csrf_token};
+    const body = JSON.stringify(args);
+    const triple = {method, path, body};
+    return submit_request(msg, triple, set_pool_data);
   },
 
 };
@@ -86,9 +158,7 @@ function set_user_info_data(data : any) {
   pool_data.group = d["groups"][0];
   pool_data.group_choices = d["groups"];
 
-  pool_data.pool_name_visible = true;
   pool_data.edit_pool_visible = false;
-  pool_data.pool_args_visible = false;
 }
 
 function set_pool_list(data) {
@@ -101,31 +171,26 @@ function set_pool_list(data) {
     console.log(dd[i]);
   }
   pool_data.pool_list = dd;
-
-  /*
-  const pool_li_items = new Array();
-  for (var k = 0; k < pool_desc_list.length; k++) {
-    const pooldesc = pool_desc_list[k];
-    pool_li_items.push(render_pool_as_ul_entry(pooldesc));
-  }
-  */
+  pool_data.edit_pool_visible = false;
 }
 
 function set_pool_data(data) {
-  console.assert(data && data["pool_list"] && data["pool_list"].length == 1);
-  const d = data["pool_list"][0]
-  pool_data.pool_name_visible = true;
-  pool_data.edit_pool_visible = true;
-
+  console.assert(data && data["pool_desc"]);
+  const d = data["pool_desc"]
   pool_data.pool_name = d["pool_name"];
+  pool_data.buckets_directory = d["buckets_directory"];
   pool_data.user = d["owner_uid"];
   pool_data.group = d["owner_gid"];
-  pool_data.buckets_directory = d["buckets_directory"];
-  pool_data.list_of_buckets = d["buckets"];
 
-  pool_data.bucket_name = "";
-  pool_data.bucket_policy = "none";
-  pool_data.group_choices = d["groups"];
+  pool_data.buckets = d["buckets"];
+  pool_data.access_keys = d["access_keys"];
+  pool_data.probe_key = d["probe_key"];
+  pool_data.expiration_time = d["expiration_time"];
+  pool_data.online_status = d["online_status"];
+  pool_data.user_enabled_status = d["user_enabled_status"];
+  pool_data.minio_state = d["minio_state"];
+  pool_data.minio_reason = d["minio_reason"];
+  pool_data.modification_time = d["modification_time"];
 
   const keys = d["access_keys"];
   const rwkeys = keys.filter(d => d["key_policy"] == "readwrite")
@@ -135,9 +200,9 @@ function set_pool_data(data) {
   pool_data.access_keys_ro = format_time_in_keys(rokeys)
   pool_data.access_keys_wo = format_time_in_keys(wokeys)
 
-  //edit_pool_data.user_enabled_status = d["user_enabled_status"];
-  //edit_pool_data.online_status = d["online_status"];
-  //edit_pool_data.pool_state = d["minio_state"];
+  pool_data.bucket_name = "";
+  pool_data.bucket_policy = "none";
+  pool_data.edit_pool_visible = true;
 }
 
 function format_time_in_keys(keys) {
@@ -146,6 +211,19 @@ function format_time_in_keys(keys) {
             "secret_key": k["secret_key"],
             "expiration_time": format_time_z(k["expiration_time"])};
   });
+}
+
+function parse_time_z(s : string) {
+  return (new Date(s).getTime() / 1000);
+}
+
+function format_time_z(d : bigint) {
+  /* Returns a date+time string with milliseconds. */
+  if (d == 0) {
+    return 0;
+  } else {
+    return new Date(d * 1000).toISOString();
+  }
 }
 
 function submit_request(msg : string, triple : any, process_response : (data :any) => void) {

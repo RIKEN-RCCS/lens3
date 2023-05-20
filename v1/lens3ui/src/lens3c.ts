@@ -5,8 +5,8 @@
 
 import {reactive, computed} from "vue";
 
-let csrf_token;
-const base_path = "";
+let csrf_token : string;
+const base_path = "/api";
 
 /* Editor State. */
 
@@ -41,13 +41,14 @@ const pool_data_ = {
   pool_name: "",
   bucket_name: "",
   bucket_policy: "",
+  key_expiration_time: "",
 
   edit_pool_visible: false,
   //pool_name_visible: true,
   //pool_args_visible: false,
   //make_pool_mode: false,
 
-  edit_pool(i : bigint) {
+  edit_pool(i : number) {
     const d = this.pool_list[i]
     const data = {"pool_desc": d};
     set_pool_data(data);
@@ -122,9 +123,9 @@ const pool_data_ = {
 
   api_make_secret(pool : string, rw : string) {
     console.log("make_secret: " + rw);
-    const expiration = parse_time_z(edit_pool_data.key_expiration_time);
+    const expiration = parse_time_z(pool_data.key_expiration_time);
     const method = "POST";
-    const path = (base_path + "/pool/" + edit_pool_data.pool_name
+    const path = (base_path + "/pool/" + pool_data.pool_name
                   + "/secret");
     const args = {"key_policy": rw,
                   "expiration_time": expiration,
@@ -138,7 +139,7 @@ const pool_data_ = {
     const msg = "delete_secret";
     console.log("delete_secret: " + key);
     const method = "DELETE";
-    const path = (base_path + "/pool/" + edit_pool_data.pool_name
+    const path = (base_path + "/pool/" + pool_data.pool_name
                   + "/secret/" + key);
     const args = {"CSRF-Token": csrf_token};
     const body = JSON.stringify(args);
@@ -161,7 +162,7 @@ function set_user_info_data(data : any) {
   pool_data.edit_pool_visible = false;
 }
 
-function set_pool_list(data) {
+function set_pool_list(data : any) {
   console.assert(data && data["pool_list"]);
   const dd = data["pool_list"]
   console.log("pool_list=" + dd.length);
@@ -174,7 +175,7 @@ function set_pool_list(data) {
   pool_data.edit_pool_visible = false;
 }
 
-function set_pool_data(data) {
+function set_pool_data(data : any) {
   console.assert(data && data["pool_desc"]);
   const d = data["pool_desc"]
   pool_data.pool_name = d["pool_name"];
@@ -193,9 +194,9 @@ function set_pool_data(data) {
   pool_data.modification_time = d["modification_time"];
 
   const keys = d["access_keys"];
-  const rwkeys = keys.filter(d => d["key_policy"] == "readwrite")
-  const rokeys = keys.filter(d => d["key_policy"] == "readonly")
-  const wokeys = keys.filter(d => d["key_policy"] == "writeonly")
+  const rwkeys = keys.filter((k : any) => k["key_policy"] == "readwrite")
+  const rokeys = keys.filter((k : any) => k["key_policy"] == "readonly")
+  const wokeys = keys.filter((k : any) => k["key_policy"] == "writeonly")
   pool_data.access_keys_rw = format_time_in_keys(rwkeys)
   pool_data.access_keys_ro = format_time_in_keys(rokeys)
   pool_data.access_keys_wo = format_time_in_keys(wokeys)
@@ -205,8 +206,8 @@ function set_pool_data(data) {
   pool_data.edit_pool_visible = true;
 }
 
-function format_time_in_keys(keys) {
-  return keys.map((k) => {
+function format_time_in_keys(keys : any) {
+  return keys.map((k : any) => {
     return {"access_key": k["access_key"],
             "secret_key": k["secret_key"],
             "expiration_time": format_time_z(k["expiration_time"])};
@@ -217,7 +218,7 @@ function parse_time_z(s : string) {
   return (new Date(s).getTime() / 1000);
 }
 
-function format_time_z(d : bigint) {
+function format_time_z(d : number) {
   /* Returns a date+time string with milliseconds. */
   if (d == 0) {
     return 0;
@@ -229,22 +230,22 @@ function format_time_z(d : bigint) {
 function submit_request(msg : string, triple : any, process_response : (data :any) => void) {
   console.log(msg + " ...");
 
-  const method = triple.method;
-  //const path = triple.path;
-  const path = "http://localhost:8003" + triple.path;
-  const body = triple.body;
+  const method : string = triple.method;
+  const path = triple.path;
+  //const path = "http://localhost:8003" + triple.path;
+  const body : string = triple.body;
   console.log("method: " + method);
   console.log("path: " + path);
   console.log("body: " + body);
 
   const options = {
     method: method,
-    mode: "cors",
+    mode: "cors" as RequestMode,
     body: body,
-    headers: {
-      //"sec-fetch-site": "cross-site",
-      "X-REMOTE-USER": "m-matsuda",
-    },
+    //headers: {
+    //"sec-fetch-site": "cross-site",
+    //"X-REMOTE-USER": "m-matsuda",
+    //},
   };
   fetch(path, options)
     .then((response) => {

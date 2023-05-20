@@ -57,10 +57,16 @@ def _make_app():
     _api = Control_Api(_api_conf, redis)
 
     _app = FastAPI()
-    _app.mount("/scripts/",
-               StaticFiles(directory=os.path.join(_api.webui_dir, "scripts")),
-               name="scripts")
-    with open(os.path.join(_api.webui_dir, "setting.html")) as f:
+    # _app.mount("/scripts/",
+    #            StaticFiles(directory=os.path.join(_api.webui_dir, "scripts")),
+    #            name="scripts")
+    _app.mount("/ui",
+               StaticFiles(directory=os.path.join(_api.pkg_dir, "ui")),
+               name="static")
+    _app.mount("/ui2",
+               StaticFiles(directory=os.path.join(_api.pkg_dir, "ui2")),
+               name="static")
+    with open(os.path.join(_api.pkg_dir, "ui2", "setting.html")) as f:
         parameters = ('<script type="text/javascript">const base_path="'
                       + _api.base_path + '";</script>')
         _setting_html = f.read().replace("PLACE_PARAMETERS_HERE", parameters)
@@ -186,7 +192,7 @@ async def validate_session(request : Request, call_next):
     return response
 
 
-@_app.get("/csrftoken/")
+@_app.get("/csrftoken")
 async def get_csrf_token(csrf_protect : CsrfProtect = Depends()):
     response = JSONResponse(status_code=200, content={"csrf_token": "cookie"})
     csrf_protect.set_csrf_cookie(response)
@@ -221,24 +227,10 @@ async def app_get_ui(
     return response
 
 
-@_app.get("/setting-debug.html")
-async def app_get_debug_ui(
-        request : Request,
-        x_remote_user : Union[str, None] = Header(default=None),
-        x_real_ip : Union[str, None] = Header(default=None),
-        x_traceid : Union[str, None] = Header(default=None)):
-    logger.debug(f"APP.GET /setting-debug.html")
-    tracing.set(x_traceid)
-    user_id = _api.map_claim_to_uid(x_remote_user)
-    client = x_real_ip
-    response = _api_get_ui("setting-debug.html", client, user_id, request)
-    return response
-
-
 def _api_get_ui(file, client, user_id, request):
     access_synopsis = [client, user_id, request.method, request.url]
     try:
-        with open(os.path.join(_api.webui_dir, file)) as f:
+        with open(os.path.join(_api.pkg_dir, "ui2", file)) as f:
             parameters = ('<script type="text/javascript">const base_path="'
                           + _api.base_path + '";</script>')
             html = f.read().replace("PLACE_PARAMETERS_HERE", parameters)

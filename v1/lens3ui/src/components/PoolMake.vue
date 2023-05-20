@@ -28,7 +28,6 @@
 </template>
 
 <script lang="ts">
-//import {api_get_user_info} from "@/lens3c";
 export default {
   //props: ["pool_data"],
   props: {

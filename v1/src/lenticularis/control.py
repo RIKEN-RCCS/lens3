@@ -175,8 +175,9 @@ class Control_Api():
         self._mc_timeout = int(api_param["minio_mc_timeout"])
         self._max_pool_expiry = int(api_param["max_pool_expiry"])
 
-        pkgdir = os.path.dirname(inspect.getfile(lenticularis))
-        self.webui_dir = os.path.join(pkgdir, "webui")
+        # pkgdir = os.path.dirname(inspect.getfile(lenticularis))
+        # self.webui_dir = os.path.join(pkgdir, "webui")
+        self.pkg_dir = os.path.dirname(inspect.getfile(lenticularis))
 
         self.csrf_key = api_param["csrf_secret_key"]
 

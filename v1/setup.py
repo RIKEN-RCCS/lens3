@@ -16,7 +16,7 @@ setup(
         "lenticularis": "src/lenticularis"
     },
     package_data={
-        "lenticularis": ["webui/*", "webui/scripts/*"],
+        "lenticularis": ["ui/*", "ui/assets/*", "ui2/*.html", "ui2/*.js"],
     },
     entry_points={
         "console_scripts": ["lens3-admin=lenticularis.admintool:main"]

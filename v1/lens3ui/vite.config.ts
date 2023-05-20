@@ -36,6 +36,23 @@ export default defineConfig({
     ],
   },
   server: {
-    port: 3000,
+    host: "0.0.0.0",
+    port: 8009,
+    cors: true,
+    /*
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "*",
+    },
+    */
   },
+  preview: {
+    host: "0.0.0.0",
+    port: 8009,
+  },
+  build: {
+    outDir: "../src/lenticularis/ui",
+    emptyOutDir: true,
+  },
+  base: "/api/ui",
 })

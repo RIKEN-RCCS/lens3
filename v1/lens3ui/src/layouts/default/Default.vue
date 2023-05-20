@@ -2,6 +2,7 @@
   <v-app>
     <default-bar />
     <default-view />
+    <v-footer class="bg-grey-lighten-1"></v-footer>
   </v-app>
 </template>
 

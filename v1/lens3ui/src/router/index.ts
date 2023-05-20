@@ -17,6 +17,17 @@ const routes = [
     ],
   },
   {
+    path: '/index.html',
+    component: () => import('@/layouts/default/Default.vue'),
+    children: [
+      {
+        path: '',
+        name: 'Welcome',
+        component: () => import('@/views/Welcome.vue'),
+      },
+    ],
+  },
+  {
     path: '/setting',
     component: () => import('@/layouts/default/Default.vue'),
     children: [
@@ -37,7 +48,7 @@ const routes = [
         component: () => import('@/views/About.vue'),
       },
     ],
-  }
+  },
 ]
 
 const router = createRouter({

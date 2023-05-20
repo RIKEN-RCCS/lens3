@@ -1,8 +1,9 @@
 <template>
   <v-container class="fill-height">
     <v-responsive class="d-flex align-center text-center fill-height">
-      <div class="text-body-2 font-weight-light mb-n1">Edit pool</div>
+      <div class="text-h3 font-weight-bold">Edit pool</div>
       <v-sheet class="pa-3 ma-3" v-if="pool_data.edit_pool_visible">
+        <div class="text-body-2 font-weight-light mb-n1">{{pool_data.pool_name}}</div>
 
         <div>
           <span class="label">BUCKETS</span>
@@ -10,9 +11,9 @@
         <div>
           <span class="label">New bucket: </span>
           <span>Bucket name: </span>
-          <input v-model="bucket_name" size="30" placeholder="bucket name" />
+          <input v-model="pool_data.bucket_name" size="30" placeholder="bucket name" />
           <span>Bucket policy for public access: </span>
-          <select v-model="bucket_policy" v-bind:required="true">
+          <select v-model="pool_data.bucket_policy" v-bind:required="true">
             <option selected>none</option>
             <option>public</option>
             <option>upload</option>
@@ -35,7 +36,7 @@
         </div>
         <div>
           <span class="label">Expiration:</span>
-          <input type="date" v-model="key_expiration_time" />
+          <input type="date" v-model="pool_data.key_expiration_time" />
           <span class="label">UTC</span>
         </div>
         <div>
@@ -80,12 +81,6 @@
           <button v-on:click="kick_delete_secret(k.access_key)">Delete key</button>
         </div>
       </v-sheet>
-
-      <v-row class="d-flex align-center justify-center">
-        <router-link to="/">Go to Home</router-link>&nbsp;
-        <router-link to="/setting">Go to Setting</router-link>&nbsp;
-        <router-link to="/about">Go to About</router-link>
-      </v-row>
     </v-responsive>
   </v-container>
 </template>
@@ -134,7 +129,7 @@ export default {
     },
 
     kick_copy_to_clipboard(v : string) {
-      navigator.clipboard.writeText(s);
+      navigator.clipboard.writeText(v);
     },
   },
 }

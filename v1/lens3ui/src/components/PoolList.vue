@@ -79,12 +79,12 @@ export default {
     return {};
   },
   methods: {
-    kick_edit_pool(i : bigint) {
+    kick_edit_pool(i : number) {
       console.log("edit_pool: this.pool_data=" + typeof (this.pool_data));
       console.log(this.pool_data);
       this.pool_data.edit_pool(i);
     },
-    kick_delete_pool(i : bigint) {
+    kick_delete_pool(i : number) {
       console.log("delete_pool: this.pool_data=" + typeof (this.pool_data));
       console.log(this.pool_data);
       const d = this.pool_data.pool_list[i]

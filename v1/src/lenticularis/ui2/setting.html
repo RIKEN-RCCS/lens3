@@ -5,12 +5,12 @@
     <meta charset="utf-8" />
     <style type="text/css">.label {
     width: 20em !important;
-    display: inline-block;
-  }
-  </style>
+    display: inline-block;}
+    </style>
     <title>Manage Pools</title>
   </head>
   <body>
+    <div><a href="ui/index.html">use new ui</a></div>
     <div id="make_new_pool_button">
       <button v-on:click="kick_add_new_pool">New bucket pool</button>
     </div>
@@ -166,14 +166,14 @@
         <div>{{reason}}</div>
         <div>{{message}}</div>
         <div>{{time}}</div>
-        <button v-on:click="kick_debug">Debug</button> (dump internal
-        data on javascript console)
+        <button v-on:click="kick_debug">Dump</button> (dump internal
+        data on the javascript console)
       </div>
     </div>
 
     PLACE_PARAMETERS_HERE
     <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
-    <script src="scripts/lens3ui.js"></script>
+    <script src="ui2/lens3ui.js"></script>
     <div hidden>Lens3 v1.2 2022-07-10</div>
   </body>
 </html>

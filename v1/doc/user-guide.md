@@ -170,13 +170,16 @@ unless it is public.
 ## Changes from v1.1 to v1.2
 
 * Host-style naming of buckets is dropped.
-* Accesses are forwarded by a bucket name.  Accesses were forwarded by
-  an access key in v1.1.  This change prohibits bucket operations.
-* Bucket name space become shared by all users.  Bucket names must be
+* Accesses are forwarded to MinIO with respect to a pair of a bucket
+  name and an access key.  Forwarding decision was only by an access
+  key in v1.1.  This change prohibits performing S3's bucket
+  operations, because bucket operations are not forwarded.
+* Bucket name space is shared by all users.  Bucket names must be
   distinct.
+* Access keys have expiration.
 * Rich features are dropped.
 * Some locking in accessing Redis are omitted.  Operations by the
-  administrator tool might be sloppy.
+  administrator tool is sloppy.
 * MC commands are directly invoked at the Lens3-Api host to change the
   setting of a MinIO instance.  MC commands were only invoked at
   Lens3-Mux in v1.1.

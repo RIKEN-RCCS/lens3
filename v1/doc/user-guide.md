@@ -120,21 +120,21 @@ be recreated.
 
 ### Bucket Naming Restrictions
 
-Bucket names must be in lowercase alphanums and "-".  Lens3 bans dots.
-Also, Lens3 bans names "aws", "amazon", "minio", and the names that
-begin with "goog" and "g00g".
+Bucket names must be in lowercase alphanums and "-" (minus).  Note
+that Lens3 bans a dot.  In addition, Lens3 bans names "aws", "amazon",
+"minio" and the names that begin with "goog" and "g00g".
 
 ### No Control on File and Bucket Properties
 
-Lens3 does not provide control on properties of files and buckets.  A
-bucket can only have a public access policy.
+Lens3 does not provide control on properties of files and buckets.
+Buckets can only have a public access policy.
 
 ### Residue Files
 
 Running MinIO leaves a directory ".minio.sys" in the buckets-directory
 of the pool.
 
-### Access Logs
+### No Access Logs
 
 Lens3 does not provide access logs to users, although we understand it
 is useful to users.  Administrators may provide access logs to users

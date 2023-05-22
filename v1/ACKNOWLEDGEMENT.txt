@@ -1,43 +1,36 @@
 # ACKNOWLEDGMENT
 
-Lenticularis depends on and uses following software.
+Lens3 uses the following software.  It may lack software transitively
+used.  Please inform us, if some software is missing.
 
+## S3 Server
 
-# S3 Compatible Server
-minio
-mc
+* minio + mc
 
+## Modules installed by pip3
 
-# Embedded modules
-The following module is embedded into source code
-vue.js
+* gunicorn
+* uvicorn
+* fastapi
+* fastapi_csrf_protect
+* redis
+* hiredis
+* jsonschema
+* pyyaml
+* wheel
+* boto3
 
+## Development Tools
 
-# Modules that installed by pip3
-redis
-hiredis
-gunicorn
-jsonschema
-pyyaml
-wheel
-fastapi
-uvicorn
-fastapi_csrf_protect
-boto3
+* python39
+* nginx
+* apache
+* httpd-tools
+* git
+* unzip
 
+## UI Tools
 
-# Modules and apps that are installed on base system
-
-"Development Tools"
-git 
-python39 
-net-tools
-redis
-nginx
-httpd-tools
-ypbind
-rpcbind
-nfs-utils
-unzip
-
-[eof]
+* vue.js
+* vuetify
+* vite

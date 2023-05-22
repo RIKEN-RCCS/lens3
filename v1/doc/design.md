@@ -229,6 +229,12 @@ The action to fake a forced removal of a __ma:pool-id__ entry in Redis
 should (1) start a new Lens3-Mux + MinIO pair, and then (2) stop an
 old Lens3-Mux + MinIO pair.
 
+## UI
+
+Lens3 UI is created by vuejs+vuetifyjs.  The code for Vuetify is in
+the "v1/ui" directory.  See the [ui/README.md](../ui/README.md) for
+building UI code.
+
 ## Short Term TODO, or Deficiency
 
 * Start MinIO with the --json option.  It will make parsing the output

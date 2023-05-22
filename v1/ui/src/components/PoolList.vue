@@ -1,7 +1,7 @@
 <template>
   <v-container class="fill-height">
     <v-responsive class="d-flex align-center text-center fill-height">
-      <div class="text-body-2 align-center text-center">Bucket pool list</div>
+      <div class="text-h4 font-weight-bold text-center">Pool list</div>
       <v-col class="pa-1 ma-1 bg-red">
         <v-slide-group v-model="pool_data.pool_list" center-active>
           <v-slide-group-item

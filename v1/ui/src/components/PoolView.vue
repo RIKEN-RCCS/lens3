@@ -1,7 +1,7 @@
 <template>
   <v-container class="fill-height">
     <v-responsive class="d-flex align-center text-center fill-height">
-      <div class="text-h3 font-weight-bold">Edit pool</div>
+      <div class="text-h4 font-weight-bold">Edit pool</div>
       <v-sheet class="pa-3 ma-3" v-if="pool_data.edit_pool_visible">
         <div class="text-body-2 font-weight-light mb-n1">{{pool_data.pool_name}}</div>
 

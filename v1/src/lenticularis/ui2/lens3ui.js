@@ -3,10 +3,10 @@
 // Copyright (c) 2022-2023 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
 
-// Note a constant "base_path" is set in the script part in
-// "setting.html".  A base_path is the base-url used when running
-// behind the proxy.  It can be something like "", ".", "/api", etc
-// (without a trailing slash).
+// Note a constant "base_path_" is set in the script code in
+// "setting.html".  A base-path is a base-URL used when running behind
+// the proxy.  Its value is taken from the configuration.  It can be
+// something like "", ".", "/api", etc (without a trailing slash).
 
 /* Editor Data */
 
@@ -164,7 +164,7 @@ function submit_request(msg, triple, process_response) {
 function api_get_user_info() {
   const msg = "get user info"
   const method = "GET";
-  const path = (base_path + "/user-info");
+  const path = (base_path_ + "/user-info");
   const body = null;
   const triple = {method, path, body};
   return submit_request(msg, triple, set_user_info_data);
@@ -173,7 +173,7 @@ function api_get_user_info() {
 function api_list_pools() {
   const msg = "list pools"
   const method = "GET";
-  const path = (base_path + "/pool");
+  const path = (base_path_ + "/pool");
   const body = null;
   const triple = {method, path, body};
   return submit_request(msg, triple, render_pool_list);
@@ -185,7 +185,7 @@ function api_make_pool() {
   const owner_gid = edit_pool_data.group;
   console.log("make_pool: directory=" + directory);
   const method = "POST";
-  const path = (base_path + "/pool");
+  const path = (base_path_ + "/pool");
   const args = {"buckets_directory": directory,
                 "owner_gid": owner_gid,
                 "CSRF-Token": csrf_token};
@@ -200,7 +200,7 @@ function api_delete_pool(i) {
   const pool_name = pooldesc["pool_name"];
   console.log(`pool_name = ${pool_name}`);
   const method = "DELETE";
-  const path = (base_path + "/pool/" + pool_name);
+  const path = (base_path_ + "/pool/" + pool_name);
   const args = {"CSRF-Token": csrf_token};
   const body = JSON.stringify(args);
   const triple = {method, path, body};
@@ -230,7 +230,7 @@ function api_make_bucket() {
   const policy = edit_pool_data.bucket_policy;
   console.log("make_bucket: name=" + name + ", policy=" + policy);
   const method = "PUT";
-  const path = (base_path + "/pool/" + edit_pool_data.pool_name
+  const path = (base_path_ + "/pool/" + edit_pool_data.pool_name
                 + "/bucket");
   const args = {"name": name,
                 "bkt_policy": policy,
@@ -244,7 +244,7 @@ function api_delete_bucket(name) {
   const msg = "delete bucket";
   console.log("delete_bucket: name=" + name);
   const method = "DELETE";
-  const path = (base_path + "/pool/" + edit_pool_data.pool_name
+  const path = (base_path_ + "/pool/" + edit_pool_data.pool_name
                 + "/bucket/" + name);
   const args = {"CSRF-Token": csrf_token};
   const body = JSON.stringify(args);
@@ -257,7 +257,7 @@ function api_make_secret(rw) {
   console.log("make_access_key: " + rw);
   const expiration = parse_time_z(edit_pool_data.key_expiration_time);
   const method = "POST";
-  const path = (base_path + "/pool/" + edit_pool_data.pool_name
+  const path = (base_path_ + "/pool/" + edit_pool_data.pool_name
                 + "/secret");
   const args = {"key_policy": rw,
                 "expiration_time": expiration,
@@ -271,7 +271,7 @@ function api_delete_secret(key) {
   const msg = "delete access-key";
   console.log("delete_access_key: " + key);
   const method = "DELETE";
-  const path = (base_path + "/pool/" + edit_pool_data.pool_name
+  const path = (base_path_ + "/pool/" + edit_pool_data.pool_name
                 + "/secret/" + key);
   const args = {"CSRF-Token": csrf_token};
   const body = JSON.stringify(args);

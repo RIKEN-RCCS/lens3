@@ -51,8 +51,9 @@ export default defineConfig({
     port: 8009,
   },
   build: {
+    minify: false,
     outDir: "../src/lenticularis/ui",
     emptyOutDir: true,
   },
-  base: "/api/ui",
+  base: "./",
 })

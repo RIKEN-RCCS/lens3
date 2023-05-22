@@ -6,7 +6,7 @@
 import {reactive, computed} from "vue";
 
 let csrf_token : string;
-const base_path = "/api";
+const base_path : string = Function("return base_path_")();
 
 /* Editor State. */
 

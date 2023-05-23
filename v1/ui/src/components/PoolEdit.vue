@@ -16,7 +16,7 @@
                   v-bind:items="['none', 'public', 'upload', 'download']" />
         <v-btn v-on:click="kick_make_bucket" rounded="xl"
                class="ma-1">
-          Add
+          Create
         </v-btn>
 
         <div class="text-h6">Existing buckets</div>
@@ -39,79 +39,51 @@
           </v-text-field>
         </v-row>
 
-        <div class="text-h6">Access keys (rw)</div>
-        <v-btn v-on:click="kick_make_secret('readwrite')" rounded="xl">Create key</v-btn>
-        <v-table density="compact">
-          <thead>
-            <tr>
-              <th class="text-left">Access key</th>
-              <th class="text-left">Secret key</th>
-              <th class="text-left">Expiration</th>
-              <th class="text-left">Delete</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="k in pool_data.access_keys_rw">
-              <td>
-                <v-tooltip text="Copy key to clipboard">
-                  <template v-slot:activator="{props}">
-                    <v-btn icon="mdi-clipboard-text" variant="plain"
-                           v-on:click="kick_copy_to_clipboard(k.access_key)"
-                           v-bind="props" />
-                  </template>
-                </v-tooltip>
-                <input v-model="k.access_key" size="22" disabled />
-              </td>
-              <td>
-                <v-tooltip text="Copy key to clipboard">
-                  <template v-slot:activator="{props}">
-                    <v-btn icon="mdi-clipboard-text" variant="plain"
-                           v-on:click="kick_copy_to_clipboard(k.secret_key)"
-                           v-bind="props" />
-                  </template>
-                </v-tooltip>
-                <input v-model="k.secret_key" size="50" disabled />
-              </td>
-              <td>
-                <input type="date" v-model="k.expiration_time" disabled />
-              </td>
-              <td>
-                <v-btn icon="mdi-delete-forever" variant="plain"
-                       v-on:click="kick_delete_secret(k.access_key)" />
-              </td>
-            </tr>
-          </tbody>
-        </v-table>
-
-        <v-space class="ma-4" />
-        <div class="text-h6">Access keys (ro)</div>
-        <v-btn v-on:click="kick_make_secret('readonly')" rounded="xl">Create key</v-btn>
-        <div v-for="k in pool_data.access_keys_ro">
-          <v-row>
-          <v-btn icon="mdi-clipboard-text"
-                 v-on:click="kick_copy_to_clipboard(k.access_key)" />
-          <input v-model="k.access_key" size="22" disabled />
-          <v-btn icon="mdi-clipboard-text"
-                 v-on:click="kick_copy_to_clipboard(k.secret_key)" />
-          <input v-model="k.secret_key" size="50" disabled />
-          <input type="datetime" v-model="k.expiration_time" disabled />
-          <v-btn v-on:click="kick_delete_secret(k.access_key)" rounded="xl">Delete</v-btn>
-          </v-row>
-        </div>
-
-        <div class="text-h6">Access keys (wo)</div>
-        <v-btn v-on:click="kick_make_secret('writeonly')" rounded="xl">Create key</v-btn>
-        <div v-for="k in pool_data.access_keys_wo">
-          <v-row>
-          <v-btn icon="mdi-clipboard-text"
-                 v-on:click="kick_copy_to_clipboard(k.access_key)" />
-          <input v-model="k.access_key" size="22" disabled />
-          <v-btn icon="mdi-clipboard-text"
-                 v-on:click="kick_copy_to_clipboard(k.secret_key)" />
-          <input v-model="k.secret_key" size="50" disabled />
-          <input type="datetime" v-model="k.expiration_time" disabled />
-          <v-btn v-on:click="kick_delete_secret(k.access_key)" rounded="xl">Delete</v-btn>
-          </v-row>
+        <div v-for="keyset in pool_data.access_key_set">
+          <v-space class="ma-4" />
+          <div class="text-h6">Access keys ({{keyset.policy}})</div>
+          <v-btn v-on:click="kick_make_secret(keyset.policy)" rounded="xl">Create key</v-btn>
+          <v-table density="compact">
+            <thead>
+              <tr>
+                <th class="text-left">Access key</th>
+                <th class="text-left">Secret key</th>
+                <th class="text-left">Expiration</th>
+                <th class="text-left">Delete</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="k in keyset.keys">
+                <td>
+                  <v-tooltip text="Copy key to clipboard">
+                    <template v-slot:activator="{props}">
+                      <v-btn icon="mdi-clipboard-text" variant="plain"
+                             v-on:click="kick_copy_to_clipboard(k.access_key)"
+                             v-bind="props" />
+                    </template>
+                  </v-tooltip>
+                  <input v-model="k.access_key" size="22" disabled />
+                </td>
+                <td>
+                  <v-tooltip text="Copy key to clipboard">
+                    <template v-slot:activator="{props}">
+                      <v-btn icon="mdi-clipboard-text" variant="plain"
+                             v-on:click="kick_copy_to_clipboard(k.secret_key)"
+                             v-bind="props" />
+                    </template>
+                  </v-tooltip>
+                  <input v-model="k.secret_key" size="50" disabled />
+                </td>
+                <td>
+                  <input type="date" v-model="k.expiration_time" disabled />
+                </td>
+                <td>
+                  <v-btn icon="mdi-delete-forever" variant="plain"
+                         v-on:click="kick_delete_secret(k.access_key)" />
+                </td>
+              </tr>
+            </tbody>
+          </v-table>
         </div>
       </v-sheet>
     </v-responsive>

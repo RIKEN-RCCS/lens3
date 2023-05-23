@@ -34,6 +34,7 @@ const pool_data_ = {
   minio_reason: "",
   modification_time: "",
 
+  access_key_set: {},
   access_keys_rw: [],
   access_keys_ro: [],
   access_keys_wo: [],
@@ -194,12 +195,17 @@ function set_pool_data(data : any) {
   pool_data.modification_time = d["modification_time"];
 
   const keys = d["access_keys"];
-  const rwkeys = keys.filter((k : any) => k["key_policy"] == "readwrite")
-  const rokeys = keys.filter((k : any) => k["key_policy"] == "readonly")
-  const wokeys = keys.filter((k : any) => k["key_policy"] == "writeonly")
-  pool_data.access_keys_rw = format_time_in_keys(rwkeys)
-  pool_data.access_keys_ro = format_time_in_keys(rokeys)
-  pool_data.access_keys_wo = format_time_in_keys(wokeys)
+  const rwkeys = keys.filter((k : any) => k["key_policy"] == "readwrite");
+  const rokeys = keys.filter((k : any) => k["key_policy"] == "readonly");
+  const wokeys = keys.filter((k : any) => k["key_policy"] == "writeonly");
+  pool_data.access_keys_rw = format_time_in_keys(rwkeys);
+  pool_data.access_keys_ro = format_time_in_keys(rokeys);
+  pool_data.access_keys_wo = format_time_in_keys(wokeys);
+  pool_data.access_key_set = [
+    {policy: "readwrite", keys: pool_data.access_keys_rw},
+    {policy: "readonly", keys: pool_data.access_keys_ro},
+    {policy: "writeonly", keys: pool_data.access_keys_wo},
+  ];
 
   pool_data.bucket_name = "";
   pool_data.bucket_policy = "none";

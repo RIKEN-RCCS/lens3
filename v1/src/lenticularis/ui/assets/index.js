@@ -8441,7 +8441,7 @@ function inject(key) {
     return provides[key];
   }
 }
-const _sfc_main$5 = {
+const _sfc_main$6 = {
   setup() {
     const theme = useTheme();
     return {
@@ -12231,7 +12231,7 @@ const VSwitch = genericComponent()({
     return {};
   }
 });
-function _sfc_render$3(_ctx, _cache, $props, $setup, $data, $options) {
+function _sfc_render$4(_ctx, _cache, $props, $setup, $data, $options) {
   return openBlock(), createBlock(VAppBar, { flat: "" }, {
     append: withCtx(() => [
       createVNode(VBtn, {
@@ -12271,8 +12271,8 @@ function _sfc_render$3(_ctx, _cache, $props, $setup, $data, $options) {
     _: 1
   });
 }
-const DefaultBar = /* @__PURE__ */ _export_sfc(_sfc_main$5, [["render", _sfc_render$3]]);
-const _sfc_main$4 = {
+const DefaultBar = /* @__PURE__ */ _export_sfc(_sfc_main$6, [["render", _sfc_render$4]]);
+const _sfc_main$5 = {
   //props: ["pool_data"],
   props: {
     pool_data: {
@@ -16512,7 +16512,7 @@ const VSelect = genericComponent()({
 });
 const _hoisted_1$2 = /* @__PURE__ */ createBaseVNode("div", { class: "text-h5 text-center" }, "Manage pool", -1);
 const _hoisted_2$2 = /* @__PURE__ */ createBaseVNode("div", { class: "text-h6" }, "New pool", -1);
-function _sfc_render$2(_ctx, _cache, $props, $setup, $data, $options) {
+function _sfc_render$3(_ctx, _cache, $props, $setup, $data, $options) {
   return openBlock(), createBlock(VContainer, { class: "fill-height" }, {
     default: withCtx(() => [
       createVNode(VResponsive, { class: "d-flex align-center text-center fill-height" }, {
@@ -16575,8 +16575,8 @@ function _sfc_render$2(_ctx, _cache, $props, $setup, $data, $options) {
     _: 1
   });
 }
-const PoolMake = /* @__PURE__ */ _export_sfc(_sfc_main$4, [["render", _sfc_render$2]]);
-const _sfc_main$3 = {
+const PoolMake = /* @__PURE__ */ _export_sfc(_sfc_main$5, [["render", _sfc_render$3]]);
+const _sfc_main$4 = {
   props: {
     pool_data: {
       type: Object,
@@ -17170,7 +17170,7 @@ const _hoisted_5$1 = /* @__PURE__ */ createBaseVNode("td", { class: "text-left" 
 const _hoisted_6$1 = /* @__PURE__ */ createBaseVNode("td", { class: "text-left" }, "minio_state", -1);
 const _hoisted_7$1 = /* @__PURE__ */ createBaseVNode("td", { class: "text-left" }, "minio_reason", -1);
 const _hoisted_8$1 = /* @__PURE__ */ createBaseVNode("td", { class: "text-left" }, "id", -1);
-function _sfc_render$1(_ctx, _cache, $props, $setup, $data, $options) {
+function _sfc_render$2(_ctx, _cache, $props, $setup, $data, $options) {
   return openBlock(), createBlock(VContainer, { class: "fill-height" }, {
     default: withCtx(() => [
       createVNode(VResponsive, { class: "d-flex align-center text-center fill-height" }, {
@@ -17306,8 +17306,8 @@ function _sfc_render$1(_ctx, _cache, $props, $setup, $data, $options) {
     _: 1
   });
 }
-const PoolList = /* @__PURE__ */ _export_sfc(_sfc_main$3, [["render", _sfc_render$1]]);
-const _sfc_main$2 = {
+const PoolList = /* @__PURE__ */ _export_sfc(_sfc_main$4, [["render", _sfc_render$2]]);
+const _sfc_main$3 = {
   props: {
     pool_data: {
       type: Object,
@@ -17375,7 +17375,7 @@ const _hoisted_9 = /* @__PURE__ */ createBaseVNode("thead", null, [
 const _hoisted_10 = ["onUpdate:modelValue"];
 const _hoisted_11 = ["onUpdate:modelValue"];
 const _hoisted_12 = ["onUpdate:modelValue"];
-function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {
+function _sfc_render$1(_ctx, _cache, $props, $setup, $data, $options) {
   return openBlock(), createBlock(VContainer, { class: "fill-height" }, {
     default: withCtx(() => [
       createVNode(VResponsive, { class: "d-flex align-center text-center fill-height" }, {
@@ -17601,7 +17601,168 @@ function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {
     _: 1
   });
 }
-const PoolEdit = /* @__PURE__ */ _export_sfc(_sfc_main$2, [["render", _sfc_render]]);
+const PoolEdit = /* @__PURE__ */ _export_sfc(_sfc_main$3, [["render", _sfc_render$1]]);
+const _sfc_main$2 = {
+  props: {
+    pool_data: {
+      type: Object,
+      default: () => ({})
+    }
+  },
+  data() {
+    return {};
+  }
+};
+const VDialog$1 = "";
+const VDialog = genericComponent()({
+  name: "VDialog",
+  props: {
+    fullscreen: Boolean,
+    retainFocus: {
+      type: Boolean,
+      default: true
+    },
+    scrollable: Boolean,
+    ...makeVOverlayProps({
+      origin: "center center",
+      scrollStrategy: "block",
+      transition: {
+        component: VDialogTransition
+      },
+      zIndex: 2400
+    })
+  },
+  emits: {
+    "update:modelValue": (value) => true
+  },
+  setup(props, _ref) {
+    let {
+      slots
+    } = _ref;
+    const isActive = useProxiedModel(props, "modelValue");
+    const {
+      scopeId
+    } = useScopeId();
+    const overlay = ref();
+    function onFocusin(e) {
+      var _a, _b;
+      const before = e.relatedTarget;
+      const after = e.target;
+      if (before !== after && ((_a = overlay.value) == null ? void 0 : _a.contentEl) && // We're the topmost dialog
+      ((_b = overlay.value) == null ? void 0 : _b.globalTop) && // It isn't the document or the dialog body
+      ![document, overlay.value.contentEl].includes(after) && // It isn't inside the dialog body
+      !overlay.value.contentEl.contains(after)) {
+        const focusable = focusableChildren(overlay.value.contentEl);
+        if (!focusable.length)
+          return;
+        const firstElement = focusable[0];
+        const lastElement = focusable[focusable.length - 1];
+        if (before === firstElement) {
+          lastElement.focus();
+        } else {
+          firstElement.focus();
+        }
+      }
+    }
+    if (IN_BROWSER) {
+      watch(() => isActive.value && props.retainFocus, (val) => {
+        val ? document.addEventListener("focusin", onFocusin) : document.removeEventListener("focusin", onFocusin);
+      }, {
+        immediate: true
+      });
+    }
+    watch(isActive, async (val) => {
+      var _a, _b;
+      await nextTick();
+      if (val) {
+        (_a = overlay.value.contentEl) == null ? void 0 : _a.focus({
+          preventScroll: true
+        });
+      } else {
+        (_b = overlay.value.activatorEl) == null ? void 0 : _b.focus({
+          preventScroll: true
+        });
+      }
+    });
+    const activatorProps = computed(() => mergeProps({
+      "aria-haspopup": "dialog",
+      "aria-expanded": String(isActive.value)
+    }, props.activatorProps));
+    useRender(() => {
+      const [overlayProps] = VOverlay.filterProps(props);
+      return createVNode(VOverlay, mergeProps({
+        "ref": overlay,
+        "class": ["v-dialog", {
+          "v-dialog--fullscreen": props.fullscreen,
+          "v-dialog--scrollable": props.scrollable
+        }, props.class],
+        "style": props.style
+      }, overlayProps, {
+        "modelValue": isActive.value,
+        "onUpdate:modelValue": ($event) => isActive.value = $event,
+        "aria-modal": "true",
+        "activatorProps": activatorProps.value,
+        "role": "dialog"
+      }, scopeId), {
+        activator: slots.activator,
+        default: function() {
+          for (var _len = arguments.length, args = new Array(_len), _key = 0; _key < _len; _key++) {
+            args[_key] = arguments[_key];
+          }
+          return createVNode(VDefaultsProvider, {
+            "root": true
+          }, {
+            default: () => {
+              var _a;
+              return [(_a = slots.default) == null ? void 0 : _a.call(slots, ...args)];
+            }
+          });
+        }
+      });
+    });
+    return forwardRefs({}, overlay);
+  }
+});
+function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {
+  return $props.pool_data.show_dialog ? (openBlock(), createBlock(VDialog, {
+    key: 0,
+    modelValue: $props.pool_data.dialog,
+    "onUpdate:modelValue": _cache[1] || (_cache[1] = ($event) => $props.pool_data.dialog = $event),
+    persistent: "",
+    width: "auto"
+  }, {
+    default: withCtx(() => [
+      createVNode(VCard, null, {
+        default: withCtx(() => [
+          createVNode(VCardText, null, {
+            default: withCtx(() => [
+              createTextVNode(" Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. ")
+            ]),
+            _: 1
+          }),
+          createVNode(VCardActions, null, {
+            default: withCtx(() => [
+              createVNode(VBtn, {
+                color: "primary",
+                block: "",
+                onClick: _cache[0] || (_cache[0] = ($event) => $props.pool_data.show_dialog = false)
+              }, {
+                default: withCtx(() => [
+                  createTextVNode("Close")
+                ]),
+                _: 1
+              })
+            ]),
+            _: 1
+          })
+        ]),
+        _: 1
+      })
+    ]),
+    _: 1
+  }, 8, ["modelValue"])) : createCommentVNode("", true);
+}
+const Alert = /* @__PURE__ */ _export_sfc(_sfc_main$2, [["render", _sfc_render]]);
 let csrf_token;
 const base_path = Function("return base_path_")();
 const pool_data_ = {
@@ -17634,6 +17795,8 @@ const pool_data_ = {
   //pool_name_visible: true,
   //pool_args_visible: false,
   //make_pool_mode: false,
+  dialog: "hello",
+  show_dialog: false,
   edit_pool(i) {
     const d = this.pool_list[i];
     const data = { "pool_desc": d };
@@ -17832,6 +17995,7 @@ function submit_request(msg, triple, process_response) {
     if (!response.ok) {
       response.json().then(
         (data) => {
+          pool_data.show_dialog = true;
           console.log("response-data: " + data);
           console.log(msg + " ... error: " + JSON.stringify(data));
           throw new Error(JSON.stringify(data));
@@ -17874,7 +18038,8 @@ const _sfc_main$1 = /* @__PURE__ */ defineComponent$1({
             createVNode(PoolEdit, { pool_data: unref(pool_data) }, null, 8, ["pool_data"])
           ]),
           _: 1
-        })
+        }),
+        createVNode(Alert, { pool_data: unref(pool_data) }, null, 8, ["pool_data"])
       ], 64);
     };
   }

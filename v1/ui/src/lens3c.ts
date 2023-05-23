@@ -49,6 +49,9 @@ const pool_data_ = {
   //pool_args_visible: false,
   //make_pool_mode: false,
 
+  dialog: "hello",
+  show_dialog: false,
+
   edit_pool(i : number) {
     const d = this.pool_list[i]
     const data = {"pool_desc": d};
@@ -259,6 +262,7 @@ function submit_request(msg : string, triple : any, process_response : (data :an
       if (!response.ok) {
         response.json().then(
           (data) => {
+            pool_data.show_dialog = true;
             console.log("response-data: " + data);
             console.log(msg + " ... error: " + JSON.stringify(data));
             throw new Error(JSON.stringify(data));

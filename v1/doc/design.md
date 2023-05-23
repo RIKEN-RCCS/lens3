@@ -231,9 +231,9 @@ old Lens3-Mux + MinIO pair.
 
 ## UI
 
-Lens3 UI is created by vuejs+vuetifyjs.  The code for Vuetify is in
-the "v1/ui" directory.  See the [ui/README.md](../ui/README.md) for
-building UI code.
+Lens3 UI is created by vuejs+vuetify.  The code for Vuetify is in the
+"v1/ui" directory.  See README.md in [ui](../ui/) for building UI
+code.
 
 ## Short Term TODO, or Deficiency
 

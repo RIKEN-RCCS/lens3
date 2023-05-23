@@ -1,29 +1,30 @@
 <template>
   <v-container class="fill-height">
-    <v-col>
+    <v-responsive class="d-flex align-center text-center fill-height">
 
-      <div class="text-h4 font-weight-bold text-center">New pool</div>
-      <div>
-        <span class="label">Buckets directory (absolute path): </span>
-        <input v-model="pool_data.buckets_directory" size="30" />
-      </div>
-      <div>
-        <span class="label">User: </span>
-        <input v-model="pool_data.user" size="30" disabled />
-      </div>
-      <div>
-        <span class="label">Group: </span>
-        <select v-model="pool_data.group" required>
-          <option v-for="(g, i) in pool_data.group_choices" v-bind:selected="i == 0">
-            {{g}}
-          </option>
-        </select>
-        <div>
-          <v-btn v-on:click="kick_make_pool" rounded="xl">Create</v-btn>
-        </div>
-      </div>
+      <div class="text-h5 text-center">New pool</div>
+      <v-card variant="outlined" class="ma-4">
+        <v-card-text>
+          A pool is a directory where S3 buckets are created. It is
+          associated to a MinIO instance. The first thing to do is
+          to create a new pool.
+        </v-card-text>
+      </v-card>
+      <v-text-field label="Buckets directory (absolute path)"
+                    v-model="pool_data.buckets_directory"
+                    class="ma-0" />
+      <v-text-field label="User"
+                    v-model="pool_data.user" disabled
+                    class="ma-0" />
+      <v-select label="Group"
+                variant="underlined"
+                v-model="pool_data.group" required
+                v-bind:items="pool_data.group_choices"
+                class="ma-0" />
+      <v-btn v-on:click="kick_make_pool" rounded="xl"
+             class="ma-1">Create</v-btn>
 
-    </v-col>
+    </v-responsive>
   </v-container>
 </template>
 

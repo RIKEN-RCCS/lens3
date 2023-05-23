@@ -22,7 +22,7 @@ const pool_data_ = {
 
   pool_list: [],
 
-  /* Entries for PoolView. */
+  /* Entries for PoolEdit. */
 
   buckets: [],
   access_keys: [],
@@ -219,11 +219,12 @@ function parse_time_z(s : string) {
 }
 
 function format_time_z(d : number) {
+  /* Returns a date string. */
   /* Returns a date+time string with milliseconds. */
   if (d == 0) {
     return 0;
   } else {
-    return new Date(d * 1000).toISOString();
+    return new Date(d * 1000).toISOString().substring(0, 10);
   }
 }
 

@@ -10,19 +10,20 @@
           to create a new pool.
         </v-card-text>
       </v-card>
-      <v-text-field label="Buckets directory (absolute path)"
-                    v-model="pool_data.buckets_directory"
-                    class="ma-0" />
-      <v-text-field label="User"
-                    v-model="pool_data.user" disabled
-                    class="ma-0" />
-      <v-select label="Group"
-                variant="underlined"
-                v-model="pool_data.group" required
-                v-bind:items="pool_data.group_choices"
-                class="ma-0" />
-      <v-btn v-on:click="kick_make_pool" rounded="xl"
-             class="ma-1">Create</v-btn>
+      <v-card class="pa-1 ma-4">
+        <div class="text-h6">New pool</div>
+        <v-text-field label="Buckets directory (absolute path)"
+                      v-model="pool_data.buckets_directory" />
+        <v-text-field label="User" cols="auto"
+                      v-model="pool_data.user" readonly />
+        <v-select label="Group" cols="auto"
+                  variant="underlined"
+                  v-model="pool_data.group" required
+                  v-bind:items="pool_data.group_choices" />
+        <v-btn v-on:click="kick_make_pool" rounded="xl">
+          Create
+        </v-btn>
+      </v-card>
 
     </v-responsive>
   </v-container>

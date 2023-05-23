@@ -47,8 +47,8 @@ instance, and the modifications will be reflected at the next start of
 a MinIO instance.  Moreover, modifications could be inconsistent.
 
 "lens3-admin" command should typically be run on the same host of
-Lens3-Api.  See a help by running
-"lens3-admin -c api-config.yaml help", for the list of commands.
+Lens3-Api.  See the help by running "lens3-admin -c conf.json help",
+for the list of commands.
 
 ## Design Assumptions
 

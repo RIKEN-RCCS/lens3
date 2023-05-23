@@ -7,42 +7,75 @@
           <v-card-text>Directory: {{pool_data.buckets_directory}}</v-card-text>
         </v-card>
 
-        <div class="text-h6">New bucket</div>
-        <v-text-field label="Bucket name"
-                      v-model="pool_data.bucket_name" />
-        <v-select label="Bucket policy for public access"
-                  variant="underlined"
-                  v-model="pool_data.bucket_policy" required
-                  v-bind:items="['none', 'public', 'upload', 'download']" />
-        <v-btn v-on:click="kick_make_bucket" rounded="xl"
-               class="ma-1">
-          Create
-        </v-btn>
+        <v-card class="pa-1 ma-4">
+          <div class="text-h6">New bucket</div>
+          <v-text-field label="Bucket name"
+                        v-model="pool_data.bucket_name" />
+          <v-select label="Bucket policy for public access"
+                    variant="underlined"
+                    v-model="pool_data.bucket_policy" required
+                    v-bind:items="['none', 'public', 'upload', 'download']" />
+          <v-btn v-on:click="kick_make_bucket" rounded="xl"
+                 class="ma-1">
+            Create
+          </v-btn>
+        </v-card>
 
         <div class="text-h6">Existing buckets</div>
-        <div v-for="b in pool_data.buckets">
-          <v-row>
-            <input v-model="b.name" size="30" disabled />
-            <input v-model="b.bkt_policy" size="10" disabled />
-            <v-btn v-on:click="kick_delete_bucket(b.name)" rounded="xl">
-              Delete
-            </v-btn>
-          </v-row>
-        </div>
+        <v-table density="compact">
+          <thead>
+            <tr>
+              <th class="text-left">Bucket</th>
+              <th class="text-left">Policy</th>
+              <th class="text-left">Delete</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="b in pool_data.buckets">
+              <td>
+                <input v-model="b.name" size="30" readonly />
+              </td>
+              <td>
+                <input v-model="b.bkt_policy" size="30" readonly />
+              </td>
+              <td>
+                <v-tooltip text="Delete a bucket">
+                  <template v-slot:activator="{props}">
+                    <v-btn icon="mdi-delete-forever" variant="plain"
+                           v-on:click="kick_delete_bucket(b.name)"
+                           v-bind="props" />
+                  </template>
+                </v-tooltip>
+              </td>
+            </tr>
+          </tbody>
+        </v-table>
 
-        <div class="text-h5">Edit access keys</div>
-        <v-row justify="center">
+        <v-card class="pa-1 ma-4">
+          <div class="text-h6">New access key</div>
+          <v-space />
           <v-text-field
             type="date"
+            v-bind:min="new Date().toISOString().substring(0, 10)"
             label="Expiration (00:00:00 UTC)"
             v-model="pool_data.key_expiration_time">
           </v-text-field>
-        </v-row>
+          <v-btn v-on:click="kick_make_secret('readwrite')" rounded="xl">
+            Create readwrite key
+          </v-btn>
+          &nbsp;
+          <v-btn v-on:click="kick_make_secret('readonly')" rounded="xl">
+            Create readonly key
+          </v-btn>
+          &nbsp;
+          <v-btn v-on:click="kick_make_secret('writeonly')" rounded="xl">
+            Create writeonly key
+          </v-btn>
+        </v-card>
 
         <div v-for="keyset in pool_data.access_key_set">
           <v-space class="ma-4" />
           <div class="text-h6">Access keys ({{keyset.policy}})</div>
-          <v-btn v-on:click="kick_make_secret(keyset.policy)" rounded="xl">Create key</v-btn>
           <v-table density="compact">
             <thead>
               <tr>
@@ -62,7 +95,7 @@
                              v-bind="props" />
                     </template>
                   </v-tooltip>
-                  <input v-model="k.access_key" size="22" disabled />
+                  <input v-model="k.access_key" size="22" readonly />
                 </td>
                 <td>
                   <v-tooltip text="Copy key to clipboard">
@@ -72,14 +105,19 @@
                              v-bind="props" />
                     </template>
                   </v-tooltip>
-                  <input v-model="k.secret_key" size="50" disabled />
+                  <input v-model="k.secret_key" size="50" readonly />
                 </td>
                 <td>
-                  <input type="date" v-model="k.expiration_time" disabled />
+                  <input v-model="k.expiration_time" size=10 readonly />
                 </td>
                 <td>
-                  <v-btn icon="mdi-delete-forever" variant="plain"
-                         v-on:click="kick_delete_secret(k.access_key)" />
+                  <v-tooltip text="Delete this key (not undoable)">
+                    <template v-slot:activator="{props}">
+                      <v-btn icon="mdi-delete-forever" variant="plain"
+                             v-on:click="kick_delete_secret(k.access_key)"
+                           v-bind="props" />
+                    </template>
+                  </v-tooltip>
                 </td>
               </tr>
             </tbody>

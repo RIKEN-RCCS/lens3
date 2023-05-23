@@ -57,7 +57,7 @@ def _make_app():
     _api = Control_Api(_api_conf, redis)
 
     _app = FastAPI()
-    # with open(os.path.join(_api.pkg_dir, "ui2", "setting.html")) as f:
+    # with open(os.path.join(_api.pkg_dir, "ui2", "index.html")) as f:
     #     parameters = ('<script type="text/javascript">const base_path_="'
     #                   + _api.base_path + '";</script>')
     #     _setting_html = f.read().replace("PLACE_BASE_PATH_SETTING_HERE", parameters)
@@ -218,23 +218,23 @@ async def app_get_ui(
     return response
 
 
-@_app.get("/ui2/setting.html")
+@_app.get("/ui2/index.html")
 async def app_get_ui(
         request : Request,
         x_remote_user : Union[str, None] = Header(default=None),
         x_real_ip : Union[str, None] = Header(default=None),
         x_traceid : Union[str, None] = Header(default=None)):
-    logger.debug(f"APP.GET /ui2/setting.html")
+    logger.debug(f"APP.GET /ui2/index.html")
     tracing.set(x_traceid)
     user_id = _api.map_claim_to_uid(x_remote_user)
     client = x_real_ip
-    response = _get_ui("ui2", "setting.html", client, user_id, request)
+    response = _get_ui("ui2", "index.html", client, user_id, request)
     return response
 
 
-# Note here it mounts static files after registering the specific
-# paths of "/ui/index.html" and "/ui2/setting.html" to take
-# precedence.
+# Note it mounts static files here after registering the specific
+# paths of "/ui/index.html" and "/ui2/index.html" to take precedence
+# over static ones.
 
 _app.mount("/ui",
            StaticFiles(directory=os.path.join(_api.pkg_dir, "ui")),

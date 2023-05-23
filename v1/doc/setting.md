@@ -350,9 +350,9 @@ running Lens3-Api.
 # cp /etc/lenticularis/conf.json /home/lens3/conf.json
 # chown lens3-admin /home/lens3/conf.json
 # su - lens3
-$ cd ~
-lens3$ cp $TOP/unit-file/api/api-conf.yaml api-conf.yaml
-lens3$ cp $TOP/unit-file/mux/mux-conf.yaml mux-conf.yaml
+lens3$ cd ~
+lens3$ cp $TOP/unit-file/api-conf.yaml api-conf.yaml
+lens3$ cp $TOP/unit-file/mux-conf.yaml mux-conf.yaml
 lens3$ vi api-conf.yaml
 lens3$ vi mux-conf.yaml
 ```

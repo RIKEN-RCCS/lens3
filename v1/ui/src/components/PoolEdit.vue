@@ -7,7 +7,7 @@
           <v-card-text>Directory: {{pool_data.buckets_directory}}</v-card-text>
         </v-card>
 
-        <v-card class="pa-1 ma-4">
+        <v-card class="pa-4 ma-4">
           <div class="text-h6">New bucket</div>
           <v-text-field label="Bucket name"
                         v-model="pool_data.bucket_name" />
@@ -21,7 +21,7 @@
           </v-btn>
         </v-card>
 
-        <div class="text-h6">Existing buckets</div>
+        <div class="text-h6">Buckets</div>
         <v-table density="compact">
           <thead>
             <tr>
@@ -51,9 +51,9 @@
           </tbody>
         </v-table>
 
-        <v-card class="pa-1 ma-4">
+        <v-spacer class="ma-4" />
+        <v-card class="pa-4 ma-4">
           <div class="text-h6">New access key</div>
-          <v-space />
           <v-text-field
             type="date"
             v-bind:min="new Date().toISOString().substring(0, 10)"
@@ -74,7 +74,6 @@
         </v-card>
 
         <div v-for="keyset in pool_data.access_key_set">
-          <v-space class="ma-4" />
           <div class="text-h6">Access keys ({{keyset.policy}})</div>
           <v-table density="compact">
             <thead>

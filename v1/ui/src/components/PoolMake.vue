@@ -2,7 +2,7 @@
   <v-container class="fill-height">
     <v-responsive class="d-flex align-center text-center fill-height">
 
-      <div class="text-h5 text-center">New pool</div>
+      <div class="text-h5 text-center">Manage pool</div>
       <v-card variant="outlined" class="ma-4">
         <v-card-text>
           A pool is a directory where S3 buckets are created. It is
@@ -10,7 +10,7 @@
           to create a new pool.
         </v-card-text>
       </v-card>
-      <v-card class="pa-1 ma-4">
+      <v-card class="pa-4 ma-4">
         <div class="text-h6">New pool</div>
         <v-text-field label="Buckets directory (absolute path)"
                       v-model="pool_data.buckets_directory" />

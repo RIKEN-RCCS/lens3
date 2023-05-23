@@ -1,6 +1,7 @@
 <template>
   <v-container class="fill-height">
     <v-responsive class="d-flex align-center text-center fill-height">
+      <v-sheet class="pa-3 ma-3" v-if="pool_data.pool_list.length">
       <div class="text-h5">Pool list</div>
       <v-card variant="outlined" class="pa-1 ma-4">
         <v-card-text>
@@ -70,6 +71,7 @@
           </v-slide-group-item>
         </v-slide-group>
       </v-col>
+      </v-sheet>
     </v-responsive>
   </v-container>
 </template>

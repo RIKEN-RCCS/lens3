@@ -4,7 +4,7 @@
     <v-main>
       <setting-view />
     </v-main>
-    <v-footer ></v-footer>
+    <v-footer class="bg-grey-lighten-1"> </v-footer>
   </v-app>
 </template>
 

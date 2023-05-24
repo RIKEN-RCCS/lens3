@@ -1,0 +1,7 @@
+{
+  "redis": {
+    "host": "localhost",
+    "port": 6378,
+    "password": "long-string-for-redis-password"
+  }
+}

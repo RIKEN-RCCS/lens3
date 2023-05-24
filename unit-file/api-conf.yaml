@@ -1,0 +1,33 @@
+subject: "api"
+version: "v1.2"
+aws_signature: "AWS4-HMAC-SHA256"
+
+gunicorn:
+    port: 8003
+    workers: 2
+    timeout: 120
+    reload: yes
+    access_logfile: "/var/tmp/lenticularis/lens3-gunicorn-api-access-log"
+    log_file: "/var/tmp/lenticularis/lens3-gunicorn-api-log"
+    log_level: debug
+    #log_syslog_facility: LOCAL8
+
+controller:
+    front_host: lens3.example.com
+    trusted_proxies:
+        - localhost
+    base_path: "/api"
+    claim_uid_map: email-name
+    probe_access_timeout: 60
+    minio_mc_timeout: 10
+    max_pool_expiry: 630720000
+    csrf_secret_key: xyzxyz
+
+minio:
+    minio: /home/lens3/bin/minio
+    mc: /home/lens3/bin/mc
+
+log_file: "/var/tmp/lenticularis/lens3-api-log"
+log_syslog:
+    facility: LOCAL7
+    priority: DEBUG

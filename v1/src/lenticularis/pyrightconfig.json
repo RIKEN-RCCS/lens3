@@ -1,0 +1,16 @@
+{
+  "useLibraryCodeForTypes": true,
+  "typeCheckingMode": "strict",
+  "reportUnknownVariableType": false,
+  "reportUnknownMemberType": false,
+  "reportUnknownParameterType": false,
+  "reportMissingParameterType": false,
+  "reportUntypedFunctionDecorator": false,
+  "reportUnknownArgumentType": false,
+  "reportMissingTypeStubs": false,
+  "reportUnknownLambdaType": false,
+
+  "reportUnusedImport": false,
+  "reportUnusedVariable": false,
+  "reportUnusedFunction": false
+}

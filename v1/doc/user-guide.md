@@ -2,38 +2,53 @@
 
 ## Quick Setup of Buckets
 
-Accessing the management Web-API site first shows the two buttons:
-"New bucket pool" and "Show bucket pools".  Click "New bucket pool".
+Accessing the Web UI first shows "New pool" section.  A _bucket-pool_
+or a pool is a directory to hold buckets.  Each pool corresponds to a
+single MinIO instance.  Buckets and access keys are associated to a
+pool.
 
-![Landing page](ug1.jpg)
+![Landing screenshot](ug1.jpg)
 
-The pool creation page is to create a _bucket pool_.  A bucket pool is
-a management unit in Lens3 and it is associated to a directory in the
-filesystem in which a MinIO will run.  Enter a directory (which needs
-to be writable) and click the "Create" button.
+The first step is creating a pool.  Fill a directory in a full path
+and select a unix group, them click "CREATE".  The directory needs to
+be writable to the user:group pair, of course.
 
-![Pool creation page](ug2.jpg)
+![Pool list screenshot](ug2.jpg)
 
-The pool edit page is to add buckets and access keys.  Click "Add" or
-"New" buttons.  A bucket has a bucket-policy that specifies a
-permission to public accesses: "none", "upload", "download", or
-"public".  A bucket with the "none"-policy is accessible only with
-access-keys.  These policy names are from MinIO.
+"Pool list" section shows a list of existing pools.  It is a slider
+list.  Select a pool by clicking an edit button (a pencil).  It opens
+a "Pool edit" section.  Or, delete a pool by clicking a delete button
+(a trash can).
 
-Each access-key has a key-policy: "readwrite", "readonly", or
-"writeonly".  Accesses to buckets/files are restricted by these
-policies.  These policy names are from MinIO.
+![Pool edit screenshot](ug3.jpg)
 
-Clicking "Show bucket pool" on the top moves to a pool list page which
-will display summaries of pools created.
+"Pool edit" section has two independent subsections -- one for buckets
+and the other for access keys.
 
-![Pool edit page](ug3.jpg)
+A bucket has a bucket-policy that specifies a permission to public
+access: "none", "upload", "download", or "public".  A bucket with the
+"none"-policy is accessible only with access-keys.  These policy names
+are taken from MinIO.
 
-The pool list page shows a list of pools.  Clicking "Edit" moves back
-to the page for addition of buckets and access keys.  Clicking "Delete"
-removes the pool.
+An access-key has a key-policy: "readwrite", "readonly", or
+"writeonly".  Accesses to buckets are restricted by these policies.
+These policy names are taken from MinIO.  An expiration date must be a
+future.  An expiration date is actually a time in second, but the UI
+only handles it by date at 00:00:00-UTC.
 
-![Pool list page](ug4.jpg)
+![Pool list screenshot](ug4.jpg)
+
+The last figure shows a screenshot after some operations.  It has one
+public bucket and two readwrite access keys.
+
+### Simple UI
+
+The current UI is created with
+[vuejs](https://vuejs.org/)+[vuetify](https://vuetifyjs.com/en/).  It
+is not good for your taste, try a simple UI.  The simple UI reveals
+interactions of Web API.  If you are currently accessing the UI by a
+URL ending with ".../ui/index.html", the simple UI is at
+".../ui2/index.html".
 
 ## S3 Client Access Example
 

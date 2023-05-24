@@ -470,7 +470,52 @@ $ aws --endpoint-url https://lens3.example.com s3 cp s3://bkt1/somefile1 -
 
 Note that Lens3 does not support listing of buckets by `aws s3 ls`.
 
-## Memo on Python Modules
+## Troubleshoot
 
-"FastAPI" uses "Starlette".  There are no direct uses of "Starlette"
-in the source code .
+### Early Troubles
+
+First check the systemd logs.  Diagnosing errors before a start of
+logging is tricky.
+
+A log of Lens3-Api may include a string "EXAMINE THE GUNICORN LOG",
+which indicates a Gunicorn process finishes by some reason.  Check the
+logs of gunicorn.
+
+### Examining MinIO Behavior
+
+It is a bit tricky when MinIO does not behave as expected.  In that
+case, it will help to connect to MinIO with "mc" command.  The
+necessary information to use "mc" command, especially ACCESSKEY and
+SECRETKEY, can be taken by "show-minio" command of "lens3-admin".  The
+command is only useful when a MinIO instance is running.
+
+```
+lens3-admin -c CONF show-minio POOLID
+```
+
+It displays the information under the keys "admin" and "password",
+where admin corresponds to ACCESSKEY and password to SECRETKEY.
+
+As an example, the following commands can be used to dump tracing logs
+from MinIO.
+
+```
+$ mc alias set ALIAS URL ACCESSKEY SECRETKEY
+$ mc admin trace ALIAS
+```
+
+### Clean Start for Messy Troubles
+
+Clear Redis databases.
+
+```
+$ export REDISCLI_AUTH=password
+$ redis-cli -p 6378 FLUSHALL
+$ redis-cli -p 6378 --scan --pattern '*'
+```
+
+### Running MinIO by Hand
+
+```
+$ minio server --anonymous --json --address :9001 /home/UUU/pool-directory
+```

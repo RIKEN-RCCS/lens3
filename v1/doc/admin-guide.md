@@ -123,30 +123,3 @@ at a shutdown of the lenticularis-mux service.  Please check a MinIO
 process without a manager process and kill it (which has sudo as the
 parent and the sudo's parent is the init), when the lenticularis-mux
 service is frequently started/stopped.
-
-## Troubleshoot
-
-### Early Troubles
-
-First check the systemd logs.  Diagnosing errors in reading
-configuration is a bit tricky.
-
-A log of Lens3-Api may include a string "EXAMINE THE GUNICORN LOG",
-which indicates a Gunicorn process finishes by some reason.  Check the
-logs.
-
-### Clean Start in Troubles
-
-Clear Redis databases.
-
-```
-$ export REDISCLI_AUTH=password
-$ redis-cli -p 6378 FLUSHALL
-$ redis-cli -p 6378 --scan --pattern '*'
-```
-
-### Running MinIO by Hand
-
-```
-$ minio server --anonymous --json --address :9001 /home/UUU/pool-directory
-```

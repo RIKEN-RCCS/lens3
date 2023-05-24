@@ -261,7 +261,7 @@ setting up the proxy.
 
 __Load balancing__: The "scheduler.py" file is not used in v1.2, which
 is for distributing the processes.  Lens3 now assumes accesses to
-Lens3-Mux is in itself balanced by a front-end reverse-proxy.
+Lens3-Mux is in itself balanced by a front-end proxy.
 
 __Removing buckets__: Lens3 does not remove buckets at all.  It just
 makes them inaccessible.  It is because MinIO's "mc rb" command
@@ -283,6 +283,8 @@ not interfere.
 
 __MinIO start delay__: Lens3 delays request handling on starting
 MinIO.  Alternatively, it can be returning 503 with a "Retry-After"
-http header.  NGINX (a reverse-proxy in front of Lens3) seems
-returning 502 on long delays.  See
-[rfc7231](https://httpwg.org/specs/rfc7231.htm).
+http header.  NGINX (a proxy in front of Lens3) seems to return 502 on
+long delays.  See [rfc7231](https://httpwg.org/specs/rfc7231.htm).
+
+__Python Modules__: "FastAPI" uses "Starlette".  There are no direct
+uses of "Starlette" in the source code.

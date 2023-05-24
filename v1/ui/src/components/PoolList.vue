@@ -45,7 +45,7 @@
                     <td>{{pool_data.pool_list[n]["minio_reason"]}}</td>
                   </tr>
                   <tr>
-                    <td class="text-left">id</td>
+                    <td class="text-left">internal-id</td>
                     <td>{{pool_data.pool_list[n]["pool_name"]}}</td>
                   </tr>
                 </tbody>

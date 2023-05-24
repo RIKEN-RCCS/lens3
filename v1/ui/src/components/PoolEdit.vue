@@ -21,7 +21,7 @@
           </v-btn>
         </v-card>
 
-        <div class="text-h6">Buckets</div>
+        <!-- <div class="text-h6">Buckets</div> -->
         <v-table density="compact">
           <thead>
             <tr>
@@ -74,11 +74,11 @@
         </v-card>
 
         <div v-for="keyset in pool_data.access_key_set">
-          <div class="text-h6">Access keys ({{keyset.policy}})</div>
+          <!-- <div class="text-h6">Access keys ({{keyset.policy}})</div> -->
           <v-table density="compact">
             <thead>
               <tr>
-                <th class="text-left">Access key</th>
+                <th class="text-left">Access key ({{keyset.policy}})</th>
                 <th class="text-left">Secret key</th>
                 <th class="text-left">Expiration</th>
                 <th class="text-left">Delete</th>
@@ -87,24 +87,24 @@
             <tbody>
               <tr v-for="k in keyset.keys">
                 <td>
-                  <v-tooltip text="Copy key to clipboard">
+                  <input v-model="k.access_key" size="22" readonly />
+                  <v-tooltip text="Copy access key to clipboard">
                     <template v-slot:activator="{props}">
                       <v-btn icon="mdi-clipboard-text" variant="plain"
                              v-on:click="kick_copy_to_clipboard(k.access_key)"
                              v-bind="props" />
                     </template>
                   </v-tooltip>
-                  <input v-model="k.access_key" size="22" readonly />
                 </td>
                 <td>
-                  <v-tooltip text="Copy key to clipboard">
+                  <input v-model="k.secret_key" size="50" readonly />
+                  <v-tooltip text="Copy secret key to clipboard">
                     <template v-slot:activator="{props}">
                       <v-btn icon="mdi-clipboard-text" variant="plain"
                              v-on:click="kick_copy_to_clipboard(k.secret_key)"
                              v-bind="props" />
                     </template>
                   </v-tooltip>
-                  <input v-model="k.secret_key" size="50" readonly />
                 </td>
                 <td>
                   <input v-model="k.expiration_time" size=10 readonly />

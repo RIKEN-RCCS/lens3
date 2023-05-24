@@ -12249,7 +12249,7 @@ function _sfc_render$4(_ctx, _cache, $props, $setup, $data, $options) {
       createVNode(VAppBarTitle, null, {
         default: withCtx(() => [
           createVNode(VIcon, { icon: "mdi-cog" }),
-          createTextVNode(" Lens3 Manage Pools ")
+          createTextVNode(" Lens3 Pool Manager ")
         ]),
         _: 1
       }),
@@ -17169,7 +17169,7 @@ const _hoisted_4$1 = /* @__PURE__ */ createBaseVNode("td", { class: "text-left" 
 const _hoisted_5$1 = /* @__PURE__ */ createBaseVNode("td", { class: "text-left" }, "enabled?", -1);
 const _hoisted_6$1 = /* @__PURE__ */ createBaseVNode("td", { class: "text-left" }, "minio_state", -1);
 const _hoisted_7$1 = /* @__PURE__ */ createBaseVNode("td", { class: "text-left" }, "minio_reason", -1);
-const _hoisted_8$1 = /* @__PURE__ */ createBaseVNode("td", { class: "text-left" }, "id", -1);
+const _hoisted_8$1 = /* @__PURE__ */ createBaseVNode("td", { class: "text-left" }, "internal-id", -1);
 function _sfc_render$2(_ctx, _cache, $props, $setup, $data, $options) {
   return openBlock(), createBlock(VContainer, { class: "fill-height" }, {
     default: withCtx(() => [
@@ -17352,29 +17352,23 @@ const _sfc_main$3 = {
 };
 const _hoisted_1 = /* @__PURE__ */ createBaseVNode("div", { class: "text-h5" }, "Edit pool", -1);
 const _hoisted_2 = /* @__PURE__ */ createBaseVNode("div", { class: "text-h6" }, "New bucket", -1);
-const _hoisted_3 = /* @__PURE__ */ createBaseVNode("div", { class: "text-h6" }, "Buckets", -1);
-const _hoisted_4 = /* @__PURE__ */ createBaseVNode("thead", null, [
+const _hoisted_3 = /* @__PURE__ */ createBaseVNode("thead", null, [
   /* @__PURE__ */ createBaseVNode("tr", null, [
     /* @__PURE__ */ createBaseVNode("th", { class: "text-left" }, "Bucket"),
     /* @__PURE__ */ createBaseVNode("th", { class: "text-left" }, "Policy"),
     /* @__PURE__ */ createBaseVNode("th", { class: "text-left" }, "Delete")
   ])
 ], -1);
+const _hoisted_4 = ["onUpdate:modelValue"];
 const _hoisted_5 = ["onUpdate:modelValue"];
-const _hoisted_6 = ["onUpdate:modelValue"];
-const _hoisted_7 = /* @__PURE__ */ createBaseVNode("div", { class: "text-h6" }, "New access key", -1);
-const _hoisted_8 = { class: "text-h6" };
-const _hoisted_9 = /* @__PURE__ */ createBaseVNode("thead", null, [
-  /* @__PURE__ */ createBaseVNode("tr", null, [
-    /* @__PURE__ */ createBaseVNode("th", { class: "text-left" }, "Access key"),
-    /* @__PURE__ */ createBaseVNode("th", { class: "text-left" }, "Secret key"),
-    /* @__PURE__ */ createBaseVNode("th", { class: "text-left" }, "Expiration"),
-    /* @__PURE__ */ createBaseVNode("th", { class: "text-left" }, "Delete")
-  ])
-], -1);
-const _hoisted_10 = ["onUpdate:modelValue"];
+const _hoisted_6 = /* @__PURE__ */ createBaseVNode("div", { class: "text-h6" }, "New access key", -1);
+const _hoisted_7 = { class: "text-left" };
+const _hoisted_8 = /* @__PURE__ */ createBaseVNode("th", { class: "text-left" }, "Secret key", -1);
+const _hoisted_9 = /* @__PURE__ */ createBaseVNode("th", { class: "text-left" }, "Expiration", -1);
+const _hoisted_10 = /* @__PURE__ */ createBaseVNode("th", { class: "text-left" }, "Delete", -1);
 const _hoisted_11 = ["onUpdate:modelValue"];
 const _hoisted_12 = ["onUpdate:modelValue"];
+const _hoisted_13 = ["onUpdate:modelValue"];
 function _sfc_render$1(_ctx, _cache, $props, $setup, $data, $options) {
   return openBlock(), createBlock(VContainer, { class: "fill-height" }, {
     default: withCtx(() => [
@@ -17429,10 +17423,9 @@ function _sfc_render$1(_ctx, _cache, $props, $setup, $data, $options) {
                 ]),
                 _: 1
               }),
-              _hoisted_3,
               createVNode(VTable, { density: "compact" }, {
                 default: withCtx(() => [
-                  _hoisted_4,
+                  _hoisted_3,
                   createBaseVNode("tbody", null, [
                     (openBlock(true), createElementBlock(Fragment, null, renderList($props.pool_data.buckets, (b) => {
                       return openBlock(), createElementBlock("tr", null, [
@@ -17441,7 +17434,7 @@ function _sfc_render$1(_ctx, _cache, $props, $setup, $data, $options) {
                             "onUpdate:modelValue": ($event) => b.name = $event,
                             size: "30",
                             readonly: ""
-                          }, null, 8, _hoisted_5), [
+                          }, null, 8, _hoisted_4), [
                             [vModelText, b.name]
                           ])
                         ]),
@@ -17450,7 +17443,7 @@ function _sfc_render$1(_ctx, _cache, $props, $setup, $data, $options) {
                             "onUpdate:modelValue": ($event) => b.bkt_policy = $event,
                             size: "30",
                             readonly: ""
-                          }, null, 8, _hoisted_6), [
+                          }, null, 8, _hoisted_5), [
                             [vModelText, b.bkt_policy]
                           ])
                         ]),
@@ -17475,7 +17468,7 @@ function _sfc_render$1(_ctx, _cache, $props, $setup, $data, $options) {
               createVNode(VSpacer, { class: "ma-4" }),
               createVNode(VCard, { class: "pa-4 ma-4" }, {
                 default: withCtx(() => [
-                  _hoisted_7,
+                  _hoisted_6,
                   createVNode(VTextField, {
                     type: "date",
                     min: (/* @__PURE__ */ new Date()).toISOString().substring(0, 10),
@@ -17517,15 +17510,28 @@ function _sfc_render$1(_ctx, _cache, $props, $setup, $data, $options) {
               }),
               (openBlock(true), createElementBlock(Fragment, null, renderList($props.pool_data.access_key_set, (keyset) => {
                 return openBlock(), createElementBlock("div", null, [
-                  createBaseVNode("div", _hoisted_8, "Access keys (" + toDisplayString(keyset.policy) + ")", 1),
                   createVNode(VTable, { density: "compact" }, {
                     default: withCtx(() => [
-                      _hoisted_9,
+                      createBaseVNode("thead", null, [
+                        createBaseVNode("tr", null, [
+                          createBaseVNode("th", _hoisted_7, "Access key (" + toDisplayString(keyset.policy) + ")", 1),
+                          _hoisted_8,
+                          _hoisted_9,
+                          _hoisted_10
+                        ])
+                      ]),
                       createBaseVNode("tbody", null, [
                         (openBlock(true), createElementBlock(Fragment, null, renderList(keyset.keys, (k) => {
                           return openBlock(), createElementBlock("tr", null, [
                             createBaseVNode("td", null, [
-                              createVNode(VTooltip, { text: "Copy key to clipboard" }, {
+                              withDirectives(createBaseVNode("input", {
+                                "onUpdate:modelValue": ($event) => k.access_key = $event,
+                                size: "22",
+                                readonly: ""
+                              }, null, 8, _hoisted_11), [
+                                [vModelText, k.access_key]
+                              ]),
+                              createVNode(VTooltip, { text: "Copy access key to clipboard" }, {
                                 activator: withCtx(({ props }) => [
                                   createVNode(VBtn, mergeProps({
                                     icon: "mdi-clipboard-text",
@@ -17534,17 +17540,17 @@ function _sfc_render$1(_ctx, _cache, $props, $setup, $data, $options) {
                                   }, props), null, 16, ["onClick"])
                                 ]),
                                 _: 2
-                              }, 1024),
-                              withDirectives(createBaseVNode("input", {
-                                "onUpdate:modelValue": ($event) => k.access_key = $event,
-                                size: "22",
-                                readonly: ""
-                              }, null, 8, _hoisted_10), [
-                                [vModelText, k.access_key]
-                              ])
+                              }, 1024)
                             ]),
                             createBaseVNode("td", null, [
-                              createVNode(VTooltip, { text: "Copy key to clipboard" }, {
+                              withDirectives(createBaseVNode("input", {
+                                "onUpdate:modelValue": ($event) => k.secret_key = $event,
+                                size: "50",
+                                readonly: ""
+                              }, null, 8, _hoisted_12), [
+                                [vModelText, k.secret_key]
+                              ]),
+                              createVNode(VTooltip, { text: "Copy secret key to clipboard" }, {
                                 activator: withCtx(({ props }) => [
                                   createVNode(VBtn, mergeProps({
                                     icon: "mdi-clipboard-text",
@@ -17553,21 +17559,14 @@ function _sfc_render$1(_ctx, _cache, $props, $setup, $data, $options) {
                                   }, props), null, 16, ["onClick"])
                                 ]),
                                 _: 2
-                              }, 1024),
-                              withDirectives(createBaseVNode("input", {
-                                "onUpdate:modelValue": ($event) => k.secret_key = $event,
-                                size: "50",
-                                readonly: ""
-                              }, null, 8, _hoisted_11), [
-                                [vModelText, k.secret_key]
-                              ])
+                              }, 1024)
                             ]),
                             createBaseVNode("td", null, [
                               withDirectives(createBaseVNode("input", {
                                 "onUpdate:modelValue": ($event) => k.expiration_time = $event,
                                 size: "10",
                                 readonly: ""
-                              }, null, 8, _hoisted_12), [
+                              }, null, 8, _hoisted_13), [
                                 [vModelText, k.expiration_time]
                               ])
                             ]),
@@ -17724,28 +17723,22 @@ const VDialog = genericComponent()({
   }
 });
 function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {
-  return $props.pool_data.show_dialog ? (openBlock(), createBlock(VDialog, {
+  return $props.pool_data.dialog_show ? (openBlock(), createBlock(VDialog, {
     key: 0,
-    modelValue: $props.pool_data.dialog,
-    "onUpdate:modelValue": _cache[1] || (_cache[1] = ($event) => $props.pool_data.dialog = $event),
-    persistent: "",
+    modelValue: $props.pool_data.dialog_text,
+    "onUpdate:modelValue": _cache[1] || (_cache[1] = ($event) => $props.pool_data.dialog_text = $event),
     width: "auto"
   }, {
     default: withCtx(() => [
-      createVNode(VCard, null, {
+      createVNode(VCard, {
+        text: $props.pool_data.dialog_text
+      }, {
         default: withCtx(() => [
-          createVNode(VCardText, null, {
-            default: withCtx(() => [
-              createTextVNode(" Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. ")
-            ]),
-            _: 1
-          }),
           createVNode(VCardActions, null, {
             default: withCtx(() => [
               createVNode(VBtn, {
-                color: "primary",
                 block: "",
-                onClick: _cache[0] || (_cache[0] = ($event) => $props.pool_data.show_dialog = false)
+                onClick: _cache[0] || (_cache[0] = ($event) => $props.pool_data.dialog_show = false)
               }, {
                 default: withCtx(() => [
                   createTextVNode("Close")
@@ -17757,7 +17750,7 @@ function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {
           })
         ]),
         _: 1
-      })
+      }, 8, ["text"])
     ]),
     _: 1
   }, 8, ["modelValue"])) : createCommentVNode("", true);
@@ -17795,8 +17788,8 @@ const pool_data_ = {
   //pool_name_visible: true,
   //pool_args_visible: false,
   //make_pool_mode: false,
-  dialog: "hello",
-  show_dialog: false,
+  dialog_text: "",
+  dialog_show: false,
   edit_pool(i) {
     const d = this.pool_list[i];
     const data = { "pool_desc": d };
@@ -17807,14 +17800,14 @@ const pool_data_ = {
     const path = base_path + "/user-info";
     const body = null;
     const triple = { method, path, body };
-    submit_request("get_user_info", triple, set_user_info_data);
+    submit_request("Get user-info", triple, set_user_info_data);
   },
   api_list_pools() {
     const method = "GET";
     const path = base_path + "/pool";
     const body = null;
     const triple = { method, path, body };
-    return submit_request("list_pools", triple, set_pool_list);
+    return submit_request("List pools", triple, set_pool_list);
   },
   api_make_pool() {
     console.log("make_pool: this=" + this);
@@ -17831,7 +17824,7 @@ const pool_data_ = {
     const body = JSON.stringify(args);
     const triple = { method, path, body };
     return submit_request(
-      "make_pool",
+      "Make pool",
       triple,
       (data) => {
         this.api_list_pools();
@@ -17846,7 +17839,7 @@ const pool_data_ = {
     const body = JSON.stringify(args);
     const triple = { method, path, body };
     return submit_request(
-      "delete_pool",
+      "Delete pool",
       triple,
       (data) => {
         this.api_list_pools();
@@ -17864,17 +17857,16 @@ const pool_data_ = {
     };
     const body = JSON.stringify(args);
     const triple = { method, path, body };
-    return submit_request("make_bucket", triple, set_pool_data);
+    return submit_request("Make bucket", triple, set_pool_data);
   },
   api_delete_bucket(pool, name) {
-    const msg = "delete_bucket";
     console.log("delete_bucket: name=" + name);
     const method = "DELETE";
     const path = base_path + "/pool/" + pool_data.pool_name + "/bucket/" + name;
     const args = { "CSRF-Token": csrf_token };
     const body = JSON.stringify(args);
     const triple = { method, path, body };
-    return submit_request(msg, triple, set_pool_data);
+    return submit_request("Delete bucket", triple, set_pool_data);
   },
   api_make_secret(pool, rw) {
     console.log("make_secret: " + rw);
@@ -17888,17 +17880,16 @@ const pool_data_ = {
     };
     const body = JSON.stringify(args);
     const triple = { method, path, body };
-    return submit_request("make_secret", triple, set_pool_data);
+    return submit_request("Make secret", triple, set_pool_data);
   },
   api_delete_secret(pool, key) {
-    const msg = "delete_secret";
     console.log("delete_secret: " + key);
     const method = "DELETE";
     const path = base_path + "/pool/" + pool_data.pool_name + "/secret/" + key;
     const args = { "CSRF-Token": csrf_token };
     const body = JSON.stringify(args);
     const triple = { method, path, body };
-    return submit_request(msg, triple, set_pool_data);
+    return submit_request("Delete secret", triple, set_pool_data);
   }
 };
 const pool_data = reactive(pool_data_);
@@ -17974,8 +17965,8 @@ function format_time_z(d) {
     return new Date(d * 1e3).toISOString().substring(0, 10);
   }
 }
-function submit_request(msg, triple, process_response) {
-  console.log(msg + " ...");
+function submit_request(op_name, triple, process_response) {
+  console.log(op_name + " ...");
   const method = triple.method;
   const path = triple.path;
   const body = triple.body;
@@ -17995,16 +17986,18 @@ function submit_request(msg, triple, process_response) {
     if (!response.ok) {
       response.json().then(
         (data) => {
-          pool_data.show_dialog = true;
           console.log("response-data: " + data);
-          console.log(msg + " ... error: " + JSON.stringify(data));
+          console.log(op_name + " ... error: " + JSON.stringify(data));
+          const slots = (({ status, reason }) => ({ status, reason }))(data);
+          pool_data.dialog_text = op_name + " failed: " + JSON.stringify(slots);
+          pool_data.dialog_show = true;
           throw new Error(JSON.stringify(data));
         }
       );
     } else {
       response.json().then(
         (data) => {
-          console.log(msg + " ... done: " + JSON.stringify(data));
+          console.log(op_name + " ... done: " + JSON.stringify(data));
           if (data["CSRF-Token"] != null) {
             csrf_token = data["CSRF-Token"];
           }

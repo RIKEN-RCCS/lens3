@@ -1,7 +1,10 @@
-/* Lens3 Client */
+/* Lens3 UI Client */
 
 /* Copyright (c) 2022-2023 RIKEN R-CCS */
 /* SPDX-License-Identifier: BSD-2-Clause */
+
+/* This provides a simple client code for Lens3.  It instantiates and
+ * exports a "pool_data" as a Vue reactive data. */
 
 import {reactive, computed} from "vue";
 
@@ -49,8 +52,8 @@ const pool_data_ = {
   //pool_args_visible: false,
   //make_pool_mode: false,
 
-  dialog: "hello",
-  show_dialog: false,
+  dialog_text: "",
+  dialog_show: false,
 
   edit_pool(i : number) {
     const d = this.pool_list[i]
@@ -63,7 +66,7 @@ const pool_data_ = {
     const path = (base_path + "/user-info");
     const body = null;
     const triple = {method, path, body};
-    submit_request("get_user_info", triple, set_user_info_data);
+    submit_request("Get user-info", triple, set_user_info_data);
   },
 
   api_list_pools() {
@@ -71,7 +74,7 @@ const pool_data_ = {
     const path = (base_path + "/pool");
     const body = null;
     const triple = {method, path, body};
-    return submit_request("list_pools", triple, set_pool_list);
+    return submit_request("List pools", triple, set_pool_list);
   },
 
   api_make_pool() {
@@ -86,7 +89,7 @@ const pool_data_ = {
                   "CSRF-Token": csrf_token};
     const body = JSON.stringify(args);
     const triple = {method, path, body};
-    return submit_request("make_pool", triple, 
+    return submit_request("Make pool", triple,
                           (data) => {this.api_list_pools();});
   },
 
@@ -97,7 +100,7 @@ const pool_data_ = {
     const args = {"CSRF-Token": csrf_token};
     const body = JSON.stringify(args);
     const triple = {method, path, body};
-    return submit_request("delete_pool", triple,
+    return submit_request("Delete pool", triple,
                           (data) => {this.api_list_pools();});
   },
 
@@ -110,11 +113,10 @@ const pool_data_ = {
                   "CSRF-Token": csrf_token};
     const body = JSON.stringify(args);
     const triple = {method, path, body};
-    return submit_request("make_bucket", triple, set_pool_data);
+    return submit_request("Make bucket", triple, set_pool_data);
   },
 
   api_delete_bucket(pool : string, name : string) {
-    const msg = "delete_bucket";
     console.log("delete_bucket: name=" + name);
     const method = "DELETE";
     const path = (base_path + "/pool/" + pool_data.pool_name
@@ -122,7 +124,7 @@ const pool_data_ = {
     const args = {"CSRF-Token": csrf_token};
     const body = JSON.stringify(args);
     const triple = {method, path, body};
-    return submit_request(msg, triple, set_pool_data);
+    return submit_request("Delete bucket", triple, set_pool_data);
   },
 
   api_make_secret(pool : string, rw : string) {
@@ -136,11 +138,10 @@ const pool_data_ = {
                   "CSRF-Token": csrf_token};
     const body = JSON.stringify(args);
     const triple = {method, path, body};
-    return submit_request("make_secret", triple, set_pool_data);
+    return submit_request("Make secret", triple, set_pool_data);
   },
 
   api_delete_secret(pool : string, key : string) {
-    const msg = "delete_secret";
     console.log("delete_secret: " + key);
     const method = "DELETE";
     const path = (base_path + "/pool/" + pool_data.pool_name
@@ -148,7 +149,7 @@ const pool_data_ = {
     const args = {"CSRF-Token": csrf_token};
     const body = JSON.stringify(args);
     const triple = {method, path, body};
-    return submit_request(msg, triple, set_pool_data);
+    return submit_request("Delete secret", triple, set_pool_data);
   },
 
 };
@@ -237,8 +238,8 @@ function format_time_z(d : number) {
   }
 }
 
-function submit_request(msg : string, triple : any, process_response : (data :any) => void) {
-  console.log(msg + " ...");
+function submit_request(op_name : string, triple : any, process_response : (data :any) => void) {
+  console.log(op_name + " ...");
 
   const method : string = triple.method;
   const path = triple.path;
@@ -262,15 +263,18 @@ function submit_request(msg : string, triple : any, process_response : (data :an
       if (!response.ok) {
         response.json().then(
           (data) => {
-            pool_data.show_dialog = true;
             console.log("response-data: " + data);
-            console.log(msg + " ... error: " + JSON.stringify(data));
+            console.log(op_name + " ... error: " + JSON.stringify(data));
+            const slots = (({status, reason}) => ({status, reason}))(data);
+            pool_data.dialog_text = (op_name + " failed: "
+                                     + JSON.stringify(slots));
+            pool_data.dialog_show = true;
             throw new Error(JSON.stringify(data));
           })
       } else {
         response.json().then(
           (data) => {
-            console.log(msg + " ... done: " + JSON.stringify(data));
+            console.log(op_name + " ... done: " + JSON.stringify(data));
             if (data["CSRF-Token"] != null) {
               csrf_token = data["CSRF-Token"];
             }

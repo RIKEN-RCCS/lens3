@@ -5,7 +5,7 @@
     </v-app-bar-nav-icon>
     <v-app-bar-title>
       <v-icon icon="mdi-cog" />
-      Lens3 Manage Pools
+      Lens3 Pool Manager
     </v-app-bar-title>
     <v-spacer></v-spacer>
     <v-toolbar-items>

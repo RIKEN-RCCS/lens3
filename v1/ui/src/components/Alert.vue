@@ -1,15 +1,11 @@
 <template>
   <v-dialog
-    v-model="pool_data.dialog"
-    persistent
-    v-if="pool_data.show_dialog"
+    v-model="pool_data.dialog_text"
+    v-if="pool_data.dialog_show"
     width="auto" >
-    <v-card>
-      <v-card-text>
-        Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
-      </v-card-text>
+    <v-card v-bind:text="pool_data.dialog_text">
       <v-card-actions>
-        <v-btn color="primary" block @click="pool_data.show_dialog=false">Close</v-btn>
+        <v-btn block @click="pool_data.dialog_show=false">Close</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>

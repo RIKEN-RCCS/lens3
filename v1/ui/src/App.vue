@@ -10,6 +10,5 @@
 
 <script lang="ts" setup>
   import DefaultBar from './layouts/default/AppBar.vue'
-  //import DefaultView from './layouts/default/View.vue'
   import SettingView from './views/Setting.vue'
 </script>

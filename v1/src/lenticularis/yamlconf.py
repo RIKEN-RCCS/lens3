@@ -201,6 +201,7 @@ def _api_conf_schema():
             "minio_mc_timeout": {"type": "number"},
             "max_pool_expiry": {"type": "number"},
             "csrf_secret_key": {"type": "string"},
+            "s3_url_for_help": {"type": "string"},
         },
         "required": [
             "front_host",

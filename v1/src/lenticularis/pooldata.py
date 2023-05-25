@@ -309,7 +309,8 @@ def check_bucket_naming(name):
             and
             re.fullmatch(
                 ("^[0-9.]*$|^.*-$"
-                 "|^xn--.*$|^.*-s3alias$|^aws$|^amazon$"
+                 "|^xn--.*$"
+                 "|^.*-s3alias$|^.*--ol-s3$|^aws$|^amazon$"
                  "|^minio$|^goog.*$|^g00g.*$"),
                 name) is None)
 

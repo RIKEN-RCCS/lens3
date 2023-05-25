@@ -353,8 +353,7 @@ class Multiplexer():
         # ?client_addr = x_real_ip if x_real_ip else peer_addr
         # x_forwarded_for = environ.get("HTTP_X_FORWARDED_FOR")
         # x_forwarded_host = environ.get("HTTP_X_FORWARDED_HOST")
-        host_ = environ.get("HTTP_HOST")
-        host_ = host_ if host_ else "-"
+        host_ = environ.get("HTTP_HOST") or "-"
 
         assert request_proto is not None
         assert request_method is not None

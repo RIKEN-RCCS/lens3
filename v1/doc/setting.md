@@ -138,18 +138,31 @@ It is highly site dependent.
 ### Required Headers
 
 Lens3-Api requires {"X-Remote-User"}, which holds an authenticated
-user claim.  Lens3-Api trusts the "X-Remote-User" header passed by a
-proxy.  Make sure the header is properly prepared by a proxy and not
-faked.
+user claim.  Lens3-Api trusts the "X-Remote-User" header passed by the
+proxy.  Make sure the header is properly prepared by the proxy.
 
-The following headers are passed to the Lens3-Mux and Lens3-Api by a
+The following headers are passed to the Lens3-Mux and Lens3-Api by the
 proxy.  Lens3-Mux requires {"Host", "X-Forwarded-For",
 "X-Forwarded-Host", "X-Forwarded-Server", "X-Forwarded-Proto",
 "X-Real-IP"}.  "Connection" (for keep-alive) is forced unset for
 Lens3-Mux.  These are all practically standard headers.
 
 Note {"X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Server"} are
-implicitly set by an Apache proxy.
+implicitly set by Apache proxy.
+
+### Proxy Path Choices (A Pitfall)
+
+A path, "location" or "proxypass", should be "/" for Mux, because a
+path cannot be specified for S3 service.  Thus, if Mux and Api are
+co-hosted, the Mux path should be "/" and the Api path should be
+something like "/api~/" that is not a legitimate name for buckets.  We
+will use "/api~/" in the following.
+
+See a note on a setup of MinIO with a proxy, saying: "The S3 API
+signature calculation algorithm does not support proxy schemes ... on
+a subpath" (at the bottom of the page in) [Configure NGINX Proxy for
+MinIO
+Server](https://min.io/docs/minio/linux/integrations/setup-nginx-proxy-with-minio.html)
 
 ### Proxy by NGINX
 
@@ -253,11 +266,11 @@ Install Apache.
 Hints for setting: Since a proxy forwards directory accesses to
 Lens3-Api, a trailing slash is necessary (in both the pattern part and
 the URL part as noted in the Apache documents).  As a result, accesses
-by `https://lens3.exmaple.com/api` (without a slash) will fail.
+by `https://lens3.exmaple.com/api~` (without a slash) will fail.
 
 ```
-ProxyPass /api/ http://localhost:8003/
-ProxyPassReverse /api/ http://localhost:8003/
+ProxyPass /api~/ http://localhost:8003/
+ProxyPassReverse /api~/ http://localhost:8003/
 ```
 
 There is a good tutorial for setting Apache with Keyclock --
@@ -295,7 +308,7 @@ Note: Starting Redis will fail when the file owner of
 # systemctl start lenticularis-redis
 ```
 
-* Copy and edit a Lens3 configuration file.  It shoul hold a Redis
+* Copy and edit a Lens3 configuration file.  It holds a Redis
   connection information.
 
 ```
@@ -445,8 +458,8 @@ lens3$ lens3-admin -c conf.json show-muxs
 
 ## Test Accesses
 
-* Access the website by a browser
-  * `http://webui.lens3.example.com/`
+* Access the website by a browser (URL depends on the proxy setting)
+  * `http://lens3.example.com/api~/`
 
 * Access buckets from S3 client
     * Copy the access keys created above
@@ -464,8 +477,8 @@ $ vi $HOME/.aws/credentials
 aws_access_key_id = zHb9uscWUDgcJ9ZdYzr6
 aws_secret_access_key = uDUHMYKSmbqyqB1MGYN57CWMC8eXNHwUL4pcNwROu3xWgpsO
 
-$ aws --endpoint-url https://lens3.example.com s3 ls s3://bkt1
-$ aws --endpoint-url https://lens3.example.com s3 cp s3://bkt1/somefile1 -
+$ aws --endpoint-url https://lens3.example.com/ s3 ls s3://bkt1
+$ aws --endpoint-url https://lens3.example.com/ s3 cp s3://bkt1/somefile1 -
 ```
 
 Note that Lens3 does not support listing of buckets by `aws s3 ls`.
@@ -479,7 +492,7 @@ logging is tricky.
 
 A log of Lens3-Api may include a string "EXAMINE THE GUNICORN LOG",
 which indicates a Gunicorn process finishes by some reason.  Check the
-logs of gunicorn.
+logs of Gunicorn.
 
 ### Examining MinIO Behavior
 
@@ -490,18 +503,21 @@ SECRETKEY, can be taken by "show-minio" command of "lens3-admin".  The
 command is only useful when a MinIO instance is running.
 
 ```
-lens3-admin -c CONF show-minio POOLID
+lens3$ lens3-admin -c conf.json show-minio POOLID
+lens3$ lens3-admin -c conf.json access-mux POOLID
 ```
 
-It displays the information under the keys "admin" and "password",
-where admin corresponds to ACCESSKEY and password to SECRETKEY.
+Running "show-minio" displays the information under the keys "admin"
+and "password", where admin corresponds to ACCESSKEY and password to
+SECRETKEY.  Running "access-mux" periodically keeps the MinIO instance
+alive, otherwise it will stop after a while.
 
 As an example, the following commands can be used to dump tracing logs
 from MinIO.
 
 ```
-$ mc alias set ALIAS URL ACCESSKEY SECRETKEY
-$ mc admin trace ALIAS
+lens3$ mc alias set ALIAS URL ACCESSKEY SECRETKEY
+lens3$ mc admin trace -v ALIAS
 ```
 
 ### Clean Start for Messy Troubles

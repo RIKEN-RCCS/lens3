@@ -82,12 +82,12 @@ Install MinIO binaries minio and mc from min.io.
 
 ```
 # su - lens3
-$ cd ~
-$ mkdir bin
-$ curl https://dl.min.io/server/minio/release/linux-amd64/minio -o /tmp/minio
-$ install -m 755 -c /tmp/minio ~/bin/minio
-$ curl https://dl.min.io/client/mc/release/linux-amd64/mc -o /tmp/mc
-# install -m 755 -c /tmp/mc ~/bin/mc
+lens3$ cd ~
+lens3$ mkdir bin
+lens3$ curl https://dl.min.io/server/minio/release/linux-amd64/minio -o /tmp/minio
+lens3$ install -m 755 -c /tmp/minio ~/bin/minio
+lens3$ curl https://dl.min.io/client/mc/release/linux-amd64/mc -o /tmp/mc
+lens3$ install -m 755 -c /tmp/mc ~/bin/mc
 ```
 
 ## Install Lens3
@@ -99,8 +99,8 @@ Install Python packages and Lens3.  Installation should be run in the
 
 ```
 # su - lens3
-$ cd $TOP/v1
-$ pip3 install --user -r requirements.txt
+lens3$ cd $TOP/v1
+lens3$ pip3 install --user -r requirements.txt
 ```
 
 Or, run `make install` in the "v1" directory.
@@ -152,17 +152,17 @@ implicitly set by Apache proxy.
 
 ### Proxy Path Choices (A Pitfall)
 
-A path, "location" or "proxypass", should be "/" for Mux, because a
-path cannot be specified for S3 service.  Thus, if Mux and Api are
-co-hosted, the Mux path should be "/" and the Api path should be
-something like "/api~/" that is not a legitimate name for buckets.  We
-will use "/api~/" in the following.
+A path, "location" or "proxypass", should be "/" for Lens3-Mux,
+because a path cannot be specified for S3 service.  Thus, if Lens3-Mux
+and Lens3-Api are co-hosted, the Mux path should be "/" and the Api
+path should be something like "/api~/" that is not a legitimate name
+for buckets.  We will use "/api~/" in the following.
 
 See a note on a setup of MinIO with a proxy, saying: "The S3 API
 signature calculation algorithm does not support proxy schemes ... on
 a subpath" (at the bottom of the page in) [Configure NGINX Proxy for
 MinIO
-Server](https://min.io/docs/minio/linux/integrations/setup-nginx-proxy-with-minio.html)
+Server](https://min.io/docs/minio/linux/integrations/setup-nginx-proxy-with-minio.html).
 
 ### Proxy by NGINX
 
@@ -318,6 +318,35 @@ Note: Starting Redis will fail when the file owner of
 # chmod o-rwx /etc/lenticularis/conf.json
 ```
 
+## Load Settings in Redis
+
+Lens3-Mux and Lens3-Api load configurations from Redis.  This section
+prepares for it.  See [mux-conf-yaml.md](mux-conf-yaml.md) and
+[api-conf-yaml.md](api-conf-yaml.md) for descriptions of the fields.
+It is better to run `lens3-admin` on the same node running Lens3-Api.
+
+* Prepare the Lens3-Mux/Api configurations
+  * Copy and edit the configuration files
+
+```
+# cp /etc/lenticularis/conf.json /home/lens3/conf.json
+# chown lens3-admin /home/lens3/conf.json
+# su - lens3
+lens3$ cd ~
+lens3$ cp $TOP/unit-file/api-conf.yaml api-conf.yaml
+lens3$ cp $TOP/unit-file/mux-conf.yaml mux-conf.yaml
+lens3$ vi api-conf.yaml
+lens3$ vi mux-conf.yaml
+```
+
+* Load the Lens3 configuration from files
+
+```
+lens3$ lens3-admin -c conf.json load-conf api-conf.yaml
+lens3$ lens3-admin -c conf.json load-conf mux-conf.yaml
+lens3$ lens3-admin -c conf.json list-conf
+```
+
 ## Set up Lens3-Api and Lens3-Mux
 
 * Copy (and edit) the systemd unit file for Lens3-Api
@@ -345,37 +374,6 @@ only allowed to run "/home/lens3/bin/minio".
 # vi /etc/sudoers.d/lenticularis-sudoers
 # chmod -w /etc/sudoers.d/lenticularis-sudoers
 # chmod o-rwx /etc/sudoers.d/lenticularis-sudoers
-```
-
-## Load Settings to Redis
-
-Lens3-Mux and Lens3-Api load configurations from Redis.  This section
-prepares for it.  See [mux-conf-yaml.md](mux-conf-yaml.md) and
-[api-conf-yaml.md](api-conf-yaml.md) for the description of the
-fields.  Probably, it is better to run `lens3-admin` on the same node
-running Lens3-Api.
-
-* Prepare the Lens3-Api configuration from files somewhere
-  * Copy and edit configuration files
-  * (Use a random for CSRF_secret_key)
-
-```
-# cp /etc/lenticularis/conf.json /home/lens3/conf.json
-# chown lens3-admin /home/lens3/conf.json
-# su - lens3
-lens3$ cd ~
-lens3$ cp $TOP/unit-file/api-conf.yaml api-conf.yaml
-lens3$ cp $TOP/unit-file/mux-conf.yaml mux-conf.yaml
-lens3$ vi api-conf.yaml
-lens3$ vi mux-conf.yaml
-```
-
-* Load the Lens3 configuration from files
-
-```
-lens3$ lens3-admin -c conf.json load-conf api-conf.yaml
-lens3$ lens3-admin -c conf.json load-conf mux-conf.yaml
-lens3$ lens3-admin -c conf.json list-conf
 ```
 
 ## Start Services (Lens3-Mux and Lens3-Api)
@@ -437,13 +435,13 @@ lens3$ lens3-admin -c conf.json list-user
 * NGINX status
 
 ```
-$ systemctl status nginx
+# systemctl status nginx
 ```
 
 * Redis status
 
 ```
-$ systemctl status lenticularis-redis
+# systemctl status lenticularis-redis
 ```
 
 * Lens3-Mux status and Lens3-Api status
@@ -458,7 +456,7 @@ lens3$ lens3-admin -c conf.json show-muxs
 
 ## Test Accesses
 
-* Access the website by a browser (URL depends on the proxy setting)
+* Access Lens3-Api by a browser (URL depends on the proxy setting)
   * `http://lens3.example.com/api~/`
 
 * Access buckets from S3 client
@@ -467,18 +465,18 @@ lens3$ lens3-admin -c conf.json show-muxs
     * Cat contents of a file
 
 ```
-$ vi ~/.aws/config
+lens3$ vi ~/.aws/config
 [default]
 s3 =
     signature_version = s3v4
 
-$ vi $HOME/.aws/credentials
+lens3$ vi $HOME/.aws/credentials
 [default]
 aws_access_key_id = zHb9uscWUDgcJ9ZdYzr6
 aws_secret_access_key = uDUHMYKSmbqyqB1MGYN57CWMC8eXNHwUL4pcNwROu3xWgpsO
 
-$ aws --endpoint-url https://lens3.example.com/ s3 ls s3://bkt1
-$ aws --endpoint-url https://lens3.example.com/ s3 cp s3://bkt1/somefile1 -
+lens3$ aws --endpoint-url https://lens3.example.com/ s3 ls s3://bkt1
+lens3$ aws --endpoint-url https://lens3.example.com/ s3 cp s3://bkt1/somefile1 -
 ```
 
 Note that Lens3 does not support listing of buckets by `aws s3 ls`.
@@ -525,13 +523,13 @@ lens3$ mc admin trace -v ALIAS
 Clear Redis databases.
 
 ```
-$ export REDISCLI_AUTH=password
-$ redis-cli -p 6378 FLUSHALL
-$ redis-cli -p 6378 --scan --pattern '*'
+lens3$ export REDISCLI_AUTH=password
+lens3$ redis-cli -p 6378 FLUSHALL
+lens3$ redis-cli -p 6378 --scan --pattern '*'
 ```
 
 ### Running MinIO by Hand
 
 ```
-$ minio server --anonymous --json --address :9001 /home/UUU/pool-directory
+lens3$ minio server --anonymous --json --address :9001 /home/UUU/pool-directory
 ```

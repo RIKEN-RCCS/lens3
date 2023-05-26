@@ -219,7 +219,7 @@ async def app_get_ui(
 
 
 @_app.get("/ui2/index.html")
-async def app_get_ui(
+async def app_get_ui2(
         request : Request,
         x_remote_user : Union[str, None] = Header(default=None),
         x_real_ip : Union[str, None] = Header(default=None),

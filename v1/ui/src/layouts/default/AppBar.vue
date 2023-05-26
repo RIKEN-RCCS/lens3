@@ -23,6 +23,12 @@
 <script lang="ts">
 import {useTheme} from "vuetify";
 export default {
+  props: {
+    pool_data: {
+      type: Object,
+      default: () => ({}),
+    },
+  },
   setup () {
     const theme = useTheme()
     return {

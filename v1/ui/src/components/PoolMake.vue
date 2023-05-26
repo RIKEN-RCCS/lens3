@@ -39,7 +39,6 @@
 
 <script lang="ts">
 export default {
-  //props: ["pool_data"],
   props: {
     pool_data: {
       type: Object,

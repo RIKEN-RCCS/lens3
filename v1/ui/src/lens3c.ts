@@ -20,6 +20,8 @@ const pool_data_ = {
   user: "",
   group: "",
   group_choices: [],
+  s3_url: "",
+  footer_banner: "",
 
   /* Entries for PoolList. */
 
@@ -163,6 +165,8 @@ function set_user_info_data(data : any) {
   pool_data.user = d["uid"];
   pool_data.group = d["groups"][0];
   pool_data.group_choices = d["groups"];
+  pool_data.s3_url = d["s3_url"];
+  pool_data.footer_banner = d["footer_banner"];
 
   pool_data.edit_pool_visible = false;
 }

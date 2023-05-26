@@ -180,6 +180,8 @@ class Control_Api():
         self.pkg_dir = os.path.dirname(inspect.getfile(lenticularis))
 
         self.csrf_key = api_param["csrf_secret_key"]
+        self._s3_url = api_param.get("s3_url") or ""
+        self._footer_banner = api_param.get("footer_banner") or ""
 
         minio_param = api_conf["minio"]
         self._bin_mc = minio_param["mc"]
@@ -549,6 +551,8 @@ class Control_Api():
             "api_version": self._api_version,
             "uid": user_id,
             "groups": groups,
+            "s3_url": self._s3_url,
+            "footer_banner": self._footer_banner.strip(),
         }
         return {"user_info": info}
 

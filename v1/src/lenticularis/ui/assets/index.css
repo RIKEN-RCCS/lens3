@@ -4747,26 +4747,6 @@ html.v-overlay-scroll-blocked {
  *
  * Configures SASS variables and Vuetify overwrites
  */
-.v-application {
-  display: flex;
-  background: rgb(var(--v-theme-background));
-  color: rgba(var(--v-theme-on-background), var(--v-high-emphasis-opacity));
-}
-
-.v-application__wrap {
-  backface-visibility: hidden;
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  max-width: 100%;
-  min-height: 100vh;
-  min-height: 100dvh;
-  position: relative;
-}/**
- * src/styles/settings.scss
- *
- * Configures SASS variables and Vuetify overwrites
- */
 .v-footer {
   align-items: center;
   display: flex;
@@ -4795,6 +4775,26 @@ html.v-overlay-scroll-blocked {
 }
 .v-footer--rounded {
   border-radius: 4px;
+}/**
+ * src/styles/settings.scss
+ *
+ * Configures SASS variables and Vuetify overwrites
+ */
+.v-application {
+  display: flex;
+  background: rgb(var(--v-theme-background));
+  color: rgba(var(--v-theme-on-background), var(--v-high-emphasis-opacity));
+}
+
+.v-application__wrap {
+  backface-visibility: hidden;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  max-width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  position: relative;
 }/**
  * src/styles/settings.scss
  *

@@ -22,6 +22,8 @@ controller:
     minio_mc_timeout: 10
     max_pool_expiry: 630720000
     csrf_secret_key: xyzxyz
+    s3_url: https://lens3.example.com
+    footer_banner: This site is operated by example.com
 
 minio:
     minio: /home/lens3/bin/minio

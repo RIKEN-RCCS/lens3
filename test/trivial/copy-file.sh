@@ -90,7 +90,7 @@ if [ $status -ne 0 ]; then
     exit 1
 fi
 
-echo "S3-RM a file from ${BKT}..."
+echo "S3-RM a file in ${BKT}..."
 ${AWS} s3 rm s3://${BKT}/gomi-file3.txt
 status=$?
 if [ $status -ne 0 ]; then

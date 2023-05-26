@@ -5,8 +5,9 @@
       <div class="text-h5">Pool list</div>
       <v-card variant="outlined" class="pa-1 ma-4">
         <v-card-text>
-          A pool list is a slider list of the pools. Select a pool by
-          clicking the "edit" button.
+          Pool list is a slider list of the pools. You can select a
+          pool by clicking "edit" button (a pencil icon). Or, delete
+          one by "delete" button (a trash can).
         </v-card-text>
       </v-card>
       <v-col class="pa-1 ma-1">

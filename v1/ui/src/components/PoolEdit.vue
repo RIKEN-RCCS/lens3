@@ -3,23 +3,36 @@
     <v-responsive class="d-flex align-center text-center fill-height">
       <v-sheet class="pa-3 ma-3" v-if="pool_data.edit_pool_visible">
         <div class="text-h5">Edit pool</div>
+        <div class="text-h6">{{pool_data.buckets_directory}}</div>
         <v-card variant="outlined" class="pa-1 ma-4">
-          <v-card-text>Directory: {{pool_data.buckets_directory}}</v-card-text>
+          <v-card-text>
+            Edit pool lists buckets and access keys. You can
+            add/delete them.  A bucket name should be unique in all
+            pools including ones owned by others. An expiration of an
+            access key is limited by the date in the future set by a
+            site manager.
+          </v-card-text>
         </v-card>
-
-        <v-card class="pa-4 ma-4">
-          <div class="text-h6">New bucket</div>
-          <v-text-field label="Bucket name"
-                        v-model="pool_data.bucket_name" />
-          <v-select label="Bucket policy for public access"
-                    variant="underlined"
-                    v-model="pool_data.bucket_policy" required
-                    v-bind:items="['none', 'public', 'upload', 'download']" />
-          <v-btn v-on:click="kick_make_bucket" rounded="xl"
-                 class="ma-1">
-            Create
-          </v-btn>
-        </v-card>
+        <v-row align="center">
+          <v-spacer />
+          <v-card class="pa-4 ma-4" width="70%">
+            <v-card-title>New bucket</v-card-title>
+            <v-text-field label="Bucket name"
+                          v-model="pool_data.bucket_name" />
+            <v-select label="Bucket policy for public access"
+                      variant="underlined"
+                      v-model="pool_data.bucket_policy" required
+                      v-bind:items="['none', 'public', 'upload', 'download']" />
+            <v-tooltip text="Create a bucket">
+              <template v-slot:activator="{props}">
+                <v-btn icon="mdi-folder-plus"
+                       v-on:click="kick_make_bucket"
+                       v-bind="props" />
+              </template>
+            </v-tooltip>
+          </v-card>
+          <v-spacer />
+        </v-row>
 
         <!-- <div class="text-h6">Buckets</div> -->
         <v-table density="compact">
@@ -52,26 +65,33 @@
         </v-table>
 
         <v-spacer class="ma-4" />
-        <v-card class="pa-4 ma-4">
-          <div class="text-h6">New access key</div>
-          <v-text-field
-            type="date"
-            v-bind:min="new Date().toISOString().substring(0, 10)"
-            label="Expiration (00:00:00 UTC)"
-            v-model="pool_data.key_expiration_time">
-          </v-text-field>
-          <v-btn v-on:click="kick_make_secret('readwrite')" rounded="xl">
-            Create readwrite key
-          </v-btn>
-          &nbsp;
-          <v-btn v-on:click="kick_make_secret('readonly')" rounded="xl">
-            Create readonly key
-          </v-btn>
-          &nbsp;
-          <v-btn v-on:click="kick_make_secret('writeonly')" rounded="xl">
-            Create writeonly key
-          </v-btn>
-        </v-card>
+        <v-row align="center">
+          <v-spacer />
+          <v-card class="pa-4 ma-4" width="70%">
+            <v-card-title>New access key</v-card-title>
+            <v-text-field
+              type="date"
+              v-bind:min="new Date().toISOString().substring(0, 10)"
+              label="Expiration (00:00:00 UTC)"
+              v-model="pool_data.key_expiration_time">
+            </v-text-field>
+            <v-btn prepend-icon="mdi-key-plus"
+                   v-on:click="kick_make_secret('readwrite')">
+              Create readwrite key
+            </v-btn>
+            &nbsp;
+            <v-btn prepend-icon="mdi-key-plus"
+                   v-on:click="kick_make_secret('readonly')">
+              Create readonly key
+            </v-btn>
+            &nbsp;
+            <v-btn prepend-icon="mdi-key-plus"
+                   v-on:click="kick_make_secret('writeonly')">
+              Create writeonly key
+            </v-btn>
+          </v-card>
+          <v-spacer />
+        </v-row>
 
         <div v-for="keyset in pool_data.access_key_set">
           <!-- <div class="text-h6">Access keys ({{keyset.policy}})</div> -->

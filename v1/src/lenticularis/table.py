@@ -457,7 +457,7 @@ class _Setting_Table(Table_Common):
         if claim != "":
             key2 = f"{self._user_claim_prefix}{claim}"
             xid = self.db.get(key2)
-            if xid is not None and uid == xid:
+            if xid is not None and uid != xid:
                 raise Exception(f"A claim for {uid} conflicts with {xid}")
             pass
         self.delete_user(uid)

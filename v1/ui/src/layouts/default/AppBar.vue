@@ -21,7 +21,7 @@
 </template>
 
 <script lang="ts">
-import {useTheme} from "vuetify"
+import {useTheme} from "vuetify";
 export default {
   setup () {
     const theme = useTheme()
@@ -31,7 +31,7 @@ export default {
       change_theme: (d : any) => {
         theme.global.name.value = d ? "dark" : "light";
       },
-    }
+    };
   },
-}
+};
 </script>

@@ -99,6 +99,18 @@ function normalizeClass(value) {
   }
   return res.trim();
 }
+function normalizeProps(props) {
+  if (!props)
+    return null;
+  let { class: klass, style } = props;
+  if (klass && !isString(klass)) {
+    props.class = normalizeClass(klass);
+  }
+  if (style) {
+    props.style = normalizeStyle(style);
+  }
+  return props;
+}
 const specialBooleanAttrs = `itemscope,allowfullscreen,formnovalidate,ismap,nomodule,novalidate,readonly`;
 const isSpecialBooleanAttr = /* @__PURE__ */ makeMap(specialBooleanAttrs);
 function includeBooleanAttr(value) {
@@ -2325,6 +2337,9 @@ function invokeDirectiveHook(vnode, prevVNode, instance, name) {
 }
 const COMPONENTS = "components";
 const DIRECTIVES = "directives";
+function resolveComponent(name, maybeSelfReference) {
+  return resolveAsset(COMPONENTS, name, true, maybeSelfReference) || name;
+}
 const NULL_DYNAMIC_COMPONENT = Symbol();
 function resolveDynamicComponent(component) {
   if (isString(component)) {
@@ -8438,22 +8453,21 @@ function inject(key) {
     return provides[key];
   }
 }
-const _sfc_main$7 = {
+const _sfc_main$8 = {
   props: {
     pool_data: {
       type: Object,
       default: () => ({})
     }
   },
-  setup() {
-    const theme = useTheme();
-    return {
-      theme,
-      dark: false,
-      change_theme: (d) => {
-        theme.global.name.value = d ? "dark" : "light";
-      }
-    };
+  //data() {
+  //  return {
+  //  };
+  //},
+  methods: {
+    kick_copy_url_to_clipboard() {
+      navigator.clipboard.writeText(this.pool_data.s3_url);
+    }
   }
 };
 const _export_sfc = (sfc, props) => {
@@ -8463,783 +8477,9 @@ const _export_sfc = (sfc, props) => {
   }
   return target;
 };
-const VAppBar$1 = "";
-const VToolbar$1 = "";
-const VDefaultsProvider = genericComponent(false)({
-  name: "VDefaultsProvider",
-  props: {
-    defaults: Object,
-    disabled: Boolean,
-    reset: [Number, String],
-    root: Boolean,
-    scoped: Boolean
-  },
-  setup(props, _ref) {
-    let {
-      slots
-    } = _ref;
-    const {
-      defaults,
-      disabled,
-      reset,
-      root,
-      scoped
-    } = toRefs(props);
-    provideDefaults(defaults, {
-      reset,
-      root,
-      scoped,
-      disabled
-    });
-    return () => {
-      var _a;
-      return (_a = slots.default) == null ? void 0 : _a.call(slots);
-    };
-  }
-});
-function createCssTransition(name) {
-  let origin = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : "center center";
-  let mode = arguments.length > 2 ? arguments[2] : void 0;
-  return genericComponent()({
-    name,
-    props: {
-      disabled: Boolean,
-      group: Boolean,
-      hideOnLeave: Boolean,
-      leaveAbsolute: Boolean,
-      mode: {
-        type: String,
-        default: mode
-      },
-      origin: {
-        type: String,
-        default: origin
-      }
-    },
-    setup(props, _ref) {
-      let {
-        slots
-      } = _ref;
-      const functions = {
-        onBeforeEnter(el) {
-          el.style.transformOrigin = props.origin;
-        },
-        onLeave(el) {
-          if (props.leaveAbsolute) {
-            const {
-              offsetTop,
-              offsetLeft,
-              offsetWidth,
-              offsetHeight
-            } = el;
-            el._transitionInitialStyles = {
-              position: el.style.position,
-              top: el.style.top,
-              left: el.style.left,
-              width: el.style.width,
-              height: el.style.height
-            };
-            el.style.position = "absolute";
-            el.style.top = `${offsetTop}px`;
-            el.style.left = `${offsetLeft}px`;
-            el.style.width = `${offsetWidth}px`;
-            el.style.height = `${offsetHeight}px`;
-          }
-          if (props.hideOnLeave) {
-            el.style.setProperty("display", "none", "important");
-          }
-        },
-        onAfterLeave(el) {
-          if (props.leaveAbsolute && (el == null ? void 0 : el._transitionInitialStyles)) {
-            const {
-              position,
-              top,
-              left,
-              width,
-              height
-            } = el._transitionInitialStyles;
-            delete el._transitionInitialStyles;
-            el.style.position = position || "";
-            el.style.top = top || "";
-            el.style.left = left || "";
-            el.style.width = width || "";
-            el.style.height = height || "";
-          }
-        }
-      };
-      return () => {
-        const tag = props.group ? TransitionGroup : Transition;
-        return h(tag, {
-          name: props.disabled ? "" : name,
-          css: !props.disabled,
-          ...props.group ? void 0 : {
-            mode: props.mode
-          },
-          ...props.disabled ? {} : functions
-        }, slots.default);
-      };
-    }
-  });
-}
-function createJavascriptTransition(name, functions) {
-  let mode = arguments.length > 2 && arguments[2] !== void 0 ? arguments[2] : "in-out";
-  return genericComponent()({
-    name,
-    props: {
-      mode: {
-        type: String,
-        default: mode
-      },
-      disabled: Boolean
-    },
-    setup(props, _ref2) {
-      let {
-        slots
-      } = _ref2;
-      return () => {
-        return h(Transition, {
-          name: props.disabled ? "" : name,
-          css: !props.disabled,
-          // mode: props.mode, // TODO: vuejs/vue-next#3104
-          ...props.disabled ? {} : functions
-        }, slots.default);
-      };
-    }
-  });
-}
-function ExpandTransitionGenerator() {
-  let expandedParentClass = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : "";
-  let x = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : false;
-  const sizeProperty = x ? "width" : "height";
-  const offsetProperty = camelize(`offset-${sizeProperty}`);
-  return {
-    onBeforeEnter(el) {
-      el._parent = el.parentNode;
-      el._initialStyle = {
-        transition: el.style.transition,
-        overflow: el.style.overflow,
-        [sizeProperty]: el.style[sizeProperty]
-      };
-    },
-    onEnter(el) {
-      const initialStyle = el._initialStyle;
-      el.style.setProperty("transition", "none", "important");
-      el.style.overflow = "hidden";
-      const offset = `${el[offsetProperty]}px`;
-      el.style[sizeProperty] = "0";
-      void el.offsetHeight;
-      el.style.transition = initialStyle.transition;
-      if (expandedParentClass && el._parent) {
-        el._parent.classList.add(expandedParentClass);
-      }
-      requestAnimationFrame(() => {
-        el.style[sizeProperty] = offset;
-      });
-    },
-    onAfterEnter: resetStyles,
-    onEnterCancelled: resetStyles,
-    onLeave(el) {
-      el._initialStyle = {
-        transition: "",
-        overflow: el.style.overflow,
-        [sizeProperty]: el.style[sizeProperty]
-      };
-      el.style.overflow = "hidden";
-      el.style[sizeProperty] = `${el[offsetProperty]}px`;
-      void el.offsetHeight;
-      requestAnimationFrame(() => el.style[sizeProperty] = "0");
-    },
-    onAfterLeave,
-    onLeaveCancelled: onAfterLeave
-  };
-  function onAfterLeave(el) {
-    if (expandedParentClass && el._parent) {
-      el._parent.classList.remove(expandedParentClass);
-    }
-    resetStyles(el);
-  }
-  function resetStyles(el) {
-    const size2 = el._initialStyle[sizeProperty];
-    el.style.overflow = el._initialStyle.overflow;
-    if (size2 != null)
-      el.style[sizeProperty] = size2;
-    delete el._initialStyle;
-  }
-}
-const VDialogTransition = genericComponent()({
-  name: "VDialogTransition",
-  props: {
-    target: Object
-  },
-  setup(props, _ref) {
-    let {
-      slots
-    } = _ref;
-    const functions = {
-      onBeforeEnter(el) {
-        el.style.pointerEvents = "none";
-        el.style.visibility = "hidden";
-      },
-      async onEnter(el, done) {
-        var _a;
-        await new Promise((resolve2) => requestAnimationFrame(resolve2));
-        await new Promise((resolve2) => requestAnimationFrame(resolve2));
-        el.style.visibility = "";
-        const {
-          x,
-          y,
-          sx,
-          sy,
-          speed
-        } = getDimensions(props.target, el);
-        const animation = animate(el, [{
-          transform: `translate(${x}px, ${y}px) scale(${sx}, ${sy})`,
-          opacity: 0
-        }, {}], {
-          duration: 225 * speed,
-          easing: deceleratedEasing
-        });
-        (_a = getChildren(el)) == null ? void 0 : _a.forEach((el2) => {
-          animate(el2, [{
-            opacity: 0
-          }, {
-            opacity: 0,
-            offset: 0.33
-          }, {}], {
-            duration: 225 * 2 * speed,
-            easing: standardEasing
-          });
-        });
-        animation.finished.then(() => done());
-      },
-      onAfterEnter(el) {
-        el.style.removeProperty("pointer-events");
-      },
-      onBeforeLeave(el) {
-        el.style.pointerEvents = "none";
-      },
-      async onLeave(el, done) {
-        var _a;
-        await new Promise((resolve2) => requestAnimationFrame(resolve2));
-        const {
-          x,
-          y,
-          sx,
-          sy,
-          speed
-        } = getDimensions(props.target, el);
-        const animation = animate(el, [{}, {
-          transform: `translate(${x}px, ${y}px) scale(${sx}, ${sy})`,
-          opacity: 0
-        }], {
-          duration: 125 * speed,
-          easing: acceleratedEasing
-        });
-        animation.finished.then(() => done());
-        (_a = getChildren(el)) == null ? void 0 : _a.forEach((el2) => {
-          animate(el2, [{}, {
-            opacity: 0,
-            offset: 0.2
-          }, {
-            opacity: 0
-          }], {
-            duration: 125 * 2 * speed,
-            easing: standardEasing
-          });
-        });
-      },
-      onAfterLeave(el) {
-        el.style.removeProperty("pointer-events");
-      }
-    };
-    return () => {
-      return props.target ? createVNode(Transition, mergeProps({
-        "name": "dialog-transition"
-      }, functions, {
-        "css": false
-      }), slots) : createVNode(Transition, {
-        "name": "dialog-transition"
-      }, slots);
-    };
-  }
-});
-function getChildren(el) {
-  var _a;
-  const els = (_a = el.querySelector(":scope > .v-card, :scope > .v-sheet, :scope > .v-list")) == null ? void 0 : _a.children;
-  return els && [...els];
-}
-function getDimensions(target, el) {
-  const targetBox = target.getBoundingClientRect();
-  const elBox = nullifyTransforms(el);
-  const [originX, originY] = getComputedStyle(el).transformOrigin.split(" ").map((v) => parseFloat(v));
-  const [anchorSide, anchorOffset] = getComputedStyle(el).getPropertyValue("--v-overlay-anchor-origin").split(" ");
-  let offsetX = targetBox.left + targetBox.width / 2;
-  if (anchorSide === "left" || anchorOffset === "left") {
-    offsetX -= targetBox.width / 2;
-  } else if (anchorSide === "right" || anchorOffset === "right") {
-    offsetX += targetBox.width / 2;
-  }
-  let offsetY = targetBox.top + targetBox.height / 2;
-  if (anchorSide === "top" || anchorOffset === "top") {
-    offsetY -= targetBox.height / 2;
-  } else if (anchorSide === "bottom" || anchorOffset === "bottom") {
-    offsetY += targetBox.height / 2;
-  }
-  const tsx = targetBox.width / elBox.width;
-  const tsy = targetBox.height / elBox.height;
-  const maxs = Math.max(1, tsx, tsy);
-  const sx = tsx / maxs || 0;
-  const sy = tsy / maxs || 0;
-  const asa = elBox.width * elBox.height / (window.innerWidth * window.innerHeight);
-  const speed = asa > 0.12 ? Math.min(1.5, (asa - 0.12) * 10 + 1) : 1;
-  return {
-    x: offsetX - (originX + elBox.left),
-    y: offsetY - (originY + elBox.top),
-    sx,
-    sy,
-    speed
-  };
-}
-createCssTransition("fab-transition", "center center", "out-in");
-createCssTransition("dialog-bottom-transition");
-createCssTransition("dialog-top-transition");
-const VFadeTransition = createCssTransition("fade-transition");
-createCssTransition("scale-transition");
-createCssTransition("scroll-x-transition");
-createCssTransition("scroll-x-reverse-transition");
-createCssTransition("scroll-y-transition");
-createCssTransition("scroll-y-reverse-transition");
-createCssTransition("slide-x-transition");
-createCssTransition("slide-x-reverse-transition");
-const VSlideYTransition = createCssTransition("slide-y-transition");
-createCssTransition("slide-y-reverse-transition");
-const VExpandTransition = createJavascriptTransition("expand-transition", ExpandTransitionGenerator());
-const VExpandXTransition = createJavascriptTransition("expand-x-transition", ExpandTransitionGenerator("", true));
-const VImg$1 = "";
-const VResponsive$1 = "";
-const makeDimensionProps = propsFactory({
-  height: [Number, String],
-  maxHeight: [Number, String],
-  maxWidth: [Number, String],
-  minHeight: [Number, String],
-  minWidth: [Number, String],
-  width: [Number, String]
-}, "dimension");
-function useDimension(props) {
-  const dimensionStyles = computed(() => ({
-    height: convertToUnit(props.height),
-    maxHeight: convertToUnit(props.maxHeight),
-    maxWidth: convertToUnit(props.maxWidth),
-    minHeight: convertToUnit(props.minHeight),
-    minWidth: convertToUnit(props.minWidth),
-    width: convertToUnit(props.width)
-  }));
-  return {
-    dimensionStyles
-  };
-}
-function useAspectStyles(props) {
-  return {
-    aspectStyles: computed(() => {
-      const ratio = Number(props.aspectRatio);
-      return ratio ? {
-        paddingBottom: String(1 / ratio * 100) + "%"
-      } : void 0;
-    })
-  };
-}
-const VResponsive = genericComponent()({
-  name: "VResponsive",
-  props: {
-    aspectRatio: [String, Number],
-    contentClass: String,
-    ...makeComponentProps(),
-    ...makeDimensionProps()
-  },
-  setup(props, _ref) {
-    let {
-      slots
-    } = _ref;
-    const {
-      aspectStyles
-    } = useAspectStyles(props);
-    const {
-      dimensionStyles
-    } = useDimension(props);
-    useRender(() => {
-      var _a;
-      return createVNode("div", {
-        "class": ["v-responsive", props.class],
-        "style": [dimensionStyles.value, props.style]
-      }, [createVNode("div", {
-        "class": "v-responsive__sizer",
-        "style": aspectStyles.value
-      }, null), (_a = slots.additional) == null ? void 0 : _a.call(slots), slots.default && createVNode("div", {
-        "class": ["v-responsive__content", props.contentClass]
-      }, [slots.default()])]);
-    });
-    return {};
-  }
-});
-function mounted$1(el, binding) {
-  if (!SUPPORTS_INTERSECTION)
-    return;
-  const modifiers = binding.modifiers || {};
-  const value = binding.value;
-  const {
-    handler,
-    options
-  } = typeof value === "object" ? value : {
-    handler: value,
-    options: {}
-  };
-  const observer = new IntersectionObserver(function() {
-    var _a;
-    let entries = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : [];
-    let observer2 = arguments.length > 1 ? arguments[1] : void 0;
-    const _observe = (_a = el._observe) == null ? void 0 : _a[binding.instance.$.uid];
-    if (!_observe)
-      return;
-    const isIntersecting = entries.some((entry) => entry.isIntersecting);
-    if (handler && (!modifiers.quiet || _observe.init) && (!modifiers.once || isIntersecting || _observe.init)) {
-      handler(isIntersecting, entries, observer2);
-    }
-    if (isIntersecting && modifiers.once)
-      unmounted$1(el, binding);
-    else
-      _observe.init = true;
-  }, options);
-  el._observe = Object(el._observe);
-  el._observe[binding.instance.$.uid] = {
-    init: false,
-    observer
-  };
-  observer.observe(el);
-}
-function unmounted$1(el, binding) {
-  var _a;
-  const observe = (_a = el._observe) == null ? void 0 : _a[binding.instance.$.uid];
-  if (!observe)
-    return;
-  observe.observer.unobserve(el);
-  delete el._observe[binding.instance.$.uid];
-}
-const Intersect = {
-  mounted: mounted$1,
-  unmounted: unmounted$1
-};
-const Intersect$1 = Intersect;
-const makeTransitionProps = propsFactory({
-  transition: {
-    type: [Boolean, String, Object],
-    default: "fade-transition",
-    validator: (val) => val !== true
-  }
-}, "transition");
-const MaybeTransition = (props, _ref) => {
-  let {
-    slots
-  } = _ref;
-  const {
-    transition,
-    ...rest
-  } = props;
-  const {
-    component = Transition,
-    ...customProps
-  } = typeof transition === "object" ? transition : {};
-  return h(component, mergeProps(typeof transition === "string" ? {
-    name: transition
-  } : customProps, rest), slots);
-};
-const VImg = genericComponent()({
-  name: "VImg",
-  directives: {
-    intersect: Intersect$1
-  },
-  props: {
-    aspectRatio: [String, Number],
-    alt: String,
-    cover: Boolean,
-    eager: Boolean,
-    gradient: String,
-    lazySrc: String,
-    options: {
-      type: Object,
-      // For more information on types, navigate to:
-      // https://developer.mozilla.org/en-US/docs/Web/API/Intersection_Observer_API
-      default: () => ({
-        root: void 0,
-        rootMargin: void 0,
-        threshold: void 0
-      })
-    },
-    sizes: String,
-    src: {
-      type: [String, Object],
-      default: ""
-    },
-    srcset: String,
-    width: [String, Number],
-    ...makeComponentProps(),
-    ...makeTransitionProps()
-  },
-  emits: {
-    loadstart: (value) => true,
-    load: (value) => true,
-    error: (value) => true
-  },
-  setup(props, _ref) {
-    let {
-      emit: emit2,
-      slots
-    } = _ref;
-    const currentSrc = ref("");
-    const image = ref();
-    const state = ref(props.eager ? "loading" : "idle");
-    const naturalWidth = ref();
-    const naturalHeight = ref();
-    const normalisedSrc = computed(() => {
-      return props.src && typeof props.src === "object" ? {
-        src: props.src.src,
-        srcset: props.srcset || props.src.srcset,
-        lazySrc: props.lazySrc || props.src.lazySrc,
-        aspect: Number(props.aspectRatio || props.src.aspect || 0)
-      } : {
-        src: props.src,
-        srcset: props.srcset,
-        lazySrc: props.lazySrc,
-        aspect: Number(props.aspectRatio || 0)
-      };
-    });
-    const aspectRatio = computed(() => {
-      return normalisedSrc.value.aspect || naturalWidth.value / naturalHeight.value || 0;
-    });
-    watch(() => props.src, () => {
-      init(state.value !== "idle");
-    });
-    watch(aspectRatio, (val, oldVal) => {
-      if (!val && oldVal && image.value) {
-        pollForSize(image.value);
-      }
-    });
-    onBeforeMount(() => init());
-    function init(isIntersecting) {
-      if (props.eager && isIntersecting)
-        return;
-      if (SUPPORTS_INTERSECTION && !isIntersecting && !props.eager)
-        return;
-      state.value = "loading";
-      if (normalisedSrc.value.lazySrc) {
-        const lazyImg = new Image();
-        lazyImg.src = normalisedSrc.value.lazySrc;
-        pollForSize(lazyImg, null);
-      }
-      if (!normalisedSrc.value.src)
-        return;
-      nextTick(() => {
-        var _a, _b;
-        emit2("loadstart", ((_a = image.value) == null ? void 0 : _a.currentSrc) || normalisedSrc.value.src);
-        if ((_b = image.value) == null ? void 0 : _b.complete) {
-          if (!image.value.naturalWidth) {
-            onError();
-          }
-          if (state.value === "error")
-            return;
-          if (!aspectRatio.value)
-            pollForSize(image.value, null);
-          onLoad();
-        } else {
-          if (!aspectRatio.value)
-            pollForSize(image.value);
-          getSrc();
-        }
-      });
-    }
-    function onLoad() {
-      var _a;
-      getSrc();
-      state.value = "loaded";
-      emit2("load", ((_a = image.value) == null ? void 0 : _a.currentSrc) || normalisedSrc.value.src);
-    }
-    function onError() {
-      var _a;
-      state.value = "error";
-      emit2("error", ((_a = image.value) == null ? void 0 : _a.currentSrc) || normalisedSrc.value.src);
-    }
-    function getSrc() {
-      const img = image.value;
-      if (img)
-        currentSrc.value = img.currentSrc || img.src;
-    }
-    let timer = -1;
-    function pollForSize(img) {
-      let timeout = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : 100;
-      const poll = () => {
-        clearTimeout(timer);
-        const {
-          naturalHeight: imgHeight,
-          naturalWidth: imgWidth
-        } = img;
-        if (imgHeight || imgWidth) {
-          naturalWidth.value = imgWidth;
-          naturalHeight.value = imgHeight;
-        } else if (!img.complete && state.value === "loading" && timeout != null) {
-          timer = window.setTimeout(poll, timeout);
-        } else if (img.currentSrc.endsWith(".svg") || img.currentSrc.startsWith("data:image/svg+xml")) {
-          naturalWidth.value = 1;
-          naturalHeight.value = 1;
-        }
-      };
-      poll();
-    }
-    const containClasses = computed(() => ({
-      "v-img__img--cover": props.cover,
-      "v-img__img--contain": !props.cover
-    }));
-    const __image = () => {
-      var _a;
-      if (!normalisedSrc.value.src || state.value === "idle")
-        return null;
-      const img = createVNode("img", {
-        "class": ["v-img__img", containClasses.value],
-        "src": normalisedSrc.value.src,
-        "srcset": normalisedSrc.value.srcset,
-        "alt": props.alt,
-        "sizes": props.sizes,
-        "ref": image,
-        "onLoad": onLoad,
-        "onError": onError
-      }, null);
-      const sources = (_a = slots.sources) == null ? void 0 : _a.call(slots);
-      return createVNode(MaybeTransition, {
-        "transition": props.transition,
-        "appear": true
-      }, {
-        default: () => [withDirectives(sources ? createVNode("picture", {
-          "class": "v-img__picture"
-        }, [sources, img]) : img, [[vShow, state.value === "loaded"]])]
-      });
-    };
-    const __preloadImage = () => createVNode(MaybeTransition, {
-      "transition": props.transition
-    }, {
-      default: () => [normalisedSrc.value.lazySrc && state.value !== "loaded" && createVNode("img", {
-        "class": ["v-img__img", "v-img__img--preload", containClasses.value],
-        "src": normalisedSrc.value.lazySrc,
-        "alt": props.alt
-      }, null)]
-    });
-    const __placeholder = () => {
-      if (!slots.placeholder)
-        return null;
-      return createVNode(MaybeTransition, {
-        "transition": props.transition,
-        "appear": true
-      }, {
-        default: () => [(state.value === "loading" || state.value === "error" && !slots.error) && createVNode("div", {
-          "class": "v-img__placeholder"
-        }, [slots.placeholder()])]
-      });
-    };
-    const __error = () => {
-      if (!slots.error)
-        return null;
-      return createVNode(MaybeTransition, {
-        "transition": props.transition,
-        "appear": true
-      }, {
-        default: () => [state.value === "error" && createVNode("div", {
-          "class": "v-img__error"
-        }, [slots.error()])]
-      });
-    };
-    const __gradient = () => {
-      if (!props.gradient)
-        return null;
-      return createVNode("div", {
-        "class": "v-img__gradient",
-        "style": {
-          backgroundImage: `linear-gradient(${props.gradient})`
-        }
-      }, null);
-    };
-    const isBooted = ref(false);
-    {
-      const stop = watch(aspectRatio, (val) => {
-        if (val) {
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-              isBooted.value = true;
-            });
-          });
-          stop();
-        }
-      });
-    }
-    useRender(() => withDirectives(createVNode(VResponsive, {
-      "class": ["v-img", {
-        "v-img--booting": !isBooted.value
-      }, props.class],
-      "style": [{
-        width: convertToUnit(props.width === "auto" ? naturalWidth.value : props.width)
-      }, props.style],
-      "aspectRatio": aspectRatio.value,
-      "aria-label": props.alt,
-      "role": props.alt ? "img" : void 0
-    }, {
-      additional: () => createVNode(Fragment, null, [createVNode(__image, null, null), createVNode(__preloadImage, null, null), createVNode(__gradient, null, null), createVNode(__placeholder, null, null), createVNode(__error, null, null)]),
-      default: slots.default
-    }), [[resolveDirective("intersect"), {
-      handler: init,
-      options: props.options
-    }, null, {
-      once: true
-    }]]));
-    return {
-      currentSrc,
-      image,
-      state,
-      naturalWidth,
-      naturalHeight
-    };
-  }
-});
-const makeTagProps = propsFactory({
-  tag: {
-    type: String,
-    default: "div"
-  }
-}, "tag");
-const makeVToolbarTitleProps = propsFactory({
-  text: String,
-  ...makeComponentProps(),
-  ...makeTagProps()
-}, "v-toolbar-title");
-const VToolbarTitle = genericComponent()({
-  name: "VToolbarTitle",
-  props: makeVToolbarTitleProps(),
-  setup(props, _ref) {
-    let {
-      slots
-    } = _ref;
-    useRender(() => {
-      const hasText = !!(slots.default || slots.text || props.text);
-      return createVNode(props.tag, {
-        "class": ["v-toolbar-title", props.class],
-        "style": props.style
-      }, {
-        default: () => {
-          var _a;
-          return [hasText && createVNode("div", {
-            "class": "v-toolbar-title__placeholder"
-          }, [slots.text ? slots.text() : props.text, (_a = slots.default) == null ? void 0 : _a.call(slots)])];
-        }
-      });
-    });
-    return {};
-  }
-});
+const VBtn$1 = "";
+const VBtnToggle = "";
+const VBtnGroup$1 = "";
 const makeBorderProps = propsFactory({
   border: [Boolean, Number, String]
 }, "border");
@@ -9259,6 +8499,23 @@ function useBorder(props) {
   });
   return {
     borderClasses
+  };
+}
+const allowedDensities$1 = [null, "default", "comfortable", "compact"];
+const makeDensityProps = propsFactory({
+  density: {
+    type: String,
+    default: "default",
+    validator: (v) => allowedDensities$1.includes(v)
+  }
+}, "density");
+function useDensity(props) {
+  let name = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : getCurrentInstanceName();
+  const densityClasses = computed(() => {
+    return `${name}--density-${props.density}`;
+  });
+  return {
+    densityClasses
   };
 }
 const makeElevationProps = propsFactory({
@@ -9309,6 +8566,12 @@ function useRounded(props) {
     roundedClasses
   };
 }
+const makeTagProps = propsFactory({
+  tag: {
+    type: String,
+    default: "div"
+  }
+}, "tag");
 function useColor(colors) {
   return destructComputed(() => {
     const classes = [];
@@ -9358,385 +8621,6 @@ function useBackgroundColor(props, name) {
   return {
     backgroundColorClasses,
     backgroundColorStyles
-  };
-}
-const allowedDensities$1 = [null, "prominent", "default", "comfortable", "compact"];
-const makeVToolbarProps = propsFactory({
-  absolute: Boolean,
-  collapse: Boolean,
-  color: String,
-  density: {
-    type: String,
-    default: "default",
-    validator: (v) => allowedDensities$1.includes(v)
-  },
-  extended: Boolean,
-  extensionHeight: {
-    type: [Number, String],
-    default: 48
-  },
-  flat: Boolean,
-  floating: Boolean,
-  height: {
-    type: [Number, String],
-    default: 64
-  },
-  image: String,
-  title: String,
-  ...makeBorderProps(),
-  ...makeComponentProps(),
-  ...makeElevationProps(),
-  ...makeRoundedProps(),
-  ...makeTagProps({
-    tag: "header"
-  }),
-  ...makeThemeProps()
-}, "v-toolbar");
-const VToolbar = genericComponent()({
-  name: "VToolbar",
-  props: makeVToolbarProps(),
-  setup(props, _ref) {
-    var _a;
-    let {
-      slots
-    } = _ref;
-    const {
-      backgroundColorClasses,
-      backgroundColorStyles
-    } = useBackgroundColor(toRef(props, "color"));
-    const {
-      borderClasses
-    } = useBorder(props);
-    const {
-      elevationClasses
-    } = useElevation(props);
-    const {
-      roundedClasses
-    } = useRounded(props);
-    const {
-      themeClasses
-    } = provideTheme(props);
-    const isExtended = ref(!!(props.extended || ((_a = slots.extension) == null ? void 0 : _a.call(slots))));
-    const contentHeight = computed(() => parseInt(Number(props.height) + (props.density === "prominent" ? Number(props.height) : 0) - (props.density === "comfortable" ? 8 : 0) - (props.density === "compact" ? 16 : 0), 10));
-    const extensionHeight = computed(() => isExtended.value ? parseInt(Number(props.extensionHeight) + (props.density === "prominent" ? Number(props.extensionHeight) : 0) - (props.density === "comfortable" ? 4 : 0) - (props.density === "compact" ? 8 : 0), 10) : 0);
-    provideDefaults({
-      VBtn: {
-        variant: "text"
-      }
-    });
-    useRender(() => {
-      var _a2;
-      const hasTitle = !!(props.title || slots.title);
-      const hasImage = !!(slots.image || props.image);
-      const extension = (_a2 = slots.extension) == null ? void 0 : _a2.call(slots);
-      isExtended.value = !!(props.extended || extension);
-      return createVNode(props.tag, {
-        "class": ["v-toolbar", {
-          "v-toolbar--absolute": props.absolute,
-          "v-toolbar--collapse": props.collapse,
-          "v-toolbar--flat": props.flat,
-          "v-toolbar--floating": props.floating,
-          [`v-toolbar--density-${props.density}`]: true
-        }, backgroundColorClasses.value, borderClasses.value, elevationClasses.value, roundedClasses.value, themeClasses.value, props.class],
-        "style": [backgroundColorStyles.value, props.style]
-      }, {
-        default: () => [hasImage && createVNode("div", {
-          "key": "image",
-          "class": "v-toolbar__image"
-        }, [!slots.image ? createVNode(VImg, {
-          "key": "image-img",
-          "cover": true,
-          "src": props.image
-        }, null) : createVNode(VDefaultsProvider, {
-          "key": "image-defaults",
-          "disabled": !props.image,
-          "defaults": {
-            VImg: {
-              cover: true,
-              src: props.image
-            }
-          }
-        }, slots.image)]), createVNode(VDefaultsProvider, {
-          "defaults": {
-            VTabs: {
-              height: convertToUnit(contentHeight.value)
-            }
-          }
-        }, {
-          default: () => {
-            var _a3, _b, _c;
-            return [createVNode("div", {
-              "class": "v-toolbar__content",
-              "style": {
-                height: convertToUnit(contentHeight.value)
-              }
-            }, [slots.prepend && createVNode("div", {
-              "class": "v-toolbar__prepend"
-            }, [(_a3 = slots.prepend) == null ? void 0 : _a3.call(slots)]), hasTitle && createVNode(VToolbarTitle, {
-              "key": "title",
-              "text": props.title
-            }, {
-              text: slots.title
-            }), (_b = slots.default) == null ? void 0 : _b.call(slots), slots.append && createVNode("div", {
-              "class": "v-toolbar__append"
-            }, [(_c = slots.append) == null ? void 0 : _c.call(slots)])])];
-          }
-        }), createVNode(VDefaultsProvider, {
-          "defaults": {
-            VTabs: {
-              height: convertToUnit(extensionHeight.value)
-            }
-          }
-        }, {
-          default: () => [createVNode(VExpandTransition, null, {
-            default: () => [isExtended.value && createVNode("div", {
-              "class": "v-toolbar__extension",
-              "style": {
-                height: convertToUnit(extensionHeight.value)
-              }
-            }, [extension])]
-          })]
-        })]
-      });
-    });
-    return {
-      contentHeight,
-      extensionHeight
-    };
-  }
-});
-const makeScrollProps = propsFactory({
-  scrollTarget: {
-    type: String
-  },
-  scrollThreshold: {
-    type: [String, Number],
-    default: 300
-  }
-}, "scroll");
-function useScroll(props) {
-  let args = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {};
-  const {
-    canScroll
-  } = args;
-  let previousScroll = 0;
-  const target = ref(null);
-  const currentScroll = ref(0);
-  const savedScroll = ref(0);
-  const currentThreshold = ref(0);
-  const isScrollActive = ref(false);
-  const isScrollingUp = ref(false);
-  const scrollThreshold = computed(() => {
-    return Number(props.scrollThreshold);
-  });
-  const scrollRatio = computed(() => {
-    return clamp((scrollThreshold.value - currentScroll.value) / scrollThreshold.value || 0);
-  });
-  const onScroll = () => {
-    const targetEl = target.value;
-    if (!targetEl || canScroll && !canScroll.value)
-      return;
-    previousScroll = currentScroll.value;
-    currentScroll.value = "window" in targetEl ? targetEl.pageYOffset : targetEl.scrollTop;
-    isScrollingUp.value = currentScroll.value < previousScroll;
-    currentThreshold.value = Math.abs(currentScroll.value - scrollThreshold.value);
-  };
-  watch(isScrollingUp, () => {
-    savedScroll.value = savedScroll.value || currentScroll.value;
-  });
-  watch(isScrollActive, () => {
-    savedScroll.value = 0;
-  });
-  onMounted(() => {
-    watch(() => props.scrollTarget, (scrollTarget) => {
-      var _a;
-      const newTarget = scrollTarget ? document.querySelector(scrollTarget) : window;
-      if (!newTarget) {
-        consoleWarn(`Unable to locate element with identifier ${scrollTarget}`, getCurrentInstance$1());
-        return;
-      }
-      if (newTarget === target.value)
-        return;
-      (_a = target.value) == null ? void 0 : _a.removeEventListener("scroll", onScroll);
-      target.value = newTarget;
-      target.value.addEventListener("scroll", onScroll, {
-        passive: true
-      });
-    }, {
-      immediate: true
-    });
-  });
-  onBeforeUnmount(() => {
-    var _a;
-    (_a = target.value) == null ? void 0 : _a.removeEventListener("scroll", onScroll);
-  });
-  canScroll && watch(canScroll, onScroll, {
-    immediate: true
-  });
-  return {
-    scrollThreshold,
-    currentScroll,
-    currentThreshold,
-    isScrollActive,
-    scrollRatio,
-    // required only for testing
-    // probably can be removed
-    // later (2 chars chlng)
-    isScrollingUp,
-    savedScroll
-  };
-}
-function useSsrBoot() {
-  const isBooted = ref(false);
-  onMounted(() => {
-    window.requestAnimationFrame(() => {
-      isBooted.value = true;
-    });
-  });
-  const ssrBootStyles = computed(() => !isBooted.value ? {
-    transition: "none !important"
-  } : void 0);
-  return {
-    ssrBootStyles,
-    isBooted: readonly(isBooted)
-  };
-}
-const VAppBar = genericComponent()({
-  name: "VAppBar",
-  props: {
-    scrollBehavior: String,
-    modelValue: {
-      type: Boolean,
-      default: true
-    },
-    location: {
-      type: String,
-      default: "top",
-      validator: (value) => ["top", "bottom"].includes(value)
-    },
-    ...makeVToolbarProps(),
-    ...makeLayoutItemProps(),
-    ...makeScrollProps(),
-    height: {
-      type: [Number, String],
-      default: 64
-    }
-  },
-  emits: {
-    "update:modelValue": (value) => true
-  },
-  setup(props, _ref) {
-    let {
-      slots
-    } = _ref;
-    const vToolbarRef = ref();
-    const isActive = useProxiedModel(props, "modelValue");
-    const scrollBehavior = computed(() => {
-      var _a;
-      const behavior = new Set(((_a = props.scrollBehavior) == null ? void 0 : _a.split(" ")) ?? []);
-      return {
-        hide: behavior.has("hide"),
-        // fullyHide: behavior.has('fully-hide'),
-        inverted: behavior.has("inverted"),
-        collapse: behavior.has("collapse"),
-        elevate: behavior.has("elevate"),
-        fadeImage: behavior.has("fade-image")
-        // shrink: behavior.has('shrink'),
-      };
-    });
-    const canScroll = computed(() => {
-      const behavior = scrollBehavior.value;
-      return behavior.hide || // behavior.fullyHide ||
-      behavior.inverted || behavior.collapse || behavior.elevate || behavior.fadeImage || // behavior.shrink ||
-      !isActive.value;
-    });
-    const {
-      currentScroll,
-      scrollThreshold,
-      isScrollingUp,
-      scrollRatio
-    } = useScroll(props, {
-      canScroll
-    });
-    const isCollapsed = computed(() => props.collapse || scrollBehavior.value.collapse && (scrollBehavior.value.inverted ? scrollRatio.value > 0 : scrollRatio.value === 0));
-    const isFlat = computed(() => props.flat || scrollBehavior.value.elevate && (scrollBehavior.value.inverted ? currentScroll.value > 0 : currentScroll.value === 0));
-    const opacity = computed(() => scrollBehavior.value.fadeImage ? scrollBehavior.value.inverted ? 1 - scrollRatio.value : scrollRatio.value : void 0);
-    const height = computed(() => {
-      var _a, _b;
-      if (scrollBehavior.value.hide && scrollBehavior.value.inverted)
-        return 0;
-      const height2 = ((_a = vToolbarRef.value) == null ? void 0 : _a.contentHeight) ?? 0;
-      const extensionHeight = ((_b = vToolbarRef.value) == null ? void 0 : _b.extensionHeight) ?? 0;
-      return height2 + extensionHeight;
-    });
-    function setActive() {
-      if (scrollBehavior.value.hide) {
-        if (scrollBehavior.value.inverted) {
-          isActive.value = currentScroll.value > scrollThreshold.value;
-        } else {
-          isActive.value = isScrollingUp.value || currentScroll.value < scrollThreshold.value;
-        }
-      } else {
-        isActive.value = true;
-      }
-    }
-    watch(currentScroll, setActive, {
-      immediate: true
-    });
-    watch(scrollBehavior, setActive);
-    const {
-      ssrBootStyles
-    } = useSsrBoot();
-    const {
-      layoutItemStyles
-    } = useLayoutItem({
-      id: props.name,
-      order: computed(() => parseInt(props.order, 10)),
-      position: toRef(props, "location"),
-      layoutSize: height,
-      elementSize: ref(void 0),
-      active: isActive,
-      absolute: toRef(props, "absolute")
-    });
-    useRender(() => {
-      const [toolbarProps] = VToolbar.filterProps(props);
-      return createVNode(VToolbar, mergeProps({
-        "ref": vToolbarRef,
-        "class": ["v-app-bar", {
-          "v-app-bar--bottom": props.location === "bottom"
-        }, props.class],
-        "style": [{
-          ...layoutItemStyles.value,
-          "--v-toolbar-image-opacity": opacity.value,
-          height: void 0,
-          ...ssrBootStyles.value
-        }, props.style]
-      }, toolbarProps, {
-        "collapse": isCollapsed.value,
-        "flat": isFlat.value
-      }), slots);
-    });
-    return {};
-  }
-});
-const VBtn$1 = "";
-const VBtnToggle = "";
-const VBtnGroup$1 = "";
-const allowedDensities = [null, "default", "comfortable", "compact"];
-const makeDensityProps = propsFactory({
-  density: {
-    type: String,
-    default: "default",
-    validator: (v) => allowedDensities.includes(v)
-  }
-}, "density");
-function useDensity(props) {
-  let name = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : getCurrentInstanceName();
-  const densityClasses = computed(() => {
-    return `${name}--density-${props.density}`;
-  });
-  return {
-    densityClasses
   };
 }
 const allowedVariants$1 = ["elevated", "flat", "tonal", "outlined", "text", "plain"];
@@ -10072,6 +8956,38 @@ genericComponent()({
       next,
       prev,
       select
+    };
+  }
+});
+const VDefaultsProvider = genericComponent(false)({
+  name: "VDefaultsProvider",
+  props: {
+    defaults: Object,
+    disabled: Boolean,
+    reset: [Number, String],
+    root: Boolean,
+    scoped: Boolean
+  },
+  setup(props, _ref) {
+    let {
+      slots
+    } = _ref;
+    const {
+      defaults,
+      disabled,
+      reset,
+      root,
+      scoped
+    } = toRefs(props);
+    provideDefaults(defaults, {
+      reset,
+      root,
+      scoped,
+      disabled
+    });
+    return () => {
+      var _a;
+      return (_a = slots.default) == null ? void 0 : _a.call(slots);
     };
   }
 });
@@ -10571,10 +9487,10 @@ function removeListeners(el) {
   el.removeEventListener("dragstart", rippleHide);
   el.removeEventListener("blur", focusRippleHide);
 }
-function mounted(el, binding) {
+function mounted$1(el, binding) {
   updateRipple(el, binding, false);
 }
-function unmounted(el) {
+function unmounted$1(el) {
   delete el._ripple;
   removeListeners(el);
 }
@@ -10586,10 +9502,31 @@ function updated(el, binding) {
   updateRipple(el, binding, wasEnabled);
 }
 const Ripple = {
-  mounted,
-  unmounted,
+  mounted: mounted$1,
+  unmounted: unmounted$1,
   updated
 };
+const makeDimensionProps = propsFactory({
+  height: [Number, String],
+  maxHeight: [Number, String],
+  maxWidth: [Number, String],
+  minHeight: [Number, String],
+  minWidth: [Number, String],
+  width: [Number, String]
+}, "dimension");
+function useDimension(props) {
+  const dimensionStyles = computed(() => ({
+    height: convertToUnit(props.height),
+    maxHeight: convertToUnit(props.maxHeight),
+    maxWidth: convertToUnit(props.maxWidth),
+    minHeight: convertToUnit(props.minHeight),
+    minWidth: convertToUnit(props.minWidth),
+    width: convertToUnit(props.width)
+  }));
+  return {
+    dimensionStyles
+  };
+}
 const VProgressLinear$1 = "";
 const oppositeMap = {
   center: "center",
@@ -11158,61 +10095,703 @@ const VBtn = genericComponent()({
     return {};
   }
 });
-const VAppBarNavIcon = genericComponent()({
-  name: "VAppBarNavIcon",
-  props: makeVBtnProps({
-    icon: "$menu",
-    variant: "text"
-  }),
-  setup(props, _ref) {
-    let {
-      slots
-    } = _ref;
-    useRender(() => createVNode(VBtn, mergeProps(props, {
-      "class": ["v-app-bar-nav-icon"]
-    }), slots));
-    return {};
-  }
-});
-const VToolbarItems = genericComponent()({
-  name: "VToolbarItems",
-  props: {
-    ...makeComponentProps(),
-    ...makeVariantProps({
-      variant: "text"
-    })
-  },
+const VCard$1 = "";
+const VCardActions = genericComponent()({
+  name: "VCardActions",
+  props: makeComponentProps(),
   setup(props, _ref) {
     let {
       slots
     } = _ref;
     provideDefaults({
       VBtn: {
-        color: toRef(props, "color"),
-        height: "inherit",
-        variant: toRef(props, "variant")
+        variant: "text"
       }
     });
     useRender(() => {
       var _a;
       return createVNode("div", {
-        "class": ["v-toolbar-items", props.class],
+        "class": ["v-card-actions", props.class],
         "style": props.style
       }, [(_a = slots.default) == null ? void 0 : _a.call(slots)]);
     });
     return {};
   }
 });
-const VAppBarTitle = genericComponent()({
-  name: "VAppBarTitle",
-  props: makeVToolbarTitleProps(),
+const VAvatar$1 = "";
+const VImg$1 = "";
+const VResponsive$1 = "";
+function useAspectStyles(props) {
+  return {
+    aspectStyles: computed(() => {
+      const ratio = Number(props.aspectRatio);
+      return ratio ? {
+        paddingBottom: String(1 / ratio * 100) + "%"
+      } : void 0;
+    })
+  };
+}
+const VResponsive = genericComponent()({
+  name: "VResponsive",
+  props: {
+    aspectRatio: [String, Number],
+    contentClass: String,
+    ...makeComponentProps(),
+    ...makeDimensionProps()
+  },
   setup(props, _ref) {
     let {
       slots
     } = _ref;
-    useRender(() => createVNode(VToolbarTitle, mergeProps(props, {
-      "class": "v-app-bar-title"
-    }), slots));
+    const {
+      aspectStyles
+    } = useAspectStyles(props);
+    const {
+      dimensionStyles
+    } = useDimension(props);
+    useRender(() => {
+      var _a;
+      return createVNode("div", {
+        "class": ["v-responsive", props.class],
+        "style": [dimensionStyles.value, props.style]
+      }, [createVNode("div", {
+        "class": "v-responsive__sizer",
+        "style": aspectStyles.value
+      }, null), (_a = slots.additional) == null ? void 0 : _a.call(slots), slots.default && createVNode("div", {
+        "class": ["v-responsive__content", props.contentClass]
+      }, [slots.default()])]);
+    });
+    return {};
+  }
+});
+function mounted(el, binding) {
+  if (!SUPPORTS_INTERSECTION)
+    return;
+  const modifiers = binding.modifiers || {};
+  const value = binding.value;
+  const {
+    handler,
+    options
+  } = typeof value === "object" ? value : {
+    handler: value,
+    options: {}
+  };
+  const observer = new IntersectionObserver(function() {
+    var _a;
+    let entries = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : [];
+    let observer2 = arguments.length > 1 ? arguments[1] : void 0;
+    const _observe = (_a = el._observe) == null ? void 0 : _a[binding.instance.$.uid];
+    if (!_observe)
+      return;
+    const isIntersecting = entries.some((entry) => entry.isIntersecting);
+    if (handler && (!modifiers.quiet || _observe.init) && (!modifiers.once || isIntersecting || _observe.init)) {
+      handler(isIntersecting, entries, observer2);
+    }
+    if (isIntersecting && modifiers.once)
+      unmounted(el, binding);
+    else
+      _observe.init = true;
+  }, options);
+  el._observe = Object(el._observe);
+  el._observe[binding.instance.$.uid] = {
+    init: false,
+    observer
+  };
+  observer.observe(el);
+}
+function unmounted(el, binding) {
+  var _a;
+  const observe = (_a = el._observe) == null ? void 0 : _a[binding.instance.$.uid];
+  if (!observe)
+    return;
+  observe.observer.unobserve(el);
+  delete el._observe[binding.instance.$.uid];
+}
+const Intersect = {
+  mounted,
+  unmounted
+};
+const Intersect$1 = Intersect;
+const makeTransitionProps = propsFactory({
+  transition: {
+    type: [Boolean, String, Object],
+    default: "fade-transition",
+    validator: (val) => val !== true
+  }
+}, "transition");
+const MaybeTransition = (props, _ref) => {
+  let {
+    slots
+  } = _ref;
+  const {
+    transition,
+    ...rest
+  } = props;
+  const {
+    component = Transition,
+    ...customProps
+  } = typeof transition === "object" ? transition : {};
+  return h(component, mergeProps(typeof transition === "string" ? {
+    name: transition
+  } : customProps, rest), slots);
+};
+const VImg = genericComponent()({
+  name: "VImg",
+  directives: {
+    intersect: Intersect$1
+  },
+  props: {
+    aspectRatio: [String, Number],
+    alt: String,
+    cover: Boolean,
+    eager: Boolean,
+    gradient: String,
+    lazySrc: String,
+    options: {
+      type: Object,
+      // For more information on types, navigate to:
+      // https://developer.mozilla.org/en-US/docs/Web/API/Intersection_Observer_API
+      default: () => ({
+        root: void 0,
+        rootMargin: void 0,
+        threshold: void 0
+      })
+    },
+    sizes: String,
+    src: {
+      type: [String, Object],
+      default: ""
+    },
+    srcset: String,
+    width: [String, Number],
+    ...makeComponentProps(),
+    ...makeTransitionProps()
+  },
+  emits: {
+    loadstart: (value) => true,
+    load: (value) => true,
+    error: (value) => true
+  },
+  setup(props, _ref) {
+    let {
+      emit: emit2,
+      slots
+    } = _ref;
+    const currentSrc = ref("");
+    const image = ref();
+    const state = ref(props.eager ? "loading" : "idle");
+    const naturalWidth = ref();
+    const naturalHeight = ref();
+    const normalisedSrc = computed(() => {
+      return props.src && typeof props.src === "object" ? {
+        src: props.src.src,
+        srcset: props.srcset || props.src.srcset,
+        lazySrc: props.lazySrc || props.src.lazySrc,
+        aspect: Number(props.aspectRatio || props.src.aspect || 0)
+      } : {
+        src: props.src,
+        srcset: props.srcset,
+        lazySrc: props.lazySrc,
+        aspect: Number(props.aspectRatio || 0)
+      };
+    });
+    const aspectRatio = computed(() => {
+      return normalisedSrc.value.aspect || naturalWidth.value / naturalHeight.value || 0;
+    });
+    watch(() => props.src, () => {
+      init(state.value !== "idle");
+    });
+    watch(aspectRatio, (val, oldVal) => {
+      if (!val && oldVal && image.value) {
+        pollForSize(image.value);
+      }
+    });
+    onBeforeMount(() => init());
+    function init(isIntersecting) {
+      if (props.eager && isIntersecting)
+        return;
+      if (SUPPORTS_INTERSECTION && !isIntersecting && !props.eager)
+        return;
+      state.value = "loading";
+      if (normalisedSrc.value.lazySrc) {
+        const lazyImg = new Image();
+        lazyImg.src = normalisedSrc.value.lazySrc;
+        pollForSize(lazyImg, null);
+      }
+      if (!normalisedSrc.value.src)
+        return;
+      nextTick(() => {
+        var _a, _b;
+        emit2("loadstart", ((_a = image.value) == null ? void 0 : _a.currentSrc) || normalisedSrc.value.src);
+        if ((_b = image.value) == null ? void 0 : _b.complete) {
+          if (!image.value.naturalWidth) {
+            onError();
+          }
+          if (state.value === "error")
+            return;
+          if (!aspectRatio.value)
+            pollForSize(image.value, null);
+          onLoad();
+        } else {
+          if (!aspectRatio.value)
+            pollForSize(image.value);
+          getSrc();
+        }
+      });
+    }
+    function onLoad() {
+      var _a;
+      getSrc();
+      state.value = "loaded";
+      emit2("load", ((_a = image.value) == null ? void 0 : _a.currentSrc) || normalisedSrc.value.src);
+    }
+    function onError() {
+      var _a;
+      state.value = "error";
+      emit2("error", ((_a = image.value) == null ? void 0 : _a.currentSrc) || normalisedSrc.value.src);
+    }
+    function getSrc() {
+      const img = image.value;
+      if (img)
+        currentSrc.value = img.currentSrc || img.src;
+    }
+    let timer = -1;
+    function pollForSize(img) {
+      let timeout = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : 100;
+      const poll = () => {
+        clearTimeout(timer);
+        const {
+          naturalHeight: imgHeight,
+          naturalWidth: imgWidth
+        } = img;
+        if (imgHeight || imgWidth) {
+          naturalWidth.value = imgWidth;
+          naturalHeight.value = imgHeight;
+        } else if (!img.complete && state.value === "loading" && timeout != null) {
+          timer = window.setTimeout(poll, timeout);
+        } else if (img.currentSrc.endsWith(".svg") || img.currentSrc.startsWith("data:image/svg+xml")) {
+          naturalWidth.value = 1;
+          naturalHeight.value = 1;
+        }
+      };
+      poll();
+    }
+    const containClasses = computed(() => ({
+      "v-img__img--cover": props.cover,
+      "v-img__img--contain": !props.cover
+    }));
+    const __image = () => {
+      var _a;
+      if (!normalisedSrc.value.src || state.value === "idle")
+        return null;
+      const img = createVNode("img", {
+        "class": ["v-img__img", containClasses.value],
+        "src": normalisedSrc.value.src,
+        "srcset": normalisedSrc.value.srcset,
+        "alt": props.alt,
+        "sizes": props.sizes,
+        "ref": image,
+        "onLoad": onLoad,
+        "onError": onError
+      }, null);
+      const sources = (_a = slots.sources) == null ? void 0 : _a.call(slots);
+      return createVNode(MaybeTransition, {
+        "transition": props.transition,
+        "appear": true
+      }, {
+        default: () => [withDirectives(sources ? createVNode("picture", {
+          "class": "v-img__picture"
+        }, [sources, img]) : img, [[vShow, state.value === "loaded"]])]
+      });
+    };
+    const __preloadImage = () => createVNode(MaybeTransition, {
+      "transition": props.transition
+    }, {
+      default: () => [normalisedSrc.value.lazySrc && state.value !== "loaded" && createVNode("img", {
+        "class": ["v-img__img", "v-img__img--preload", containClasses.value],
+        "src": normalisedSrc.value.lazySrc,
+        "alt": props.alt
+      }, null)]
+    });
+    const __placeholder = () => {
+      if (!slots.placeholder)
+        return null;
+      return createVNode(MaybeTransition, {
+        "transition": props.transition,
+        "appear": true
+      }, {
+        default: () => [(state.value === "loading" || state.value === "error" && !slots.error) && createVNode("div", {
+          "class": "v-img__placeholder"
+        }, [slots.placeholder()])]
+      });
+    };
+    const __error = () => {
+      if (!slots.error)
+        return null;
+      return createVNode(MaybeTransition, {
+        "transition": props.transition,
+        "appear": true
+      }, {
+        default: () => [state.value === "error" && createVNode("div", {
+          "class": "v-img__error"
+        }, [slots.error()])]
+      });
+    };
+    const __gradient = () => {
+      if (!props.gradient)
+        return null;
+      return createVNode("div", {
+        "class": "v-img__gradient",
+        "style": {
+          backgroundImage: `linear-gradient(${props.gradient})`
+        }
+      }, null);
+    };
+    const isBooted = ref(false);
+    {
+      const stop = watch(aspectRatio, (val) => {
+        if (val) {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              isBooted.value = true;
+            });
+          });
+          stop();
+        }
+      });
+    }
+    useRender(() => withDirectives(createVNode(VResponsive, {
+      "class": ["v-img", {
+        "v-img--booting": !isBooted.value
+      }, props.class],
+      "style": [{
+        width: convertToUnit(props.width === "auto" ? naturalWidth.value : props.width)
+      }, props.style],
+      "aspectRatio": aspectRatio.value,
+      "aria-label": props.alt,
+      "role": props.alt ? "img" : void 0
+    }, {
+      additional: () => createVNode(Fragment, null, [createVNode(__image, null, null), createVNode(__preloadImage, null, null), createVNode(__gradient, null, null), createVNode(__placeholder, null, null), createVNode(__error, null, null)]),
+      default: slots.default
+    }), [[resolveDirective("intersect"), {
+      handler: init,
+      options: props.options
+    }, null, {
+      once: true
+    }]]));
+    return {
+      currentSrc,
+      image,
+      state,
+      naturalWidth,
+      naturalHeight
+    };
+  }
+});
+const makeVAvatarProps = propsFactory({
+  start: Boolean,
+  end: Boolean,
+  icon: IconValue,
+  image: String,
+  ...makeComponentProps(),
+  ...makeDensityProps(),
+  ...makeRoundedProps(),
+  ...makeSizeProps(),
+  ...makeTagProps(),
+  ...makeThemeProps(),
+  ...makeVariantProps({
+    variant: "flat"
+  })
+}, "v-avatar");
+const VAvatar = genericComponent()({
+  name: "VAvatar",
+  props: makeVAvatarProps(),
+  setup(props, _ref) {
+    let {
+      slots
+    } = _ref;
+    const {
+      themeClasses
+    } = provideTheme(props);
+    const {
+      colorClasses,
+      colorStyles,
+      variantClasses
+    } = useVariant(props);
+    const {
+      densityClasses
+    } = useDensity(props);
+    const {
+      roundedClasses
+    } = useRounded(props);
+    const {
+      sizeClasses,
+      sizeStyles
+    } = useSize(props);
+    useRender(() => createVNode(props.tag, {
+      "class": ["v-avatar", {
+        "v-avatar--start": props.start,
+        "v-avatar--end": props.end
+      }, themeClasses.value, colorClasses.value, densityClasses.value, roundedClasses.value, sizeClasses.value, variantClasses.value, props.class],
+      "style": [colorStyles.value, sizeStyles.value, props.style]
+    }, {
+      default: () => {
+        var _a;
+        return [props.image ? createVNode(VImg, {
+          "key": "image",
+          "src": props.image,
+          "alt": "",
+          "cover": true
+        }, null) : props.icon ? createVNode(VIcon, {
+          "key": "icon",
+          "icon": props.icon
+        }, null) : (_a = slots.default) == null ? void 0 : _a.call(slots), genOverlays(false, "v-avatar")];
+      }
+    }));
+    return {};
+  }
+});
+const VCardSubtitle = createSimpleFunctional("v-card-subtitle");
+const VCardTitle = createSimpleFunctional("v-card-title");
+const VCardItem = genericComponent()({
+  name: "VCardItem",
+  props: {
+    appendAvatar: String,
+    appendIcon: IconValue,
+    prependAvatar: String,
+    prependIcon: IconValue,
+    subtitle: String,
+    title: String,
+    ...makeComponentProps(),
+    ...makeDensityProps()
+  },
+  setup(props, _ref) {
+    let {
+      slots
+    } = _ref;
+    useRender(() => {
+      var _a;
+      const hasPrependMedia = !!(props.prependAvatar || props.prependIcon);
+      const hasPrepend = !!(hasPrependMedia || slots.prepend);
+      const hasAppendMedia = !!(props.appendAvatar || props.appendIcon);
+      const hasAppend = !!(hasAppendMedia || slots.append);
+      const hasTitle = !!(props.title || slots.title);
+      const hasSubtitle = !!(props.subtitle || slots.subtitle);
+      return createVNode("div", {
+        "class": ["v-card-item", props.class],
+        "style": props.style
+      }, [hasPrepend && createVNode("div", {
+        "key": "prepend",
+        "class": "v-card-item__prepend"
+      }, [!slots.prepend ? hasPrependMedia && createVNode(VAvatar, {
+        "key": "prepend-avatar",
+        "density": props.density,
+        "icon": props.prependIcon,
+        "image": props.prependAvatar
+      }, null) : createVNode(VDefaultsProvider, {
+        "key": "prepend-defaults",
+        "disabled": !hasPrependMedia,
+        "defaults": {
+          VAvatar: {
+            density: props.density,
+            icon: props.prependIcon,
+            image: props.prependAvatar
+          }
+        }
+      }, slots.prepend)]), createVNode("div", {
+        "class": "v-card-item__content"
+      }, [hasTitle && createVNode(VCardTitle, {
+        "key": "title"
+      }, {
+        default: () => {
+          var _a2;
+          return [((_a2 = slots.title) == null ? void 0 : _a2.call(slots)) ?? props.title];
+        }
+      }), hasSubtitle && createVNode(VCardSubtitle, {
+        "key": "subtitle"
+      }, {
+        default: () => {
+          var _a2;
+          return [((_a2 = slots.subtitle) == null ? void 0 : _a2.call(slots)) ?? props.subtitle];
+        }
+      }), (_a = slots.default) == null ? void 0 : _a.call(slots)]), hasAppend && createVNode("div", {
+        "key": "append",
+        "class": "v-card-item__append"
+      }, [!slots.append ? hasAppendMedia && createVNode(VAvatar, {
+        "key": "append-avatar",
+        "density": props.density,
+        "icon": props.appendIcon,
+        "image": props.appendAvatar
+      }, null) : createVNode(VDefaultsProvider, {
+        "key": "append-defaults",
+        "disabled": !hasAppendMedia,
+        "defaults": {
+          VAvatar: {
+            density: props.density,
+            icon: props.appendIcon,
+            image: props.appendAvatar
+          }
+        }
+      }, slots.append)])]);
+    });
+    return {};
+  }
+});
+const VCardText = createSimpleFunctional("v-card-text");
+const VCard = genericComponent()({
+  name: "VCard",
+  directives: {
+    Ripple
+  },
+  props: {
+    appendAvatar: String,
+    appendIcon: IconValue,
+    disabled: Boolean,
+    flat: Boolean,
+    hover: Boolean,
+    image: String,
+    link: {
+      type: Boolean,
+      default: void 0
+    },
+    prependAvatar: String,
+    prependIcon: IconValue,
+    ripple: {
+      type: Boolean,
+      default: true
+    },
+    subtitle: String,
+    text: String,
+    title: String,
+    ...makeBorderProps(),
+    ...makeComponentProps(),
+    ...makeDensityProps(),
+    ...makeDimensionProps(),
+    ...makeElevationProps(),
+    ...makeLoaderProps(),
+    ...makeLocationProps(),
+    ...makePositionProps(),
+    ...makeRoundedProps(),
+    ...makeRouterProps(),
+    ...makeTagProps(),
+    ...makeThemeProps(),
+    ...makeVariantProps({
+      variant: "elevated"
+    })
+  },
+  setup(props, _ref) {
+    let {
+      attrs,
+      slots
+    } = _ref;
+    const {
+      themeClasses
+    } = provideTheme(props);
+    const {
+      borderClasses
+    } = useBorder(props);
+    const {
+      colorClasses,
+      colorStyles,
+      variantClasses
+    } = useVariant(props);
+    const {
+      densityClasses
+    } = useDensity(props);
+    const {
+      dimensionStyles
+    } = useDimension(props);
+    const {
+      elevationClasses
+    } = useElevation(props);
+    const {
+      loaderClasses
+    } = useLoader(props);
+    const {
+      locationStyles
+    } = useLocation(props);
+    const {
+      positionClasses
+    } = usePosition(props);
+    const {
+      roundedClasses
+    } = useRounded(props);
+    const link = useLink(props, attrs);
+    const isLink = computed(() => props.link !== false && link.isLink.value);
+    const isClickable = computed(() => !props.disabled && props.link !== false && (props.link || link.isClickable.value));
+    useRender(() => {
+      const Tag = isLink.value ? "a" : props.tag;
+      const hasTitle = !!(slots.title || props.title);
+      const hasSubtitle = !!(slots.subtitle || props.subtitle);
+      const hasHeader = hasTitle || hasSubtitle;
+      const hasAppend = !!(slots.append || props.appendAvatar || props.appendIcon);
+      const hasPrepend = !!(slots.prepend || props.prependAvatar || props.prependIcon);
+      const hasImage = !!(slots.image || props.image);
+      const hasCardItem = hasHeader || hasPrepend || hasAppend;
+      const hasText = !!(slots.text || props.text);
+      return withDirectives(createVNode(Tag, {
+        "class": ["v-card", {
+          "v-card--disabled": props.disabled,
+          "v-card--flat": props.flat,
+          "v-card--hover": props.hover && !(props.disabled || props.flat),
+          "v-card--link": isClickable.value
+        }, themeClasses.value, borderClasses.value, colorClasses.value, densityClasses.value, elevationClasses.value, loaderClasses.value, positionClasses.value, roundedClasses.value, variantClasses.value, props.class],
+        "style": [colorStyles.value, dimensionStyles.value, locationStyles.value, props.style],
+        "href": link.href.value,
+        "onClick": isClickable.value && link.navigate,
+        "tabindex": props.disabled ? -1 : void 0
+      }, {
+        default: () => {
+          var _a;
+          return [hasImage && createVNode("div", {
+            "key": "image",
+            "class": "v-card__image"
+          }, [!slots.image ? createVNode(VImg, {
+            "key": "image-img",
+            "cover": true,
+            "src": props.image
+          }, null) : createVNode(VDefaultsProvider, {
+            "key": "image-defaults",
+            "disabled": !props.image,
+            "defaults": {
+              VImg: {
+                cover: true,
+                src: props.image
+              }
+            }
+          }, slots.image)]), createVNode(LoaderSlot, {
+            "name": "v-card",
+            "active": !!props.loading,
+            "color": typeof props.loading === "boolean" ? void 0 : props.loading
+          }, {
+            default: slots.loader
+          }), hasCardItem && createVNode(VCardItem, {
+            "key": "item",
+            "prependAvatar": props.prependAvatar,
+            "prependIcon": props.prependIcon,
+            "title": props.title,
+            "subtitle": props.subtitle,
+            "appendAvatar": props.appendAvatar,
+            "appendIcon": props.appendIcon
+          }, {
+            default: slots.item,
+            prepend: slots.prepend,
+            title: slots.title,
+            subtitle: slots.subtitle,
+            append: slots.append
+          }), hasText && createVNode(VCardText, {
+            "key": "text"
+          }, {
+            default: () => {
+              var _a2;
+              return [((_a2 = slots.text) == null ? void 0 : _a2.call(slots)) ?? props.text];
+            }
+          }), (_a = slots.default) == null ? void 0 : _a.call(slots), slots.actions && createVNode(VCardActions, null, {
+            default: slots.actions
+          }), genOverlays(isClickable.value, "v-card")];
+        }
+      }), [[resolveDirective("ripple"), isClickable.value && props.ripple]]);
+    });
     return {};
   }
 });
@@ -11466,6 +11045,2269 @@ const VRow = genericComponent()({
   }
 });
 const VSpacer = createSimpleFunctional("flex-grow-1", "div", "VSpacer");
+const _hoisted_1$4 = { class: "text-body-1" };
+const _hoisted_2$2 = /* @__PURE__ */ createBaseVNode("li", null, "Lens3 is a multiplexer to MinIO to service multiple MinIO instances at a single access point. ", -1);
+const _hoisted_3$2 = /* @__PURE__ */ createBaseVNode("li", null, [
+  /* @__PURE__ */ createTextVNode("For the usage, see the Lens3 User Guide in: "),
+  /* @__PURE__ */ createBaseVNode("a", { href: "https://github.com/riken-rccs/lens3/" }, "github.com")
+], -1);
+function _sfc_render$6(_ctx, _cache, $props, $setup, $data, $options) {
+  return openBlock(), createBlock(VCard, { "min-width": "300" }, {
+    default: withCtx(() => [
+      createVNode(VCardTitle, null, {
+        default: withCtx(() => [
+          createTextVNode("About Lens3")
+        ]),
+        _: 1
+      }),
+      createVNode(VCardText, { class: "text-body-1 pa=1 ma=1" }, {
+        default: withCtx(() => [
+          createBaseVNode("ul", _hoisted_1$4, [
+            _hoisted_2$2,
+            _hoisted_3$2,
+            createBaseVNode("li", null, [
+              createTextVNode("S3 is serviced at: " + toDisplayString($props.pool_data.s3_url) + " ", 1),
+              createVNode(VBtn, {
+                icon: "mdi-clipboard-text",
+                variant: "plain",
+                onClick: $options.kick_copy_url_to_clipboard
+              }, null, 8, ["onClick"]),
+              createTextVNode(". ")
+            ]),
+            createBaseVNode("li", null, "Lens3 version: " + toDisplayString($props.pool_data.lens3_version), 1)
+          ])
+        ]),
+        _: 1
+      }),
+      createVNode(VCardActions, null, {
+        default: withCtx(() => [
+          createVNode(VBtn, {
+            variant: "text",
+            onClick: _cache[0] || (_cache[0] = ($event) => $props.pool_data.menu_visible = false)
+          }, {
+            default: withCtx(() => [
+              createTextVNode(" Dismiss ")
+            ]),
+            _: 1
+          }),
+          createVNode(VSpacer)
+        ]),
+        _: 1
+      })
+    ]),
+    _: 1
+  });
+}
+const AboutMenu = /* @__PURE__ */ _export_sfc(_sfc_main$8, [["render", _sfc_render$6]]);
+const _sfc_main$7 = {
+  props: {
+    pool_data: {
+      type: Object,
+      default: () => ({})
+    }
+  },
+  components: {
+    AboutMenu
+  },
+  setup() {
+    const theme = useTheme();
+    return {
+      theme,
+      dark: false,
+      change_theme: (d) => {
+        theme.global.name.value = d ? "dark" : "light";
+      }
+    };
+  }
+};
+const VAppBar$1 = "";
+const VToolbar$1 = "";
+function createCssTransition(name) {
+  let origin = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : "center center";
+  let mode = arguments.length > 2 ? arguments[2] : void 0;
+  return genericComponent()({
+    name,
+    props: {
+      disabled: Boolean,
+      group: Boolean,
+      hideOnLeave: Boolean,
+      leaveAbsolute: Boolean,
+      mode: {
+        type: String,
+        default: mode
+      },
+      origin: {
+        type: String,
+        default: origin
+      }
+    },
+    setup(props, _ref) {
+      let {
+        slots
+      } = _ref;
+      const functions = {
+        onBeforeEnter(el) {
+          el.style.transformOrigin = props.origin;
+        },
+        onLeave(el) {
+          if (props.leaveAbsolute) {
+            const {
+              offsetTop,
+              offsetLeft,
+              offsetWidth,
+              offsetHeight
+            } = el;
+            el._transitionInitialStyles = {
+              position: el.style.position,
+              top: el.style.top,
+              left: el.style.left,
+              width: el.style.width,
+              height: el.style.height
+            };
+            el.style.position = "absolute";
+            el.style.top = `${offsetTop}px`;
+            el.style.left = `${offsetLeft}px`;
+            el.style.width = `${offsetWidth}px`;
+            el.style.height = `${offsetHeight}px`;
+          }
+          if (props.hideOnLeave) {
+            el.style.setProperty("display", "none", "important");
+          }
+        },
+        onAfterLeave(el) {
+          if (props.leaveAbsolute && (el == null ? void 0 : el._transitionInitialStyles)) {
+            const {
+              position,
+              top,
+              left,
+              width,
+              height
+            } = el._transitionInitialStyles;
+            delete el._transitionInitialStyles;
+            el.style.position = position || "";
+            el.style.top = top || "";
+            el.style.left = left || "";
+            el.style.width = width || "";
+            el.style.height = height || "";
+          }
+        }
+      };
+      return () => {
+        const tag = props.group ? TransitionGroup : Transition;
+        return h(tag, {
+          name: props.disabled ? "" : name,
+          css: !props.disabled,
+          ...props.group ? void 0 : {
+            mode: props.mode
+          },
+          ...props.disabled ? {} : functions
+        }, slots.default);
+      };
+    }
+  });
+}
+function createJavascriptTransition(name, functions) {
+  let mode = arguments.length > 2 && arguments[2] !== void 0 ? arguments[2] : "in-out";
+  return genericComponent()({
+    name,
+    props: {
+      mode: {
+        type: String,
+        default: mode
+      },
+      disabled: Boolean
+    },
+    setup(props, _ref2) {
+      let {
+        slots
+      } = _ref2;
+      return () => {
+        return h(Transition, {
+          name: props.disabled ? "" : name,
+          css: !props.disabled,
+          // mode: props.mode, // TODO: vuejs/vue-next#3104
+          ...props.disabled ? {} : functions
+        }, slots.default);
+      };
+    }
+  });
+}
+function ExpandTransitionGenerator() {
+  let expandedParentClass = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : "";
+  let x = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : false;
+  const sizeProperty = x ? "width" : "height";
+  const offsetProperty = camelize(`offset-${sizeProperty}`);
+  return {
+    onBeforeEnter(el) {
+      el._parent = el.parentNode;
+      el._initialStyle = {
+        transition: el.style.transition,
+        overflow: el.style.overflow,
+        [sizeProperty]: el.style[sizeProperty]
+      };
+    },
+    onEnter(el) {
+      const initialStyle = el._initialStyle;
+      el.style.setProperty("transition", "none", "important");
+      el.style.overflow = "hidden";
+      const offset = `${el[offsetProperty]}px`;
+      el.style[sizeProperty] = "0";
+      void el.offsetHeight;
+      el.style.transition = initialStyle.transition;
+      if (expandedParentClass && el._parent) {
+        el._parent.classList.add(expandedParentClass);
+      }
+      requestAnimationFrame(() => {
+        el.style[sizeProperty] = offset;
+      });
+    },
+    onAfterEnter: resetStyles,
+    onEnterCancelled: resetStyles,
+    onLeave(el) {
+      el._initialStyle = {
+        transition: "",
+        overflow: el.style.overflow,
+        [sizeProperty]: el.style[sizeProperty]
+      };
+      el.style.overflow = "hidden";
+      el.style[sizeProperty] = `${el[offsetProperty]}px`;
+      void el.offsetHeight;
+      requestAnimationFrame(() => el.style[sizeProperty] = "0");
+    },
+    onAfterLeave,
+    onLeaveCancelled: onAfterLeave
+  };
+  function onAfterLeave(el) {
+    if (expandedParentClass && el._parent) {
+      el._parent.classList.remove(expandedParentClass);
+    }
+    resetStyles(el);
+  }
+  function resetStyles(el) {
+    const size2 = el._initialStyle[sizeProperty];
+    el.style.overflow = el._initialStyle.overflow;
+    if (size2 != null)
+      el.style[sizeProperty] = size2;
+    delete el._initialStyle;
+  }
+}
+const VDialogTransition = genericComponent()({
+  name: "VDialogTransition",
+  props: {
+    target: Object
+  },
+  setup(props, _ref) {
+    let {
+      slots
+    } = _ref;
+    const functions = {
+      onBeforeEnter(el) {
+        el.style.pointerEvents = "none";
+        el.style.visibility = "hidden";
+      },
+      async onEnter(el, done) {
+        var _a;
+        await new Promise((resolve2) => requestAnimationFrame(resolve2));
+        await new Promise((resolve2) => requestAnimationFrame(resolve2));
+        el.style.visibility = "";
+        const {
+          x,
+          y,
+          sx,
+          sy,
+          speed
+        } = getDimensions(props.target, el);
+        const animation = animate(el, [{
+          transform: `translate(${x}px, ${y}px) scale(${sx}, ${sy})`,
+          opacity: 0
+        }, {}], {
+          duration: 225 * speed,
+          easing: deceleratedEasing
+        });
+        (_a = getChildren(el)) == null ? void 0 : _a.forEach((el2) => {
+          animate(el2, [{
+            opacity: 0
+          }, {
+            opacity: 0,
+            offset: 0.33
+          }, {}], {
+            duration: 225 * 2 * speed,
+            easing: standardEasing
+          });
+        });
+        animation.finished.then(() => done());
+      },
+      onAfterEnter(el) {
+        el.style.removeProperty("pointer-events");
+      },
+      onBeforeLeave(el) {
+        el.style.pointerEvents = "none";
+      },
+      async onLeave(el, done) {
+        var _a;
+        await new Promise((resolve2) => requestAnimationFrame(resolve2));
+        const {
+          x,
+          y,
+          sx,
+          sy,
+          speed
+        } = getDimensions(props.target, el);
+        const animation = animate(el, [{}, {
+          transform: `translate(${x}px, ${y}px) scale(${sx}, ${sy})`,
+          opacity: 0
+        }], {
+          duration: 125 * speed,
+          easing: acceleratedEasing
+        });
+        animation.finished.then(() => done());
+        (_a = getChildren(el)) == null ? void 0 : _a.forEach((el2) => {
+          animate(el2, [{}, {
+            opacity: 0,
+            offset: 0.2
+          }, {
+            opacity: 0
+          }], {
+            duration: 125 * 2 * speed,
+            easing: standardEasing
+          });
+        });
+      },
+      onAfterLeave(el) {
+        el.style.removeProperty("pointer-events");
+      }
+    };
+    return () => {
+      return props.target ? createVNode(Transition, mergeProps({
+        "name": "dialog-transition"
+      }, functions, {
+        "css": false
+      }), slots) : createVNode(Transition, {
+        "name": "dialog-transition"
+      }, slots);
+    };
+  }
+});
+function getChildren(el) {
+  var _a;
+  const els = (_a = el.querySelector(":scope > .v-card, :scope > .v-sheet, :scope > .v-list")) == null ? void 0 : _a.children;
+  return els && [...els];
+}
+function getDimensions(target, el) {
+  const targetBox = target.getBoundingClientRect();
+  const elBox = nullifyTransforms(el);
+  const [originX, originY] = getComputedStyle(el).transformOrigin.split(" ").map((v) => parseFloat(v));
+  const [anchorSide, anchorOffset] = getComputedStyle(el).getPropertyValue("--v-overlay-anchor-origin").split(" ");
+  let offsetX = targetBox.left + targetBox.width / 2;
+  if (anchorSide === "left" || anchorOffset === "left") {
+    offsetX -= targetBox.width / 2;
+  } else if (anchorSide === "right" || anchorOffset === "right") {
+    offsetX += targetBox.width / 2;
+  }
+  let offsetY = targetBox.top + targetBox.height / 2;
+  if (anchorSide === "top" || anchorOffset === "top") {
+    offsetY -= targetBox.height / 2;
+  } else if (anchorSide === "bottom" || anchorOffset === "bottom") {
+    offsetY += targetBox.height / 2;
+  }
+  const tsx = targetBox.width / elBox.width;
+  const tsy = targetBox.height / elBox.height;
+  const maxs = Math.max(1, tsx, tsy);
+  const sx = tsx / maxs || 0;
+  const sy = tsy / maxs || 0;
+  const asa = elBox.width * elBox.height / (window.innerWidth * window.innerHeight);
+  const speed = asa > 0.12 ? Math.min(1.5, (asa - 0.12) * 10 + 1) : 1;
+  return {
+    x: offsetX - (originX + elBox.left),
+    y: offsetY - (originY + elBox.top),
+    sx,
+    sy,
+    speed
+  };
+}
+createCssTransition("fab-transition", "center center", "out-in");
+createCssTransition("dialog-bottom-transition");
+createCssTransition("dialog-top-transition");
+const VFadeTransition = createCssTransition("fade-transition");
+createCssTransition("scale-transition");
+createCssTransition("scroll-x-transition");
+createCssTransition("scroll-x-reverse-transition");
+createCssTransition("scroll-y-transition");
+createCssTransition("scroll-y-reverse-transition");
+createCssTransition("slide-x-transition");
+createCssTransition("slide-x-reverse-transition");
+const VSlideYTransition = createCssTransition("slide-y-transition");
+createCssTransition("slide-y-reverse-transition");
+const VExpandTransition = createJavascriptTransition("expand-transition", ExpandTransitionGenerator());
+const VExpandXTransition = createJavascriptTransition("expand-x-transition", ExpandTransitionGenerator("", true));
+const makeVToolbarTitleProps = propsFactory({
+  text: String,
+  ...makeComponentProps(),
+  ...makeTagProps()
+}, "v-toolbar-title");
+const VToolbarTitle = genericComponent()({
+  name: "VToolbarTitle",
+  props: makeVToolbarTitleProps(),
+  setup(props, _ref) {
+    let {
+      slots
+    } = _ref;
+    useRender(() => {
+      const hasText = !!(slots.default || slots.text || props.text);
+      return createVNode(props.tag, {
+        "class": ["v-toolbar-title", props.class],
+        "style": props.style
+      }, {
+        default: () => {
+          var _a;
+          return [hasText && createVNode("div", {
+            "class": "v-toolbar-title__placeholder"
+          }, [slots.text ? slots.text() : props.text, (_a = slots.default) == null ? void 0 : _a.call(slots)])];
+        }
+      });
+    });
+    return {};
+  }
+});
+const allowedDensities = [null, "prominent", "default", "comfortable", "compact"];
+const makeVToolbarProps = propsFactory({
+  absolute: Boolean,
+  collapse: Boolean,
+  color: String,
+  density: {
+    type: String,
+    default: "default",
+    validator: (v) => allowedDensities.includes(v)
+  },
+  extended: Boolean,
+  extensionHeight: {
+    type: [Number, String],
+    default: 48
+  },
+  flat: Boolean,
+  floating: Boolean,
+  height: {
+    type: [Number, String],
+    default: 64
+  },
+  image: String,
+  title: String,
+  ...makeBorderProps(),
+  ...makeComponentProps(),
+  ...makeElevationProps(),
+  ...makeRoundedProps(),
+  ...makeTagProps({
+    tag: "header"
+  }),
+  ...makeThemeProps()
+}, "v-toolbar");
+const VToolbar = genericComponent()({
+  name: "VToolbar",
+  props: makeVToolbarProps(),
+  setup(props, _ref) {
+    var _a;
+    let {
+      slots
+    } = _ref;
+    const {
+      backgroundColorClasses,
+      backgroundColorStyles
+    } = useBackgroundColor(toRef(props, "color"));
+    const {
+      borderClasses
+    } = useBorder(props);
+    const {
+      elevationClasses
+    } = useElevation(props);
+    const {
+      roundedClasses
+    } = useRounded(props);
+    const {
+      themeClasses
+    } = provideTheme(props);
+    const isExtended = ref(!!(props.extended || ((_a = slots.extension) == null ? void 0 : _a.call(slots))));
+    const contentHeight = computed(() => parseInt(Number(props.height) + (props.density === "prominent" ? Number(props.height) : 0) - (props.density === "comfortable" ? 8 : 0) - (props.density === "compact" ? 16 : 0), 10));
+    const extensionHeight = computed(() => isExtended.value ? parseInt(Number(props.extensionHeight) + (props.density === "prominent" ? Number(props.extensionHeight) : 0) - (props.density === "comfortable" ? 4 : 0) - (props.density === "compact" ? 8 : 0), 10) : 0);
+    provideDefaults({
+      VBtn: {
+        variant: "text"
+      }
+    });
+    useRender(() => {
+      var _a2;
+      const hasTitle = !!(props.title || slots.title);
+      const hasImage = !!(slots.image || props.image);
+      const extension = (_a2 = slots.extension) == null ? void 0 : _a2.call(slots);
+      isExtended.value = !!(props.extended || extension);
+      return createVNode(props.tag, {
+        "class": ["v-toolbar", {
+          "v-toolbar--absolute": props.absolute,
+          "v-toolbar--collapse": props.collapse,
+          "v-toolbar--flat": props.flat,
+          "v-toolbar--floating": props.floating,
+          [`v-toolbar--density-${props.density}`]: true
+        }, backgroundColorClasses.value, borderClasses.value, elevationClasses.value, roundedClasses.value, themeClasses.value, props.class],
+        "style": [backgroundColorStyles.value, props.style]
+      }, {
+        default: () => [hasImage && createVNode("div", {
+          "key": "image",
+          "class": "v-toolbar__image"
+        }, [!slots.image ? createVNode(VImg, {
+          "key": "image-img",
+          "cover": true,
+          "src": props.image
+        }, null) : createVNode(VDefaultsProvider, {
+          "key": "image-defaults",
+          "disabled": !props.image,
+          "defaults": {
+            VImg: {
+              cover: true,
+              src: props.image
+            }
+          }
+        }, slots.image)]), createVNode(VDefaultsProvider, {
+          "defaults": {
+            VTabs: {
+              height: convertToUnit(contentHeight.value)
+            }
+          }
+        }, {
+          default: () => {
+            var _a3, _b, _c;
+            return [createVNode("div", {
+              "class": "v-toolbar__content",
+              "style": {
+                height: convertToUnit(contentHeight.value)
+              }
+            }, [slots.prepend && createVNode("div", {
+              "class": "v-toolbar__prepend"
+            }, [(_a3 = slots.prepend) == null ? void 0 : _a3.call(slots)]), hasTitle && createVNode(VToolbarTitle, {
+              "key": "title",
+              "text": props.title
+            }, {
+              text: slots.title
+            }), (_b = slots.default) == null ? void 0 : _b.call(slots), slots.append && createVNode("div", {
+              "class": "v-toolbar__append"
+            }, [(_c = slots.append) == null ? void 0 : _c.call(slots)])])];
+          }
+        }), createVNode(VDefaultsProvider, {
+          "defaults": {
+            VTabs: {
+              height: convertToUnit(extensionHeight.value)
+            }
+          }
+        }, {
+          default: () => [createVNode(VExpandTransition, null, {
+            default: () => [isExtended.value && createVNode("div", {
+              "class": "v-toolbar__extension",
+              "style": {
+                height: convertToUnit(extensionHeight.value)
+              }
+            }, [extension])]
+          })]
+        })]
+      });
+    });
+    return {
+      contentHeight,
+      extensionHeight
+    };
+  }
+});
+const makeScrollProps = propsFactory({
+  scrollTarget: {
+    type: String
+  },
+  scrollThreshold: {
+    type: [String, Number],
+    default: 300
+  }
+}, "scroll");
+function useScroll(props) {
+  let args = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {};
+  const {
+    canScroll
+  } = args;
+  let previousScroll = 0;
+  const target = ref(null);
+  const currentScroll = ref(0);
+  const savedScroll = ref(0);
+  const currentThreshold = ref(0);
+  const isScrollActive = ref(false);
+  const isScrollingUp = ref(false);
+  const scrollThreshold = computed(() => {
+    return Number(props.scrollThreshold);
+  });
+  const scrollRatio = computed(() => {
+    return clamp((scrollThreshold.value - currentScroll.value) / scrollThreshold.value || 0);
+  });
+  const onScroll = () => {
+    const targetEl = target.value;
+    if (!targetEl || canScroll && !canScroll.value)
+      return;
+    previousScroll = currentScroll.value;
+    currentScroll.value = "window" in targetEl ? targetEl.pageYOffset : targetEl.scrollTop;
+    isScrollingUp.value = currentScroll.value < previousScroll;
+    currentThreshold.value = Math.abs(currentScroll.value - scrollThreshold.value);
+  };
+  watch(isScrollingUp, () => {
+    savedScroll.value = savedScroll.value || currentScroll.value;
+  });
+  watch(isScrollActive, () => {
+    savedScroll.value = 0;
+  });
+  onMounted(() => {
+    watch(() => props.scrollTarget, (scrollTarget) => {
+      var _a;
+      const newTarget = scrollTarget ? document.querySelector(scrollTarget) : window;
+      if (!newTarget) {
+        consoleWarn(`Unable to locate element with identifier ${scrollTarget}`, getCurrentInstance$1());
+        return;
+      }
+      if (newTarget === target.value)
+        return;
+      (_a = target.value) == null ? void 0 : _a.removeEventListener("scroll", onScroll);
+      target.value = newTarget;
+      target.value.addEventListener("scroll", onScroll, {
+        passive: true
+      });
+    }, {
+      immediate: true
+    });
+  });
+  onBeforeUnmount(() => {
+    var _a;
+    (_a = target.value) == null ? void 0 : _a.removeEventListener("scroll", onScroll);
+  });
+  canScroll && watch(canScroll, onScroll, {
+    immediate: true
+  });
+  return {
+    scrollThreshold,
+    currentScroll,
+    currentThreshold,
+    isScrollActive,
+    scrollRatio,
+    // required only for testing
+    // probably can be removed
+    // later (2 chars chlng)
+    isScrollingUp,
+    savedScroll
+  };
+}
+function useSsrBoot() {
+  const isBooted = ref(false);
+  onMounted(() => {
+    window.requestAnimationFrame(() => {
+      isBooted.value = true;
+    });
+  });
+  const ssrBootStyles = computed(() => !isBooted.value ? {
+    transition: "none !important"
+  } : void 0);
+  return {
+    ssrBootStyles,
+    isBooted: readonly(isBooted)
+  };
+}
+const VAppBar = genericComponent()({
+  name: "VAppBar",
+  props: {
+    scrollBehavior: String,
+    modelValue: {
+      type: Boolean,
+      default: true
+    },
+    location: {
+      type: String,
+      default: "top",
+      validator: (value) => ["top", "bottom"].includes(value)
+    },
+    ...makeVToolbarProps(),
+    ...makeLayoutItemProps(),
+    ...makeScrollProps(),
+    height: {
+      type: [Number, String],
+      default: 64
+    }
+  },
+  emits: {
+    "update:modelValue": (value) => true
+  },
+  setup(props, _ref) {
+    let {
+      slots
+    } = _ref;
+    const vToolbarRef = ref();
+    const isActive = useProxiedModel(props, "modelValue");
+    const scrollBehavior = computed(() => {
+      var _a;
+      const behavior = new Set(((_a = props.scrollBehavior) == null ? void 0 : _a.split(" ")) ?? []);
+      return {
+        hide: behavior.has("hide"),
+        // fullyHide: behavior.has('fully-hide'),
+        inverted: behavior.has("inverted"),
+        collapse: behavior.has("collapse"),
+        elevate: behavior.has("elevate"),
+        fadeImage: behavior.has("fade-image")
+        // shrink: behavior.has('shrink'),
+      };
+    });
+    const canScroll = computed(() => {
+      const behavior = scrollBehavior.value;
+      return behavior.hide || // behavior.fullyHide ||
+      behavior.inverted || behavior.collapse || behavior.elevate || behavior.fadeImage || // behavior.shrink ||
+      !isActive.value;
+    });
+    const {
+      currentScroll,
+      scrollThreshold,
+      isScrollingUp,
+      scrollRatio
+    } = useScroll(props, {
+      canScroll
+    });
+    const isCollapsed = computed(() => props.collapse || scrollBehavior.value.collapse && (scrollBehavior.value.inverted ? scrollRatio.value > 0 : scrollRatio.value === 0));
+    const isFlat = computed(() => props.flat || scrollBehavior.value.elevate && (scrollBehavior.value.inverted ? currentScroll.value > 0 : currentScroll.value === 0));
+    const opacity = computed(() => scrollBehavior.value.fadeImage ? scrollBehavior.value.inverted ? 1 - scrollRatio.value : scrollRatio.value : void 0);
+    const height = computed(() => {
+      var _a, _b;
+      if (scrollBehavior.value.hide && scrollBehavior.value.inverted)
+        return 0;
+      const height2 = ((_a = vToolbarRef.value) == null ? void 0 : _a.contentHeight) ?? 0;
+      const extensionHeight = ((_b = vToolbarRef.value) == null ? void 0 : _b.extensionHeight) ?? 0;
+      return height2 + extensionHeight;
+    });
+    function setActive() {
+      if (scrollBehavior.value.hide) {
+        if (scrollBehavior.value.inverted) {
+          isActive.value = currentScroll.value > scrollThreshold.value;
+        } else {
+          isActive.value = isScrollingUp.value || currentScroll.value < scrollThreshold.value;
+        }
+      } else {
+        isActive.value = true;
+      }
+    }
+    watch(currentScroll, setActive, {
+      immediate: true
+    });
+    watch(scrollBehavior, setActive);
+    const {
+      ssrBootStyles
+    } = useSsrBoot();
+    const {
+      layoutItemStyles
+    } = useLayoutItem({
+      id: props.name,
+      order: computed(() => parseInt(props.order, 10)),
+      position: toRef(props, "location"),
+      layoutSize: height,
+      elementSize: ref(void 0),
+      active: isActive,
+      absolute: toRef(props, "absolute")
+    });
+    useRender(() => {
+      const [toolbarProps] = VToolbar.filterProps(props);
+      return createVNode(VToolbar, mergeProps({
+        "ref": vToolbarRef,
+        "class": ["v-app-bar", {
+          "v-app-bar--bottom": props.location === "bottom"
+        }, props.class],
+        "style": [{
+          ...layoutItemStyles.value,
+          "--v-toolbar-image-opacity": opacity.value,
+          height: void 0,
+          ...ssrBootStyles.value
+        }, props.style]
+      }, toolbarProps, {
+        "collapse": isCollapsed.value,
+        "flat": isFlat.value
+      }), slots);
+    });
+    return {};
+  }
+});
+const VAppBarNavIcon = genericComponent()({
+  name: "VAppBarNavIcon",
+  props: makeVBtnProps({
+    icon: "$menu",
+    variant: "text"
+  }),
+  setup(props, _ref) {
+    let {
+      slots
+    } = _ref;
+    useRender(() => createVNode(VBtn, mergeProps(props, {
+      "class": ["v-app-bar-nav-icon"]
+    }), slots));
+    return {};
+  }
+});
+const VToolbarItems = genericComponent()({
+  name: "VToolbarItems",
+  props: {
+    ...makeComponentProps(),
+    ...makeVariantProps({
+      variant: "text"
+    })
+  },
+  setup(props, _ref) {
+    let {
+      slots
+    } = _ref;
+    provideDefaults({
+      VBtn: {
+        color: toRef(props, "color"),
+        height: "inherit",
+        variant: toRef(props, "variant")
+      }
+    });
+    useRender(() => {
+      var _a;
+      return createVNode("div", {
+        "class": ["v-toolbar-items", props.class],
+        "style": props.style
+      }, [(_a = slots.default) == null ? void 0 : _a.call(slots)]);
+    });
+    return {};
+  }
+});
+const VAppBarTitle = genericComponent()({
+  name: "VAppBarTitle",
+  props: makeVToolbarTitleProps(),
+  setup(props, _ref) {
+    let {
+      slots
+    } = _ref;
+    useRender(() => createVNode(VToolbarTitle, mergeProps(props, {
+      "class": "v-app-bar-title"
+    }), slots));
+    return {};
+  }
+});
+const VMenu$1 = "";
+const VOverlay$1 = "";
+const makeDelayProps = propsFactory({
+  closeDelay: [Number, String],
+  openDelay: [Number, String]
+}, "delay");
+function useDelay(props, cb) {
+  const delays = {};
+  const runDelayFactory = (prop) => () => {
+    if (!IN_BROWSER)
+      return Promise.resolve(true);
+    const active = prop === "openDelay";
+    delays.closeDelay && window.clearTimeout(delays.closeDelay);
+    delete delays.closeDelay;
+    delays.openDelay && window.clearTimeout(delays.openDelay);
+    delete delays.openDelay;
+    return new Promise((resolve2) => {
+      const delay = parseInt(props[prop] ?? 0, 10);
+      delays[prop] = window.setTimeout(() => {
+        cb == null ? void 0 : cb(active);
+        resolve2(active);
+      }, delay);
+    });
+  };
+  return {
+    runCloseDelay: runDelayFactory("closeDelay"),
+    runOpenDelay: runDelayFactory("openDelay")
+  };
+}
+const VMenuSymbol = Symbol.for("vuetify:v-menu");
+const makeActivatorProps = propsFactory({
+  activator: [String, Object],
+  activatorProps: {
+    type: Object,
+    default: () => ({})
+  },
+  openOnClick: {
+    type: Boolean,
+    default: void 0
+  },
+  openOnHover: Boolean,
+  openOnFocus: {
+    type: Boolean,
+    default: void 0
+  },
+  closeOnContentClick: Boolean,
+  ...makeDelayProps()
+}, "v-overlay-activator");
+function useActivator(props, _ref) {
+  let {
+    isActive,
+    isTop
+  } = _ref;
+  const activatorEl = ref();
+  let isHovered = false;
+  let isFocused = false;
+  let firstEnter = true;
+  const openOnFocus = computed(() => props.openOnFocus || props.openOnFocus == null && props.openOnHover);
+  const openOnClick = computed(() => props.openOnClick || props.openOnClick == null && !props.openOnHover && !openOnFocus.value);
+  const {
+    runOpenDelay,
+    runCloseDelay
+  } = useDelay(props, (value) => {
+    if (value === (props.openOnHover && isHovered || openOnFocus.value && isFocused) && !(props.openOnHover && isActive.value && !isTop.value)) {
+      if (isActive.value !== value) {
+        firstEnter = true;
+      }
+      isActive.value = value;
+    }
+  });
+  const availableEvents = {
+    click: (e) => {
+      e.stopPropagation();
+      activatorEl.value = e.currentTarget || e.target;
+      isActive.value = !isActive.value;
+    },
+    mouseenter: (e) => {
+      var _a;
+      if ((_a = e.sourceCapabilities) == null ? void 0 : _a.firesTouchEvents)
+        return;
+      isHovered = true;
+      activatorEl.value = e.currentTarget || e.target;
+      runOpenDelay();
+    },
+    mouseleave: (e) => {
+      isHovered = false;
+      runCloseDelay();
+    },
+    focus: (e) => {
+      if (SUPPORTS_FOCUS_VISIBLE && !e.target.matches(":focus-visible"))
+        return;
+      isFocused = true;
+      e.stopPropagation();
+      activatorEl.value = e.currentTarget || e.target;
+      runOpenDelay();
+    },
+    blur: (e) => {
+      isFocused = false;
+      e.stopPropagation();
+      runCloseDelay();
+    }
+  };
+  const activatorEvents = computed(() => {
+    const events = {};
+    if (openOnClick.value) {
+      events.click = availableEvents.click;
+    }
+    if (props.openOnHover) {
+      events.mouseenter = availableEvents.mouseenter;
+      events.mouseleave = availableEvents.mouseleave;
+    }
+    if (openOnFocus.value) {
+      events.focus = availableEvents.focus;
+      events.blur = availableEvents.blur;
+    }
+    return events;
+  });
+  const contentEvents = computed(() => {
+    const events = {};
+    if (props.openOnHover) {
+      events.mouseenter = () => {
+        isHovered = true;
+        runOpenDelay();
+      };
+      events.mouseleave = () => {
+        isHovered = false;
+        runCloseDelay();
+      };
+    }
+    if (props.closeOnContentClick) {
+      const menu = inject$1(VMenuSymbol, null);
+      events.click = () => {
+        isActive.value = false;
+        menu == null ? void 0 : menu.closeParents();
+      };
+    }
+    return events;
+  });
+  const scrimEvents = computed(() => {
+    const events = {};
+    if (props.openOnHover) {
+      events.mouseenter = () => {
+        if (firstEnter) {
+          isHovered = true;
+          firstEnter = false;
+          runOpenDelay();
+        }
+      };
+      events.mouseleave = () => {
+        isHovered = false;
+        runCloseDelay();
+      };
+    }
+    return events;
+  });
+  watch(isTop, (val) => {
+    if (val && (props.openOnHover && !isHovered && (!openOnFocus.value || !isFocused) || openOnFocus.value && !isFocused && (!props.openOnHover || !isHovered))) {
+      isActive.value = false;
+    }
+  });
+  const activatorRef = ref();
+  watchEffect(() => {
+    if (!activatorRef.value)
+      return;
+    nextTick(() => {
+      const activator = activatorRef.value;
+      activatorEl.value = isComponentInstance(activator) ? activator.$el : activator;
+    });
+  });
+  const vm = getCurrentInstance("useActivator");
+  let scope;
+  watch(() => !!props.activator, (val) => {
+    if (val && IN_BROWSER) {
+      scope = effectScope();
+      scope.run(() => {
+        _useActivator(props, vm, {
+          activatorEl,
+          activatorEvents
+        });
+      });
+    } else if (scope) {
+      scope.stop();
+    }
+  }, {
+    flush: "post",
+    immediate: true
+  });
+  onScopeDispose(() => {
+    scope == null ? void 0 : scope.stop();
+  });
+  return {
+    activatorEl,
+    activatorRef,
+    activatorEvents,
+    contentEvents,
+    scrimEvents
+  };
+}
+function _useActivator(props, vm, _ref2) {
+  let {
+    activatorEl,
+    activatorEvents
+  } = _ref2;
+  watch(() => props.activator, (val, oldVal) => {
+    if (oldVal && val !== oldVal) {
+      const activator = getActivator(oldVal);
+      activator && unbindActivatorProps(activator);
+    }
+    if (val) {
+      nextTick(() => bindActivatorProps());
+    }
+  }, {
+    immediate: true
+  });
+  watch(() => props.activatorProps, () => {
+    bindActivatorProps();
+  });
+  onScopeDispose(() => {
+    unbindActivatorProps();
+  });
+  function bindActivatorProps() {
+    let el = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : getActivator();
+    let _props = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : props.activatorProps;
+    if (!el)
+      return;
+    Object.entries(activatorEvents.value).forEach((_ref3) => {
+      let [name, cb] = _ref3;
+      el.addEventListener(name, cb);
+    });
+    Object.keys(_props).forEach((k) => {
+      if (_props[k] == null) {
+        el.removeAttribute(k);
+      } else {
+        el.setAttribute(k, _props[k]);
+      }
+    });
+  }
+  function unbindActivatorProps() {
+    let el = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : getActivator();
+    let _props = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : props.activatorProps;
+    if (!el)
+      return;
+    Object.entries(activatorEvents.value).forEach((_ref4) => {
+      let [name, cb] = _ref4;
+      el.removeEventListener(name, cb);
+    });
+    Object.keys(_props).forEach((k) => {
+      el.removeAttribute(k);
+    });
+  }
+  function getActivator() {
+    var _a, _b;
+    let selector = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : props.activator;
+    let activator;
+    if (selector) {
+      if (selector === "parent") {
+        let el = (_b = (_a = vm == null ? void 0 : vm.proxy) == null ? void 0 : _a.$el) == null ? void 0 : _b.parentNode;
+        while (el.hasAttribute("data-no-activator")) {
+          el = el.parentNode;
+        }
+        activator = el;
+      } else if (typeof selector === "string") {
+        activator = document.querySelector(selector);
+      } else if ("$el" in selector) {
+        activator = selector.$el;
+      } else {
+        activator = selector;
+      }
+    }
+    activatorEl.value = (activator == null ? void 0 : activator.nodeType) === Node.ELEMENT_NODE ? activator : null;
+    return activatorEl.value;
+  }
+}
+const makeLazyProps = propsFactory({
+  eager: Boolean
+}, "lazy");
+function useLazy(props, active) {
+  const isBooted = ref(false);
+  const hasContent = computed(() => isBooted.value || props.eager || active.value);
+  watch(active, () => isBooted.value = true);
+  function onAfterLeave() {
+    if (!props.eager)
+      isBooted.value = false;
+  }
+  return {
+    isBooted,
+    hasContent,
+    onAfterLeave
+  };
+}
+function elementToViewport(point, offset) {
+  return {
+    x: point.x + offset.x,
+    y: point.y + offset.y
+  };
+}
+function getOffset(a, b) {
+  return {
+    x: a.x - b.x,
+    y: a.y - b.y
+  };
+}
+function anchorToPoint(anchor, box) {
+  if (anchor.side === "top" || anchor.side === "bottom") {
+    const {
+      side,
+      align
+    } = anchor;
+    const x = align === "left" ? 0 : align === "center" ? box.width / 2 : align === "right" ? box.width : align;
+    const y = side === "top" ? 0 : side === "bottom" ? box.height : side;
+    return elementToViewport({
+      x,
+      y
+    }, box);
+  } else if (anchor.side === "left" || anchor.side === "right") {
+    const {
+      side,
+      align
+    } = anchor;
+    const x = side === "left" ? 0 : side === "right" ? box.width : side;
+    const y = align === "top" ? 0 : align === "center" ? box.height / 2 : align === "bottom" ? box.height : align;
+    return elementToViewport({
+      x,
+      y
+    }, box);
+  }
+  return elementToViewport({
+    x: box.width / 2,
+    y: box.height / 2
+  }, box);
+}
+const locationStrategies = {
+  static: staticLocationStrategy,
+  // specific viewport position, usually centered
+  connected: connectedLocationStrategy
+  // connected to a certain element
+};
+const makeLocationStrategyProps = propsFactory({
+  locationStrategy: {
+    type: [String, Function],
+    default: "static",
+    validator: (val) => typeof val === "function" || val in locationStrategies
+  },
+  location: {
+    type: String,
+    default: "bottom"
+  },
+  origin: {
+    type: String,
+    default: "auto"
+  },
+  offset: [Number, String, Array]
+}, "v-overlay-location-strategies");
+function useLocationStrategies(props, data) {
+  const contentStyles = ref({});
+  const updateLocation = ref();
+  if (IN_BROWSER) {
+    useToggleScope(() => !!(data.isActive.value && props.locationStrategy), (reset) => {
+      var _a, _b;
+      watch(() => props.locationStrategy, reset);
+      onScopeDispose(() => {
+        updateLocation.value = void 0;
+      });
+      if (typeof props.locationStrategy === "function") {
+        updateLocation.value = (_a = props.locationStrategy(data, props, contentStyles)) == null ? void 0 : _a.updateLocation;
+      } else {
+        updateLocation.value = (_b = locationStrategies[props.locationStrategy](data, props, contentStyles)) == null ? void 0 : _b.updateLocation;
+      }
+    });
+    window.addEventListener("resize", onResize, {
+      passive: true
+    });
+    onScopeDispose(() => {
+      window.removeEventListener("resize", onResize);
+      updateLocation.value = void 0;
+    });
+  }
+  function onResize(e) {
+    var _a;
+    (_a = updateLocation.value) == null ? void 0 : _a.call(updateLocation, e);
+  }
+  return {
+    contentStyles,
+    updateLocation
+  };
+}
+function staticLocationStrategy() {
+}
+function getIntrinsicSize(el, isRtl) {
+  const contentBox = nullifyTransforms(el);
+  if (isRtl) {
+    contentBox.x += parseFloat(el.style.right || 0);
+  } else {
+    contentBox.x -= parseFloat(el.style.left || 0);
+  }
+  contentBox.y -= parseFloat(el.style.top || 0);
+  return contentBox;
+}
+function connectedLocationStrategy(data, props, contentStyles) {
+  const activatorFixed = isFixedPosition(data.activatorEl.value);
+  if (activatorFixed) {
+    Object.assign(contentStyles.value, {
+      position: "fixed"
+    });
+  }
+  const {
+    preferredAnchor,
+    preferredOrigin
+  } = destructComputed(() => {
+    const parsedAnchor = parseAnchor(props.location, data.isRtl.value);
+    const parsedOrigin = props.origin === "overlap" ? parsedAnchor : props.origin === "auto" ? flipSide(parsedAnchor) : parseAnchor(props.origin, data.isRtl.value);
+    if (parsedAnchor.side === parsedOrigin.side && parsedAnchor.align === flipAlign(parsedOrigin).align) {
+      return {
+        preferredAnchor: flipCorner(parsedAnchor),
+        preferredOrigin: flipCorner(parsedOrigin)
+      };
+    } else {
+      return {
+        preferredAnchor: parsedAnchor,
+        preferredOrigin: parsedOrigin
+      };
+    }
+  });
+  const [minWidth, minHeight, maxWidth, maxHeight] = ["minWidth", "minHeight", "maxWidth", "maxHeight"].map((key) => {
+    return computed(() => {
+      const val = parseFloat(props[key]);
+      return isNaN(val) ? Infinity : val;
+    });
+  });
+  const offset = computed(() => {
+    if (Array.isArray(props.offset)) {
+      return props.offset;
+    }
+    if (typeof props.offset === "string") {
+      const offset2 = props.offset.split(" ").map(parseFloat);
+      if (offset2.length < 2)
+        offset2.push(0);
+      return offset2;
+    }
+    return typeof props.offset === "number" ? [props.offset, 0] : [0, 0];
+  });
+  let observe = false;
+  const observer = new ResizeObserver(() => {
+    if (observe)
+      updateLocation();
+  });
+  watch([data.activatorEl, data.contentEl], (_ref, _ref2) => {
+    let [newActivatorEl, newContentEl] = _ref;
+    let [oldActivatorEl, oldContentEl] = _ref2;
+    if (oldActivatorEl)
+      observer.unobserve(oldActivatorEl);
+    if (newActivatorEl)
+      observer.observe(newActivatorEl);
+    if (oldContentEl)
+      observer.unobserve(oldContentEl);
+    if (newContentEl)
+      observer.observe(newContentEl);
+  }, {
+    immediate: true
+  });
+  onScopeDispose(() => {
+    observer.disconnect();
+  });
+  function updateLocation() {
+    observe = false;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => observe = true);
+    });
+    if (!data.activatorEl.value || !data.contentEl.value)
+      return;
+    const targetBox = data.activatorEl.value.getBoundingClientRect();
+    const contentBox = getIntrinsicSize(data.contentEl.value, data.isRtl.value);
+    const scrollParents = getScrollParents(data.contentEl.value);
+    const viewportMargin = 12;
+    if (!scrollParents.length) {
+      scrollParents.push(document.documentElement);
+      if (!(data.contentEl.value.style.top && data.contentEl.value.style.left)) {
+        contentBox.x += parseFloat(document.documentElement.style.getPropertyValue("--v-body-scroll-x") || 0);
+        contentBox.y += parseFloat(document.documentElement.style.getPropertyValue("--v-body-scroll-y") || 0);
+      }
+    }
+    const viewport = scrollParents.reduce((box, el) => {
+      const rect = el.getBoundingClientRect();
+      const scrollBox = new Box({
+        x: el === document.documentElement ? 0 : rect.x,
+        y: el === document.documentElement ? 0 : rect.y,
+        width: el.clientWidth,
+        height: el.clientHeight
+      });
+      if (box) {
+        return new Box({
+          x: Math.max(box.left, scrollBox.left),
+          y: Math.max(box.top, scrollBox.top),
+          width: Math.min(box.right, scrollBox.right) - Math.max(box.left, scrollBox.left),
+          height: Math.min(box.bottom, scrollBox.bottom) - Math.max(box.top, scrollBox.top)
+        });
+      }
+      return scrollBox;
+    }, void 0);
+    viewport.x += viewportMargin;
+    viewport.y += viewportMargin;
+    viewport.width -= viewportMargin * 2;
+    viewport.height -= viewportMargin * 2;
+    let placement = {
+      anchor: preferredAnchor.value,
+      origin: preferredOrigin.value
+    };
+    function checkOverflow(_placement) {
+      const box = new Box(contentBox);
+      const targetPoint = anchorToPoint(_placement.anchor, targetBox);
+      const contentPoint = anchorToPoint(_placement.origin, box);
+      let {
+        x: x2,
+        y: y2
+      } = getOffset(targetPoint, contentPoint);
+      switch (_placement.anchor.side) {
+        case "top":
+          y2 -= offset.value[0];
+          break;
+        case "bottom":
+          y2 += offset.value[0];
+          break;
+        case "left":
+          x2 -= offset.value[0];
+          break;
+        case "right":
+          x2 += offset.value[0];
+          break;
+      }
+      switch (_placement.anchor.align) {
+        case "top":
+          y2 -= offset.value[1];
+          break;
+        case "bottom":
+          y2 += offset.value[1];
+          break;
+        case "left":
+          x2 -= offset.value[1];
+          break;
+        case "right":
+          x2 += offset.value[1];
+          break;
+      }
+      box.x += x2;
+      box.y += y2;
+      box.width = Math.min(box.width, maxWidth.value);
+      box.height = Math.min(box.height, maxHeight.value);
+      const overflows = getOverflow(box, viewport);
+      return {
+        overflows,
+        x: x2,
+        y: y2
+      };
+    }
+    let x = 0;
+    let y = 0;
+    const available = {
+      x: 0,
+      y: 0
+    };
+    const flipped = {
+      x: false,
+      y: false
+    };
+    let resets = -1;
+    while (true) {
+      if (resets++ > 10) {
+        consoleError("Infinite loop detected in connectedLocationStrategy");
+        break;
+      }
+      const {
+        x: _x,
+        y: _y,
+        overflows
+      } = checkOverflow(placement);
+      x += _x;
+      y += _y;
+      contentBox.x += _x;
+      contentBox.y += _y;
+      {
+        const axis2 = getAxis(placement.anchor);
+        const hasOverflowX = overflows.x.before || overflows.x.after;
+        const hasOverflowY = overflows.y.before || overflows.y.after;
+        let reset = false;
+        ["x", "y"].forEach((key) => {
+          if (key === "x" && hasOverflowX && !flipped.x || key === "y" && hasOverflowY && !flipped.y) {
+            const newPlacement = {
+              anchor: {
+                ...placement.anchor
+              },
+              origin: {
+                ...placement.origin
+              }
+            };
+            const flip = key === "x" ? axis2 === "y" ? flipAlign : flipSide : axis2 === "y" ? flipSide : flipAlign;
+            newPlacement.anchor = flip(newPlacement.anchor);
+            newPlacement.origin = flip(newPlacement.origin);
+            const {
+              overflows: newOverflows
+            } = checkOverflow(newPlacement);
+            if (newOverflows[key].before <= overflows[key].before && newOverflows[key].after <= overflows[key].after || newOverflows[key].before + newOverflows[key].after < (overflows[key].before + overflows[key].after) / 2) {
+              placement = newPlacement;
+              reset = flipped[key] = true;
+            }
+          }
+        });
+        if (reset)
+          continue;
+      }
+      if (overflows.x.before) {
+        x += overflows.x.before;
+        contentBox.x += overflows.x.before;
+      }
+      if (overflows.x.after) {
+        x -= overflows.x.after;
+        contentBox.x -= overflows.x.after;
+      }
+      if (overflows.y.before) {
+        y += overflows.y.before;
+        contentBox.y += overflows.y.before;
+      }
+      if (overflows.y.after) {
+        y -= overflows.y.after;
+        contentBox.y -= overflows.y.after;
+      }
+      {
+        const overflows2 = getOverflow(contentBox, viewport);
+        available.x = viewport.width - overflows2.x.before - overflows2.x.after;
+        available.y = viewport.height - overflows2.y.before - overflows2.y.after;
+        x += overflows2.x.before;
+        contentBox.x += overflows2.x.before;
+        y += overflows2.y.before;
+        contentBox.y += overflows2.y.before;
+      }
+      break;
+    }
+    const axis = getAxis(placement.anchor);
+    Object.assign(contentStyles.value, {
+      "--v-overlay-anchor-origin": `${placement.anchor.side} ${placement.anchor.align}`,
+      transformOrigin: `${placement.origin.side} ${placement.origin.align}`,
+      // transform: `translate(${pixelRound(x)}px, ${pixelRound(y)}px)`,
+      top: convertToUnit(pixelRound(y)),
+      left: data.isRtl.value ? void 0 : convertToUnit(pixelRound(x)),
+      right: data.isRtl.value ? convertToUnit(pixelRound(-x)) : void 0,
+      minWidth: convertToUnit(axis === "y" ? Math.min(minWidth.value, targetBox.width) : minWidth.value),
+      maxWidth: convertToUnit(pixelCeil(clamp(available.x, minWidth.value === Infinity ? 0 : minWidth.value, maxWidth.value))),
+      maxHeight: convertToUnit(pixelCeil(clamp(available.y, minHeight.value === Infinity ? 0 : minHeight.value, maxHeight.value)))
+    });
+    return {
+      available,
+      contentBox
+    };
+  }
+  watch(() => [preferredAnchor.value, preferredOrigin.value, props.offset, props.minWidth, props.minHeight, props.maxWidth, props.maxHeight], () => updateLocation());
+  nextTick(() => {
+    const result = updateLocation();
+    if (!result)
+      return;
+    const {
+      available,
+      contentBox
+    } = result;
+    if (contentBox.height > available.y) {
+      requestAnimationFrame(() => {
+        updateLocation();
+        requestAnimationFrame(() => {
+          updateLocation();
+        });
+      });
+    }
+  });
+  return {
+    updateLocation
+  };
+}
+function pixelRound(val) {
+  return Math.round(val * devicePixelRatio) / devicePixelRatio;
+}
+function pixelCeil(val) {
+  return Math.ceil(val * devicePixelRatio) / devicePixelRatio;
+}
+let clean = true;
+const frames = [];
+function requestNewFrame(cb) {
+  if (!clean || frames.length) {
+    frames.push(cb);
+    run();
+  } else {
+    clean = false;
+    cb();
+    run();
+  }
+}
+let raf = -1;
+function run() {
+  cancelAnimationFrame(raf);
+  raf = requestAnimationFrame(() => {
+    const frame = frames.shift();
+    if (frame)
+      frame();
+    if (frames.length)
+      run();
+    else
+      clean = true;
+  });
+}
+const scrollStrategies = {
+  none: null,
+  close: closeScrollStrategy,
+  block: blockScrollStrategy,
+  reposition: repositionScrollStrategy
+};
+const makeScrollStrategyProps = propsFactory({
+  scrollStrategy: {
+    type: [String, Function],
+    default: "block",
+    validator: (val) => typeof val === "function" || val in scrollStrategies
+  }
+}, "v-overlay-scroll-strategies");
+function useScrollStrategies(props, data) {
+  if (!IN_BROWSER)
+    return;
+  let scope;
+  watchEffect(async () => {
+    scope == null ? void 0 : scope.stop();
+    if (!(data.isActive.value && props.scrollStrategy))
+      return;
+    scope = effectScope();
+    await nextTick();
+    scope.active && scope.run(() => {
+      var _a;
+      if (typeof props.scrollStrategy === "function") {
+        props.scrollStrategy(data, props, scope);
+      } else {
+        (_a = scrollStrategies[props.scrollStrategy]) == null ? void 0 : _a.call(scrollStrategies, data, props, scope);
+      }
+    });
+  });
+  onScopeDispose(() => {
+    scope == null ? void 0 : scope.stop();
+  });
+}
+function closeScrollStrategy(data) {
+  function onScroll(e) {
+    data.isActive.value = false;
+  }
+  bindScroll(data.activatorEl.value ?? data.contentEl.value, onScroll);
+}
+function blockScrollStrategy(data, props) {
+  var _a;
+  const offsetParent = (_a = data.root.value) == null ? void 0 : _a.offsetParent;
+  const scrollElements = [.../* @__PURE__ */ new Set([...getScrollParents(data.activatorEl.value, props.contained ? offsetParent : void 0), ...getScrollParents(data.contentEl.value, props.contained ? offsetParent : void 0)])].filter((el) => !el.classList.contains("v-overlay-scroll-blocked"));
+  const scrollbarWidth = window.innerWidth - document.documentElement.offsetWidth;
+  const scrollableParent = ((el) => hasScrollbar(el) && el)(offsetParent || document.documentElement);
+  if (scrollableParent) {
+    data.root.value.classList.add("v-overlay--scroll-blocked");
+  }
+  scrollElements.forEach((el, i) => {
+    el.style.setProperty("--v-body-scroll-x", convertToUnit(-el.scrollLeft));
+    el.style.setProperty("--v-body-scroll-y", convertToUnit(-el.scrollTop));
+    el.style.setProperty("--v-scrollbar-offset", convertToUnit(scrollbarWidth));
+    el.classList.add("v-overlay-scroll-blocked");
+  });
+  onScopeDispose(() => {
+    scrollElements.forEach((el, i) => {
+      const x = parseFloat(el.style.getPropertyValue("--v-body-scroll-x"));
+      const y = parseFloat(el.style.getPropertyValue("--v-body-scroll-y"));
+      el.style.removeProperty("--v-body-scroll-x");
+      el.style.removeProperty("--v-body-scroll-y");
+      el.style.removeProperty("--v-scrollbar-offset");
+      el.classList.remove("v-overlay-scroll-blocked");
+      el.scrollLeft = -x;
+      el.scrollTop = -y;
+    });
+    if (scrollableParent) {
+      data.root.value.classList.remove("v-overlay--scroll-blocked");
+    }
+  });
+}
+function repositionScrollStrategy(data, props, scope) {
+  let slow = false;
+  let raf2 = -1;
+  let ric = -1;
+  function update(e) {
+    requestNewFrame(() => {
+      var _a, _b;
+      const start = performance.now();
+      (_b = (_a = data.updateLocation).value) == null ? void 0 : _b.call(_a, e);
+      const time = performance.now() - start;
+      slow = time / (1e3 / 60) > 2;
+    });
+  }
+  ric = (typeof requestIdleCallback === "undefined" ? (cb) => cb() : requestIdleCallback)(() => {
+    scope.run(() => {
+      bindScroll(data.activatorEl.value ?? data.contentEl.value, (e) => {
+        if (slow) {
+          cancelAnimationFrame(raf2);
+          raf2 = requestAnimationFrame(() => {
+            raf2 = requestAnimationFrame(() => {
+              update(e);
+            });
+          });
+        } else {
+          update(e);
+        }
+      });
+    });
+  });
+  onScopeDispose(() => {
+    typeof cancelIdleCallback !== "undefined" && cancelIdleCallback(ric);
+    cancelAnimationFrame(raf2);
+  });
+}
+function bindScroll(el, onScroll) {
+  const scrollElements = [document, ...getScrollParents(el)];
+  scrollElements.forEach((el2) => {
+    el2.addEventListener("scroll", onScroll, {
+      passive: true
+    });
+  });
+  onScopeDispose(() => {
+    scrollElements.forEach((el2) => {
+      el2.removeEventListener("scroll", onScroll);
+    });
+  });
+}
+function useHydration() {
+  if (!IN_BROWSER)
+    return ref(false);
+  const {
+    ssr
+  } = useDisplay();
+  if (ssr) {
+    const isMounted = ref(false);
+    onMounted(() => {
+      isMounted.value = true;
+    });
+    return isMounted;
+  } else {
+    return ref(true);
+  }
+}
+function useScopeId() {
+  const vm = getCurrentInstance("useScopeId");
+  const scopeId = vm.vnode.scopeId;
+  return {
+    scopeId: scopeId ? {
+      [scopeId]: ""
+    } : void 0
+  };
+}
+const StackSymbol = Symbol.for("vuetify:stack");
+const globalStack = reactive([]);
+function useStack(isActive, zIndex, disableGlobalStack) {
+  const vm = getCurrentInstance("useStack");
+  const createStackEntry = !disableGlobalStack;
+  const parent = inject$1(StackSymbol, void 0);
+  const stack = reactive({
+    activeChildren: /* @__PURE__ */ new Set()
+  });
+  provide(StackSymbol, stack);
+  const _zIndex = ref(+zIndex.value);
+  useToggleScope(isActive, () => {
+    var _a;
+    const lastZIndex = (_a = globalStack.at(-1)) == null ? void 0 : _a[1];
+    _zIndex.value = lastZIndex ? lastZIndex + 10 : +zIndex.value;
+    if (createStackEntry) {
+      globalStack.push([vm.uid, _zIndex.value]);
+    }
+    parent == null ? void 0 : parent.activeChildren.add(vm.uid);
+    onScopeDispose(() => {
+      if (createStackEntry) {
+        const idx = toRaw(globalStack).findIndex((v) => v[0] === vm.uid);
+        globalStack.splice(idx, 1);
+      }
+      parent == null ? void 0 : parent.activeChildren.delete(vm.uid);
+    });
+  });
+  const globalTop = ref(true);
+  if (createStackEntry) {
+    watchEffect(() => {
+      var _a;
+      const _isTop = ((_a = globalStack.at(-1)) == null ? void 0 : _a[0]) === vm.uid;
+      setTimeout(() => globalTop.value = _isTop);
+    });
+  }
+  const localTop = computed(() => !stack.activeChildren.size);
+  return {
+    globalTop: readonly(globalTop),
+    localTop,
+    stackStyles: computed(() => ({
+      zIndex: _zIndex.value
+    }))
+  };
+}
+function useTeleport(target) {
+  const teleportTarget = computed(() => {
+    const _target = target.value;
+    if (_target === true || !IN_BROWSER)
+      return void 0;
+    const targetElement = _target === false ? document.body : typeof _target === "string" ? document.querySelector(_target) : _target;
+    if (targetElement == null) {
+      return void 0;
+    }
+    let container = targetElement.querySelector(":scope > .v-overlay-container");
+    if (!container) {
+      container = document.createElement("div");
+      container.className = "v-overlay-container";
+      targetElement.appendChild(container);
+    }
+    return container;
+  });
+  return {
+    teleportTarget
+  };
+}
+function defaultConditional() {
+  return true;
+}
+function checkEvent(e, el, binding) {
+  if (!e || checkIsActive(e, binding) === false)
+    return false;
+  const root = attachedRoot(el);
+  if (typeof ShadowRoot !== "undefined" && root instanceof ShadowRoot && root.host === e.target)
+    return false;
+  const elements = (typeof binding.value === "object" && binding.value.include || (() => []))();
+  elements.push(el);
+  return !elements.some((el2) => el2 == null ? void 0 : el2.contains(e.target));
+}
+function checkIsActive(e, binding) {
+  const isActive = typeof binding.value === "object" && binding.value.closeConditional || defaultConditional;
+  return isActive(e);
+}
+function directive(e, el, binding) {
+  const handler = typeof binding.value === "function" ? binding.value : binding.value.handler;
+  el._clickOutside.lastMousedownWasOutside && checkEvent(e, el, binding) && setTimeout(() => {
+    checkIsActive(e, binding) && handler && handler(e);
+  }, 0);
+}
+function handleShadow(el, callback) {
+  const root = attachedRoot(el);
+  callback(document);
+  if (typeof ShadowRoot !== "undefined" && root instanceof ShadowRoot) {
+    callback(root);
+  }
+}
+const ClickOutside = {
+  // [data-app] may not be found
+  // if using bind, inserted makes
+  // sure that the root element is
+  // available, iOS does not support
+  // clicks on body
+  mounted(el, binding) {
+    const onClick = (e) => directive(e, el, binding);
+    const onMousedown = (e) => {
+      el._clickOutside.lastMousedownWasOutside = checkEvent(e, el, binding);
+    };
+    handleShadow(el, (app2) => {
+      app2.addEventListener("click", onClick, true);
+      app2.addEventListener("mousedown", onMousedown, true);
+    });
+    if (!el._clickOutside) {
+      el._clickOutside = {
+        lastMousedownWasOutside: true
+      };
+    }
+    el._clickOutside[binding.instance.$.uid] = {
+      onClick,
+      onMousedown
+    };
+  },
+  unmounted(el, binding) {
+    if (!el._clickOutside)
+      return;
+    handleShadow(el, (app2) => {
+      var _a;
+      if (!app2 || !((_a = el._clickOutside) == null ? void 0 : _a[binding.instance.$.uid]))
+        return;
+      const {
+        onClick,
+        onMousedown
+      } = el._clickOutside[binding.instance.$.uid];
+      app2.removeEventListener("click", onClick, true);
+      app2.removeEventListener("mousedown", onMousedown, true);
+    });
+    delete el._clickOutside[binding.instance.$.uid];
+  }
+};
+function Scrim(props) {
+  const {
+    modelValue,
+    color,
+    ...rest
+  } = props;
+  return createVNode(Transition, {
+    "name": "fade-transition",
+    "appear": true
+  }, {
+    default: () => [props.modelValue && createVNode("div", mergeProps({
+      "class": ["v-overlay__scrim", props.color.backgroundColorClasses.value],
+      "style": props.color.backgroundColorStyles.value
+    }, rest), null)]
+  });
+}
+const makeVOverlayProps = propsFactory({
+  absolute: Boolean,
+  attach: [Boolean, String, Object],
+  closeOnBack: {
+    type: Boolean,
+    default: true
+  },
+  contained: Boolean,
+  contentClass: null,
+  contentProps: null,
+  disabled: Boolean,
+  noClickAnimation: Boolean,
+  modelValue: Boolean,
+  persistent: Boolean,
+  scrim: {
+    type: [String, Boolean],
+    default: true
+  },
+  zIndex: {
+    type: [Number, String],
+    default: 2e3
+  },
+  ...makeActivatorProps(),
+  ...makeComponentProps(),
+  ...makeDimensionProps(),
+  ...makeLazyProps(),
+  ...makeLocationStrategyProps(),
+  ...makeScrollStrategyProps(),
+  ...makeThemeProps(),
+  ...makeTransitionProps()
+}, "v-overlay");
+const VOverlay = genericComponent()({
+  name: "VOverlay",
+  directives: {
+    ClickOutside
+  },
+  inheritAttrs: false,
+  props: {
+    _disableGlobalStack: Boolean,
+    ...makeVOverlayProps()
+  },
+  emits: {
+    "click:outside": (e) => true,
+    "update:modelValue": (value) => true,
+    afterLeave: () => true
+  },
+  setup(props, _ref) {
+    let {
+      slots,
+      attrs,
+      emit: emit2
+    } = _ref;
+    const model = useProxiedModel(props, "modelValue");
+    const isActive = computed({
+      get: () => model.value,
+      set: (v) => {
+        if (!(v && props.disabled))
+          model.value = v;
+      }
+    });
+    const {
+      teleportTarget
+    } = useTeleport(computed(() => props.attach || props.contained));
+    const {
+      themeClasses
+    } = provideTheme(props);
+    const {
+      rtlClasses,
+      isRtl
+    } = useRtl();
+    const {
+      hasContent,
+      onAfterLeave
+    } = useLazy(props, isActive);
+    const scrimColor = useBackgroundColor(computed(() => {
+      return typeof props.scrim === "string" ? props.scrim : null;
+    }));
+    const {
+      globalTop,
+      localTop,
+      stackStyles
+    } = useStack(isActive, toRef(props, "zIndex"), props._disableGlobalStack);
+    const {
+      activatorEl,
+      activatorRef,
+      activatorEvents,
+      contentEvents,
+      scrimEvents
+    } = useActivator(props, {
+      isActive,
+      isTop: localTop
+    });
+    const {
+      dimensionStyles
+    } = useDimension(props);
+    const isMounted = useHydration();
+    const {
+      scopeId
+    } = useScopeId();
+    watch(() => props.disabled, (v) => {
+      if (v)
+        isActive.value = false;
+    });
+    const root = ref();
+    const contentEl = ref();
+    const {
+      contentStyles,
+      updateLocation
+    } = useLocationStrategies(props, {
+      isRtl,
+      contentEl,
+      activatorEl,
+      isActive
+    });
+    useScrollStrategies(props, {
+      root,
+      contentEl,
+      activatorEl,
+      isActive,
+      updateLocation
+    });
+    function onClickOutside(e) {
+      emit2("click:outside", e);
+      if (!props.persistent)
+        isActive.value = false;
+      else
+        animateClick();
+    }
+    function closeConditional() {
+      return isActive.value && globalTop.value;
+    }
+    IN_BROWSER && watch(isActive, (val) => {
+      if (val) {
+        window.addEventListener("keydown", onKeydown);
+      } else {
+        window.removeEventListener("keydown", onKeydown);
+      }
+    }, {
+      immediate: true
+    });
+    function onKeydown(e) {
+      if (e.key === "Escape" && globalTop.value) {
+        if (!props.persistent) {
+          isActive.value = false;
+        } else
+          animateClick();
+      }
+    }
+    const router = useRouter();
+    useToggleScope(() => props.closeOnBack, () => {
+      useBackButton(router, (next) => {
+        if (globalTop.value && isActive.value) {
+          next(false);
+          if (!props.persistent)
+            isActive.value = false;
+          else
+            animateClick();
+        } else {
+          next();
+        }
+      });
+    });
+    const top = ref();
+    watch(() => isActive.value && (props.absolute || props.contained) && teleportTarget.value == null, (val) => {
+      if (val) {
+        const scrollParent = getScrollParent(root.value);
+        if (scrollParent && scrollParent !== document.scrollingElement) {
+          top.value = scrollParent.scrollTop;
+        }
+      }
+    });
+    function animateClick() {
+      if (props.noClickAnimation)
+        return;
+      contentEl.value && animate(contentEl.value, [{
+        transformOrigin: "center"
+      }, {
+        transform: "scale(1.03)"
+      }, {
+        transformOrigin: "center"
+      }], {
+        duration: 150,
+        easing: standardEasing
+      });
+    }
+    useRender(() => {
+      var _a;
+      return createVNode(Fragment, null, [(_a = slots.activator) == null ? void 0 : _a.call(slots, {
+        isActive: isActive.value,
+        props: mergeProps({
+          ref: activatorRef
+        }, toHandlers(activatorEvents.value), props.activatorProps)
+      }), isMounted.value && createVNode(Teleport, {
+        "disabled": !teleportTarget.value,
+        "to": teleportTarget.value
+      }, {
+        default: () => [hasContent.value && createVNode("div", mergeProps({
+          "class": ["v-overlay", {
+            "v-overlay--absolute": props.absolute || props.contained,
+            "v-overlay--active": isActive.value,
+            "v-overlay--contained": props.contained
+          }, themeClasses.value, rtlClasses.value, props.class],
+          "style": [stackStyles.value, {
+            top: convertToUnit(top.value)
+          }, props.style],
+          "ref": root
+        }, scopeId, attrs), [createVNode(Scrim, mergeProps({
+          "color": scrimColor,
+          "modelValue": isActive.value && !!props.scrim
+        }, toHandlers(scrimEvents.value)), null), createVNode(MaybeTransition, {
+          "appear": true,
+          "persisted": true,
+          "transition": props.transition,
+          "target": activatorEl.value,
+          "onAfterLeave": () => {
+            onAfterLeave();
+            emit2("afterLeave");
+          }
+        }, {
+          default: () => {
+            var _a2;
+            return [withDirectives(createVNode("div", mergeProps({
+              "ref": contentEl,
+              "class": ["v-overlay__content", props.contentClass],
+              "style": [dimensionStyles.value, contentStyles.value]
+            }, toHandlers(contentEvents.value), props.contentProps), [(_a2 = slots.default) == null ? void 0 : _a2.call(slots, {
+              isActive
+            })]), [[vShow, isActive.value], [resolveDirective("click-outside"), {
+              handler: onClickOutside,
+              closeConditional,
+              include: () => [activatorEl.value]
+            }]])];
+          }
+        })])]
+      })]);
+    });
+    return {
+      activatorEl,
+      animateClick,
+      contentEl,
+      globalTop,
+      localTop,
+      updateLocation
+    };
+  }
+});
+const Refs = Symbol("Forwarded refs");
+function getDescriptor(obj, key) {
+  let currentObj = obj;
+  while (currentObj) {
+    const descriptor = Reflect.getOwnPropertyDescriptor(currentObj, key);
+    if (descriptor)
+      return descriptor;
+    currentObj = Object.getPrototypeOf(currentObj);
+  }
+  return void 0;
+}
+function forwardRefs(target) {
+  for (var _len = arguments.length, refs = new Array(_len > 1 ? _len - 1 : 0), _key = 1; _key < _len; _key++) {
+    refs[_key - 1] = arguments[_key];
+  }
+  target[Refs] = refs;
+  return new Proxy(target, {
+    get(target2, key) {
+      if (Reflect.has(target2, key)) {
+        return Reflect.get(target2, key);
+      }
+      if (typeof key === "symbol" || key.startsWith("__"))
+        return;
+      for (const ref2 of refs) {
+        if (ref2.value && Reflect.has(ref2.value, key)) {
+          const val = Reflect.get(ref2.value, key);
+          return typeof val === "function" ? val.bind(ref2.value) : val;
+        }
+      }
+    },
+    has(target2, key) {
+      if (Reflect.has(target2, key)) {
+        return true;
+      }
+      if (typeof key === "symbol" || key.startsWith("__"))
+        return false;
+      for (const ref2 of refs) {
+        if (ref2.value && Reflect.has(ref2.value, key)) {
+          return true;
+        }
+      }
+      return false;
+    },
+    getOwnPropertyDescriptor(target2, key) {
+      var _a;
+      const descriptor = Reflect.getOwnPropertyDescriptor(target2, key);
+      if (descriptor)
+        return descriptor;
+      if (typeof key === "symbol" || key.startsWith("__"))
+        return;
+      for (const ref2 of refs) {
+        if (!ref2.value)
+          continue;
+        const descriptor2 = getDescriptor(ref2.value, key) ?? ("_" in ref2.value ? getDescriptor((_a = ref2.value._) == null ? void 0 : _a.setupState, key) : void 0);
+        if (descriptor2)
+          return descriptor2;
+      }
+      for (const ref2 of refs) {
+        const childRefs = ref2.value && ref2.value[Refs];
+        if (!childRefs)
+          continue;
+        const queue2 = childRefs.slice();
+        while (queue2.length) {
+          const ref3 = queue2.shift();
+          const descriptor2 = getDescriptor(ref3.value, key);
+          if (descriptor2)
+            return descriptor2;
+          const childRefs2 = ref3.value && ref3.value[Refs];
+          if (childRefs2)
+            queue2.push(...childRefs2);
+        }
+      }
+      return void 0;
+    }
+  });
+}
+const VMenu = genericComponent()({
+  name: "VMenu",
+  props: {
+    // TODO
+    // disableKeys: Boolean,
+    id: String,
+    ...omit(makeVOverlayProps({
+      closeDelay: 250,
+      closeOnContentClick: true,
+      locationStrategy: "connected",
+      openDelay: 300,
+      scrim: false,
+      scrollStrategy: "reposition",
+      transition: {
+        component: VDialogTransition
+      }
+    }), ["absolute"])
+  },
+  emits: {
+    "update:modelValue": (value) => true
+  },
+  setup(props, _ref) {
+    let {
+      slots
+    } = _ref;
+    const isActive = useProxiedModel(props, "modelValue");
+    const {
+      scopeId
+    } = useScopeId();
+    const uid2 = getUid();
+    const id = computed(() => props.id || `v-menu-${uid2}`);
+    const overlay = ref();
+    const parent = inject$1(VMenuSymbol, null);
+    const openChildren = ref(0);
+    provide(VMenuSymbol, {
+      register() {
+        ++openChildren.value;
+      },
+      unregister() {
+        --openChildren.value;
+      },
+      closeParents() {
+        setTimeout(() => {
+          if (!openChildren.value) {
+            isActive.value = false;
+            parent == null ? void 0 : parent.closeParents();
+          }
+        }, 40);
+      }
+    });
+    watch(isActive, (val) => {
+      val ? parent == null ? void 0 : parent.register() : parent == null ? void 0 : parent.unregister();
+    });
+    function onClickOutside() {
+      parent == null ? void 0 : parent.closeParents();
+    }
+    const activatorProps = computed(() => mergeProps({
+      "aria-haspopup": "menu",
+      "aria-expanded": String(isActive.value),
+      "aria-owns": id.value
+    }, props.activatorProps));
+    useRender(() => {
+      const [overlayProps] = VOverlay.filterProps(props);
+      return createVNode(VOverlay, mergeProps({
+        "ref": overlay,
+        "class": ["v-menu", props.class],
+        "style": props.style
+      }, overlayProps, {
+        "modelValue": isActive.value,
+        "onUpdate:modelValue": ($event) => isActive.value = $event,
+        "absolute": true,
+        "activatorProps": activatorProps.value,
+        "onClick:outside": onClickOutside
+      }, scopeId), {
+        activator: slots.activator,
+        default: function() {
+          for (var _len = arguments.length, args = new Array(_len), _key = 0; _key < _len; _key++) {
+            args[_key] = arguments[_key];
+          }
+          return createVNode(VDefaultsProvider, {
+            "root": true
+          }, {
+            default: () => {
+              var _a;
+              return [(_a = slots.default) == null ? void 0 : _a.call(slots, ...args)];
+            }
+          });
+        }
+      });
+    });
+    return forwardRefs({
+      id,
+      ΨopenChildren: openChildren
+    }, overlay);
+  }
+});
 const VSwitch$1 = "";
 const VSelectionControl$1 = "";
 const VLabel$1 = "";
@@ -12235,6 +14077,7 @@ const VSwitch = genericComponent()({
   }
 });
 function _sfc_render$5(_ctx, _cache, $props, $setup, $data, $options) {
+  const _component_about_menu = resolveComponent("about-menu");
   return openBlock(), createBlock(VAppBar, { flat: "" }, {
     append: withCtx(() => [
       createVNode(VBtn, {
@@ -12243,12 +14086,25 @@ function _sfc_render$5(_ctx, _cache, $props, $setup, $data, $options) {
       })
     ]),
     default: withCtx(() => [
-      createVNode(VAppBarNavIcon, { disabled: "" }, {
+      createVNode(VMenu, {
+        modelValue: $props.pool_data.menu_visible,
+        "onUpdate:modelValue": _cache[0] || (_cache[0] = ($event) => $props.pool_data.menu_visible = $event),
+        "close-on-content-click": false,
+        location: "bottom"
+      }, {
+        activator: withCtx(({ props }) => [
+          createVNode(VAppBarNavIcon, normalizeProps(guardReactiveProps(props)), {
+            default: withCtx(() => [
+              createVNode(VIcon, { icon: "mdi-menu" })
+            ]),
+            _: 2
+          }, 1040)
+        ]),
         default: withCtx(() => [
-          createVNode(VIcon, { icon: "mdi-menu" })
+          createVNode(_component_about_menu, { pool_data: $props.pool_data }, null, 8, ["pool_data"])
         ]),
         _: 1
-      }),
+      }, 8, ["modelValue"]),
       createVNode(VAppBarTitle, null, {
         default: withCtx(() => [
           createVNode(VIcon, { icon: "mdi-cog" }),
@@ -12261,11 +14117,11 @@ function _sfc_render$5(_ctx, _cache, $props, $setup, $data, $options) {
         default: withCtx(() => [
           createVNode(VSwitch, {
             modelValue: $setup.dark,
-            "onUpdate:modelValue": _cache[0] || (_cache[0] = ($event) => $setup.dark = $event),
+            "onUpdate:modelValue": _cache[1] || (_cache[1] = ($event) => $setup.dark = $event),
             flat: "",
             "prepend-icon": "mdi-white-balance-sunny",
             "append-icon": "mdi-moon-waning-crescent",
-            onChange: _cache[1] || (_cache[1] = () => $setup.change_theme($setup.dark))
+            onChange: _cache[2] || (_cache[2] = () => $setup.change_theme($setup.dark))
           }, null, 8, ["modelValue"])
         ]),
         _: 1
@@ -12296,337 +14152,6 @@ const _sfc_main$6 = {
     }
   }
 };
-const VCard$1 = "";
-const VCardActions = genericComponent()({
-  name: "VCardActions",
-  props: makeComponentProps(),
-  setup(props, _ref) {
-    let {
-      slots
-    } = _ref;
-    provideDefaults({
-      VBtn: {
-        variant: "text"
-      }
-    });
-    useRender(() => {
-      var _a;
-      return createVNode("div", {
-        "class": ["v-card-actions", props.class],
-        "style": props.style
-      }, [(_a = slots.default) == null ? void 0 : _a.call(slots)]);
-    });
-    return {};
-  }
-});
-const VAvatar$1 = "";
-const makeVAvatarProps = propsFactory({
-  start: Boolean,
-  end: Boolean,
-  icon: IconValue,
-  image: String,
-  ...makeComponentProps(),
-  ...makeDensityProps(),
-  ...makeRoundedProps(),
-  ...makeSizeProps(),
-  ...makeTagProps(),
-  ...makeThemeProps(),
-  ...makeVariantProps({
-    variant: "flat"
-  })
-}, "v-avatar");
-const VAvatar = genericComponent()({
-  name: "VAvatar",
-  props: makeVAvatarProps(),
-  setup(props, _ref) {
-    let {
-      slots
-    } = _ref;
-    const {
-      themeClasses
-    } = provideTheme(props);
-    const {
-      colorClasses,
-      colorStyles,
-      variantClasses
-    } = useVariant(props);
-    const {
-      densityClasses
-    } = useDensity(props);
-    const {
-      roundedClasses
-    } = useRounded(props);
-    const {
-      sizeClasses,
-      sizeStyles
-    } = useSize(props);
-    useRender(() => createVNode(props.tag, {
-      "class": ["v-avatar", {
-        "v-avatar--start": props.start,
-        "v-avatar--end": props.end
-      }, themeClasses.value, colorClasses.value, densityClasses.value, roundedClasses.value, sizeClasses.value, variantClasses.value, props.class],
-      "style": [colorStyles.value, sizeStyles.value, props.style]
-    }, {
-      default: () => {
-        var _a;
-        return [props.image ? createVNode(VImg, {
-          "key": "image",
-          "src": props.image,
-          "alt": "",
-          "cover": true
-        }, null) : props.icon ? createVNode(VIcon, {
-          "key": "icon",
-          "icon": props.icon
-        }, null) : (_a = slots.default) == null ? void 0 : _a.call(slots), genOverlays(false, "v-avatar")];
-      }
-    }));
-    return {};
-  }
-});
-const VCardSubtitle = createSimpleFunctional("v-card-subtitle");
-const VCardTitle = createSimpleFunctional("v-card-title");
-const VCardItem = genericComponent()({
-  name: "VCardItem",
-  props: {
-    appendAvatar: String,
-    appendIcon: IconValue,
-    prependAvatar: String,
-    prependIcon: IconValue,
-    subtitle: String,
-    title: String,
-    ...makeComponentProps(),
-    ...makeDensityProps()
-  },
-  setup(props, _ref) {
-    let {
-      slots
-    } = _ref;
-    useRender(() => {
-      var _a;
-      const hasPrependMedia = !!(props.prependAvatar || props.prependIcon);
-      const hasPrepend = !!(hasPrependMedia || slots.prepend);
-      const hasAppendMedia = !!(props.appendAvatar || props.appendIcon);
-      const hasAppend = !!(hasAppendMedia || slots.append);
-      const hasTitle = !!(props.title || slots.title);
-      const hasSubtitle = !!(props.subtitle || slots.subtitle);
-      return createVNode("div", {
-        "class": ["v-card-item", props.class],
-        "style": props.style
-      }, [hasPrepend && createVNode("div", {
-        "key": "prepend",
-        "class": "v-card-item__prepend"
-      }, [!slots.prepend ? hasPrependMedia && createVNode(VAvatar, {
-        "key": "prepend-avatar",
-        "density": props.density,
-        "icon": props.prependIcon,
-        "image": props.prependAvatar
-      }, null) : createVNode(VDefaultsProvider, {
-        "key": "prepend-defaults",
-        "disabled": !hasPrependMedia,
-        "defaults": {
-          VAvatar: {
-            density: props.density,
-            icon: props.prependIcon,
-            image: props.prependAvatar
-          }
-        }
-      }, slots.prepend)]), createVNode("div", {
-        "class": "v-card-item__content"
-      }, [hasTitle && createVNode(VCardTitle, {
-        "key": "title"
-      }, {
-        default: () => {
-          var _a2;
-          return [((_a2 = slots.title) == null ? void 0 : _a2.call(slots)) ?? props.title];
-        }
-      }), hasSubtitle && createVNode(VCardSubtitle, {
-        "key": "subtitle"
-      }, {
-        default: () => {
-          var _a2;
-          return [((_a2 = slots.subtitle) == null ? void 0 : _a2.call(slots)) ?? props.subtitle];
-        }
-      }), (_a = slots.default) == null ? void 0 : _a.call(slots)]), hasAppend && createVNode("div", {
-        "key": "append",
-        "class": "v-card-item__append"
-      }, [!slots.append ? hasAppendMedia && createVNode(VAvatar, {
-        "key": "append-avatar",
-        "density": props.density,
-        "icon": props.appendIcon,
-        "image": props.appendAvatar
-      }, null) : createVNode(VDefaultsProvider, {
-        "key": "append-defaults",
-        "disabled": !hasAppendMedia,
-        "defaults": {
-          VAvatar: {
-            density: props.density,
-            icon: props.appendIcon,
-            image: props.appendAvatar
-          }
-        }
-      }, slots.append)])]);
-    });
-    return {};
-  }
-});
-const VCardText = createSimpleFunctional("v-card-text");
-const VCard = genericComponent()({
-  name: "VCard",
-  directives: {
-    Ripple
-  },
-  props: {
-    appendAvatar: String,
-    appendIcon: IconValue,
-    disabled: Boolean,
-    flat: Boolean,
-    hover: Boolean,
-    image: String,
-    link: {
-      type: Boolean,
-      default: void 0
-    },
-    prependAvatar: String,
-    prependIcon: IconValue,
-    ripple: {
-      type: Boolean,
-      default: true
-    },
-    subtitle: String,
-    text: String,
-    title: String,
-    ...makeBorderProps(),
-    ...makeComponentProps(),
-    ...makeDensityProps(),
-    ...makeDimensionProps(),
-    ...makeElevationProps(),
-    ...makeLoaderProps(),
-    ...makeLocationProps(),
-    ...makePositionProps(),
-    ...makeRoundedProps(),
-    ...makeRouterProps(),
-    ...makeTagProps(),
-    ...makeThemeProps(),
-    ...makeVariantProps({
-      variant: "elevated"
-    })
-  },
-  setup(props, _ref) {
-    let {
-      attrs,
-      slots
-    } = _ref;
-    const {
-      themeClasses
-    } = provideTheme(props);
-    const {
-      borderClasses
-    } = useBorder(props);
-    const {
-      colorClasses,
-      colorStyles,
-      variantClasses
-    } = useVariant(props);
-    const {
-      densityClasses
-    } = useDensity(props);
-    const {
-      dimensionStyles
-    } = useDimension(props);
-    const {
-      elevationClasses
-    } = useElevation(props);
-    const {
-      loaderClasses
-    } = useLoader(props);
-    const {
-      locationStyles
-    } = useLocation(props);
-    const {
-      positionClasses
-    } = usePosition(props);
-    const {
-      roundedClasses
-    } = useRounded(props);
-    const link = useLink(props, attrs);
-    const isLink = computed(() => props.link !== false && link.isLink.value);
-    const isClickable = computed(() => !props.disabled && props.link !== false && (props.link || link.isClickable.value));
-    useRender(() => {
-      const Tag = isLink.value ? "a" : props.tag;
-      const hasTitle = !!(slots.title || props.title);
-      const hasSubtitle = !!(slots.subtitle || props.subtitle);
-      const hasHeader = hasTitle || hasSubtitle;
-      const hasAppend = !!(slots.append || props.appendAvatar || props.appendIcon);
-      const hasPrepend = !!(slots.prepend || props.prependAvatar || props.prependIcon);
-      const hasImage = !!(slots.image || props.image);
-      const hasCardItem = hasHeader || hasPrepend || hasAppend;
-      const hasText = !!(slots.text || props.text);
-      return withDirectives(createVNode(Tag, {
-        "class": ["v-card", {
-          "v-card--disabled": props.disabled,
-          "v-card--flat": props.flat,
-          "v-card--hover": props.hover && !(props.disabled || props.flat),
-          "v-card--link": isClickable.value
-        }, themeClasses.value, borderClasses.value, colorClasses.value, densityClasses.value, elevationClasses.value, loaderClasses.value, positionClasses.value, roundedClasses.value, variantClasses.value, props.class],
-        "style": [colorStyles.value, dimensionStyles.value, locationStyles.value, props.style],
-        "href": link.href.value,
-        "onClick": isClickable.value && link.navigate,
-        "tabindex": props.disabled ? -1 : void 0
-      }, {
-        default: () => {
-          var _a;
-          return [hasImage && createVNode("div", {
-            "key": "image",
-            "class": "v-card__image"
-          }, [!slots.image ? createVNode(VImg, {
-            "key": "image-img",
-            "cover": true,
-            "src": props.image
-          }, null) : createVNode(VDefaultsProvider, {
-            "key": "image-defaults",
-            "disabled": !props.image,
-            "defaults": {
-              VImg: {
-                cover: true,
-                src: props.image
-              }
-            }
-          }, slots.image)]), createVNode(LoaderSlot, {
-            "name": "v-card",
-            "active": !!props.loading,
-            "color": typeof props.loading === "boolean" ? void 0 : props.loading
-          }, {
-            default: slots.loader
-          }), hasCardItem && createVNode(VCardItem, {
-            "key": "item",
-            "prependAvatar": props.prependAvatar,
-            "prependIcon": props.prependIcon,
-            "title": props.title,
-            "subtitle": props.subtitle,
-            "appendAvatar": props.appendAvatar,
-            "appendIcon": props.appendIcon
-          }, {
-            default: slots.item,
-            prepend: slots.prepend,
-            title: slots.title,
-            subtitle: slots.subtitle,
-            append: slots.append
-          }), hasText && createVNode(VCardText, {
-            "key": "text"
-          }, {
-            default: () => {
-              var _a2;
-              return [((_a2 = slots.text) == null ? void 0 : _a2.call(slots)) ?? props.text];
-            }
-          }), (_a = slots.default) == null ? void 0 : _a.call(slots), slots.actions && createVNode(VCardActions, null, {
-            default: slots.actions
-          }), genOverlays(isClickable.value, "v-card")];
-        }
-      }), [[resolveDirective("ripple"), isClickable.value && props.ripple]]);
-    });
-    return {};
-  }
-});
 const VSelect$1 = "";
 const VTextField$1 = "";
 const VField$1 = "";
@@ -12945,82 +14470,6 @@ const VCounter = genericComponent()({
     return {};
   }
 });
-const Refs = Symbol("Forwarded refs");
-function getDescriptor(obj, key) {
-  let currentObj = obj;
-  while (currentObj) {
-    const descriptor = Reflect.getOwnPropertyDescriptor(currentObj, key);
-    if (descriptor)
-      return descriptor;
-    currentObj = Object.getPrototypeOf(currentObj);
-  }
-  return void 0;
-}
-function forwardRefs(target) {
-  for (var _len = arguments.length, refs = new Array(_len > 1 ? _len - 1 : 0), _key = 1; _key < _len; _key++) {
-    refs[_key - 1] = arguments[_key];
-  }
-  target[Refs] = refs;
-  return new Proxy(target, {
-    get(target2, key) {
-      if (Reflect.has(target2, key)) {
-        return Reflect.get(target2, key);
-      }
-      if (typeof key === "symbol" || key.startsWith("__"))
-        return;
-      for (const ref2 of refs) {
-        if (ref2.value && Reflect.has(ref2.value, key)) {
-          const val = Reflect.get(ref2.value, key);
-          return typeof val === "function" ? val.bind(ref2.value) : val;
-        }
-      }
-    },
-    has(target2, key) {
-      if (Reflect.has(target2, key)) {
-        return true;
-      }
-      if (typeof key === "symbol" || key.startsWith("__"))
-        return false;
-      for (const ref2 of refs) {
-        if (ref2.value && Reflect.has(ref2.value, key)) {
-          return true;
-        }
-      }
-      return false;
-    },
-    getOwnPropertyDescriptor(target2, key) {
-      var _a;
-      const descriptor = Reflect.getOwnPropertyDescriptor(target2, key);
-      if (descriptor)
-        return descriptor;
-      if (typeof key === "symbol" || key.startsWith("__"))
-        return;
-      for (const ref2 of refs) {
-        if (!ref2.value)
-          continue;
-        const descriptor2 = getDescriptor(ref2.value, key) ?? ("_" in ref2.value ? getDescriptor((_a = ref2.value._) == null ? void 0 : _a.setupState, key) : void 0);
-        if (descriptor2)
-          return descriptor2;
-      }
-      for (const ref2 of refs) {
-        const childRefs = ref2.value && ref2.value[Refs];
-        if (!childRefs)
-          continue;
-        const queue2 = childRefs.slice();
-        while (queue2.length) {
-          const ref3 = queue2.shift();
-          const descriptor2 = getDescriptor(ref3.value, key);
-          if (descriptor2)
-            return descriptor2;
-          const childRefs2 = ref3.value && ref3.value[Refs];
-          if (childRefs2)
-            queue2.push(...childRefs2);
-        }
-      }
-      return void 0;
-    }
-  });
-}
 const activeTypes = ["color", "file", "time", "date", "datetime-local", "week", "month"];
 const makeVTextFieldProps = propsFactory({
   autofocus: Boolean,
@@ -14844,1352 +16293,6 @@ const VList = genericComponent()({
     };
   }
 });
-const VMenu$1 = "";
-const VOverlay$1 = "";
-const makeDelayProps = propsFactory({
-  closeDelay: [Number, String],
-  openDelay: [Number, String]
-}, "delay");
-function useDelay(props, cb) {
-  const delays = {};
-  const runDelayFactory = (prop) => () => {
-    if (!IN_BROWSER)
-      return Promise.resolve(true);
-    const active = prop === "openDelay";
-    delays.closeDelay && window.clearTimeout(delays.closeDelay);
-    delete delays.closeDelay;
-    delays.openDelay && window.clearTimeout(delays.openDelay);
-    delete delays.openDelay;
-    return new Promise((resolve2) => {
-      const delay = parseInt(props[prop] ?? 0, 10);
-      delays[prop] = window.setTimeout(() => {
-        cb == null ? void 0 : cb(active);
-        resolve2(active);
-      }, delay);
-    });
-  };
-  return {
-    runCloseDelay: runDelayFactory("closeDelay"),
-    runOpenDelay: runDelayFactory("openDelay")
-  };
-}
-const VMenuSymbol = Symbol.for("vuetify:v-menu");
-const makeActivatorProps = propsFactory({
-  activator: [String, Object],
-  activatorProps: {
-    type: Object,
-    default: () => ({})
-  },
-  openOnClick: {
-    type: Boolean,
-    default: void 0
-  },
-  openOnHover: Boolean,
-  openOnFocus: {
-    type: Boolean,
-    default: void 0
-  },
-  closeOnContentClick: Boolean,
-  ...makeDelayProps()
-}, "v-overlay-activator");
-function useActivator(props, _ref) {
-  let {
-    isActive,
-    isTop
-  } = _ref;
-  const activatorEl = ref();
-  let isHovered = false;
-  let isFocused = false;
-  let firstEnter = true;
-  const openOnFocus = computed(() => props.openOnFocus || props.openOnFocus == null && props.openOnHover);
-  const openOnClick = computed(() => props.openOnClick || props.openOnClick == null && !props.openOnHover && !openOnFocus.value);
-  const {
-    runOpenDelay,
-    runCloseDelay
-  } = useDelay(props, (value) => {
-    if (value === (props.openOnHover && isHovered || openOnFocus.value && isFocused) && !(props.openOnHover && isActive.value && !isTop.value)) {
-      if (isActive.value !== value) {
-        firstEnter = true;
-      }
-      isActive.value = value;
-    }
-  });
-  const availableEvents = {
-    click: (e) => {
-      e.stopPropagation();
-      activatorEl.value = e.currentTarget || e.target;
-      isActive.value = !isActive.value;
-    },
-    mouseenter: (e) => {
-      var _a;
-      if ((_a = e.sourceCapabilities) == null ? void 0 : _a.firesTouchEvents)
-        return;
-      isHovered = true;
-      activatorEl.value = e.currentTarget || e.target;
-      runOpenDelay();
-    },
-    mouseleave: (e) => {
-      isHovered = false;
-      runCloseDelay();
-    },
-    focus: (e) => {
-      if (SUPPORTS_FOCUS_VISIBLE && !e.target.matches(":focus-visible"))
-        return;
-      isFocused = true;
-      e.stopPropagation();
-      activatorEl.value = e.currentTarget || e.target;
-      runOpenDelay();
-    },
-    blur: (e) => {
-      isFocused = false;
-      e.stopPropagation();
-      runCloseDelay();
-    }
-  };
-  const activatorEvents = computed(() => {
-    const events = {};
-    if (openOnClick.value) {
-      events.click = availableEvents.click;
-    }
-    if (props.openOnHover) {
-      events.mouseenter = availableEvents.mouseenter;
-      events.mouseleave = availableEvents.mouseleave;
-    }
-    if (openOnFocus.value) {
-      events.focus = availableEvents.focus;
-      events.blur = availableEvents.blur;
-    }
-    return events;
-  });
-  const contentEvents = computed(() => {
-    const events = {};
-    if (props.openOnHover) {
-      events.mouseenter = () => {
-        isHovered = true;
-        runOpenDelay();
-      };
-      events.mouseleave = () => {
-        isHovered = false;
-        runCloseDelay();
-      };
-    }
-    if (props.closeOnContentClick) {
-      const menu = inject$1(VMenuSymbol, null);
-      events.click = () => {
-        isActive.value = false;
-        menu == null ? void 0 : menu.closeParents();
-      };
-    }
-    return events;
-  });
-  const scrimEvents = computed(() => {
-    const events = {};
-    if (props.openOnHover) {
-      events.mouseenter = () => {
-        if (firstEnter) {
-          isHovered = true;
-          firstEnter = false;
-          runOpenDelay();
-        }
-      };
-      events.mouseleave = () => {
-        isHovered = false;
-        runCloseDelay();
-      };
-    }
-    return events;
-  });
-  watch(isTop, (val) => {
-    if (val && (props.openOnHover && !isHovered && (!openOnFocus.value || !isFocused) || openOnFocus.value && !isFocused && (!props.openOnHover || !isHovered))) {
-      isActive.value = false;
-    }
-  });
-  const activatorRef = ref();
-  watchEffect(() => {
-    if (!activatorRef.value)
-      return;
-    nextTick(() => {
-      const activator = activatorRef.value;
-      activatorEl.value = isComponentInstance(activator) ? activator.$el : activator;
-    });
-  });
-  const vm = getCurrentInstance("useActivator");
-  let scope;
-  watch(() => !!props.activator, (val) => {
-    if (val && IN_BROWSER) {
-      scope = effectScope();
-      scope.run(() => {
-        _useActivator(props, vm, {
-          activatorEl,
-          activatorEvents
-        });
-      });
-    } else if (scope) {
-      scope.stop();
-    }
-  }, {
-    flush: "post",
-    immediate: true
-  });
-  onScopeDispose(() => {
-    scope == null ? void 0 : scope.stop();
-  });
-  return {
-    activatorEl,
-    activatorRef,
-    activatorEvents,
-    contentEvents,
-    scrimEvents
-  };
-}
-function _useActivator(props, vm, _ref2) {
-  let {
-    activatorEl,
-    activatorEvents
-  } = _ref2;
-  watch(() => props.activator, (val, oldVal) => {
-    if (oldVal && val !== oldVal) {
-      const activator = getActivator(oldVal);
-      activator && unbindActivatorProps(activator);
-    }
-    if (val) {
-      nextTick(() => bindActivatorProps());
-    }
-  }, {
-    immediate: true
-  });
-  watch(() => props.activatorProps, () => {
-    bindActivatorProps();
-  });
-  onScopeDispose(() => {
-    unbindActivatorProps();
-  });
-  function bindActivatorProps() {
-    let el = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : getActivator();
-    let _props = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : props.activatorProps;
-    if (!el)
-      return;
-    Object.entries(activatorEvents.value).forEach((_ref3) => {
-      let [name, cb] = _ref3;
-      el.addEventListener(name, cb);
-    });
-    Object.keys(_props).forEach((k) => {
-      if (_props[k] == null) {
-        el.removeAttribute(k);
-      } else {
-        el.setAttribute(k, _props[k]);
-      }
-    });
-  }
-  function unbindActivatorProps() {
-    let el = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : getActivator();
-    let _props = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : props.activatorProps;
-    if (!el)
-      return;
-    Object.entries(activatorEvents.value).forEach((_ref4) => {
-      let [name, cb] = _ref4;
-      el.removeEventListener(name, cb);
-    });
-    Object.keys(_props).forEach((k) => {
-      el.removeAttribute(k);
-    });
-  }
-  function getActivator() {
-    var _a, _b;
-    let selector = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : props.activator;
-    let activator;
-    if (selector) {
-      if (selector === "parent") {
-        let el = (_b = (_a = vm == null ? void 0 : vm.proxy) == null ? void 0 : _a.$el) == null ? void 0 : _b.parentNode;
-        while (el.hasAttribute("data-no-activator")) {
-          el = el.parentNode;
-        }
-        activator = el;
-      } else if (typeof selector === "string") {
-        activator = document.querySelector(selector);
-      } else if ("$el" in selector) {
-        activator = selector.$el;
-      } else {
-        activator = selector;
-      }
-    }
-    activatorEl.value = (activator == null ? void 0 : activator.nodeType) === Node.ELEMENT_NODE ? activator : null;
-    return activatorEl.value;
-  }
-}
-const makeLazyProps = propsFactory({
-  eager: Boolean
-}, "lazy");
-function useLazy(props, active) {
-  const isBooted = ref(false);
-  const hasContent = computed(() => isBooted.value || props.eager || active.value);
-  watch(active, () => isBooted.value = true);
-  function onAfterLeave() {
-    if (!props.eager)
-      isBooted.value = false;
-  }
-  return {
-    isBooted,
-    hasContent,
-    onAfterLeave
-  };
-}
-function elementToViewport(point, offset) {
-  return {
-    x: point.x + offset.x,
-    y: point.y + offset.y
-  };
-}
-function getOffset(a, b) {
-  return {
-    x: a.x - b.x,
-    y: a.y - b.y
-  };
-}
-function anchorToPoint(anchor, box) {
-  if (anchor.side === "top" || anchor.side === "bottom") {
-    const {
-      side,
-      align
-    } = anchor;
-    const x = align === "left" ? 0 : align === "center" ? box.width / 2 : align === "right" ? box.width : align;
-    const y = side === "top" ? 0 : side === "bottom" ? box.height : side;
-    return elementToViewport({
-      x,
-      y
-    }, box);
-  } else if (anchor.side === "left" || anchor.side === "right") {
-    const {
-      side,
-      align
-    } = anchor;
-    const x = side === "left" ? 0 : side === "right" ? box.width : side;
-    const y = align === "top" ? 0 : align === "center" ? box.height / 2 : align === "bottom" ? box.height : align;
-    return elementToViewport({
-      x,
-      y
-    }, box);
-  }
-  return elementToViewport({
-    x: box.width / 2,
-    y: box.height / 2
-  }, box);
-}
-const locationStrategies = {
-  static: staticLocationStrategy,
-  // specific viewport position, usually centered
-  connected: connectedLocationStrategy
-  // connected to a certain element
-};
-const makeLocationStrategyProps = propsFactory({
-  locationStrategy: {
-    type: [String, Function],
-    default: "static",
-    validator: (val) => typeof val === "function" || val in locationStrategies
-  },
-  location: {
-    type: String,
-    default: "bottom"
-  },
-  origin: {
-    type: String,
-    default: "auto"
-  },
-  offset: [Number, String, Array]
-}, "v-overlay-location-strategies");
-function useLocationStrategies(props, data) {
-  const contentStyles = ref({});
-  const updateLocation = ref();
-  if (IN_BROWSER) {
-    useToggleScope(() => !!(data.isActive.value && props.locationStrategy), (reset) => {
-      var _a, _b;
-      watch(() => props.locationStrategy, reset);
-      onScopeDispose(() => {
-        updateLocation.value = void 0;
-      });
-      if (typeof props.locationStrategy === "function") {
-        updateLocation.value = (_a = props.locationStrategy(data, props, contentStyles)) == null ? void 0 : _a.updateLocation;
-      } else {
-        updateLocation.value = (_b = locationStrategies[props.locationStrategy](data, props, contentStyles)) == null ? void 0 : _b.updateLocation;
-      }
-    });
-    window.addEventListener("resize", onResize, {
-      passive: true
-    });
-    onScopeDispose(() => {
-      window.removeEventListener("resize", onResize);
-      updateLocation.value = void 0;
-    });
-  }
-  function onResize(e) {
-    var _a;
-    (_a = updateLocation.value) == null ? void 0 : _a.call(updateLocation, e);
-  }
-  return {
-    contentStyles,
-    updateLocation
-  };
-}
-function staticLocationStrategy() {
-}
-function getIntrinsicSize(el, isRtl) {
-  const contentBox = nullifyTransforms(el);
-  if (isRtl) {
-    contentBox.x += parseFloat(el.style.right || 0);
-  } else {
-    contentBox.x -= parseFloat(el.style.left || 0);
-  }
-  contentBox.y -= parseFloat(el.style.top || 0);
-  return contentBox;
-}
-function connectedLocationStrategy(data, props, contentStyles) {
-  const activatorFixed = isFixedPosition(data.activatorEl.value);
-  if (activatorFixed) {
-    Object.assign(contentStyles.value, {
-      position: "fixed"
-    });
-  }
-  const {
-    preferredAnchor,
-    preferredOrigin
-  } = destructComputed(() => {
-    const parsedAnchor = parseAnchor(props.location, data.isRtl.value);
-    const parsedOrigin = props.origin === "overlap" ? parsedAnchor : props.origin === "auto" ? flipSide(parsedAnchor) : parseAnchor(props.origin, data.isRtl.value);
-    if (parsedAnchor.side === parsedOrigin.side && parsedAnchor.align === flipAlign(parsedOrigin).align) {
-      return {
-        preferredAnchor: flipCorner(parsedAnchor),
-        preferredOrigin: flipCorner(parsedOrigin)
-      };
-    } else {
-      return {
-        preferredAnchor: parsedAnchor,
-        preferredOrigin: parsedOrigin
-      };
-    }
-  });
-  const [minWidth, minHeight, maxWidth, maxHeight] = ["minWidth", "minHeight", "maxWidth", "maxHeight"].map((key) => {
-    return computed(() => {
-      const val = parseFloat(props[key]);
-      return isNaN(val) ? Infinity : val;
-    });
-  });
-  const offset = computed(() => {
-    if (Array.isArray(props.offset)) {
-      return props.offset;
-    }
-    if (typeof props.offset === "string") {
-      const offset2 = props.offset.split(" ").map(parseFloat);
-      if (offset2.length < 2)
-        offset2.push(0);
-      return offset2;
-    }
-    return typeof props.offset === "number" ? [props.offset, 0] : [0, 0];
-  });
-  let observe = false;
-  const observer = new ResizeObserver(() => {
-    if (observe)
-      updateLocation();
-  });
-  watch([data.activatorEl, data.contentEl], (_ref, _ref2) => {
-    let [newActivatorEl, newContentEl] = _ref;
-    let [oldActivatorEl, oldContentEl] = _ref2;
-    if (oldActivatorEl)
-      observer.unobserve(oldActivatorEl);
-    if (newActivatorEl)
-      observer.observe(newActivatorEl);
-    if (oldContentEl)
-      observer.unobserve(oldContentEl);
-    if (newContentEl)
-      observer.observe(newContentEl);
-  }, {
-    immediate: true
-  });
-  onScopeDispose(() => {
-    observer.disconnect();
-  });
-  function updateLocation() {
-    observe = false;
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => observe = true);
-    });
-    if (!data.activatorEl.value || !data.contentEl.value)
-      return;
-    const targetBox = data.activatorEl.value.getBoundingClientRect();
-    const contentBox = getIntrinsicSize(data.contentEl.value, data.isRtl.value);
-    const scrollParents = getScrollParents(data.contentEl.value);
-    const viewportMargin = 12;
-    if (!scrollParents.length) {
-      scrollParents.push(document.documentElement);
-      if (!(data.contentEl.value.style.top && data.contentEl.value.style.left)) {
-        contentBox.x += parseFloat(document.documentElement.style.getPropertyValue("--v-body-scroll-x") || 0);
-        contentBox.y += parseFloat(document.documentElement.style.getPropertyValue("--v-body-scroll-y") || 0);
-      }
-    }
-    const viewport = scrollParents.reduce((box, el) => {
-      const rect = el.getBoundingClientRect();
-      const scrollBox = new Box({
-        x: el === document.documentElement ? 0 : rect.x,
-        y: el === document.documentElement ? 0 : rect.y,
-        width: el.clientWidth,
-        height: el.clientHeight
-      });
-      if (box) {
-        return new Box({
-          x: Math.max(box.left, scrollBox.left),
-          y: Math.max(box.top, scrollBox.top),
-          width: Math.min(box.right, scrollBox.right) - Math.max(box.left, scrollBox.left),
-          height: Math.min(box.bottom, scrollBox.bottom) - Math.max(box.top, scrollBox.top)
-        });
-      }
-      return scrollBox;
-    }, void 0);
-    viewport.x += viewportMargin;
-    viewport.y += viewportMargin;
-    viewport.width -= viewportMargin * 2;
-    viewport.height -= viewportMargin * 2;
-    let placement = {
-      anchor: preferredAnchor.value,
-      origin: preferredOrigin.value
-    };
-    function checkOverflow(_placement) {
-      const box = new Box(contentBox);
-      const targetPoint = anchorToPoint(_placement.anchor, targetBox);
-      const contentPoint = anchorToPoint(_placement.origin, box);
-      let {
-        x: x2,
-        y: y2
-      } = getOffset(targetPoint, contentPoint);
-      switch (_placement.anchor.side) {
-        case "top":
-          y2 -= offset.value[0];
-          break;
-        case "bottom":
-          y2 += offset.value[0];
-          break;
-        case "left":
-          x2 -= offset.value[0];
-          break;
-        case "right":
-          x2 += offset.value[0];
-          break;
-      }
-      switch (_placement.anchor.align) {
-        case "top":
-          y2 -= offset.value[1];
-          break;
-        case "bottom":
-          y2 += offset.value[1];
-          break;
-        case "left":
-          x2 -= offset.value[1];
-          break;
-        case "right":
-          x2 += offset.value[1];
-          break;
-      }
-      box.x += x2;
-      box.y += y2;
-      box.width = Math.min(box.width, maxWidth.value);
-      box.height = Math.min(box.height, maxHeight.value);
-      const overflows = getOverflow(box, viewport);
-      return {
-        overflows,
-        x: x2,
-        y: y2
-      };
-    }
-    let x = 0;
-    let y = 0;
-    const available = {
-      x: 0,
-      y: 0
-    };
-    const flipped = {
-      x: false,
-      y: false
-    };
-    let resets = -1;
-    while (true) {
-      if (resets++ > 10) {
-        consoleError("Infinite loop detected in connectedLocationStrategy");
-        break;
-      }
-      const {
-        x: _x,
-        y: _y,
-        overflows
-      } = checkOverflow(placement);
-      x += _x;
-      y += _y;
-      contentBox.x += _x;
-      contentBox.y += _y;
-      {
-        const axis2 = getAxis(placement.anchor);
-        const hasOverflowX = overflows.x.before || overflows.x.after;
-        const hasOverflowY = overflows.y.before || overflows.y.after;
-        let reset = false;
-        ["x", "y"].forEach((key) => {
-          if (key === "x" && hasOverflowX && !flipped.x || key === "y" && hasOverflowY && !flipped.y) {
-            const newPlacement = {
-              anchor: {
-                ...placement.anchor
-              },
-              origin: {
-                ...placement.origin
-              }
-            };
-            const flip = key === "x" ? axis2 === "y" ? flipAlign : flipSide : axis2 === "y" ? flipSide : flipAlign;
-            newPlacement.anchor = flip(newPlacement.anchor);
-            newPlacement.origin = flip(newPlacement.origin);
-            const {
-              overflows: newOverflows
-            } = checkOverflow(newPlacement);
-            if (newOverflows[key].before <= overflows[key].before && newOverflows[key].after <= overflows[key].after || newOverflows[key].before + newOverflows[key].after < (overflows[key].before + overflows[key].after) / 2) {
-              placement = newPlacement;
-              reset = flipped[key] = true;
-            }
-          }
-        });
-        if (reset)
-          continue;
-      }
-      if (overflows.x.before) {
-        x += overflows.x.before;
-        contentBox.x += overflows.x.before;
-      }
-      if (overflows.x.after) {
-        x -= overflows.x.after;
-        contentBox.x -= overflows.x.after;
-      }
-      if (overflows.y.before) {
-        y += overflows.y.before;
-        contentBox.y += overflows.y.before;
-      }
-      if (overflows.y.after) {
-        y -= overflows.y.after;
-        contentBox.y -= overflows.y.after;
-      }
-      {
-        const overflows2 = getOverflow(contentBox, viewport);
-        available.x = viewport.width - overflows2.x.before - overflows2.x.after;
-        available.y = viewport.height - overflows2.y.before - overflows2.y.after;
-        x += overflows2.x.before;
-        contentBox.x += overflows2.x.before;
-        y += overflows2.y.before;
-        contentBox.y += overflows2.y.before;
-      }
-      break;
-    }
-    const axis = getAxis(placement.anchor);
-    Object.assign(contentStyles.value, {
-      "--v-overlay-anchor-origin": `${placement.anchor.side} ${placement.anchor.align}`,
-      transformOrigin: `${placement.origin.side} ${placement.origin.align}`,
-      // transform: `translate(${pixelRound(x)}px, ${pixelRound(y)}px)`,
-      top: convertToUnit(pixelRound(y)),
-      left: data.isRtl.value ? void 0 : convertToUnit(pixelRound(x)),
-      right: data.isRtl.value ? convertToUnit(pixelRound(-x)) : void 0,
-      minWidth: convertToUnit(axis === "y" ? Math.min(minWidth.value, targetBox.width) : minWidth.value),
-      maxWidth: convertToUnit(pixelCeil(clamp(available.x, minWidth.value === Infinity ? 0 : minWidth.value, maxWidth.value))),
-      maxHeight: convertToUnit(pixelCeil(clamp(available.y, minHeight.value === Infinity ? 0 : minHeight.value, maxHeight.value)))
-    });
-    return {
-      available,
-      contentBox
-    };
-  }
-  watch(() => [preferredAnchor.value, preferredOrigin.value, props.offset, props.minWidth, props.minHeight, props.maxWidth, props.maxHeight], () => updateLocation());
-  nextTick(() => {
-    const result = updateLocation();
-    if (!result)
-      return;
-    const {
-      available,
-      contentBox
-    } = result;
-    if (contentBox.height > available.y) {
-      requestAnimationFrame(() => {
-        updateLocation();
-        requestAnimationFrame(() => {
-          updateLocation();
-        });
-      });
-    }
-  });
-  return {
-    updateLocation
-  };
-}
-function pixelRound(val) {
-  return Math.round(val * devicePixelRatio) / devicePixelRatio;
-}
-function pixelCeil(val) {
-  return Math.ceil(val * devicePixelRatio) / devicePixelRatio;
-}
-let clean = true;
-const frames = [];
-function requestNewFrame(cb) {
-  if (!clean || frames.length) {
-    frames.push(cb);
-    run();
-  } else {
-    clean = false;
-    cb();
-    run();
-  }
-}
-let raf = -1;
-function run() {
-  cancelAnimationFrame(raf);
-  raf = requestAnimationFrame(() => {
-    const frame = frames.shift();
-    if (frame)
-      frame();
-    if (frames.length)
-      run();
-    else
-      clean = true;
-  });
-}
-const scrollStrategies = {
-  none: null,
-  close: closeScrollStrategy,
-  block: blockScrollStrategy,
-  reposition: repositionScrollStrategy
-};
-const makeScrollStrategyProps = propsFactory({
-  scrollStrategy: {
-    type: [String, Function],
-    default: "block",
-    validator: (val) => typeof val === "function" || val in scrollStrategies
-  }
-}, "v-overlay-scroll-strategies");
-function useScrollStrategies(props, data) {
-  if (!IN_BROWSER)
-    return;
-  let scope;
-  watchEffect(async () => {
-    scope == null ? void 0 : scope.stop();
-    if (!(data.isActive.value && props.scrollStrategy))
-      return;
-    scope = effectScope();
-    await nextTick();
-    scope.active && scope.run(() => {
-      var _a;
-      if (typeof props.scrollStrategy === "function") {
-        props.scrollStrategy(data, props, scope);
-      } else {
-        (_a = scrollStrategies[props.scrollStrategy]) == null ? void 0 : _a.call(scrollStrategies, data, props, scope);
-      }
-    });
-  });
-  onScopeDispose(() => {
-    scope == null ? void 0 : scope.stop();
-  });
-}
-function closeScrollStrategy(data) {
-  function onScroll(e) {
-    data.isActive.value = false;
-  }
-  bindScroll(data.activatorEl.value ?? data.contentEl.value, onScroll);
-}
-function blockScrollStrategy(data, props) {
-  var _a;
-  const offsetParent = (_a = data.root.value) == null ? void 0 : _a.offsetParent;
-  const scrollElements = [.../* @__PURE__ */ new Set([...getScrollParents(data.activatorEl.value, props.contained ? offsetParent : void 0), ...getScrollParents(data.contentEl.value, props.contained ? offsetParent : void 0)])].filter((el) => !el.classList.contains("v-overlay-scroll-blocked"));
-  const scrollbarWidth = window.innerWidth - document.documentElement.offsetWidth;
-  const scrollableParent = ((el) => hasScrollbar(el) && el)(offsetParent || document.documentElement);
-  if (scrollableParent) {
-    data.root.value.classList.add("v-overlay--scroll-blocked");
-  }
-  scrollElements.forEach((el, i) => {
-    el.style.setProperty("--v-body-scroll-x", convertToUnit(-el.scrollLeft));
-    el.style.setProperty("--v-body-scroll-y", convertToUnit(-el.scrollTop));
-    el.style.setProperty("--v-scrollbar-offset", convertToUnit(scrollbarWidth));
-    el.classList.add("v-overlay-scroll-blocked");
-  });
-  onScopeDispose(() => {
-    scrollElements.forEach((el, i) => {
-      const x = parseFloat(el.style.getPropertyValue("--v-body-scroll-x"));
-      const y = parseFloat(el.style.getPropertyValue("--v-body-scroll-y"));
-      el.style.removeProperty("--v-body-scroll-x");
-      el.style.removeProperty("--v-body-scroll-y");
-      el.style.removeProperty("--v-scrollbar-offset");
-      el.classList.remove("v-overlay-scroll-blocked");
-      el.scrollLeft = -x;
-      el.scrollTop = -y;
-    });
-    if (scrollableParent) {
-      data.root.value.classList.remove("v-overlay--scroll-blocked");
-    }
-  });
-}
-function repositionScrollStrategy(data, props, scope) {
-  let slow = false;
-  let raf2 = -1;
-  let ric = -1;
-  function update(e) {
-    requestNewFrame(() => {
-      var _a, _b;
-      const start = performance.now();
-      (_b = (_a = data.updateLocation).value) == null ? void 0 : _b.call(_a, e);
-      const time = performance.now() - start;
-      slow = time / (1e3 / 60) > 2;
-    });
-  }
-  ric = (typeof requestIdleCallback === "undefined" ? (cb) => cb() : requestIdleCallback)(() => {
-    scope.run(() => {
-      bindScroll(data.activatorEl.value ?? data.contentEl.value, (e) => {
-        if (slow) {
-          cancelAnimationFrame(raf2);
-          raf2 = requestAnimationFrame(() => {
-            raf2 = requestAnimationFrame(() => {
-              update(e);
-            });
-          });
-        } else {
-          update(e);
-        }
-      });
-    });
-  });
-  onScopeDispose(() => {
-    typeof cancelIdleCallback !== "undefined" && cancelIdleCallback(ric);
-    cancelAnimationFrame(raf2);
-  });
-}
-function bindScroll(el, onScroll) {
-  const scrollElements = [document, ...getScrollParents(el)];
-  scrollElements.forEach((el2) => {
-    el2.addEventListener("scroll", onScroll, {
-      passive: true
-    });
-  });
-  onScopeDispose(() => {
-    scrollElements.forEach((el2) => {
-      el2.removeEventListener("scroll", onScroll);
-    });
-  });
-}
-function useHydration() {
-  if (!IN_BROWSER)
-    return ref(false);
-  const {
-    ssr
-  } = useDisplay();
-  if (ssr) {
-    const isMounted = ref(false);
-    onMounted(() => {
-      isMounted.value = true;
-    });
-    return isMounted;
-  } else {
-    return ref(true);
-  }
-}
-function useScopeId() {
-  const vm = getCurrentInstance("useScopeId");
-  const scopeId = vm.vnode.scopeId;
-  return {
-    scopeId: scopeId ? {
-      [scopeId]: ""
-    } : void 0
-  };
-}
-const StackSymbol = Symbol.for("vuetify:stack");
-const globalStack = reactive([]);
-function useStack(isActive, zIndex, disableGlobalStack) {
-  const vm = getCurrentInstance("useStack");
-  const createStackEntry = !disableGlobalStack;
-  const parent = inject$1(StackSymbol, void 0);
-  const stack = reactive({
-    activeChildren: /* @__PURE__ */ new Set()
-  });
-  provide(StackSymbol, stack);
-  const _zIndex = ref(+zIndex.value);
-  useToggleScope(isActive, () => {
-    var _a;
-    const lastZIndex = (_a = globalStack.at(-1)) == null ? void 0 : _a[1];
-    _zIndex.value = lastZIndex ? lastZIndex + 10 : +zIndex.value;
-    if (createStackEntry) {
-      globalStack.push([vm.uid, _zIndex.value]);
-    }
-    parent == null ? void 0 : parent.activeChildren.add(vm.uid);
-    onScopeDispose(() => {
-      if (createStackEntry) {
-        const idx = toRaw(globalStack).findIndex((v) => v[0] === vm.uid);
-        globalStack.splice(idx, 1);
-      }
-      parent == null ? void 0 : parent.activeChildren.delete(vm.uid);
-    });
-  });
-  const globalTop = ref(true);
-  if (createStackEntry) {
-    watchEffect(() => {
-      var _a;
-      const _isTop = ((_a = globalStack.at(-1)) == null ? void 0 : _a[0]) === vm.uid;
-      setTimeout(() => globalTop.value = _isTop);
-    });
-  }
-  const localTop = computed(() => !stack.activeChildren.size);
-  return {
-    globalTop: readonly(globalTop),
-    localTop,
-    stackStyles: computed(() => ({
-      zIndex: _zIndex.value
-    }))
-  };
-}
-function useTeleport(target) {
-  const teleportTarget = computed(() => {
-    const _target = target.value;
-    if (_target === true || !IN_BROWSER)
-      return void 0;
-    const targetElement = _target === false ? document.body : typeof _target === "string" ? document.querySelector(_target) : _target;
-    if (targetElement == null) {
-      return void 0;
-    }
-    let container = targetElement.querySelector(":scope > .v-overlay-container");
-    if (!container) {
-      container = document.createElement("div");
-      container.className = "v-overlay-container";
-      targetElement.appendChild(container);
-    }
-    return container;
-  });
-  return {
-    teleportTarget
-  };
-}
-function defaultConditional() {
-  return true;
-}
-function checkEvent(e, el, binding) {
-  if (!e || checkIsActive(e, binding) === false)
-    return false;
-  const root = attachedRoot(el);
-  if (typeof ShadowRoot !== "undefined" && root instanceof ShadowRoot && root.host === e.target)
-    return false;
-  const elements = (typeof binding.value === "object" && binding.value.include || (() => []))();
-  elements.push(el);
-  return !elements.some((el2) => el2 == null ? void 0 : el2.contains(e.target));
-}
-function checkIsActive(e, binding) {
-  const isActive = typeof binding.value === "object" && binding.value.closeConditional || defaultConditional;
-  return isActive(e);
-}
-function directive(e, el, binding) {
-  const handler = typeof binding.value === "function" ? binding.value : binding.value.handler;
-  el._clickOutside.lastMousedownWasOutside && checkEvent(e, el, binding) && setTimeout(() => {
-    checkIsActive(e, binding) && handler && handler(e);
-  }, 0);
-}
-function handleShadow(el, callback) {
-  const root = attachedRoot(el);
-  callback(document);
-  if (typeof ShadowRoot !== "undefined" && root instanceof ShadowRoot) {
-    callback(root);
-  }
-}
-const ClickOutside = {
-  // [data-app] may not be found
-  // if using bind, inserted makes
-  // sure that the root element is
-  // available, iOS does not support
-  // clicks on body
-  mounted(el, binding) {
-    const onClick = (e) => directive(e, el, binding);
-    const onMousedown = (e) => {
-      el._clickOutside.lastMousedownWasOutside = checkEvent(e, el, binding);
-    };
-    handleShadow(el, (app2) => {
-      app2.addEventListener("click", onClick, true);
-      app2.addEventListener("mousedown", onMousedown, true);
-    });
-    if (!el._clickOutside) {
-      el._clickOutside = {
-        lastMousedownWasOutside: true
-      };
-    }
-    el._clickOutside[binding.instance.$.uid] = {
-      onClick,
-      onMousedown
-    };
-  },
-  unmounted(el, binding) {
-    if (!el._clickOutside)
-      return;
-    handleShadow(el, (app2) => {
-      var _a;
-      if (!app2 || !((_a = el._clickOutside) == null ? void 0 : _a[binding.instance.$.uid]))
-        return;
-      const {
-        onClick,
-        onMousedown
-      } = el._clickOutside[binding.instance.$.uid];
-      app2.removeEventListener("click", onClick, true);
-      app2.removeEventListener("mousedown", onMousedown, true);
-    });
-    delete el._clickOutside[binding.instance.$.uid];
-  }
-};
-function Scrim(props) {
-  const {
-    modelValue,
-    color,
-    ...rest
-  } = props;
-  return createVNode(Transition, {
-    "name": "fade-transition",
-    "appear": true
-  }, {
-    default: () => [props.modelValue && createVNode("div", mergeProps({
-      "class": ["v-overlay__scrim", props.color.backgroundColorClasses.value],
-      "style": props.color.backgroundColorStyles.value
-    }, rest), null)]
-  });
-}
-const makeVOverlayProps = propsFactory({
-  absolute: Boolean,
-  attach: [Boolean, String, Object],
-  closeOnBack: {
-    type: Boolean,
-    default: true
-  },
-  contained: Boolean,
-  contentClass: null,
-  contentProps: null,
-  disabled: Boolean,
-  noClickAnimation: Boolean,
-  modelValue: Boolean,
-  persistent: Boolean,
-  scrim: {
-    type: [String, Boolean],
-    default: true
-  },
-  zIndex: {
-    type: [Number, String],
-    default: 2e3
-  },
-  ...makeActivatorProps(),
-  ...makeComponentProps(),
-  ...makeDimensionProps(),
-  ...makeLazyProps(),
-  ...makeLocationStrategyProps(),
-  ...makeScrollStrategyProps(),
-  ...makeThemeProps(),
-  ...makeTransitionProps()
-}, "v-overlay");
-const VOverlay = genericComponent()({
-  name: "VOverlay",
-  directives: {
-    ClickOutside
-  },
-  inheritAttrs: false,
-  props: {
-    _disableGlobalStack: Boolean,
-    ...makeVOverlayProps()
-  },
-  emits: {
-    "click:outside": (e) => true,
-    "update:modelValue": (value) => true,
-    afterLeave: () => true
-  },
-  setup(props, _ref) {
-    let {
-      slots,
-      attrs,
-      emit: emit2
-    } = _ref;
-    const model = useProxiedModel(props, "modelValue");
-    const isActive = computed({
-      get: () => model.value,
-      set: (v) => {
-        if (!(v && props.disabled))
-          model.value = v;
-      }
-    });
-    const {
-      teleportTarget
-    } = useTeleport(computed(() => props.attach || props.contained));
-    const {
-      themeClasses
-    } = provideTheme(props);
-    const {
-      rtlClasses,
-      isRtl
-    } = useRtl();
-    const {
-      hasContent,
-      onAfterLeave
-    } = useLazy(props, isActive);
-    const scrimColor = useBackgroundColor(computed(() => {
-      return typeof props.scrim === "string" ? props.scrim : null;
-    }));
-    const {
-      globalTop,
-      localTop,
-      stackStyles
-    } = useStack(isActive, toRef(props, "zIndex"), props._disableGlobalStack);
-    const {
-      activatorEl,
-      activatorRef,
-      activatorEvents,
-      contentEvents,
-      scrimEvents
-    } = useActivator(props, {
-      isActive,
-      isTop: localTop
-    });
-    const {
-      dimensionStyles
-    } = useDimension(props);
-    const isMounted = useHydration();
-    const {
-      scopeId
-    } = useScopeId();
-    watch(() => props.disabled, (v) => {
-      if (v)
-        isActive.value = false;
-    });
-    const root = ref();
-    const contentEl = ref();
-    const {
-      contentStyles,
-      updateLocation
-    } = useLocationStrategies(props, {
-      isRtl,
-      contentEl,
-      activatorEl,
-      isActive
-    });
-    useScrollStrategies(props, {
-      root,
-      contentEl,
-      activatorEl,
-      isActive,
-      updateLocation
-    });
-    function onClickOutside(e) {
-      emit2("click:outside", e);
-      if (!props.persistent)
-        isActive.value = false;
-      else
-        animateClick();
-    }
-    function closeConditional() {
-      return isActive.value && globalTop.value;
-    }
-    IN_BROWSER && watch(isActive, (val) => {
-      if (val) {
-        window.addEventListener("keydown", onKeydown);
-      } else {
-        window.removeEventListener("keydown", onKeydown);
-      }
-    }, {
-      immediate: true
-    });
-    function onKeydown(e) {
-      if (e.key === "Escape" && globalTop.value) {
-        if (!props.persistent) {
-          isActive.value = false;
-        } else
-          animateClick();
-      }
-    }
-    const router = useRouter();
-    useToggleScope(() => props.closeOnBack, () => {
-      useBackButton(router, (next) => {
-        if (globalTop.value && isActive.value) {
-          next(false);
-          if (!props.persistent)
-            isActive.value = false;
-          else
-            animateClick();
-        } else {
-          next();
-        }
-      });
-    });
-    const top = ref();
-    watch(() => isActive.value && (props.absolute || props.contained) && teleportTarget.value == null, (val) => {
-      if (val) {
-        const scrollParent = getScrollParent(root.value);
-        if (scrollParent && scrollParent !== document.scrollingElement) {
-          top.value = scrollParent.scrollTop;
-        }
-      }
-    });
-    function animateClick() {
-      if (props.noClickAnimation)
-        return;
-      contentEl.value && animate(contentEl.value, [{
-        transformOrigin: "center"
-      }, {
-        transform: "scale(1.03)"
-      }, {
-        transformOrigin: "center"
-      }], {
-        duration: 150,
-        easing: standardEasing
-      });
-    }
-    useRender(() => {
-      var _a;
-      return createVNode(Fragment, null, [(_a = slots.activator) == null ? void 0 : _a.call(slots, {
-        isActive: isActive.value,
-        props: mergeProps({
-          ref: activatorRef
-        }, toHandlers(activatorEvents.value), props.activatorProps)
-      }), isMounted.value && createVNode(Teleport, {
-        "disabled": !teleportTarget.value,
-        "to": teleportTarget.value
-      }, {
-        default: () => [hasContent.value && createVNode("div", mergeProps({
-          "class": ["v-overlay", {
-            "v-overlay--absolute": props.absolute || props.contained,
-            "v-overlay--active": isActive.value,
-            "v-overlay--contained": props.contained
-          }, themeClasses.value, rtlClasses.value, props.class],
-          "style": [stackStyles.value, {
-            top: convertToUnit(top.value)
-          }, props.style],
-          "ref": root
-        }, scopeId, attrs), [createVNode(Scrim, mergeProps({
-          "color": scrimColor,
-          "modelValue": isActive.value && !!props.scrim
-        }, toHandlers(scrimEvents.value)), null), createVNode(MaybeTransition, {
-          "appear": true,
-          "persisted": true,
-          "transition": props.transition,
-          "target": activatorEl.value,
-          "onAfterLeave": () => {
-            onAfterLeave();
-            emit2("afterLeave");
-          }
-        }, {
-          default: () => {
-            var _a2;
-            return [withDirectives(createVNode("div", mergeProps({
-              "ref": contentEl,
-              "class": ["v-overlay__content", props.contentClass],
-              "style": [dimensionStyles.value, contentStyles.value]
-            }, toHandlers(contentEvents.value), props.contentProps), [(_a2 = slots.default) == null ? void 0 : _a2.call(slots, {
-              isActive
-            })]), [[vShow, isActive.value], [resolveDirective("click-outside"), {
-              handler: onClickOutside,
-              closeConditional,
-              include: () => [activatorEl.value]
-            }]])];
-          }
-        })])]
-      })]);
-    });
-    return {
-      activatorEl,
-      animateClick,
-      contentEl,
-      globalTop,
-      localTop,
-      updateLocation
-    };
-  }
-});
-const VMenu = genericComponent()({
-  name: "VMenu",
-  props: {
-    // TODO
-    // disableKeys: Boolean,
-    id: String,
-    ...omit(makeVOverlayProps({
-      closeDelay: 250,
-      closeOnContentClick: true,
-      locationStrategy: "connected",
-      openDelay: 300,
-      scrim: false,
-      scrollStrategy: "reposition",
-      transition: {
-        component: VDialogTransition
-      }
-    }), ["absolute"])
-  },
-  emits: {
-    "update:modelValue": (value) => true
-  },
-  setup(props, _ref) {
-    let {
-      slots
-    } = _ref;
-    const isActive = useProxiedModel(props, "modelValue");
-    const {
-      scopeId
-    } = useScopeId();
-    const uid2 = getUid();
-    const id = computed(() => props.id || `v-menu-${uid2}`);
-    const overlay = ref();
-    const parent = inject$1(VMenuSymbol, null);
-    const openChildren = ref(0);
-    provide(VMenuSymbol, {
-      register() {
-        ++openChildren.value;
-      },
-      unregister() {
-        --openChildren.value;
-      },
-      closeParents() {
-        setTimeout(() => {
-          if (!openChildren.value) {
-            isActive.value = false;
-            parent == null ? void 0 : parent.closeParents();
-          }
-        }, 40);
-      }
-    });
-    watch(isActive, (val) => {
-      val ? parent == null ? void 0 : parent.register() : parent == null ? void 0 : parent.unregister();
-    });
-    function onClickOutside() {
-      parent == null ? void 0 : parent.closeParents();
-    }
-    const activatorProps = computed(() => mergeProps({
-      "aria-haspopup": "menu",
-      "aria-expanded": String(isActive.value),
-      "aria-owns": id.value
-    }, props.activatorProps));
-    useRender(() => {
-      const [overlayProps] = VOverlay.filterProps(props);
-      return createVNode(VOverlay, mergeProps({
-        "ref": overlay,
-        "class": ["v-menu", props.class],
-        "style": props.style
-      }, overlayProps, {
-        "modelValue": isActive.value,
-        "onUpdate:modelValue": ($event) => isActive.value = $event,
-        "absolute": true,
-        "activatorProps": activatorProps.value,
-        "onClick:outside": onClickOutside
-      }, scopeId), {
-        activator: slots.activator,
-        default: function() {
-          for (var _len = arguments.length, args = new Array(_len), _key = 0; _key < _len; _key++) {
-            args[_key] = arguments[_key];
-          }
-          return createVNode(VDefaultsProvider, {
-            "root": true
-          }, {
-            default: () => {
-              var _a;
-              return [(_a = slots.default) == null ? void 0 : _a.call(slots, ...args)];
-            }
-          });
-        }
-      });
-    });
-    return forwardRefs({
-      id,
-      ΨopenChildren: openChildren
-    }, overlay);
-  }
-});
 const makeSelectProps = propsFactory({
   chips: Boolean,
   closableChips: Boolean,
@@ -17800,7 +17903,7 @@ function _sfc_render$1(_ctx, _cache, $props, $setup, $data, $options) {
     _: 1
   }, 8, ["modelValue"])) : createCommentVNode("", true);
 }
-const Alert = /* @__PURE__ */ _export_sfc(_sfc_main$3, [["render", _sfc_render$1]]);
+const AlertPopup = /* @__PURE__ */ _export_sfc(_sfc_main$3, [["render", _sfc_render$1]]);
 let csrf_token;
 const base_path = Function("return base_path_")();
 const pool_data_ = {
@@ -17809,6 +17912,7 @@ const pool_data_ = {
   user: "",
   group: "",
   group_choices: [],
+  lens3_version: "",
   s3_url: "",
   footer_banner: "",
   /* Entries for PoolList. */
@@ -17832,6 +17936,7 @@ const pool_data_ = {
   bucket_policy: "",
   key_expiration_time: "",
   edit_pool_visible: false,
+  menu_visible: false,
   //pool_name_visible: true,
   //pool_args_visible: false,
   //make_pool_mode: false,
@@ -17947,6 +18052,7 @@ function set_user_info_data(data) {
   pool_data.user = d["uid"];
   pool_data.group = d["groups"][0];
   pool_data.group_choices = d["groups"];
+  pool_data.lens3_version = d["lens3_version"];
   pool_data.s3_url = d["s3_url"];
   pool_data.footer_banner = d["footer_banner"];
   pool_data.edit_pool_visible = false;
@@ -17954,12 +18060,7 @@ function set_user_info_data(data) {
 function set_pool_list(data) {
   console.assert(data && data["pool_list"]);
   const dd = data["pool_list"];
-  console.log("pool_list=" + dd.length);
-  console.log(dd);
-  for (let i in dd) {
-    console.log("pool=" + i);
-    console.log(dd[i]);
-  }
+  console.log("pool_list.length=" + dd.length);
   pool_data.pool_list = dd;
   pool_data.edit_pool_visible = false;
 }
@@ -18081,7 +18182,7 @@ const _sfc_main$2 = /* @__PURE__ */ defineComponent$1({
           ]),
           _: 1
         }),
-        createVNode(Alert, { pool_data: unref(pool_data) }, null, 8, ["pool_data"])
+        createVNode(AlertPopup, { pool_data: unref(pool_data) }, null, 8, ["pool_data"])
       ], 64);
     };
   }

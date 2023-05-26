@@ -1,13 +1,22 @@
 <template>
   <v-app-bar flat>
-    <v-app-bar-nav-icon disabled>
+    <v-menu v-model="pool_data.menu_visible"
+            v-bind:close-on-content-click="false"
+            location="bottom">
+      <template v-slot:activator="{props}">
+        <v-app-bar-nav-icon v-bind="props">
           <v-icon icon="mdi-menu" />
-    </v-app-bar-nav-icon>
+        </v-app-bar-nav-icon>
+      </template>
+      <about-menu v-bind:pool_data="pool_data" />
+    </v-menu>
     <v-app-bar-title>
       <v-icon icon="mdi-cog" />
       Lens3 Pool Manager
     </v-app-bar-title>
+
     <v-spacer></v-spacer>
+
     <v-toolbar-items>
       <v-switch v-model="dark" flat
                 prepend-icon="mdi-white-balance-sunny"
@@ -22,6 +31,7 @@
 
 <script lang="ts">
 import {useTheme} from "vuetify";
+import AboutMenu from '@/components/About.vue';
 export default {
   props: {
     pool_data: {
@@ -29,7 +39,10 @@ export default {
       default: () => ({}),
     },
   },
-  setup () {
+  components: {
+    AboutMenu: AboutMenu,
+  },
+  setup() {
     const theme = useTheme()
     return {
       theme,

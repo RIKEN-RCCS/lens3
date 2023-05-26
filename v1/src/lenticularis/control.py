@@ -161,6 +161,7 @@ class Control_Api():
     def __init__(self, api_conf, redis):
         self._api_conf = api_conf
         assert api_conf["version"] == "v1.2"
+        self._lens3_version = "v1.2.1"
         self._api_version = "v1.2"
 
         api_param = api_conf["controller"]
@@ -551,6 +552,7 @@ class Control_Api():
             "api_version": self._api_version,
             "uid": user_id,
             "groups": groups,
+            "lens3_version": self._lens3_version,
             "s3_url": self._s3_url,
             "footer_banner": self._footer_banner.strip(),
         }

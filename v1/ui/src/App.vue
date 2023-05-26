@@ -9,8 +9,8 @@
 </template>
 
 <script lang="ts" setup>
-  import DefaultBar from './layouts/default/AppBar.vue'
-  import SettingView from './views/Setting.vue'
-  import DefaultFooter from './layouts/default/Footer.vue'
+  import DefaultBar from '@/layouts/default/AppBar.vue'
+  import SettingView from '@/views/Setting.vue'
+  import DefaultFooter from '@/layouts/default/Footer.vue'
   import {pool_data} from "@/lens3c";
 </script>

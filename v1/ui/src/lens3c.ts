@@ -20,6 +20,7 @@ const pool_data_ = {
   user: "",
   group: "",
   group_choices: [],
+  lens3_version: "",
   s3_url: "",
   footer_banner: "",
 
@@ -50,6 +51,7 @@ const pool_data_ = {
   key_expiration_time: "",
 
   edit_pool_visible: false,
+  menu_visible: false,
   //pool_name_visible: true,
   //pool_args_visible: false,
   //make_pool_mode: false,
@@ -165,6 +167,7 @@ function set_user_info_data(data : any) {
   pool_data.user = d["uid"];
   pool_data.group = d["groups"][0];
   pool_data.group_choices = d["groups"];
+  pool_data.lens3_version = d["lens3_version"];
   pool_data.s3_url = d["s3_url"];
   pool_data.footer_banner = d["footer_banner"];
 
@@ -174,12 +177,12 @@ function set_user_info_data(data : any) {
 function set_pool_list(data : any) {
   console.assert(data && data["pool_list"]);
   const dd = data["pool_list"]
-  console.log("pool_list=" + dd.length);
-  console.log(dd);
-  for (let i in dd) {
-    console.log("pool=" + i);
-    console.log(dd[i]);
-  }
+  console.log("pool_list.length=" + dd.length);
+  //console.log(dd);
+  //for (let i in dd) {
+  //  console.log("pool=" + i);
+  //  console.log(dd[i]);
+  //}
   pool_data.pool_list = dd;
   pool_data.edit_pool_visible = false;
 }

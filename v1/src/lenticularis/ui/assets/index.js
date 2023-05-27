@@ -8460,10 +8460,6 @@ const _sfc_main$8 = {
       default: () => ({})
     }
   },
-  //data() {
-  //  return {
-  //  };
-  //},
   methods: {
     kick_copy_url_to_clipboard() {
       navigator.clipboard.writeText(this.pool_data.s3_url);
@@ -10795,16 +10791,18 @@ const VCard = genericComponent()({
     return {};
   }
 });
-const _hoisted_1$4 = /* @__PURE__ */ createBaseVNode("li", null, " Lens3 is a multiplexer to MinIO to service multiple MinIO instances at a single access point. ", -1);
-const _hoisted_2$2 = /* @__PURE__ */ createBaseVNode("li", null, [
-  /* @__PURE__ */ createTextVNode(" For the usage, see the Lens3 User Guide in: "),
+const _hoisted_1$4 = /* @__PURE__ */ createBaseVNode("li", null, " Lens3 is an S3 service using 3rd-party server program MinIO. ", -1);
+const _hoisted_2$2 = /* @__PURE__ */ createBaseVNode("li", null, " Lens3 runs multiple MinIO instances at a single access point, and it redirects requests with regard to access keys. ", -1);
+const _hoisted_3$2 = /* @__PURE__ */ createBaseVNode("li", null, [
+  /* @__PURE__ */ createTextVNode(" For the usage, see the Lens3 user-guide.md in: "),
   /* @__PURE__ */ createBaseVNode("a", { href: "https://github.com/riken-rccs/lens3/" }, "github.com")
 ], -1);
+const _hoisted_4$2 = /* @__PURE__ */ createBaseVNode("li", null, ' A simpler UI is available at "ui2/index.html". ', -1);
 function _sfc_render$6(_ctx, _cache, $props, $setup, $data, $options) {
   return openBlock(), createBlock(VCard, {
     variant: "outlined",
     class: "text-body-1 pa-4",
-    "min-width": "300"
+    "min-width": "33%"
   }, {
     default: withCtx(() => [
       createVNode(VCardTitle, null, {
@@ -10818,15 +10816,20 @@ function _sfc_render$6(_ctx, _cache, $props, $setup, $data, $options) {
           createBaseVNode("ul", null, [
             _hoisted_1$4,
             _hoisted_2$2,
+            _hoisted_3$2,
             createBaseVNode("li", null, [
-              createTextVNode(" S3 is serviced at: " + toDisplayString($props.pool_data.s3_url) + " ", 1),
+              createTextVNode(" Lens3's S3 end-point is: " + toDisplayString($props.pool_data.s3_url) + " ", 1),
               createVNode(VBtn, {
-                icon: "mdi-clipboard-text",
                 variant: "plain",
                 onClick: $options.kick_copy_url_to_clipboard
-              }, null, 8, ["onClick"]),
-              createTextVNode(". ")
+              }, {
+                default: withCtx(() => [
+                  createTextVNode(" (copy link)")
+                ]),
+                _: 1
+              }, 8, ["onClick"])
             ]),
+            _hoisted_4$2,
             createBaseVNode("li", null, " Lens3 version: " + toDisplayString($props.pool_data.lens3_version), 1)
           ])
         ]),
@@ -16698,78 +16701,70 @@ const VTooltip = genericComponent()({
     return forwardRefs({}, overlay);
   }
 });
-const _hoisted_1$3 = /* @__PURE__ */ createBaseVNode("div", { class: "text-h5 text-center" }, "Manage pool", -1);
+const _hoisted_1$3 = /* @__PURE__ */ createBaseVNode("div", { class: "text-h5 text-center w-100" }, "Manage Pools", -1);
 function _sfc_render$4(_ctx, _cache, $props, $setup, $data, $options) {
-  return openBlock(), createBlock(VContainer, { class: "fill-height" }, {
+  return openBlock(), createBlock(VContainer, { class: "align-center text-center fill-height" }, {
     default: withCtx(() => [
-      createVNode(VResponsive, { class: "d-flex align-center text-center fill-height" }, {
+      _hoisted_1$3,
+      createVNode(VCard, {
+        variant: "outlined",
+        class: "ma-4 w-100"
+      }, {
         default: withCtx(() => [
-          _hoisted_1$3,
-          createVNode(VCard, {
-            variant: "outlined",
-            class: "ma-4"
-          }, {
+          createVNode(VCardText, null, {
             default: withCtx(() => [
-              createVNode(VCardText, null, {
+              createTextVNode(" A pool is a directory where S3 buckets are created. It is associated to a MinIO instance. The first thing to do is to create a new pool. ")
+            ]),
+            _: 1
+          })
+        ]),
+        _: 1
+      }),
+      createVNode(VRow, { align: "center" }, {
+        default: withCtx(() => [
+          createVNode(VSpacer),
+          createVNode(VCard, { class: "w-75 pa-4 ma-4" }, {
+            default: withCtx(() => [
+              createVNode(VCardTitle, null, {
                 default: withCtx(() => [
-                  createTextVNode(" A pool is a directory where S3 buckets are created. It is associated to a MinIO instance. The first thing to do is to create a new pool. ")
+                  createTextVNode("New pool")
+                ]),
+                _: 1
+              }),
+              createVNode(VTextField, {
+                label: "Buckets directory (absolute path)",
+                modelValue: $props.pool_data.buckets_directory,
+                "onUpdate:modelValue": _cache[0] || (_cache[0] = ($event) => $props.pool_data.buckets_directory = $event)
+              }, null, 8, ["modelValue"]),
+              createVNode(VTextField, {
+                label: "User",
+                cols: "auto",
+                modelValue: $props.pool_data.user,
+                "onUpdate:modelValue": _cache[1] || (_cache[1] = ($event) => $props.pool_data.user = $event),
+                readonly: ""
+              }, null, 8, ["modelValue"]),
+              createVNode(VSelect, {
+                label: "Group",
+                cols: "auto",
+                variant: "underlined",
+                modelValue: $props.pool_data.group,
+                "onUpdate:modelValue": _cache[2] || (_cache[2] = ($event) => $props.pool_data.group = $event),
+                required: "",
+                items: $props.pool_data.group_choices
+              }, null, 8, ["modelValue", "items"]),
+              createVNode(VTooltip, { text: "Create a pool" }, {
+                activator: withCtx(({ props }) => [
+                  createVNode(VBtn, mergeProps({
+                    icon: "mdi-plus-circle",
+                    onClick: $options.kick_make_pool
+                  }, props), null, 16, ["onClick"])
                 ]),
                 _: 1
               })
             ]),
             _: 1
           }),
-          createVNode(VRow, { align: "center" }, {
-            default: withCtx(() => [
-              createVNode(VSpacer),
-              createVNode(VCard, {
-                class: "pa-4 ma-4",
-                width: "70%"
-              }, {
-                default: withCtx(() => [
-                  createVNode(VCardTitle, null, {
-                    default: withCtx(() => [
-                      createTextVNode("New pool")
-                    ]),
-                    _: 1
-                  }),
-                  createVNode(VTextField, {
-                    label: "Buckets directory (absolute path)",
-                    modelValue: $props.pool_data.buckets_directory,
-                    "onUpdate:modelValue": _cache[0] || (_cache[0] = ($event) => $props.pool_data.buckets_directory = $event)
-                  }, null, 8, ["modelValue"]),
-                  createVNode(VTextField, {
-                    label: "User",
-                    cols: "auto",
-                    modelValue: $props.pool_data.user,
-                    "onUpdate:modelValue": _cache[1] || (_cache[1] = ($event) => $props.pool_data.user = $event),
-                    readonly: ""
-                  }, null, 8, ["modelValue"]),
-                  createVNode(VSelect, {
-                    label: "Group",
-                    cols: "auto",
-                    variant: "underlined",
-                    modelValue: $props.pool_data.group,
-                    "onUpdate:modelValue": _cache[2] || (_cache[2] = ($event) => $props.pool_data.group = $event),
-                    required: "",
-                    items: $props.pool_data.group_choices
-                  }, null, 8, ["modelValue", "items"]),
-                  createVNode(VTooltip, { text: "Create a pool" }, {
-                    activator: withCtx(({ props }) => [
-                      createVNode(VBtn, mergeProps({
-                        icon: "mdi-plus-circle",
-                        onClick: $options.kick_make_pool
-                      }, props), null, 16, ["onClick"])
-                    ]),
-                    _: 1
-                  })
-                ]),
-                _: 1
-              }),
-              createVNode(VSpacer)
-            ]),
-            _: 1
-          })
+          createVNode(VSpacer)
         ]),
         _: 1
       })
@@ -16804,60 +16799,6 @@ const _sfc_main$5 = {
     }
   }
 };
-const VSheet$1 = "";
-const makeVSheetProps = propsFactory({
-  color: String,
-  ...makeBorderProps(),
-  ...makeComponentProps(),
-  ...makeDimensionProps(),
-  ...makeElevationProps(),
-  ...makeLocationProps(),
-  ...makePositionProps(),
-  ...makeRoundedProps(),
-  ...makeTagProps(),
-  ...makeThemeProps()
-}, "v-sheet");
-const VSheet = genericComponent()({
-  name: "VSheet",
-  props: {
-    ...makeVSheetProps()
-  },
-  setup(props, _ref) {
-    let {
-      slots
-    } = _ref;
-    const {
-      themeClasses
-    } = provideTheme(props);
-    const {
-      backgroundColorClasses,
-      backgroundColorStyles
-    } = useBackgroundColor(toRef(props, "color"));
-    const {
-      borderClasses
-    } = useBorder(props);
-    const {
-      dimensionStyles
-    } = useDimension(props);
-    const {
-      elevationClasses
-    } = useElevation(props);
-    const {
-      locationStyles
-    } = useLocation(props);
-    const {
-      positionClasses
-    } = usePosition(props);
-    const {
-      roundedClasses
-    } = useRounded(props);
-    useRender(() => createVNode(props.tag, {
-      "class": ["v-sheet", themeClasses.value, backgroundColorClasses.value, borderClasses.value, elevationClasses.value, positionClasses.value, roundedClasses.value, props.class],
-      "style": [backgroundColorStyles.value, dimensionStyles.value, locationStyles.value, props.style]
-    }, slots));
-    return {};
-  }
-});
 const VSlideGroup$1 = "";
 function bias(val) {
   const c = 0.501;
@@ -17283,7 +17224,7 @@ const VTable = genericComponent()({
     return {};
   }
 });
-const _hoisted_1$2 = /* @__PURE__ */ createBaseVNode("div", { class: "text-h5" }, "Pool list", -1);
+const _hoisted_1$2 = /* @__PURE__ */ createBaseVNode("div", { class: "text-h5 text-center w-100" }, "List Pools", -1);
 const _hoisted_2$1 = /* @__PURE__ */ createBaseVNode("td", { class: "text-left" }, "uid", -1);
 const _hoisted_3$1 = /* @__PURE__ */ createBaseVNode("td", { class: "text-left" }, "gid", -1);
 const _hoisted_4$1 = /* @__PURE__ */ createBaseVNode("td", { class: "text-left" }, "online?", -1);
@@ -17292,140 +17233,130 @@ const _hoisted_6$1 = /* @__PURE__ */ createBaseVNode("td", { class: "text-left" 
 const _hoisted_7$1 = /* @__PURE__ */ createBaseVNode("td", { class: "text-left" }, "minio_reason", -1);
 const _hoisted_8$1 = /* @__PURE__ */ createBaseVNode("td", { class: "text-left" }, "internal-id", -1);
 function _sfc_render$3(_ctx, _cache, $props, $setup, $data, $options) {
-  return openBlock(), createBlock(VContainer, { class: "fill-height" }, {
+  return $props.pool_data.pool_list.length ? (openBlock(), createBlock(VContainer, {
+    key: 0,
+    class: "d-flex align-center text-center fill-height"
+  }, {
     default: withCtx(() => [
-      createVNode(VResponsive, { class: "d-flex align-center text-center fill-height" }, {
+      _hoisted_1$2,
+      createVNode(VCard, {
+        variant: "outlined",
+        class: "ma-4 w-100"
+      }, {
         default: withCtx(() => [
-          $props.pool_data.pool_list.length ? (openBlock(), createBlock(VSheet, {
-            key: 0,
-            class: "pa-3 ma-3"
+          createVNode(VCardText, null, {
+            default: withCtx(() => [
+              createTextVNode(' Pool list is a slider list of the pools. You can select a pool by clicking "edit" button (a pencil icon). Or, delete one by "delete" button (a trash can). ')
+            ]),
+            _: 1
+          })
+        ]),
+        _: 1
+      }),
+      createVNode(VCol, { class: "pa-1 ma-1" }, {
+        default: withCtx(() => [
+          createVNode(VSlideGroup, {
+            modelValue: $props.pool_data.pool_list,
+            "onUpdate:modelValue": _cache[0] || (_cache[0] = ($event) => $props.pool_data.pool_list = $event),
+            "center-active": ""
           }, {
             default: withCtx(() => [
-              _hoisted_1$2,
-              createVNode(VCard, {
-                variant: "outlined",
-                class: "pa-1 ma-4"
-              }, {
-                default: withCtx(() => [
-                  createVNode(VCardText, null, {
-                    default: withCtx(() => [
-                      createTextVNode(' Pool list is a slider list of the pools. You can select a pool by clicking "edit" button (a pencil icon). Or, delete one by "delete" button (a trash can). ')
-                    ]),
-                    _: 1
-                  })
-                ]),
-                _: 1
-              }),
-              createVNode(VCol, { class: "pa-1 ma-1" }, {
-                default: withCtx(() => [
-                  createVNode(VSlideGroup, {
-                    modelValue: $props.pool_data.pool_list,
-                    "onUpdate:modelValue": _cache[0] || (_cache[0] = ($event) => $props.pool_data.pool_list = $event),
-                    "center-active": ""
-                  }, {
-                    default: withCtx(() => [
-                      (openBlock(true), createElementBlock(Fragment, null, renderList($props.pool_data.pool_list.length, (_, n) => {
-                        return openBlock(), createBlock(VSlideGroupItem, { key: n }, {
+              (openBlock(true), createElementBlock(Fragment, null, renderList($props.pool_data.pool_list.length, (_, n) => {
+                return openBlock(), createBlock(VSlideGroupItem, { key: n }, {
+                  default: withCtx(() => [
+                    createVNode(VCard, {
+                      outlined: "",
+                      class: "ma-4"
+                    }, {
+                      default: withCtx(() => [
+                        createVNode(VCardItem, null, {
                           default: withCtx(() => [
-                            createVNode(VCard, {
-                              outlined: "",
-                              class: "ma-4"
-                            }, {
+                            createVNode(VCardTitle, null, {
                               default: withCtx(() => [
-                                createVNode(VCardItem, null, {
-                                  default: withCtx(() => [
-                                    createVNode(VCardTitle, null, {
-                                      default: withCtx(() => [
-                                        createTextVNode(toDisplayString($props.pool_data.pool_list[n]["buckets_directory"]), 1)
-                                      ]),
-                                      _: 2
-                                    }, 1024)
-                                  ]),
-                                  _: 2
-                                }, 1024),
-                                createVNode(VTable, { density: "compact" }, {
-                                  default: withCtx(() => [
-                                    createBaseVNode("tbody", null, [
-                                      createBaseVNode("tr", null, [
-                                        _hoisted_2$1,
-                                        createBaseVNode("td", null, toDisplayString($props.pool_data.pool_list[n]["owner_uid"]), 1)
-                                      ]),
-                                      createBaseVNode("tr", null, [
-                                        _hoisted_3$1,
-                                        createBaseVNode("td", null, toDisplayString($props.pool_data.pool_list[n]["owner_gid"]), 1)
-                                      ]),
-                                      createBaseVNode("tr", null, [
-                                        _hoisted_4$1,
-                                        createBaseVNode("td", null, toDisplayString($props.pool_data.pool_list[n]["online_status"]), 1)
-                                      ]),
-                                      createBaseVNode("tr", null, [
-                                        _hoisted_5$1,
-                                        createBaseVNode("td", null, toDisplayString($props.pool_data.pool_list[n]["user_enabled_status"]), 1)
-                                      ]),
-                                      createBaseVNode("tr", null, [
-                                        _hoisted_6$1,
-                                        createBaseVNode("td", null, toDisplayString($props.pool_data.pool_list[n]["minio_state"]), 1)
-                                      ]),
-                                      createBaseVNode("tr", null, [
-                                        _hoisted_7$1,
-                                        createBaseVNode("td", null, toDisplayString($props.pool_data.pool_list[n]["minio_reason"]), 1)
-                                      ]),
-                                      createBaseVNode("tr", null, [
-                                        _hoisted_8$1,
-                                        createBaseVNode("td", null, toDisplayString($props.pool_data.pool_list[n]["pool_name"]), 1)
-                                      ])
-                                    ])
-                                  ]),
-                                  _: 2
-                                }, 1024),
-                                createVNode(VRow, { class: "pa-3 ma-1 align-center" }, {
-                                  default: withCtx(() => [
-                                    createVNode(VTooltip, { text: "Edit this pool in a bottom pane" }, {
-                                      activator: withCtx(({ props }) => [
-                                        createVNode(VBtn, mergeProps({
-                                          icon: "mdi-pencil",
-                                          variant: "plain",
-                                          onClick: ($event) => $options.kick_edit_pool(n)
-                                        }, props), null, 16, ["onClick"])
-                                      ]),
-                                      _: 2
-                                    }, 1024),
-                                    createTextVNode("   "),
-                                    createVNode(VTooltip, { text: "Delete this pool (not undoable)" }, {
-                                      activator: withCtx(({ props }) => [
-                                        createVNode(VBtn, mergeProps({
-                                          icon: "mdi-delete-forever",
-                                          variant: "plain",
-                                          onClick: ($event) => $options.kick_delete_pool(n)
-                                        }, props), null, 16, ["onClick"])
-                                      ]),
-                                      _: 2
-                                    }, 1024)
-                                  ]),
-                                  _: 2
-                                }, 1024)
+                                createTextVNode(toDisplayString($props.pool_data.pool_list[n]["buckets_directory"]), 1)
                               ]),
                               _: 2
                             }, 1024)
                           ]),
                           _: 2
-                        }, 1024);
-                      }), 128))
-                    ]),
-                    _: 1
-                  }, 8, ["modelValue"])
-                ]),
-                _: 1
-              })
+                        }, 1024),
+                        createVNode(VTable, { density: "compact" }, {
+                          default: withCtx(() => [
+                            createBaseVNode("tbody", null, [
+                              createBaseVNode("tr", null, [
+                                _hoisted_2$1,
+                                createBaseVNode("td", null, toDisplayString($props.pool_data.pool_list[n]["owner_uid"]), 1)
+                              ]),
+                              createBaseVNode("tr", null, [
+                                _hoisted_3$1,
+                                createBaseVNode("td", null, toDisplayString($props.pool_data.pool_list[n]["owner_gid"]), 1)
+                              ]),
+                              createBaseVNode("tr", null, [
+                                _hoisted_4$1,
+                                createBaseVNode("td", null, toDisplayString($props.pool_data.pool_list[n]["online_status"]), 1)
+                              ]),
+                              createBaseVNode("tr", null, [
+                                _hoisted_5$1,
+                                createBaseVNode("td", null, toDisplayString($props.pool_data.pool_list[n]["user_enabled_status"]), 1)
+                              ]),
+                              createBaseVNode("tr", null, [
+                                _hoisted_6$1,
+                                createBaseVNode("td", null, toDisplayString($props.pool_data.pool_list[n]["minio_state"]), 1)
+                              ]),
+                              createBaseVNode("tr", null, [
+                                _hoisted_7$1,
+                                createBaseVNode("td", null, toDisplayString($props.pool_data.pool_list[n]["minio_reason"]), 1)
+                              ]),
+                              createBaseVNode("tr", null, [
+                                _hoisted_8$1,
+                                createBaseVNode("td", null, toDisplayString($props.pool_data.pool_list[n]["pool_name"]), 1)
+                              ])
+                            ])
+                          ]),
+                          _: 2
+                        }, 1024),
+                        createVNode(VRow, { class: "pa-3 ma-1 align-center" }, {
+                          default: withCtx(() => [
+                            createVNode(VTooltip, { text: "Edit this pool in a bottom pane" }, {
+                              activator: withCtx(({ props }) => [
+                                createVNode(VBtn, mergeProps({
+                                  icon: "mdi-pencil",
+                                  variant: "plain",
+                                  onClick: ($event) => $options.kick_edit_pool(n)
+                                }, props), null, 16, ["onClick"])
+                              ]),
+                              _: 2
+                            }, 1024),
+                            createTextVNode("   "),
+                            createVNode(VTooltip, { text: "Delete this pool (not undoable)" }, {
+                              activator: withCtx(({ props }) => [
+                                createVNode(VBtn, mergeProps({
+                                  icon: "mdi-delete-forever",
+                                  variant: "plain",
+                                  onClick: ($event) => $options.kick_delete_pool(n)
+                                }, props), null, 16, ["onClick"])
+                              ]),
+                              _: 2
+                            }, 1024)
+                          ]),
+                          _: 2
+                        }, 1024)
+                      ]),
+                      _: 2
+                    }, 1024)
+                  ]),
+                  _: 2
+                }, 1024);
+              }), 128))
             ]),
             _: 1
-          })) : createCommentVNode("", true)
+          }, 8, ["modelValue"])
         ]),
         _: 1
       })
     ]),
     _: 1
-  });
+  })) : createCommentVNode("", true);
 }
 const PoolList = /* @__PURE__ */ _export_sfc(_sfc_main$5, [["render", _sfc_render$3]]);
 const _sfc_main$4 = {
@@ -17471,8 +17402,8 @@ const _sfc_main$4 = {
     }
   }
 };
-const _hoisted_1$1 = /* @__PURE__ */ createBaseVNode("div", { class: "text-h5" }, "Edit pool", -1);
-const _hoisted_2 = { class: "text-h6" };
+const _hoisted_1$1 = /* @__PURE__ */ createBaseVNode("div", { class: "text-h5 text-center w-100" }, "Edit a Pool", -1);
+const _hoisted_2 = { class: "text-h6 text-center w-100" };
 const _hoisted_3 = /* @__PURE__ */ createBaseVNode("thead", null, [
   /* @__PURE__ */ createBaseVNode("tr", null, [
     /* @__PURE__ */ createBaseVNode("th", { class: "text-left" }, "Bucket"),
@@ -17482,273 +17413,262 @@ const _hoisted_3 = /* @__PURE__ */ createBaseVNode("thead", null, [
 ], -1);
 const _hoisted_4 = ["onUpdate:modelValue"];
 const _hoisted_5 = ["onUpdate:modelValue"];
-const _hoisted_6 = { class: "text-left" };
-const _hoisted_7 = /* @__PURE__ */ createBaseVNode("th", { class: "text-left" }, "Secret key", -1);
-const _hoisted_8 = /* @__PURE__ */ createBaseVNode("th", { class: "text-left" }, "Expiration", -1);
-const _hoisted_9 = /* @__PURE__ */ createBaseVNode("th", { class: "text-left" }, "Delete", -1);
-const _hoisted_10 = ["onUpdate:modelValue"];
+const _hoisted_6 = { class: "w-100" };
+const _hoisted_7 = { class: "text-left" };
+const _hoisted_8 = /* @__PURE__ */ createBaseVNode("th", { class: "text-left" }, "Secret key", -1);
+const _hoisted_9 = /* @__PURE__ */ createBaseVNode("th", { class: "text-left" }, "Expiration", -1);
+const _hoisted_10 = /* @__PURE__ */ createBaseVNode("th", { class: "text-left" }, "Delete", -1);
 const _hoisted_11 = ["onUpdate:modelValue"];
 const _hoisted_12 = ["onUpdate:modelValue"];
+const _hoisted_13 = ["onUpdate:modelValue"];
 function _sfc_render$2(_ctx, _cache, $props, $setup, $data, $options) {
-  return openBlock(), createBlock(VContainer, { class: "fill-height" }, {
+  return $props.pool_data.edit_pool_visible ? (openBlock(), createBlock(VContainer, {
+    key: 0,
+    class: "d-flex align-center text-center fill-height"
+  }, {
     default: withCtx(() => [
-      createVNode(VResponsive, { class: "d-flex align-center text-center fill-height" }, {
+      _hoisted_1$1,
+      createBaseVNode("div", _hoisted_2, toDisplayString($props.pool_data.buckets_directory), 1),
+      createVNode(VCard, {
+        variant: "outlined",
+        class: "ma-4 w-100"
+      }, {
         default: withCtx(() => [
-          $props.pool_data.edit_pool_visible ? (openBlock(), createBlock(VSheet, {
-            key: 0,
-            class: "pa-3 ma-3"
-          }, {
+          createVNode(VCardText, null, {
             default: withCtx(() => [
-              _hoisted_1$1,
-              createBaseVNode("div", _hoisted_2, toDisplayString($props.pool_data.buckets_directory), 1),
-              createVNode(VCard, {
-                variant: "outlined",
-                class: "pa-1 ma-4"
-              }, {
+              createTextVNode(" Edit pool lists buckets and access keys. You can add/delete them. A bucket name should be unique in all pools including ones owned by others. An expiration of an access key is limited by the date in the future set by a site manager. ")
+            ]),
+            _: 1
+          })
+        ]),
+        _: 1
+      }),
+      createVNode(VRow, { align: "center" }, {
+        default: withCtx(() => [
+          createVNode(VSpacer),
+          createVNode(VCard, { class: "w-75 pa-4 ma-4" }, {
+            default: withCtx(() => [
+              createVNode(VCardTitle, null, {
                 default: withCtx(() => [
-                  createVNode(VCardText, null, {
-                    default: withCtx(() => [
-                      createTextVNode(" Edit pool lists buckets and access keys. You can add/delete them. A bucket name should be unique in all pools including ones owned by others. An expiration of an access key is limited by the date in the future set by a site manager. ")
-                    ]),
-                    _: 1
-                  })
+                  createTextVNode("New bucket")
                 ]),
                 _: 1
               }),
-              createVNode(VRow, { align: "center" }, {
-                default: withCtx(() => [
-                  createVNode(VSpacer),
-                  createVNode(VCard, {
-                    class: "pa-4 ma-4",
-                    width: "70%"
-                  }, {
-                    default: withCtx(() => [
-                      createVNode(VCardTitle, null, {
-                        default: withCtx(() => [
-                          createTextVNode("New bucket")
-                        ]),
-                        _: 1
-                      }),
-                      createVNode(VTextField, {
-                        label: "Bucket name",
-                        modelValue: $props.pool_data.bucket_name,
-                        "onUpdate:modelValue": _cache[0] || (_cache[0] = ($event) => $props.pool_data.bucket_name = $event)
-                      }, null, 8, ["modelValue"]),
-                      createVNode(VSelect, {
-                        label: "Bucket policy for public access",
-                        variant: "underlined",
-                        modelValue: $props.pool_data.bucket_policy,
-                        "onUpdate:modelValue": _cache[1] || (_cache[1] = ($event) => $props.pool_data.bucket_policy = $event),
-                        required: "",
-                        items: ["none", "public", "upload", "download"]
-                      }, null, 8, ["modelValue"]),
-                      createVNode(VTooltip, { text: "Create a bucket" }, {
-                        activator: withCtx(({ props }) => [
-                          createVNode(VBtn, mergeProps({
-                            icon: "mdi-folder-plus",
-                            onClick: $options.kick_make_bucket
-                          }, props), null, 16, ["onClick"])
-                        ]),
-                        _: 1
-                      })
-                    ]),
-                    _: 1
-                  }),
-                  createVNode(VSpacer)
+              createVNode(VTextField, {
+                label: "Bucket name",
+                modelValue: $props.pool_data.bucket_name,
+                "onUpdate:modelValue": _cache[0] || (_cache[0] = ($event) => $props.pool_data.bucket_name = $event)
+              }, null, 8, ["modelValue"]),
+              createVNode(VSelect, {
+                label: "Bucket policy for public access",
+                variant: "underlined",
+                modelValue: $props.pool_data.bucket_policy,
+                "onUpdate:modelValue": _cache[1] || (_cache[1] = ($event) => $props.pool_data.bucket_policy = $event),
+                required: "",
+                items: ["none", "public", "upload", "download"]
+              }, null, 8, ["modelValue"]),
+              createVNode(VTooltip, { text: "Create a bucket" }, {
+                activator: withCtx(({ props }) => [
+                  createVNode(VBtn, mergeProps({
+                    icon: "mdi-folder-plus",
+                    onClick: $options.kick_make_bucket
+                  }, props), null, 16, ["onClick"])
                 ]),
                 _: 1
-              }),
-              createVNode(VTable, { density: "compact" }, {
-                default: withCtx(() => [
-                  _hoisted_3,
-                  createBaseVNode("tbody", null, [
-                    (openBlock(true), createElementBlock(Fragment, null, renderList($props.pool_data.buckets, (b) => {
-                      return openBlock(), createElementBlock("tr", null, [
-                        createBaseVNode("td", null, [
-                          withDirectives(createBaseVNode("input", {
-                            "onUpdate:modelValue": ($event) => b.name = $event,
-                            size: "30",
-                            readonly: ""
-                          }, null, 8, _hoisted_4), [
-                            [vModelText, b.name]
-                          ])
-                        ]),
-                        createBaseVNode("td", null, [
-                          withDirectives(createBaseVNode("input", {
-                            "onUpdate:modelValue": ($event) => b.bkt_policy = $event,
-                            size: "30",
-                            readonly: ""
-                          }, null, 8, _hoisted_5), [
-                            [vModelText, b.bkt_policy]
-                          ])
-                        ]),
-                        createBaseVNode("td", null, [
-                          createVNode(VTooltip, { text: "Delete a bucket" }, {
-                            activator: withCtx(({ props }) => [
-                              createVNode(VBtn, mergeProps({
-                                icon: "mdi-delete-forever",
-                                variant: "plain",
-                                onClick: ($event) => $options.kick_delete_bucket(b.name)
-                              }, props), null, 16, ["onClick"])
-                            ]),
-                            _: 2
-                          }, 1024)
-                        ])
-                      ]);
-                    }), 256))
+              })
+            ]),
+            _: 1
+          }),
+          createVNode(VSpacer)
+        ]),
+        _: 1
+      }),
+      createVNode(VTable, {
+        density: "compact",
+        class: "w-100"
+      }, {
+        default: withCtx(() => [
+          _hoisted_3,
+          createBaseVNode("tbody", null, [
+            (openBlock(true), createElementBlock(Fragment, null, renderList($props.pool_data.buckets, (b) => {
+              return openBlock(), createElementBlock("tr", null, [
+                createBaseVNode("td", null, [
+                  withDirectives(createBaseVNode("input", {
+                    "onUpdate:modelValue": ($event) => b.name = $event,
+                    size: "30",
+                    readonly: ""
+                  }, null, 8, _hoisted_4), [
+                    [vModelText, b.name]
                   ])
                 ]),
-                _: 1
-              }),
-              createVNode(VSpacer, { class: "ma-4" }),
-              createVNode(VRow, { align: "center" }, {
-                default: withCtx(() => [
-                  createVNode(VSpacer),
-                  createVNode(VCard, {
-                    class: "pa-4 ma-4",
-                    width: "70%"
-                  }, {
-                    default: withCtx(() => [
-                      createVNode(VCardTitle, null, {
-                        default: withCtx(() => [
-                          createTextVNode("New access key")
-                        ]),
-                        _: 1
-                      }),
-                      createVNode(VTextField, {
-                        type: "date",
-                        min: (/* @__PURE__ */ new Date()).toISOString().substring(0, 10),
-                        label: "Expiration (00:00:00 UTC)",
-                        modelValue: $props.pool_data.key_expiration_time,
-                        "onUpdate:modelValue": _cache[2] || (_cache[2] = ($event) => $props.pool_data.key_expiration_time = $event)
-                      }, null, 8, ["min", "modelValue"]),
-                      createVNode(VBtn, {
-                        "prepend-icon": "mdi-key-plus",
-                        onClick: _cache[3] || (_cache[3] = ($event) => $options.kick_make_secret("readwrite"))
-                      }, {
-                        default: withCtx(() => [
-                          createTextVNode(" Create readwrite key ")
-                        ]),
-                        _: 1
-                      }),
-                      createTextVNode("   "),
-                      createVNode(VBtn, {
-                        "prepend-icon": "mdi-key-plus",
-                        onClick: _cache[4] || (_cache[4] = ($event) => $options.kick_make_secret("readonly"))
-                      }, {
-                        default: withCtx(() => [
-                          createTextVNode(" Create readonly key ")
-                        ]),
-                        _: 1
-                      }),
-                      createTextVNode("   "),
-                      createVNode(VBtn, {
-                        "prepend-icon": "mdi-key-plus",
-                        onClick: _cache[5] || (_cache[5] = ($event) => $options.kick_make_secret("writeonly"))
-                      }, {
-                        default: withCtx(() => [
-                          createTextVNode(" Create writeonly key ")
-                        ]),
-                        _: 1
-                      })
-                    ]),
-                    _: 1
-                  }),
-                  createVNode(VSpacer)
+                createBaseVNode("td", null, [
+                  withDirectives(createBaseVNode("input", {
+                    "onUpdate:modelValue": ($event) => b.bkt_policy = $event,
+                    size: "30",
+                    readonly: ""
+                  }, null, 8, _hoisted_5), [
+                    [vModelText, b.bkt_policy]
+                  ])
                 ]),
-                _: 1
-              }),
-              (openBlock(true), createElementBlock(Fragment, null, renderList($props.pool_data.access_key_set, (keyset) => {
-                return openBlock(), createElementBlock("div", null, [
-                  createVNode(VTable, { density: "compact" }, {
-                    default: withCtx(() => [
-                      createBaseVNode("thead", null, [
-                        createBaseVNode("tr", null, [
-                          createBaseVNode("th", _hoisted_6, "Access key (" + toDisplayString(keyset.policy) + ")", 1),
-                          _hoisted_7,
-                          _hoisted_8,
-                          _hoisted_9
-                        ])
-                      ]),
-                      createBaseVNode("tbody", null, [
-                        (openBlock(true), createElementBlock(Fragment, null, renderList(keyset.keys, (k) => {
-                          return openBlock(), createElementBlock("tr", null, [
-                            createBaseVNode("td", null, [
-                              withDirectives(createBaseVNode("input", {
-                                "onUpdate:modelValue": ($event) => k.access_key = $event,
-                                size: "22",
-                                readonly: ""
-                              }, null, 8, _hoisted_10), [
-                                [vModelText, k.access_key]
-                              ]),
-                              createVNode(VTooltip, { text: "Copy access key to clipboard" }, {
-                                activator: withCtx(({ props }) => [
-                                  createVNode(VBtn, mergeProps({
-                                    icon: "mdi-clipboard-text",
-                                    variant: "plain",
-                                    onClick: ($event) => $options.kick_copy_to_clipboard(k.access_key)
-                                  }, props), null, 16, ["onClick"])
-                                ]),
-                                _: 2
-                              }, 1024)
-                            ]),
-                            createBaseVNode("td", null, [
-                              withDirectives(createBaseVNode("input", {
-                                "onUpdate:modelValue": ($event) => k.secret_key = $event,
-                                size: "50",
-                                readonly: ""
-                              }, null, 8, _hoisted_11), [
-                                [vModelText, k.secret_key]
-                              ]),
-                              createVNode(VTooltip, { text: "Copy secret key to clipboard" }, {
-                                activator: withCtx(({ props }) => [
-                                  createVNode(VBtn, mergeProps({
-                                    icon: "mdi-clipboard-text",
-                                    variant: "plain",
-                                    onClick: ($event) => $options.kick_copy_to_clipboard(k.secret_key)
-                                  }, props), null, 16, ["onClick"])
-                                ]),
-                                _: 2
-                              }, 1024)
-                            ]),
-                            createBaseVNode("td", null, [
-                              withDirectives(createBaseVNode("input", {
-                                "onUpdate:modelValue": ($event) => k.expiration_time = $event,
-                                size: "10",
-                                readonly: ""
-                              }, null, 8, _hoisted_12), [
-                                [vModelText, k.expiration_time]
-                              ])
-                            ]),
-                            createBaseVNode("td", null, [
-                              createVNode(VTooltip, { text: "Delete this key (not undoable)" }, {
-                                activator: withCtx(({ props }) => [
-                                  createVNode(VBtn, mergeProps({
-                                    icon: "mdi-delete-forever",
-                                    variant: "plain",
-                                    onClick: ($event) => $options.kick_delete_secret(k.access_key)
-                                  }, props), null, 16, ["onClick"])
-                                ]),
-                                _: 2
-                              }, 1024)
-                            ])
-                          ]);
-                        }), 256))
-                      ])
+                createBaseVNode("td", null, [
+                  createVNode(VTooltip, { text: "Delete a bucket" }, {
+                    activator: withCtx(({ props }) => [
+                      createVNode(VBtn, mergeProps({
+                        icon: "mdi-delete-forever",
+                        variant: "plain",
+                        onClick: ($event) => $options.kick_delete_bucket(b.name)
+                      }, props), null, 16, ["onClick"])
                     ]),
                     _: 2
                   }, 1024)
-                ]);
-              }), 256))
-            ]),
-            _: 1
-          })) : createCommentVNode("", true)
+                ])
+              ]);
+            }), 256))
+          ])
         ]),
         _: 1
-      })
+      }),
+      createVNode(VRow, { align: "center" }, {
+        default: withCtx(() => [
+          createVNode(VSpacer),
+          createVNode(VCard, { class: "w-75 pa-4 ma-4" }, {
+            default: withCtx(() => [
+              createVNode(VCardTitle, null, {
+                default: withCtx(() => [
+                  createTextVNode("New access key")
+                ]),
+                _: 1
+              }),
+              createVNode(VTextField, {
+                type: "date",
+                min: (/* @__PURE__ */ new Date()).toISOString().substring(0, 10),
+                label: "Expiration (00:00:00 UTC)",
+                modelValue: $props.pool_data.key_expiration_time,
+                "onUpdate:modelValue": _cache[2] || (_cache[2] = ($event) => $props.pool_data.key_expiration_time = $event)
+              }, null, 8, ["min", "modelValue"]),
+              createVNode(VBtn, {
+                "prepend-icon": "mdi-key-plus",
+                onClick: _cache[3] || (_cache[3] = ($event) => $options.kick_make_secret("readwrite"))
+              }, {
+                default: withCtx(() => [
+                  createTextVNode(" Create readwrite key ")
+                ]),
+                _: 1
+              }),
+              createTextVNode("   "),
+              createVNode(VBtn, {
+                "prepend-icon": "mdi-key-plus",
+                onClick: _cache[4] || (_cache[4] = ($event) => $options.kick_make_secret("readonly"))
+              }, {
+                default: withCtx(() => [
+                  createTextVNode(" Create readonly key ")
+                ]),
+                _: 1
+              }),
+              createTextVNode("   "),
+              createVNode(VBtn, {
+                "prepend-icon": "mdi-key-plus",
+                onClick: _cache[5] || (_cache[5] = ($event) => $options.kick_make_secret("writeonly"))
+              }, {
+                default: withCtx(() => [
+                  createTextVNode(" Create writeonly key ")
+                ]),
+                _: 1
+              })
+            ]),
+            _: 1
+          }),
+          createVNode(VSpacer)
+        ]),
+        _: 1
+      }),
+      (openBlock(true), createElementBlock(Fragment, null, renderList($props.pool_data.access_key_set, (keyset) => {
+        return openBlock(), createElementBlock("div", _hoisted_6, [
+          createVNode(VSpacer),
+          createVNode(VTable, { density: "compact" }, {
+            default: withCtx(() => [
+              createBaseVNode("thead", null, [
+                createBaseVNode("tr", null, [
+                  createBaseVNode("th", _hoisted_7, "Access key (" + toDisplayString(keyset.policy) + ")", 1),
+                  _hoisted_8,
+                  _hoisted_9,
+                  _hoisted_10
+                ])
+              ]),
+              createBaseVNode("tbody", null, [
+                (openBlock(true), createElementBlock(Fragment, null, renderList(keyset.keys, (k) => {
+                  return openBlock(), createElementBlock("tr", null, [
+                    createBaseVNode("td", null, [
+                      withDirectives(createBaseVNode("input", {
+                        "onUpdate:modelValue": ($event) => k.access_key = $event,
+                        size: "22",
+                        readonly: ""
+                      }, null, 8, _hoisted_11), [
+                        [vModelText, k.access_key]
+                      ]),
+                      createVNode(VTooltip, { text: "Copy access key to clipboard" }, {
+                        activator: withCtx(({ props }) => [
+                          createVNode(VBtn, mergeProps({
+                            icon: "mdi-clipboard-text",
+                            variant: "plain",
+                            onClick: ($event) => $options.kick_copy_to_clipboard(k.access_key)
+                          }, props), null, 16, ["onClick"])
+                        ]),
+                        _: 2
+                      }, 1024)
+                    ]),
+                    createBaseVNode("td", null, [
+                      withDirectives(createBaseVNode("input", {
+                        "onUpdate:modelValue": ($event) => k.secret_key = $event,
+                        size: "50",
+                        readonly: ""
+                      }, null, 8, _hoisted_12), [
+                        [vModelText, k.secret_key]
+                      ]),
+                      createVNode(VTooltip, { text: "Copy secret key to clipboard" }, {
+                        activator: withCtx(({ props }) => [
+                          createVNode(VBtn, mergeProps({
+                            icon: "mdi-clipboard-text",
+                            variant: "plain",
+                            onClick: ($event) => $options.kick_copy_to_clipboard(k.secret_key)
+                          }, props), null, 16, ["onClick"])
+                        ]),
+                        _: 2
+                      }, 1024)
+                    ]),
+                    createBaseVNode("td", null, [
+                      withDirectives(createBaseVNode("input", {
+                        "onUpdate:modelValue": ($event) => k.expiration_time = $event,
+                        size: "10",
+                        readonly: ""
+                      }, null, 8, _hoisted_13), [
+                        [vModelText, k.expiration_time]
+                      ])
+                    ]),
+                    createBaseVNode("td", null, [
+                      createVNode(VTooltip, { text: "Delete this key (not undoable)" }, {
+                        activator: withCtx(({ props }) => [
+                          createVNode(VBtn, mergeProps({
+                            icon: "mdi-delete-forever",
+                            variant: "plain",
+                            onClick: ($event) => $options.kick_delete_secret(k.access_key)
+                          }, props), null, 16, ["onClick"])
+                        ]),
+                        _: 2
+                      }, 1024)
+                    ])
+                  ]);
+                }), 256))
+              ])
+            ]),
+            _: 2
+          }, 1024),
+          createVNode(VSpacer)
+        ]);
+      }), 256))
     ]),
     _: 1
-  });
+  })) : createCommentVNode("", true);
 }
 const PoolEdit = /* @__PURE__ */ _export_sfc(_sfc_main$4, [["render", _sfc_render$2]]);
 const _sfc_main$3 = {
@@ -17917,6 +17837,7 @@ const pool_data_ = {
   lens3_version: "",
   s3_url: "",
   footer_banner: "",
+  base_path: "",
   /* Entries for PoolList. */
   pool_list: [],
   /* Entries for PoolEdit. */
@@ -18057,6 +17978,7 @@ function set_user_info_data(data) {
   pool_data.lens3_version = d["lens3_version"];
   pool_data.s3_url = d["s3_url"];
   pool_data.footer_banner = d["footer_banner"];
+  pool_data.base_path = base_path;
   pool_data.edit_pool_visible = false;
 }
 function set_pool_list(data) {
@@ -18165,27 +18087,15 @@ const _sfc_main$2 = /* @__PURE__ */ defineComponent$1({
   __name: "Setting",
   setup(__props) {
     return (_ctx, _cache) => {
-      return openBlock(), createElementBlock(Fragment, null, [
-        createVNode(VRow, null, {
-          default: withCtx(() => [
-            createVNode(PoolMake, { pool_data: unref(pool_data) }, null, 8, ["pool_data"])
-          ]),
-          _: 1
-        }),
-        createVNode(VRow, null, {
-          default: withCtx(() => [
-            createVNode(PoolList, { pool_data: unref(pool_data) }, null, 8, ["pool_data"])
-          ]),
-          _: 1
-        }),
-        createVNode(VRow, null, {
-          default: withCtx(() => [
-            createVNode(PoolEdit, { pool_data: unref(pool_data) }, null, 8, ["pool_data"])
-          ]),
-          _: 1
-        }),
-        createVNode(AlertPopup, { pool_data: unref(pool_data) }, null, 8, ["pool_data"])
-      ], 64);
+      return openBlock(), createBlock(VResponsive, { class: "d-flex align-center text-center fill-height" }, {
+        default: withCtx(() => [
+          createVNode(PoolMake, { pool_data: unref(pool_data) }, null, 8, ["pool_data"]),
+          createVNode(PoolList, { pool_data: unref(pool_data) }, null, 8, ["pool_data"]),
+          createVNode(PoolEdit, { pool_data: unref(pool_data) }, null, 8, ["pool_data"]),
+          createVNode(AlertPopup, { pool_data: unref(pool_data) }, null, 8, ["pool_data"])
+        ]),
+        _: 1
+      });
     };
   }
 });

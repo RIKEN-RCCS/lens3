@@ -23,6 +23,7 @@ const pool_data_ = {
   lens3_version: "",
   s3_url: "",
   footer_banner: "",
+  base_path: "",
 
   /* Entries for PoolList. */
 
@@ -170,6 +171,7 @@ function set_user_info_data(data : any) {
   pool_data.lens3_version = d["lens3_version"];
   pool_data.s3_url = d["s3_url"];
   pool_data.footer_banner = d["footer_banner"];
+  pool_data.base_path = base_path;
 
   pool_data.edit_pool_visible = false;
 }

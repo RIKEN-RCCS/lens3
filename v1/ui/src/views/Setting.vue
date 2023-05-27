@@ -1,14 +1,10 @@
 <template>
-  <v-row>
+  <v-responsive class="d-flex align-center text-center fill-height">
     <PoolMake v-bind:pool_data="pool_data" />
-  </v-row>
-  <v-row>
     <PoolList v-bind:pool_data="pool_data" />
-  </v-row>
-  <v-row>
     <PoolEdit v-bind:pool_data="pool_data" />
-  </v-row>
-  <AlertPopup v-bind:pool_data="pool_data" />
+    <AlertPopup v-bind:pool_data="pool_data" />
+  </v-responsive>
 </template>
 
 <script lang="ts" setup>

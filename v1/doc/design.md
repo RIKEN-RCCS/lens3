@@ -5,7 +5,7 @@ This describes design notes of Lenticularis-S3.
 ## Components of Lens3
 
 * Lens3-Mux
-* Lens3-Api (Web-API)
+* Lens3-Api (Web-UI)
 * Manager: A Manager runs under a Lens3-Mux and starts a MinIO
   instance and manages its lifetime.
 * MinIO (S3 server)
@@ -50,8 +50,9 @@ list, "claim" is a string (maybe empty), and "enabled" is a boolean.
 A __um:claim__ entry is a map from a user claim to a uid.  Entries are
 used only when Lens-Api is configured with "claim_uid_map=map".
 
-Partial reasons of storing configurations in the database is because
-typo errors are annoying when detected at a start of a service.
+One reason for storing configurations in the database is to let them
+parsed at storing in the database.  Detecting typos at a start of a
+service is very annoying.
 
 ### Storage-Table (DB=1)
 
@@ -193,24 +194,37 @@ transition at intervals (by heartbeat_interval).
 All states of services are stored in Redis.  systemd services can be
 stoped/started.
 
-## Lens3-Api Processes
+## Processes
+
+### Lens3-Api Processes
 
 Lens3-Api is not designed as load-balanced.  Lens3-Api may consist of
 some processes started by Gunicorn, but they are not distributed.
 
-## Lens3-Mux Processes
+### Lens3-Mux Processes
 
 There exists multiple Lens3-Mux processes for a single Lens3-Mux
 service, as it is started by Gunicorn.  Some book-keeping periodical
 operations (running in background threads) are performed more
 frequently than expected.
 
-## Manager Processes
+### Manager Processes
 
 A Manager becomes a session leader (by calling setsid), and a MinIO
 process will be terminated when a Manager exits.
 
-## Service Tests
+## UI
+
+Lens3 UI is created by vuejs+vuetify.  The code for Vuetify is in the
+"v1/ui" directory.  See README.md in [ui](../ui/) for building UI
+code.
+
+## Security
+
+Security totally depends on the setting of the proxy.  Ask experts for
+setting up the proxy.
+
+## Notes on Testing the Service
 
 ### Forced Heartbeat Failure
 
@@ -224,17 +238,6 @@ that it leaves "minio" and "sudo" processes in the STOP state.
 The action to fake a forced removal of a __ma:pool-id__ entry in Redis
 should (1) start a new Lens3-Mux + MinIO pair, and then (2) stop an
 old Lens3-Mux + MinIO pair.
-
-## UI
-
-Lens3 UI is created by vuejs+vuetify.  The code for Vuetify is in the
-"v1/ui" directory.  See README.md in [ui](../ui/) for building UI
-code.
-
-## Security
-
-Security totally depends on the setting of the proxy.  Ask experts for
-setting up the proxy.
 
 ## Notes on MinIO
 
@@ -254,7 +257,7 @@ change in versions of MinIO,
 {"level": "FATAL", ..., "message": "Specified port is already in use:
   listen tcp :n: bind: address already in use", ...}
 {"level": "FATAL", ..., "message": "Unable to write to the backend:
-  file access denied", "error": {...}}
+  file access denied", ...}
 ```
 
 ## Glossary

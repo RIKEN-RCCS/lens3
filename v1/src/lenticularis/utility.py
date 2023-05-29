@@ -5,7 +5,6 @@
 
 import codecs
 import hashlib
-import json
 import platform
 import random
 import string

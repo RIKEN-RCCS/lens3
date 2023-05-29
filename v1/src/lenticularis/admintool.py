@@ -549,7 +549,7 @@ class Command():
         api_conf = get_conf("api", None, self._redis)
         assert api_conf is not None
         control = Control_Api(api_conf, self._redis)
-        control.access_mux_for_pool(pool_id)
+        status = control.access_mux_for_pool(pool_id)
         pass
 
     command_list = [

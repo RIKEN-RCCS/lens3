@@ -205,10 +205,6 @@ service, as it is started by Gunicorn.  Some book-keeping periodical
 operations (running in background threads) are performed more
 frequently than expected.
 
-## MinIO Clients
-
-Note that alias commands are local (not connect to a MinIO).
-
 ## Manager Processes
 
 A Manager becomes a session leader (by calling setsid), and a MinIO
@@ -235,27 +231,46 @@ Lens3 UI is created by vuejs+vuetify.  The code for Vuetify is in the
 "v1/ui" directory.  See README.md in [ui](../ui/) for building UI
 code.
 
-## Short Term TODO, or Deficiency
-
-* Start MinIO with the --json option.  It will make parsing the output
-  reliable.
-* Rewrite in Go-lang.  The code will be in Go in the next release.
-* Make access-key generation of Web-API behave like STS.
-* Add control on the pool status "online" via Web-API.  It is fixed
-  currently.
-* Make starting a MinIO instance via the frontend proxy.  Currently,
-  an arbitrary Mux is chosen, but the proxy can balance the loads.
-
 ## Security
 
 Security totally depends on the setting of the proxy.  Ask experts for
 setting up the proxy.
+
+## Notes on MinIO
+
+### Clients (MC)
+
+Note that alias commands are local (not connect to a MinIO).
+
+### MinIO Startup Messages
+
+Lens3 recognizes a few of the messages at a MinIO startup.  It retries
+starting MinIO on a port-in-use error.  The code to match messages
+needs to be updated after updating MinIO, because these messages may
+change in versions of MinIO,
+
+```
+{"level": "INFO", ..., "message": "API: http://n.n.n.n:n  http://n.n.n.n:n"}
+{"level": "FATAL", ..., "message": "Specified port is already in use:
+  listen tcp :n: bind: address already in use", ...}
+{"level": "FATAL", ..., "message": "Unable to write to the backend:
+  file access denied", "error": {...}}
+```
 
 ## Glossary
 
 * __Probe-key__: An access-key used by Lens3-Api to tell Lens3-Mux
   about a wake up of MinIO.  This is key has no corresponding secret.
   It is distiguished by an empty secret.
+
+## Short-Term TODO, or Deficiency
+
+* Rewrite in Go-lang.  The code will be in Go in the next release.
+* Make access-key generation of Lens3-Api behave like STS.
+* Add control on the pool status "online".  It is always online currently.
+* Make starting a MinIO instance through the frontend proxy.
+  Currently, arbitrary Mux is chosen.  The proxy can balance the
+  loads.
 
 ## RANDOM MEMO
 

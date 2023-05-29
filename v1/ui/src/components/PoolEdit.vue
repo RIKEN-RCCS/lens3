@@ -3,7 +3,7 @@
                v-if="pool_data.edit_pool_visible">
     <div class="text-h5 text-center w-100">Edit a Pool</div>
     <div class="text-h6 text-center w-100">{{pool_data.buckets_directory}}</div>
-    <v-card variant="outlined" class="ma-4 w-100">
+    <v-card variant="outlined" class="w-100 ma-4">
       <v-card-text>
         Edit pool lists buckets and access keys. You can
         add/delete them.  A bucket name should be unique in all
@@ -67,6 +67,7 @@
 
     <!-- KEYS -->
 
+    <v-divider v-bind:thickness="5" class="border-opacity-0"></v-divider>
     <v-row align="center">
       <v-spacer />
       <v-card class="w-75 pa-4 ma-4">

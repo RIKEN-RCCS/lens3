@@ -10791,13 +10791,7 @@ const VCard = genericComponent()({
     return {};
   }
 });
-const _hoisted_1$4 = /* @__PURE__ */ createBaseVNode("li", null, " Lens3 is an S3 service using 3rd-party server program MinIO. ", -1);
-const _hoisted_2$2 = /* @__PURE__ */ createBaseVNode("li", null, " Lens3 runs multiple MinIO instances at a single access point, and it redirects requests with regard to access keys. ", -1);
-const _hoisted_3$2 = /* @__PURE__ */ createBaseVNode("li", null, [
-  /* @__PURE__ */ createTextVNode(" For the usage, see the Lens3 user-guide.md in: "),
-  /* @__PURE__ */ createBaseVNode("a", { href: "https://github.com/riken-rccs/lens3/" }, "github.com")
-], -1);
-const _hoisted_4$2 = /* @__PURE__ */ createBaseVNode("li", null, ' A simpler UI is available at "ui2/index.html". ', -1);
+const _hoisted_1$4 = /* @__PURE__ */ createBaseVNode("a", { href: "https://github.com/riken-rccs/lens3/" }, "github.com", -1);
 function _sfc_render$6(_ctx, _cache, $props, $setup, $data, $options) {
   return openBlock(), createBlock(VCard, {
     variant: "outlined",
@@ -10811,38 +10805,61 @@ function _sfc_render$6(_ctx, _cache, $props, $setup, $data, $options) {
         ]),
         _: 1
       }),
-      createVNode(VCardText, { class: "text-body-1" }, {
+      createVNode(VCardText, null, {
         default: withCtx(() => [
-          createBaseVNode("ul", null, [
-            _hoisted_1$4,
-            _hoisted_2$2,
-            _hoisted_3$2,
-            createBaseVNode("li", null, [
-              createTextVNode(" Lens3's S3 end-point is: " + toDisplayString($props.pool_data.s3_url) + " ", 1),
-              createVNode(VBtn, {
-                variant: "plain",
-                onClick: $options.kick_copy_url_to_clipboard
-              }, {
-                default: withCtx(() => [
-                  createTextVNode(" (copy link)")
-                ]),
-                _: 1
-              }, 8, ["onClick"])
+          createTextVNode(" Lens3 is an S3 service using 3rd-party server program MinIO. ")
+        ]),
+        _: 1
+      }),
+      createVNode(VCardText, null, {
+        default: withCtx(() => [
+          createTextVNode(" Lens3 runs multiple MinIO instances at a single access point, and it redirects requests with regard to access keys. ")
+        ]),
+        _: 1
+      }),
+      createVNode(VCardText, null, {
+        default: withCtx(() => [
+          createTextVNode(" For the usage, see the Lens3 user-guide.md in: "),
+          _hoisted_1$4
+        ]),
+        _: 1
+      }),
+      createVNode(VCardText, null, {
+        default: withCtx(() => [
+          createTextVNode(" Lens3's S3 end-point is: " + toDisplayString($props.pool_data.s3_url) + " ", 1),
+          createVNode(VBtn, {
+            variant: "plain",
+            onClick: $options.kick_copy_url_to_clipboard
+          }, {
+            default: withCtx(() => [
+              createTextVNode(" (copy link)")
             ]),
-            _hoisted_4$2,
-            createBaseVNode("li", null, " Lens3 version: " + toDisplayString($props.pool_data.lens3_version), 1)
-          ])
+            _: 1
+          }, 8, ["onClick"])
+        ]),
+        _: 1
+      }),
+      createVNode(VCardText, null, {
+        default: withCtx(() => [
+          createTextVNode(' A simpler UI is available at "ui2/index.html". ')
+        ]),
+        _: 1
+      }),
+      createVNode(VCardText, null, {
+        default: withCtx(() => [
+          createTextVNode(" Lens3 version: " + toDisplayString($props.pool_data.lens3_version), 1)
         ]),
         _: 1
       }),
       createVNode(VCardActions, null, {
         default: withCtx(() => [
           createVNode(VBtn, {
-            variant: "text",
-            onClick: _cache[0] || (_cache[0] = ($event) => $props.pool_data.menu_visible = false)
+            onClick: _cache[0] || (_cache[0] = ($event) => $props.pool_data.menu_visible = false),
+            block: "",
+            variant: "text"
           }, {
             default: withCtx(() => [
-              createTextVNode(" Dismiss ")
+              createTextVNode(" Close ")
             ]),
             _: 1
           })
@@ -14113,7 +14130,7 @@ function _sfc_render$5(_ctx, _cache, $props, $setup, $data, $options) {
       createVNode(VAppBarTitle, null, {
         default: withCtx(() => [
           createVNode(VIcon, { icon: "mdi-cog" }),
-          createTextVNode(" Lens3 Pool Manager ")
+          createTextVNode(" Lens3 ")
         ]),
         _: 1
       }),
@@ -16708,7 +16725,7 @@ function _sfc_render$4(_ctx, _cache, $props, $setup, $data, $options) {
       _hoisted_1$3,
       createVNode(VCard, {
         variant: "outlined",
-        class: "ma-4 w-100"
+        class: "w-100 ma-4"
       }, {
         default: withCtx(() => [
           createVNode(VCardText, null, {
@@ -16799,6 +16816,116 @@ const _sfc_main$5 = {
     }
   }
 };
+const VDialog$1 = "";
+const VDialog = genericComponent()({
+  name: "VDialog",
+  props: {
+    fullscreen: Boolean,
+    retainFocus: {
+      type: Boolean,
+      default: true
+    },
+    scrollable: Boolean,
+    ...makeVOverlayProps({
+      origin: "center center",
+      scrollStrategy: "block",
+      transition: {
+        component: VDialogTransition
+      },
+      zIndex: 2400
+    })
+  },
+  emits: {
+    "update:modelValue": (value) => true
+  },
+  setup(props, _ref) {
+    let {
+      slots
+    } = _ref;
+    const isActive = useProxiedModel(props, "modelValue");
+    const {
+      scopeId
+    } = useScopeId();
+    const overlay = ref();
+    function onFocusin(e) {
+      var _a, _b;
+      const before = e.relatedTarget;
+      const after = e.target;
+      if (before !== after && ((_a = overlay.value) == null ? void 0 : _a.contentEl) && // We're the topmost dialog
+      ((_b = overlay.value) == null ? void 0 : _b.globalTop) && // It isn't the document or the dialog body
+      ![document, overlay.value.contentEl].includes(after) && // It isn't inside the dialog body
+      !overlay.value.contentEl.contains(after)) {
+        const focusable = focusableChildren(overlay.value.contentEl);
+        if (!focusable.length)
+          return;
+        const firstElement = focusable[0];
+        const lastElement = focusable[focusable.length - 1];
+        if (before === firstElement) {
+          lastElement.focus();
+        } else {
+          firstElement.focus();
+        }
+      }
+    }
+    if (IN_BROWSER) {
+      watch(() => isActive.value && props.retainFocus, (val) => {
+        val ? document.addEventListener("focusin", onFocusin) : document.removeEventListener("focusin", onFocusin);
+      }, {
+        immediate: true
+      });
+    }
+    watch(isActive, async (val) => {
+      var _a, _b;
+      await nextTick();
+      if (val) {
+        (_a = overlay.value.contentEl) == null ? void 0 : _a.focus({
+          preventScroll: true
+        });
+      } else {
+        (_b = overlay.value.activatorEl) == null ? void 0 : _b.focus({
+          preventScroll: true
+        });
+      }
+    });
+    const activatorProps = computed(() => mergeProps({
+      "aria-haspopup": "dialog",
+      "aria-expanded": String(isActive.value)
+    }, props.activatorProps));
+    useRender(() => {
+      const [overlayProps] = VOverlay.filterProps(props);
+      return createVNode(VOverlay, mergeProps({
+        "ref": overlay,
+        "class": ["v-dialog", {
+          "v-dialog--fullscreen": props.fullscreen,
+          "v-dialog--scrollable": props.scrollable
+        }, props.class],
+        "style": props.style
+      }, overlayProps, {
+        "modelValue": isActive.value,
+        "onUpdate:modelValue": ($event) => isActive.value = $event,
+        "aria-modal": "true",
+        "activatorProps": activatorProps.value,
+        "role": "dialog"
+      }, scopeId), {
+        activator: slots.activator,
+        default: function() {
+          for (var _len = arguments.length, args = new Array(_len), _key = 0; _key < _len; _key++) {
+            args[_key] = arguments[_key];
+          }
+          return createVNode(VDefaultsProvider, {
+            "root": true
+          }, {
+            default: () => {
+              var _a;
+              return [(_a = slots.default) == null ? void 0 : _a.call(slots, ...args)];
+            }
+          });
+        }
+      });
+    });
+    return forwardRefs({}, overlay);
+  }
+});
 const VSlideGroup$1 = "";
 function bias(val) {
   const c = 0.501;
@@ -17225,13 +17352,12 @@ const VTable = genericComponent()({
   }
 });
 const _hoisted_1$2 = /* @__PURE__ */ createBaseVNode("div", { class: "text-h5 text-center w-100" }, "List Pools", -1);
-const _hoisted_2$1 = /* @__PURE__ */ createBaseVNode("td", { class: "text-left" }, "uid", -1);
-const _hoisted_3$1 = /* @__PURE__ */ createBaseVNode("td", { class: "text-left" }, "gid", -1);
-const _hoisted_4$1 = /* @__PURE__ */ createBaseVNode("td", { class: "text-left" }, "online?", -1);
-const _hoisted_5$1 = /* @__PURE__ */ createBaseVNode("td", { class: "text-left" }, "enabled?", -1);
-const _hoisted_6$1 = /* @__PURE__ */ createBaseVNode("td", { class: "text-left" }, "minio_state", -1);
-const _hoisted_7$1 = /* @__PURE__ */ createBaseVNode("td", { class: "text-left" }, "minio_reason", -1);
-const _hoisted_8$1 = /* @__PURE__ */ createBaseVNode("td", { class: "text-left" }, "internal-id", -1);
+const _hoisted_2$1 = /* @__PURE__ */ createBaseVNode("td", null, "uid", -1);
+const _hoisted_3$1 = /* @__PURE__ */ createBaseVNode("td", null, "gid", -1);
+const _hoisted_4$1 = /* @__PURE__ */ createBaseVNode("td", null, "online?", -1);
+const _hoisted_5$1 = /* @__PURE__ */ createBaseVNode("td", null, "enabled?", -1);
+const _hoisted_6$1 = /* @__PURE__ */ createBaseVNode("td", null, "minio_state", -1);
+const _hoisted_7$1 = /* @__PURE__ */ createBaseVNode("td", null, "internal-id", -1);
 function _sfc_render$3(_ctx, _cache, $props, $setup, $data, $options) {
   return $props.pool_data.pool_list.length ? (openBlock(), createBlock(VContainer, {
     key: 0,
@@ -17241,7 +17367,7 @@ function _sfc_render$3(_ctx, _cache, $props, $setup, $data, $options) {
       _hoisted_1$2,
       createVNode(VCard, {
         variant: "outlined",
-        class: "ma-4 w-100"
+        class: "w-100 ma-4"
       }, {
         default: withCtx(() => [
           createVNode(VCardText, null, {
@@ -17280,7 +17406,10 @@ function _sfc_render$3(_ctx, _cache, $props, $setup, $data, $options) {
                           ]),
                           _: 2
                         }, 1024),
-                        createVNode(VTable, { density: "compact" }, {
+                        createVNode(VTable, {
+                          density: "compact",
+                          class: "text-left"
+                        }, {
                           default: withCtx(() => [
                             createBaseVNode("tbody", null, [
                               createBaseVNode("tr", null, [
@@ -17301,14 +17430,57 @@ function _sfc_render$3(_ctx, _cache, $props, $setup, $data, $options) {
                               ]),
                               createBaseVNode("tr", null, [
                                 _hoisted_6$1,
-                                createBaseVNode("td", null, toDisplayString($props.pool_data.pool_list[n]["minio_state"]), 1)
+                                createBaseVNode("td", null, [
+                                  createTextVNode(toDisplayString($props.pool_data.pool_list[n]["minio_state"]) + " ", 1),
+                                  $props.pool_data.pool_list[n].minio_reason != "-" ? (openBlock(), createBlock(VBtn, {
+                                    key: 0,
+                                    variant: "plain"
+                                  }, {
+                                    default: withCtx(() => [
+                                      createTextVNode(" Reason "),
+                                      createVNode(VDialog, {
+                                        modelValue: $props.pool_data.pool_list[n].dialog,
+                                        "onUpdate:modelValue": ($event) => $props.pool_data.pool_list[n].dialog = $event,
+                                        activator: "parent",
+                                        width: "auto"
+                                      }, {
+                                        default: withCtx(() => [
+                                          createVNode(VCard, null, {
+                                            default: withCtx(() => [
+                                              createVNode(VCardText, null, {
+                                                default: withCtx(() => [
+                                                  createTextVNode(toDisplayString($props.pool_data.pool_list[n]["minio_reason"]), 1)
+                                                ]),
+                                                _: 2
+                                              }, 1024),
+                                              createVNode(VCardActions, null, {
+                                                default: withCtx(() => [
+                                                  createVNode(VBtn, {
+                                                    onClick: ($event) => $props.pool_data.pool_list[n].dialog = false,
+                                                    variant: "text",
+                                                    block: ""
+                                                  }, {
+                                                    default: withCtx(() => [
+                                                      createTextVNode(" Close ")
+                                                    ]),
+                                                    _: 2
+                                                  }, 1032, ["onClick"])
+                                                ]),
+                                                _: 2
+                                              }, 1024)
+                                            ]),
+                                            _: 2
+                                          }, 1024)
+                                        ]),
+                                        _: 2
+                                      }, 1032, ["modelValue", "onUpdate:modelValue"])
+                                    ]),
+                                    _: 2
+                                  }, 1024)) : createCommentVNode("", true)
+                                ])
                               ]),
                               createBaseVNode("tr", null, [
                                 _hoisted_7$1,
-                                createBaseVNode("td", null, toDisplayString($props.pool_data.pool_list[n]["minio_reason"]), 1)
-                              ]),
-                              createBaseVNode("tr", null, [
-                                _hoisted_8$1,
                                 createBaseVNode("td", null, toDisplayString($props.pool_data.pool_list[n]["pool_name"]), 1)
                               ])
                             ])
@@ -17431,7 +17603,7 @@ function _sfc_render$2(_ctx, _cache, $props, $setup, $data, $options) {
       createBaseVNode("div", _hoisted_2, toDisplayString($props.pool_data.buckets_directory), 1),
       createVNode(VCard, {
         variant: "outlined",
-        class: "ma-4 w-100"
+        class: "w-100 ma-4"
       }, {
         default: withCtx(() => [
           createVNode(VCardText, null, {
@@ -17527,6 +17699,10 @@ function _sfc_render$2(_ctx, _cache, $props, $setup, $data, $options) {
           ])
         ]),
         _: 1
+      }),
+      createVNode(VDivider, {
+        thickness: 5,
+        class: "border-opacity-0"
       }),
       createVNode(VRow, { align: "center" }, {
         default: withCtx(() => [
@@ -17682,116 +17858,6 @@ const _sfc_main$3 = {
     return {};
   }
 };
-const VDialog$1 = "";
-const VDialog = genericComponent()({
-  name: "VDialog",
-  props: {
-    fullscreen: Boolean,
-    retainFocus: {
-      type: Boolean,
-      default: true
-    },
-    scrollable: Boolean,
-    ...makeVOverlayProps({
-      origin: "center center",
-      scrollStrategy: "block",
-      transition: {
-        component: VDialogTransition
-      },
-      zIndex: 2400
-    })
-  },
-  emits: {
-    "update:modelValue": (value) => true
-  },
-  setup(props, _ref) {
-    let {
-      slots
-    } = _ref;
-    const isActive = useProxiedModel(props, "modelValue");
-    const {
-      scopeId
-    } = useScopeId();
-    const overlay = ref();
-    function onFocusin(e) {
-      var _a, _b;
-      const before = e.relatedTarget;
-      const after = e.target;
-      if (before !== after && ((_a = overlay.value) == null ? void 0 : _a.contentEl) && // We're the topmost dialog
-      ((_b = overlay.value) == null ? void 0 : _b.globalTop) && // It isn't the document or the dialog body
-      ![document, overlay.value.contentEl].includes(after) && // It isn't inside the dialog body
-      !overlay.value.contentEl.contains(after)) {
-        const focusable = focusableChildren(overlay.value.contentEl);
-        if (!focusable.length)
-          return;
-        const firstElement = focusable[0];
-        const lastElement = focusable[focusable.length - 1];
-        if (before === firstElement) {
-          lastElement.focus();
-        } else {
-          firstElement.focus();
-        }
-      }
-    }
-    if (IN_BROWSER) {
-      watch(() => isActive.value && props.retainFocus, (val) => {
-        val ? document.addEventListener("focusin", onFocusin) : document.removeEventListener("focusin", onFocusin);
-      }, {
-        immediate: true
-      });
-    }
-    watch(isActive, async (val) => {
-      var _a, _b;
-      await nextTick();
-      if (val) {
-        (_a = overlay.value.contentEl) == null ? void 0 : _a.focus({
-          preventScroll: true
-        });
-      } else {
-        (_b = overlay.value.activatorEl) == null ? void 0 : _b.focus({
-          preventScroll: true
-        });
-      }
-    });
-    const activatorProps = computed(() => mergeProps({
-      "aria-haspopup": "dialog",
-      "aria-expanded": String(isActive.value)
-    }, props.activatorProps));
-    useRender(() => {
-      const [overlayProps] = VOverlay.filterProps(props);
-      return createVNode(VOverlay, mergeProps({
-        "ref": overlay,
-        "class": ["v-dialog", {
-          "v-dialog--fullscreen": props.fullscreen,
-          "v-dialog--scrollable": props.scrollable
-        }, props.class],
-        "style": props.style
-      }, overlayProps, {
-        "modelValue": isActive.value,
-        "onUpdate:modelValue": ($event) => isActive.value = $event,
-        "aria-modal": "true",
-        "activatorProps": activatorProps.value,
-        "role": "dialog"
-      }, scopeId), {
-        activator: slots.activator,
-        default: function() {
-          for (var _len = arguments.length, args = new Array(_len), _key = 0; _key < _len; _key++) {
-            args[_key] = arguments[_key];
-          }
-          return createVNode(VDefaultsProvider, {
-            "root": true
-          }, {
-            default: () => {
-              var _a;
-              return [(_a = slots.default) == null ? void 0 : _a.call(slots, ...args)];
-            }
-          });
-        }
-      });
-    });
-    return forwardRefs({}, overlay);
-  }
-});
 function _sfc_render$1(_ctx, _cache, $props, $setup, $data, $options) {
   return $props.pool_data.dialog_show ? (openBlock(), createBlock(VDialog, {
     key: 0,

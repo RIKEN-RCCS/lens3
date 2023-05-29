@@ -6,6 +6,7 @@ transition of the pool state."""
 
 import argparse
 import os
+import errno
 from signal import signal, alarm, SIGTERM, SIGCHLD, SIGALRM, SIG_IGN
 from subprocess import Popen, DEVNULL, PIPE, TimeoutExpired
 import random
@@ -14,6 +15,7 @@ import sys
 import threading
 import time
 import contextlib
+import json
 from urllib.request import urlopen
 from urllib.error import HTTPError, URLError
 from lenticularis.mc import Mc, assert_mc_success
@@ -45,11 +47,12 @@ class Termination(Exception):
 
 # Messages from a MinIO process at its start-up.
 
-_minio_expected_response = b"API: "
-_minio_error_response = b"ERROR"
-_minio_response_port_in_use = b"Specified port is already in use"
-_minio_response_unwritable_storage = b"Unable to write to the backend"
-_minio_response_port_capability = b"Insufficient permissions to use specified port"
+_minio_expected_response = "API: "
+_minio_error_response = "ERROR"
+_minio_response_port_in_use = "Specified port is already in use"
+_minio_response_nonwritable_storage = "Unable to write to the backend"
+_minio_response_failure = "Unable to initialize backend"
+_minio_response_port_capability = "Insufficient permissions to use specified port"
 
 
 def _read_stream(s):
@@ -72,6 +75,58 @@ def _manager_info_string(desc):
     muxep = host_port(desc["mux_host"], desc["mux_port"])
     pid = desc["manager_pid"]
     return f"{muxep}/pid={pid}"
+
+
+def _json_loads_no_errors(s):
+    """json.loads(), but ignores an error and returns an empty dict."""
+    try:
+        d = json.loads(s)
+        return d
+    except json.JSONDecodeError as e:
+        return dict()
+    pass
+
+
+def _diagnose_minio_message(s, in_json):
+    """Diagnoses a message returned at MinIO startup.  It returns 0 for a
+    successful run, or EADDRINUSE on port-in-use, EACCES on
+    non-writable storage, or EIO or ENOENT on unknown errors.
+    """
+    if not in_json:
+        m = str(s, "latin-1")
+        if m.startswith(_minio_expected_response):
+            return (0, m)
+        elif m.find(_minio_error_response) != -1:
+            if m.find(_minio_response_port_in_use) != -1:
+                return (errno.EADDRINUSE, m)
+            elif m.find(_minio_response_nonwritable_storage) != -1:
+                return (errno.EACCES, m)
+            else:
+                return (errno.EIO, m)
+        else:
+            return (errno.ENOENT, m)
+    else:
+        mm = [_json_loads_no_errors(x) for x in s.splitlines()]
+        if len(mm) == 0:
+            return (errno.EIO, "Output from MinIO is empty")
+        level = mm[0].get("level") or ""
+        m = mm[0].get("message") or ""
+        if all(x.get("level") == "INFO" for x in mm if x is not None):
+            if m.startswith(_minio_expected_response):
+                return (0, m)
+            else:
+                return (errno.ENOENT, m)
+        elif level == "FATAL":
+            if m.find(_minio_response_port_in_use) != -1:
+                return (errno.EADDRINUSE, m)
+            elif m.find(_minio_response_nonwritable_storage) != -1:
+                return (errno.EACCES, m)
+            else:
+                return (errno.EIO, m)
+        else:
+            return (errno.ENOENT, m)
+        pass
+    pass
 
 
 class Manager():
@@ -339,17 +394,17 @@ class Manager():
 
         ports = list(range(self._port_min, self._port_max + 1))
         random.shuffle(ports)
-        (p, nonfatal) = (None, True)
+        (p, continuable) = (None, True)
         for port in ports:
-            (p, nonfatal) = self._try_start_minio(port, user_id, group_id,
-                                                  directory)
+            (p, continuable) = self._try_start_minio(port, user_id, group_id,
+                                                     directory)
             if p is not None:
                 break
-            if not nonfatal:
+            if not continuable:
                 break
             pass
         if p is None:
-            if nonfatal:
+            if continuable:
                 logger.error(f"Manager (pool={pool_id}) failed"
                              f" to start MinIO (all ports used).")
                 pass
@@ -376,7 +431,7 @@ class Manager():
             logger.debug(f"Manager (pool={pool_id}) starting MinIO: {cmd}")
             p = Popen(cmd, stdin=DEVNULL, stdout=PIPE, stderr=PIPE,
                       env=self._env_minio)
-            (ok, error_is_nonfatal) = self._wait_for_minio_to_come_up(p)
+            (ok, continuable) = self._wait_for_minio_to_come_up(p)
             alarm(0)
             if ok:
                 logger.debug(f"Manager (pool={pool_id}) MinIO started.")
@@ -384,7 +439,7 @@ class Manager():
                 return (p, True)
             else:
                 self._minio_ep = None
-                return (None, error_is_nonfatal)
+                return (None, continuable)
         except Exception as e:
             # (e is SubprocessError, OSError, ValueError, usually).
             m = rephrase_exception_message(e)
@@ -403,21 +458,21 @@ class Manager():
         return (None, True)
 
     def _wait_for_minio_to_come_up(self, p):
-        """Checks a MinIO startup.  It assumes any subprocess outputs at least
-        one line of a message or closes stdout.  Otherwise it may wait
-        indefinitely.
+        """Checks a MinIO startup.  It assumes a subprocess outputs at least
+        one line of a message or closes stdout.  Otherwise, it may
+        wait indefinitely.  It expects that MinIO outputs a first line
+        on stdout that includes the "API" keyword at a successful
+        startup: "API: http://xx.xx.xx.xx:9000 http://127.0.0.1:9000".
+        The message is on the entire line without "--json", or in the
+        "message" slot with "--json".
         """
-        # It expects that MinIO outputs the following lines at a
-        # successful start (to stdout):
-        # > "API: http://xx.xx.xx.xx:9000  http://127.0.0.1:9000"
-        # > "RootUser: minioadmin"
-        # > "RootPass: minioadmin"
         pool_id = self._pool_id
         (outs, errs, closed) = wait_one_line_on_stdout(p, None)
-        if outs.startswith(_minio_expected_response):
+        (errorcode1, _) = _diagnose_minio_message(outs, False)
+        if errorcode1 == 0:
             logger.info(f"Manager (pool={pool_id})"
                         f" message on MinIO outs=({outs}) errs=({errs})")
-            return (True, False)
+            return (True, True)
         else:
             # A closure of stdout is presumably an error.  But, it
             # does not try to terminate a child since it is "sudo".
@@ -428,28 +483,16 @@ class Manager():
             except TimeoutExpired:
                 pass
             p_status = p.poll()
-            m0 = f"Manager (pool={pool_id}) starting MinIO failed with"
-            m1 = (f" exit={p_status}" f" outs=({outs}) errs=({errs})")
-            if outs.find(_minio_error_response) != -1:
-                if outs.find(_minio_response_port_in_use) != -1:
-                    reason = "port-in-use (transient)"
-                    logger.debug(f"{m0} {reason}: {m1}")
-                    return (False, True)
-                elif outs.find(_minio_response_unwritable_storage) != -1:
-                    reason = "Storage unwritable"
-                    self._set_pool_state(Pool_State.INOPERABLE, reason)
-                    logger.info(f"{m0} {reason}: {m1}")
-                    return (False, False)
-                else:
-                    reason = "Start failed"
-                    self._set_pool_state(Pool_State.INOPERABLE, reason)
-                    logger.error(f"{m0} {reason}: {m1}")
-                    return (False, False)
-                pass
+            m1 = f"Manager (pool={pool_id}) starting MinIO failed with"
+            m2 = f"exit={p_status} outs=({outs}) errs=({errs})"
+            (errorcode2, reason2) = _diagnose_minio_message(outs, False)
+            assert errorcode2 != 0
+            if errorcode2 == errno.EADDRINUSE:
+                logger.debug(f"{m1} port-in-use (transient): {m2}")
+                return (False, True)
             else:
-                reason = "Start failed (no error)"
-                self._set_pool_state(Pool_State.INOPERABLE, reason)
-                logger.error(f"{m0} {reason}: {m1}")
+                self._set_pool_state(Pool_State.INOPERABLE, reason2)
+                logger.error(f"{m1} start failed: {m2}")
                 return (False, False)
             pass
         pass

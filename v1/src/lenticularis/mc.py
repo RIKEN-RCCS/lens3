@@ -45,18 +45,18 @@ _mc_list_entry_json_keys = {
     "storageClass": "storageClass"}
 
 
-def intern_mc_user_info(json):
+def intern_mc_user_info(record):
     """Maps key strings returned from MC to ones in Lens3."""
     mapping = _mc_user_info_json_keys
-    return {mapping.get(k, k): v for (k, v) in json.items()}
+    return {mapping.get(k, k): v for (k, v) in record.items()}
 
 
-def intern_mc_list_entry(json):
+def intern_mc_list_entry(record):
     """Maps key strings returned from MC to ones in Lens3.  It also drops
     a trailing slash in a bucket name."""
     mapping = _mc_list_entry_json_keys
     return {mapping.get(k, k): (remove_trailing_slash(v) if k == "key" else v)
-            for (k, v) in json.items()}
+            for (k, v) in record.items()}
 
 
 def assert_mc_success(rr, op):

@@ -216,36 +216,6 @@ class Control_Api():
         pooldesc["buckets_directory"] = path
         pass
 
-    def _make_mc_for_pool(self, pool_id):
-        """Returns an MC command instance.  It accesses a Mux to start a
-        MinIO, or to keep it running for a while even when a MinIO is
-        running.
-        """
-        logger.debug(f"Access a Mux to start Minio for pool={pool_id}.")
-        status = self.access_mux_for_pool(pool_id)
-        if status != 200:
-            logger.error(f"Access a Mux by Api failed for pool={pool_id}:"
-                         f" status={status}")
-        else:
-            pass
-        minioproc = self.tables.get_minio_proc(pool_id)
-        if minioproc is None:
-            raise Api_Error(500, (f"Cannot start MinIO for pool={pool_id}:"
-                                  f" status={status}"))
-        else:
-            pass
-        ep = minioproc["minio_ep"]
-        admin = minioproc["admin"]
-        password = minioproc["password"]
-        mc = Mc(self._bin_mc, self._env_mc, ep, pool_id, self._mc_timeout)
-        try:
-            mc.alias_set(admin, password)
-            return mc
-        except Exception:
-            mc.__exit__(None, None, None)
-            raise
-        pass
-
     def map_claim_to_uid(self, claim):
         """Converts a claim data passed by REMOTE-USER to a uid.  It returns
         None if a claim is badly formed or not found.  It is an
@@ -325,14 +295,43 @@ class Control_Api():
             ep = host_port(pair[0], pair[1])
             pass
         assert ep is not None
-        # Use probe-access key.
+        # Use a probe-access key.
         access_key = pooldesc["probe_key"]
         assert access_key is not None
         status = access_mux(ep, access_key,
                             self._front_host, self._front_host_ip,
                             self._probe_access_timeout)
         logger.debug(f"Access Mux for pool={pool_id}: status={status}")
+        if status != 200:
+            logger.error(f"Accessing a Mux by Api failed for"
+                         f" pool={pool_id}: status={status}")
+            pass
         return status
+
+    def _make_mc_for_pool(self, pool_id):
+        """Returns an MC command instance.  It accesses a Mux to start a
+        MinIO, or to keep it running for a while even when a MinIO is
+        running.
+        """
+        logger.debug(f"Access a Mux to start Minio for pool={pool_id}.")
+        status = self.access_mux_for_pool(pool_id)
+        minioproc = self.tables.get_minio_proc(pool_id)
+        if minioproc is None:
+            raise Api_Error(500, (f"Cannot start MinIO for pool={pool_id}:"
+                                  f" status={status}"))
+        else:
+            pass
+        ep = minioproc["minio_ep"]
+        admin = minioproc["admin"]
+        password = minioproc["password"]
+        mc = Mc(self._bin_mc, self._env_mc, ep, pool_id, self._mc_timeout)
+        try:
+            mc.alias_set(admin, password)
+            return mc
+        except Exception:
+            mc.__exit__(None, None, None)
+            raise
+        pass
 
     # Query interface.
 
@@ -584,35 +583,34 @@ class Control_Api():
     def _do_make_pool(self, path, uid, gid):
         expiration = self._determine_expiration_time()
         pool_id = _make_new_pool(self.tables, path, uid, gid, expiration)
-        self._activate_pool(pool_id)
+        self._activate_pool(pool_id, path)
         return pool_id
 
-    def _activate_pool(self, pool_id):
+    def _activate_pool(self, pool_id, path):
+        """Starts a Mux once.  Note that it is not an error, even if it fails.
+        It is an error of Mux and is indicated in the MinIO state.
+        """
         assert pool_id is not None
         try:
             self._set_pool_state(pool_id, Pool_State.INITIAL, "-")
             self.tables.set_access_timestamp(pool_id)
-        except Exception:
-            self.tables.delete_pool(pool_id)
-            self.tables.delete_pool_state(pool_id)
-            self.tables.delete_access_timestamp(pool_id)
-            raise
-        try:
             status = self.access_mux_for_pool(pool_id)
+            if status == 200:
+                self._set_pool_state(pool_id, Pool_State.READY, "-")
+                pass
         except Exception:
-            self.tables.delete_pool_state(pool_id)
-            self.tables.delete_pool(pool_id)
-            self.tables.delete_access_timestamp(pool_id)
+            # self.tables.delete_buckets_directory(path)
+            # self.tables.delete_pool(pool_id)
+            # self.tables.delete_pool_state(pool_id)
+            # self.tables.delete_access_timestamp(pool_id)
             raise
         else:
             pass
-        self._set_pool_state(pool_id, Pool_State.READY, "-")
         poolstate = self._get_pool_state(pool_id)
         if poolstate not in {Pool_State.READY}:
             logger.error(f"Initialization error: pool-state is not ready:"
                          f" {poolstate}")
-            raise Exception(f"Initialization error: pool-state is not ready:"
-                            f" {poolstate}")
+            pass
         pass
 
     def _api_delete_pool(self, user_id, pool_id):

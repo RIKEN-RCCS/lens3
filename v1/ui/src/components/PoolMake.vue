@@ -1,7 +1,7 @@
 <template>
   <v-container class="align-center text-center fill-height">
     <div class="text-h5 text-center w-100">Manage Pools</div>
-    <v-card variant="outlined" class="ma-4 w-100">
+    <v-card variant="outlined" class="w-100 ma-4">
       <v-card-text>
         A pool is a directory where S3 buckets are created. It is
         associated to a MinIO instance. The first thing to do is

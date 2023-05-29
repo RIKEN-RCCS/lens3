@@ -12,7 +12,7 @@
     </v-menu>
     <v-app-bar-title>
       <v-icon icon="mdi-cog" />
-      Lens3 Pool Manager
+      Lens3
     </v-app-bar-title>
 
     <v-spacer></v-spacer>
@@ -27,6 +27,14 @@
       <v-btn icon="mdi-dots-vertical" disabled></v-btn>
     </template>
   </v-app-bar>
+
+  <!--
+  <v-navigation-drawer
+    v-model="pool_data.menu_visible"
+    persistent>
+    <about-menu v-bind:pool_data="pool_data" />
+  </v-navigation-drawer>
+  -->
 </template>
 
 <script lang="ts">

@@ -2,7 +2,7 @@
   <v-container class="d-flex align-center text-center fill-height"
                v-if="pool_data.pool_list.length">
     <div class="text-h5 text-center w-100">List Pools</div>
-    <v-card variant="outlined" class="ma-4 w-100">
+    <v-card variant="outlined" class="w-100 ma-4">
       <v-card-text>
         Pool list is a slider list of the pools. You can select a
         pool by clicking "edit" button (a pencil icon). Or, delete
@@ -18,34 +18,54 @@
             <v-card-item>
               <v-card-title>{{pool_data.pool_list[n]["buckets_directory"]}}</v-card-title>
             </v-card-item>
-            <v-table density="compact">
+            <v-table density="compact" class="text-left">
               <tbody>
                 <tr>
-                  <td class="text-left">uid</td>
+                  <td>uid</td>
                   <td>{{pool_data.pool_list[n]["owner_uid"]}}</td>
                 </tr>
                 <tr>
-                  <td class="text-left">gid</td>
+                  <td>gid</td>
                   <td>{{pool_data.pool_list[n]["owner_gid"]}}</td>
                 </tr>
                 <tr>
-                  <td class="text-left">online?</td>
+                  <td>online?</td>
                   <td>{{pool_data.pool_list[n]["online_status"]}}</td>
                 </tr>
                 <tr>
-                  <td class="text-left">enabled?</td>
+                  <td>enabled?</td>
                   <td>{{pool_data.pool_list[n]["user_enabled_status"]}}</td>
                 </tr>
                 <tr>
-                  <td class="text-left">minio_state</td>
-                  <td>{{pool_data.pool_list[n]["minio_state"]}}</td>
+                  <td>minio_state</td>
+                  <td>{{pool_data.pool_list[n]["minio_state"]}}
+                    <v-btn
+                      variant="plain"
+                      v-if="pool_data.pool_list[n].minio_reason!='-'">
+                      Reason
+                      <v-dialog
+                        v-model="pool_data.pool_list[n].dialog"
+                        activator="parent"
+                        width="auto">
+                        <v-card>
+                          <v-card-text>
+                            {{pool_data.pool_list[n]["minio_reason"]}}
+                          </v-card-text>
+                          <v-card-actions>
+                            <v-btn
+                              v-on:click="pool_data.pool_list[n].dialog=false"
+                              variant="text"
+                              block>
+                              Close
+                            </v-btn>
+                          </v-card-actions>
+                        </v-card>
+                      </v-dialog>
+                    </v-btn>
+                  </td>
                 </tr>
                 <tr>
-                  <td class="text-left">minio_reason</td>
-                  <td>{{pool_data.pool_list[n]["minio_reason"]}}</td>
-                </tr>
-                <tr>
-                  <td class="text-left">internal-id</td>
+                  <td>internal-id</td>
                   <td>{{pool_data.pool_list[n]["pool_name"]}}</td>
                 </tr>
               </tbody>

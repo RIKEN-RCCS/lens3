@@ -5,7 +5,6 @@ and checked against json schema."""
 # SPDX-License-Identifier: BSD-2-Clause
 
 import sys
-import json
 import jsonschema
 import yaml
 from lenticularis.utility import rephrase_exception_message

@@ -260,7 +260,9 @@ class Mc():
             # if no_wait:
             #     return (p, None)
             with p:
-                (outs, errs) = p.communicate(timeout=self._mc_timeout)
+                (outs_, errs_) = p.communicate(timeout=self._mc_timeout)
+                outs = str(outs_, "latin-1")
+                errs = str(errs_, "latin-1")
                 p_status = p.poll()
                 if (self._verbose):
                     logger.debug(f"Running MC command: cmd={cmd};"
@@ -273,9 +275,9 @@ class Mc():
                     rr = [_make_mc_error(f"Unfinished MC: ({outs})")]
                     return rr
                 try:
-                    ss = outs.split(b"\n")
+                    ss = outs.split("\n")
                     ee = [json.loads(e)
-                          for e in ss if e != b""]
+                          for e in ss if e != ""]
                     (ok, rr) = _simplify_messages_in_mc_error(ee)
                     if ok:
                         if (self._verbose):

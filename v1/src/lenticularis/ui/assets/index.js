@@ -10791,7 +10791,12 @@ const VCard = genericComponent()({
     return {};
   }
 });
-const _hoisted_1$4 = /* @__PURE__ */ createBaseVNode("a", { href: "https://github.com/riken-rccs/lens3/" }, "github.com", -1);
+const _hoisted_1$4 = /* @__PURE__ */ createBaseVNode("p", null, " Lens3 is an S3 service using 3rd-party server program MinIO. Lens3 runs multiple MinIO instances at a single access point, and forwards S3 requests with regard to the registered buckets. ", -1);
+const _hoisted_2$2 = /* @__PURE__ */ createBaseVNode("p", null, [
+  /* @__PURE__ */ createTextVNode(" For the usage, see the Lens3 user-guide.md in: "),
+  /* @__PURE__ */ createBaseVNode("a", { href: "https://github.com/riken-rccs/lens3/" }, "github.com")
+], -1);
+const _hoisted_3$2 = /* @__PURE__ */ createBaseVNode("p", null, ' A simpler UI is available at "ui2/index.html". ', -1);
 function _sfc_render$6(_ctx, _cache, $props, $setup, $data, $options) {
   return openBlock(), createBlock(VCard, {
     variant: "outlined",
@@ -10805,49 +10810,24 @@ function _sfc_render$6(_ctx, _cache, $props, $setup, $data, $options) {
         ]),
         _: 1
       }),
-      createVNode(VCardText, null, {
+      createVNode(VCardText, { density: "comfortable" }, {
         default: withCtx(() => [
-          createTextVNode(" Lens3 is an S3 service using 3rd-party server program MinIO. ")
-        ]),
-        _: 1
-      }),
-      createVNode(VCardText, null, {
-        default: withCtx(() => [
-          createTextVNode(" Lens3 runs multiple MinIO instances at a single access point, and it redirects requests with regard to access keys. ")
-        ]),
-        _: 1
-      }),
-      createVNode(VCardText, null, {
-        default: withCtx(() => [
-          createTextVNode(" For the usage, see the Lens3 user-guide.md in: "),
-          _hoisted_1$4
-        ]),
-        _: 1
-      }),
-      createVNode(VCardText, null, {
-        default: withCtx(() => [
-          createTextVNode(" Lens3's S3 end-point is: " + toDisplayString($props.pool_data.s3_url) + " ", 1),
-          createVNode(VBtn, {
-            variant: "plain",
-            onClick: $options.kick_copy_url_to_clipboard
-          }, {
-            default: withCtx(() => [
-              createTextVNode(" (copy link)")
-            ]),
-            _: 1
-          }, 8, ["onClick"])
-        ]),
-        _: 1
-      }),
-      createVNode(VCardText, null, {
-        default: withCtx(() => [
-          createTextVNode(' A simpler UI is available at "ui2/index.html". ')
-        ]),
-        _: 1
-      }),
-      createVNode(VCardText, null, {
-        default: withCtx(() => [
-          createTextVNode(" Lens3 version: " + toDisplayString($props.pool_data.lens3_version), 1)
+          _hoisted_1$4,
+          _hoisted_2$2,
+          createBaseVNode("p", null, [
+            createTextVNode(" Lens3's S3 end-point is: " + toDisplayString($props.pool_data.s3_url) + " ", 1),
+            createVNode(VBtn, {
+              variant: "text",
+              onClick: $options.kick_copy_url_to_clipboard
+            }, {
+              default: withCtx(() => [
+                createTextVNode(" (copy link)")
+              ]),
+              _: 1
+            }, 8, ["onClick"])
+          ]),
+          _hoisted_3$2,
+          createBaseVNode("p", null, " Lens3 version: " + toDisplayString($props.pool_data.lens3_version), 1)
         ]),
         _: 1
       }),

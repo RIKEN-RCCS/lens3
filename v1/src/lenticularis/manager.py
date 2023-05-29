@@ -56,16 +56,19 @@ _minio_response_port_capability = "Insufficient permissions to use specified por
 
 
 def _read_stream(s):
-    """Reads a stream if some is available.  It returns a pair of the
-    readout and the state of a stream.
+    """Reads a stream while some is available.  It returns a pair of the
+    readout and the state of a stream after reading, true on EOF.  It
+    decodes the readout in Latin-1.
     """
-    outs = b""
+    buf_ = b""
     while (s in select.select([s], [], [], 0)[0]):
         r = s.read1()
         if r == b"":
-            return (outs, True)
-        outs += r
-    return (outs, False)
+            break
+        buf_ += r
+        pass
+    buf = str(buf_, "latin-1")
+    return (buf, False)
 
 
 def _manager_info_string(desc):
@@ -93,7 +96,7 @@ def _diagnose_minio_message(s, in_json):
     non-writable storage, or EIO or ENOENT on unknown errors.
     """
     if not in_json:
-        m = str(s, "latin-1")
+        m = s
         if m.startswith(_minio_expected_response):
             return (0, m)
         elif m.find(_minio_error_response) != -1:
@@ -422,7 +425,7 @@ class Manager():
         pool_id = self._pool_id
         address = f":{port}"
         cmd = [self._bin_sudo, "-n", "-u", user, "-g", group,
-               self._bin_minio, "server", "--anonymous",
+               self._bin_minio, "server", "--json", "--anonymous",
                "--address", address, directory]
         assert all(isinstance(i, str) for i in cmd)
         p = None
@@ -467,8 +470,10 @@ class Manager():
         "message" slot with "--json".
         """
         pool_id = self._pool_id
-        (outs, errs, closed) = wait_one_line_on_stdout(p, None)
-        (errorcode1, _) = _diagnose_minio_message(outs, False)
+        (outs_, errs_, closed) = wait_one_line_on_stdout(p, None)
+        outs = str(outs_, "latin-1")
+        errs = str(errs_, "latin-1")
+        (errorcode1, _) = _diagnose_minio_message(outs, True)
         if errorcode1 == 0:
             logger.info(f"Manager (pool={pool_id})"
                         f" message on MinIO outs=({outs}) errs=({errs})")
@@ -478,14 +483,16 @@ class Manager():
             # does not try to terminate a child since it is "sudo".
             try:
                 (o_, e_) = p.communicate(timeout=15)
-                outs += o_
-                errs += e_
+                outs_ += o_
+                errs_ += e_
             except TimeoutExpired:
                 pass
+            outs = str(outs_, "latin-1")
+            errs = str(errs_, "latin-1")
             p_status = p.poll()
             m1 = f"Manager (pool={pool_id}) starting MinIO failed with"
             m2 = f"exit={p_status} outs=({outs}) errs=({errs})"
-            (errorcode2, reason2) = _diagnose_minio_message(outs, False)
+            (errorcode2, reason2) = _diagnose_minio_message(outs, True)
             assert errorcode2 != 0
             if errorcode2 == errno.EADDRINUSE:
                 logger.debug(f"{m1} port-in-use (transient): {m2}")
@@ -582,14 +589,14 @@ class Manager():
 
                 if p.stderr in readable:
                     (errs, closed) = _read_stream(p.stderr)
-                    if errs != b"":
+                    if errs != "":
                         logger.info(f"Manager (pool={pool_id}):"
                                     f" Message on MinIO stderr=({errs})")
                         pass
                     pass
                 if p.stdout in readable:
                     (outs, closed) = _read_stream(p.stdout)
-                    if outs != b"":
+                    if outs != "":
                         logger.info(f"Manager (pool={pool_id}):"
                                     f" Message on MinIO stdout=({outs})")
                         pass
@@ -745,12 +752,14 @@ class Manager():
                 pass
             pass
         try:
-            (outs, errs) = p.communicate(timeout=self._minio_stop_timeout)
-            if errs != b"":
+            (outs_, errs_) = p.communicate(timeout=self._minio_stop_timeout)
+            outs = str(outs_, "latin-1")
+            errs = str(errs_, "latin-1")
+            if errs != "":
                 logger.info(f"Manager (pool={pool_id}):"
                             f" Message on MinIO stderr=({errs})")
                 pass
-            if outs != b"":
+            if outs != "":
                 logger.info(f"Manager (pool={pool_id}):"
                             f" Message on MinIO stdout=({outs})")
                 pass

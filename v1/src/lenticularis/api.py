@@ -105,11 +105,11 @@ async def _get_request_body(request):
        dict and a token is a csrf-token.  It removes a csrf-token from
        the body.
     """
-    buf = b""
+    buf_ = b""
     async for chunk in request.stream():
-        buf += chunk
+        buf_ += chunk
         pass
-    body = json.loads((buf or "{}"))
+    body = json.loads((buf_ or "{}"))
     token = body.get("CSRF-Token")
     if token is not None:
         del body["CSRF-Token"]

@@ -57,23 +57,25 @@ class Spawner():
             pass
         assert all(isinstance(i, str) for i in (cmd + args))
         ok = False
-        (outs, errs) = (b"", b"")
+        (outs, errs) = ("", "")
         try:
             # It waits for a Manager to write a line on stdout.
             logger.info(f"Starting a Manager: cmd={cmd+args}")
             with Popen(cmd + args, stdin=DEVNULL, stdout=PIPE, stderr=PIPE,
                        env=env) as p:
-                (outs, errs, closed) = wait_one_line_on_stdout(p, None)
+                (outs_, errs_, closed) = wait_one_line_on_stdout(p, None)
                 p_status = p.poll()
                 if p_status is None:
                     try:
                         (o_, e_) = p.communicate(timeout=self._extra_timeout)
-                        outs += o_
-                        errs += e_
+                        outs_ += o_
+                        errs_ += e_
                     except TimeoutExpired:
                         pass
                     p_status = p.poll()
                     pass
+                outs = str(outs_, "latin-1")
+                errs = str(errs_, "latin-1")
                 if p_status is None:
                     ok = False
                     logger.warning(f"A Manager may not go background.")
@@ -84,7 +86,7 @@ class Spawner():
                     ok = False
                     logger.warning(f"A Manager exited with status={p_status}")
                     pass
-                if outs != b"" or errs != b"":
+                if outs != "" or errs != "":
                     logger.info(f"Output from a Manager:"
                                 f" stdout=({outs}), stderr=({errs})")
                     pass
@@ -92,7 +94,7 @@ class Spawner():
             m = rephrase_exception_message(e)
             logger.error(f"Starting a Manager failed: exception=({m})",
                          exc_info=True)
-            if outs != b"" or errs != b"":
+            if outs != "" or errs != "":
                 logger.error(f"Output from a Manager:"
                              f" stdout=({outs}), stderr=({errs})")
                 pass

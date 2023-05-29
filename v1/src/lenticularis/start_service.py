@@ -130,10 +130,12 @@ def _run(servicename, env, cmd, args):
                  f" env=({env})")
 
     assert all(isinstance(i, str) for i in (cmd + args))
-    (outs, errs) = (b"", b"")
+    (outs, errs) = ("", "")
     try:
         with Popen(cmd + args, stdin=DEVNULL, stdout=PIPE, stderr=PIPE, env=env) as p:
-            (outs, errs) = p.communicate()
+            (outs_, errs_) = p.communicate()
+            outs = str(outs_, "latin-1")
+            errs = str(errs_, "latin-1")
             p_status = p.wait()
     except Exception as e:
         m = rephrase_exception_message(e)
@@ -144,12 +146,12 @@ def _run(servicename, env, cmd, args):
 
     if p_status == 0:
         logger.debug(f"{servicename} exited: status={p_status}")
-        sys.exit(p_status)
+        sys.exit(0)
     else:
         logger.error(f"{servicename} exited: status={p_status};"
                      f" EXAMINE THE GUNICORN LOG;"
                      f" stdout=({outs}), stderr=({errs})")
-        if p_status is not None and p_status > 0:
+        if p_status > 0:
             sys.exit(p_status)
         else:
             sys.exit(1)

@@ -545,7 +545,7 @@ class Command():
     # commands above only access Redis.
 
     def op_access_mux(self, pool_id):
-        """Accesses Mux for a pool.  It may wake up or stop MinIO."""
+        """Accesses a Mux of a pool.  It will wake up MinIO."""
         api_conf = get_conf("api", None, self._redis)
         assert api_conf is not None
         control = Control_Api(api_conf, self._redis)

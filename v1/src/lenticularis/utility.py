@@ -366,9 +366,9 @@ def make_typical_ip_address(ip):
 
 def wait_one_line_on_stdout(p, timeout):
     """Waits until a line is on stdout.  A returned line can be more than
-    one.  Note that a closure is undetectable on pipes created by
-    Popen (until a subprocess exits).  It drains stdout/stderr and
-    returns (outs, errs).
+    one.  Note that closure is undetectable on a pipe created by Popen
+    until a subprocess exits.  It drains stdout/stderr and returns a
+    pair of byte-strings (outs, errs).
     """
     (outs, errs, closed) = (b"", b"", False)
     ss = [p.stdout, p.stderr]

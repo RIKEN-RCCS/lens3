@@ -35,12 +35,14 @@ controller:
     front_host: lens3.example.com
     trusted_proxies:
         - localhost
-    base_path: "/api"
+    base_path: "/api~"
     claim_uid_map: email-name
     probe_access_timeout: 60
     minio_mc_timeout: 10
     max_pool_expiry: 630720000
     csrf_secret_key: xyzxyz
+    s3_url: https://lens3.example.com
+    footer_banner: This site is operated by example.com
 ```
 
 * __front_host__ is a host name of a proxy.  It is used as a HOST
@@ -49,13 +51,16 @@ controller:
 * __trusted_proxies__ is host names of the proxies.  The ip-addresses
   of them are checked when Lens3 receives a request.
 
-* __base_path__ is a base-URL.  It is used when a proxy drops paths.
-  It can be "".  Do not add a trailing slash.
+* __base_path__ is a base-URL.  It is a path that a proxy drops.  It
+  can be "".  Do not add a trailing slash.  A path shall usually
+  include non-alphanumeric characters to avoid confusion with bucket
+  names, when a single server co-hosts both S3 and Lens3-Api.
 
 * __claim_uid_map__ is one of "id", "email-name", "map".  It specifies
   a mapping of a claim (an X-REMOTE-USER) to an uid.  "id" means
-  unchanged, "email-name" takes a name part of an email (before "@"),
-  and "map" is a mapping which is defined in the configuration.
+  unchanged, "email-name" takes the name part of an email (that is,
+  before "@"), and "map" is a mapping which is defined by user
+  registration.
 
 * __probe_access_timeout__: is a tolerance when Lens3-Api accesses a
   Mux.
@@ -66,7 +71,14 @@ controller:
 * __max_pool_expiry__ is a time limit of a pool is active.  630720000
   is 10 years.
 
-* __csrf_secret_key__: is a key used by fastapi_csrf_protect module.
+* __csrf_secret_key__: is a salt (?) used by fastapi_csrf_protect
+  module.
+
+* __s3_url__: is just information.  It is displayed in the UI as an
+  S3 endpoint.
+
+* __footer_banner__: is also just information.  It is displayed in the
+  UI as a footer.
 
 ## MinIO Part
 

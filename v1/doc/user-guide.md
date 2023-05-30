@@ -193,8 +193,8 @@ unless it is public.
   distinct.
 * Access keys have expiration.
 * Rich features are dropped.
-* Some locking in accessing Redis are omitted.  Operations by the
-  administrator tool is sloppy.
+* Some lockings in accessing a database are omitted.  Operations by
+  Lens3-Api and the administrator tool is sloppy.
 * MC commands are directly invoked at the Lens3-Api host to change the
   setting of a MinIO instance.  MC commands were only invoked at
   Lens3-Mux in v1.1.

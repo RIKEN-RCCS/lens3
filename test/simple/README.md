@@ -1,10 +1,29 @@
 # Simple Tests
 
+## copy-file.sh
+
+[copy-file.sh](copy-file.sh) runs a very simple test using AWS S3 CLI.
+It runs commands: __cp__, __ls__, __mv__, __rm__, __presign__,
+__website__.  It generates a file of 32MB, and uploads and downloads
+it.  That file is large enough to start a multipart upload (8MB is the
+default threshold to use a multipart upload).
+
+A secret of S3 should be prepared in ".aws/*".  A bucket needs to be
+created in advance, too.  The shell variables "EP" and "BKT" are set
+to the target, "EP" as an endpoint and "BKT" as a bucket.  Note it
+leaves garbage files.  Run the tests in the "test/simple" directory,
+because it needs sample files in the directory.
+
+__presign__ is useless.  Lens3 denies a bucket access unless it is
+public.
+
+__website__ will fail in Lens3.
+
 ## Prerequisite
 
 * boto3
 
-## Brief Descriptions
+## Other Tests -- Brief Descriptions
 
 Run "apitest.py" first, and then run "s3test.py".
 
@@ -33,7 +52,12 @@ password: "xxxxxx"
 ### s3test.py
 
 It tests S3 operations: file upload/download for combinations of
-bucket policies and access-key policies.  It tests using small files
-(64KB).
+bucket policies and access-key policies.  Test uses 64KB file.
 
 It also reads a file "testu.yaml".
+
+## Info
+
+For S3 CLI, refer to the links:
+* [S3 CLI commands](https://awscli.amazonaws.com/v2/documentation/api/latest/reference/s3/index.html)
+* [S3 CLI API commands](https://awscli.amazonaws.com/v2/documentation/api/latest/reference/s3api/index.html)

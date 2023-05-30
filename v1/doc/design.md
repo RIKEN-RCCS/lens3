@@ -266,9 +266,14 @@ change in versions of MinIO,
   about a wake up of MinIO.  This is key has no corresponding secret.
   It is distiguished by an empty secret.
 
-## Short-Term TODO, or Deficiency
+## Short-Term Todo, or Deficiency
 
 * Rewrite in Go-lang.  The code will be in Go in the next release.
+* Run a remover of orphaned directories, buckets, and keys at
+  Lens3-Api startup.  Adding a bucket/key and removing a pool have a
+  race.  A crash at creation/deletion of a pool may leave an orphaned
+  directory.  Also, a pool can be orphaned when a user is removed.  It
+  will be coded in Go version.
 * Make access-key generation of Lens3-Api behave like STS.
 * Add control on the pool status "online".  It is always online currently.
 * Make starting a MinIO instance through the frontend proxy.

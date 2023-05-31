@@ -1,30 +1,14 @@
-"""Lenticularis-S3 Lens3-Api Client."""
+"""Lens3-Api Client."""
 
 # Copyright (c) 2022-2023 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
-import sys
-import base64
 import json
-import ssl
-import time
-import string
-import random
-import platform
 import contextvars
-from urllib.request import Request, urlopen
-from urllib.error import HTTPError
+from apiclient import Api_Client
 
 
 tracing = contextvars.ContextVar("tracing")
-
-
-def random_str(n):
-    astr = string.ascii_letters
-    bstr = string.ascii_letters + string.digits
-    a = random.SystemRandom().choice(astr)
-    b = (random.SystemRandom().choice(bstr) for _ in range(n - 1))
-    return a + "".join(b)
 
 
 def _trunc100(x):
@@ -39,99 +23,60 @@ class Lens3_Error(Exception):
     pass
 
 
-class Client():
-    """Lens3 API client.  It just represents an access endpoint."""
+class Lens3_Client(Api_Client):
+    """Lens3-Api client.  It represents an access endpoint."""
 
     bkt_policy_set = {"none", "public", "upload", "download"}
     key_policy_set = {"readwrite", "readonly", "writeonly"}
 
-    def __init__(self, uid, gid, password, home, url):
-        self._api_version = "v1.2"
-        self._verbose = False
-        self.uid = uid
-        self.gid = gid
-        self.password = password
-        self.home = home
-        # self.hostname = hostname
-        # self.url = f"{proto}://{self.hostname}"
-        self.url = url
-        self.running_host = platform.node()
-        self.csrf_token = None
-        pass
-
-    def _auth_token(self):
-        basic_auth = f"{self.uid}:{self.password}"
-        return base64.b64encode(basic_auth.encode()).decode()
-
-    def access(self, method, path, *, data=None):
-        headers = dict()
-        headers["HOST"] = self.running_host
-        headers["X-TRACEID"] = tracing.get()
-        headers["X-REAL-IP"] = self.running_host
-        # headers["X-Forwarded-For"] = self.running_host
-        # headers["REMOTE-ADDR"] = self.running_host
-        if self.uid and self.password:
-            s = self._auth_token()
-            authorization = f"Basic {s}"
-            headers["AUTHORIZATION"] = authorization
+    def __init__(self, client_json):
+        super().__init__(client_json)
+        with open(client_json) as f:
+            ci = json.loads(f.read())
             pass
-
-        context = ssl.create_default_context()
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_NONE
-
-        assert path.startswith("/")
-        url = f"{self.url}{path}"
-        req = Request(url, headers=headers, method=method, data=data)
-
-        # sys.stdout.write(f"url={url}; request={req}\n")
-
-        try:
-            res = urlopen(req, timeout=300, context=context)
-            s = res.read().decode()
-            v = json.loads(s)
-            assert v["status"] == "success"
-            return v
-        except HTTPError as e:
-            s = e.read().decode()
-            v = json.loads(s)
-            sys.stderr.write(f"urlopen failed with: ({e}) ({v})\n")
-            raise
+        # print(f"client_setting={ci}")
+        self.api_version = "v1.2"
+        self._verbose = False
+        self.gid = ci.get("gid")
+        self.home = ci.get("home")
         pass
 
-    # API Primitives.
+    # Lens3-Api Primitives.
 
     def get_user_info(self):
         path = "/user-info"
-        template = self.access("GET", path)
-        api_version = template["pool_list"][0]["api_version"]
+        v = self.access("GET", path, data=None)
+        self.csrf_token = v.get("CSRF-Token")
+        assert self.csrf_token is not None
+        info = v.get("user_info")
+        api_version = info.get("api_version")
         # sys.stdout.write(f"api_version=({api_version})\n")
-        assert api_version == self._api_version
-        self.csrf_token = template.get("CSRF-Token")
+        assert api_version == self.api_version
         # sys.stdout.write(f"csrf_token=({self.csrf_token})\n")
-        return template
+        return info
 
     def make_pool(self, directory):
         assert self.csrf_token is not None
-        desc = {"buckets_directory": directory,
-                "owner_gid": self.gid}
-        body = {"CSRF-Token": self.csrf_token,
-                "pool": desc}
+        body = {
+            "buckets_directory": directory,
+            "owner_gid": self.gid,
+            "CSRF-Token": self.csrf_token,
+        }
         path = f"/pool"
         data = json.dumps(body).encode()
         desc = self.access("POST", path, data=data)
-        pooldesc = desc["pool_list"][0]
+        pooldesc = desc["pool_desc"]
         assert pooldesc is not None
         return pooldesc
 
     def get_pool(self, pool):
         path = f"/pool/{pool}"
-        desc = self.access("GET", path)
+        desc = self.access("GET", path, data=None)
         return desc["pool_list"][0]
 
     def list_pools(self):
         path = f"/pool"
-        desc = self.access("GET", path)
+        desc = self.access("GET", path, data=None)
         pools = desc["pool_list"]
         return pools
 
@@ -145,8 +90,11 @@ class Client():
     def make_bucket(self, pool, bucket, bkt_policy):
         assert bkt_policy in self.bkt_policy_set
         path = f"/pool/{pool}/bucket"
-        body = {"CSRF-Token": self.csrf_token,
-                "bucket": {"name": bucket, "bkt_policy": bkt_policy}}
+        body = {
+            "name": bucket,
+            "bkt_policy": bkt_policy,
+            "CSRF-Token": self.csrf_token,
+        }
         data = json.dumps(body).encode()
         return self.access("PUT", path, data=data)
 
@@ -157,11 +105,14 @@ class Client():
         data = json.dumps(body).encode()
         return self.access("DELETE", path, data=data)
 
-    def make_secret(self, pool, key_policy):
+    def make_secret(self, pool, key_policy, expiration):
         assert key_policy in self.key_policy_set
         path = f"/pool/{pool}/secret"
-        body = {"CSRF-Token": self.csrf_token,
-                "key_policy": key_policy}
+        body = {
+            "key_policy": key_policy,
+            "expiration_time": expiration,
+            "CSRF-Token": self.csrf_token,
+        }
         data = json.dumps(body).encode()
         return self.access("POST", path, data=data)
 
@@ -197,3 +148,18 @@ class Client():
         pass
 
     pass
+
+
+def _main():
+    client = Lens3_Client("client.json")
+    path = "/user-info"
+    v = client.get_user_info()
+    print(f"client.get_user_info={v}")
+    pass
+
+
+# >>> exec(open("lens3client.py").read())
+
+
+if __name__ == "__main__":
+    _main()

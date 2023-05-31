@@ -1,0 +1,7 @@
+{
+  "api_ep": "http://localhost:8003",
+  "s3_ep": "https://localhost",
+  "gid": "somegroup",
+  "home": "/home/someuser",
+  "cred": {"x-remote-user": "someuser"}
+}

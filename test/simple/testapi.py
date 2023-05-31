@@ -1,16 +1,24 @@
-"""Simple Tests on Setting via Web-API."""
+"""Simple Tests."""
 
 # Copyright (c) 2022-2023 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
+import string
+import random
 import sys
 import time
 import yaml
 import contextvars
 import urllib.error
-from lens3client import Client
-from lens3client import tracing
-from lens3client import random_str
+from lens3client import Lens3_Client
+
+
+def random_string(n):
+    astr = string.ascii_letters
+    bstr = string.ascii_letters + string.digits
+    a = random.SystemRandom().choice(astr)
+    b = (random.SystemRandom().choice(bstr) for _ in range(n - 1))
+    return (a + "".join(b)).lower()
 
 
 class Api_Test():
@@ -41,7 +49,7 @@ class Api_Test():
         """Makes a pool with a random name directory."""
         assert self.working_directory is None
         self.working_directory = (self.client.home + "/00"
-                                  + random_str(6).lower())
+                                  + random_string(6))
         pooldesc = self.client.make_pool(self.working_directory)
         # sys.stdout.write(f"make_pool_for_test={pooldesc}\n")
         return pooldesc
@@ -75,7 +83,9 @@ class Api_Test():
 
         for policy in self.client.key_policy_set:
             print(f"Making an access-key with policy={policy}")
-            self.client.make_secret(pool, policy)
+            now = int(time.time())
+            expiration = now + (24 * 3600)
+            self.client.make_secret(pool, policy, expiration)
             pass
 
         # Print an access-key as an aws credential entry.
@@ -89,7 +99,7 @@ class Api_Test():
 
         working_buckets = set()
         policy = "none"
-        bucket = ("lenticularis-oddity-" + random_str(6).lower())
+        bucket = ("lenticularis-oddity-" + random_string(6))
         print(f"Makeing a bucket bucket={bucket}")
         self.client.make_bucket(pool, bucket, policy)
         working_buckets.add(bucket)
@@ -105,9 +115,9 @@ class Api_Test():
         # Make buckets.
 
         for policy in self.client.bkt_policy_set:
-            bucket = ("lenticularis-oddity-" + random_str(6).lower())
+            bucket = ("lenticularis-oddity-" + random_string(6))
             while bucket in working_buckets:
-                bucket = ("lenticularis-oddity-" + random_str(6).lower())
+                bucket = ("lenticularis-oddity-" + random_string(6))
                 pass
             assert bucket not in working_buckets
             print(f"Makeing a bucket bucket={bucket}")
@@ -144,35 +154,19 @@ class Api_Test():
     pass
 
 
-def read_test_conf():
-    config = "testu.yaml"
-    try:
-        with open(config, "r") as f:
-            conf = yaml.load(f, Loader=yaml.BaseLoader)
-    except yaml.YAMLError as e:
-        raise Exception(f"cannot read {config} {e}")
-    except Exception as e:
-        raise Exception(f"cannot read {config} {e}")
-    return conf
-
-def run():
-    conf = read_test_conf()
-    tracing.set("_random_tracing_value_")
+def main():
+    # conf = read_test_conf()
+    # tracing.set("_random_tracing_value_")
     # sys.stdout.write(f"tracing.get={tracing.get()}\n")
-    path = conf["home"]
-    uid = conf["uid"]
-    home = f"{path}/{uid}"
-    proto = conf["proto"]
-    ep = conf["apiep"]
-    url = f"{proto}://{ep}"
-    client = Client(conf["uid"], conf["gid"], conf["password"], home, url)
+    global test, client
+    client = Lens3_Client("client.json")
     client.get_user_info()
-    test = Api_Test(client)
 
-    print(f"Makeing a pool for testing")
-    pooldesc = test.make_pool_for_test()
-    print(f"A pool={pooldesc}")
-    pool = pooldesc["pool_name"]
+    test = Api_Test(client)
+    print(f"Making a pool for test...")
+    desc = test.make_pool_for_test()
+    print(f"A pool={desc}")
+    pool = desc["pool_name"]
     try:
         test.run()
     finally:
@@ -183,5 +177,8 @@ def run():
     pass
 
 
+# >>> exec(open("testapi.py").read())
+
+
 if __name__ == "__main__":
-    run()
+    main()

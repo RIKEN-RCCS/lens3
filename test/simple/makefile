@@ -1,21 +1,12 @@
 # makefile
 
 all::
+	@echo make installboto3 or make pyright
 
-restore::
-	echo "DO NOT FORGET 'sudo usermod -a -G lens3 $$(whoami)'"
-	./dump-restore-test.sh
+installboto3::
+	pip3 install --user -r requirements.txt
 
-install:
-	pip3 -qq install -r requirements.txt --user
-
-tags::
-	ctags *.py
-
-clean::
-	rm tags
-
-PYFILES=lens3client.py apitest.py s3test.py
+PYFILES=apiclient.py basic_test.py
 
 pyright::
 	-(pyright $(PYFILES)) > pyright-output.txt

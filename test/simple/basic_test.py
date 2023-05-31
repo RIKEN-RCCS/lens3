@@ -273,7 +273,7 @@ class Access_Test(Test_Base):
             sc1 = session1.resource(
                 service_name="s3",
                 endpoint_url=self.client.s3_ep,
-                verify=False)
+                verify=self.client.ssl_verify)
             self.s3_clients[expired][policy2] = sc1
             pass
         assert self.s3_clients[expired].keys() == self.client.key_policy_set
@@ -285,7 +285,7 @@ class Access_Test(Test_Base):
             service_name="s3",
             endpoint_url=self.client.s3_ep,
             config=botocore.config.Config(signature_version=botocore.UNSIGNED),
-            verify=False)
+            verify=self.client.ssl_verify)
         self.s3_clients[expired]["nokey"] = sc2
         #
         # Make a readwrite access client for another pool.
@@ -306,7 +306,7 @@ class Access_Test(Test_Base):
         sc3 = session3.resource(
             service_name="s3",
             endpoint_url=self.client.s3_ep,
-            verify=False)
+            verify=self.client.ssl_verify)
         self.s3_clients[expired]["other"] = sc3
         print(f"s3clients={self.s3_clients[expired]}")
         pass

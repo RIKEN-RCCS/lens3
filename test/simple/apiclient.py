@@ -49,6 +49,7 @@ class Api_Client():
             pass
         self.api_ep = ci["api_ep"]
         self.s3_ep = ci["s3_ep"]
+        self.ssl_verify = ci.get("ssl_verify", True)
         cred = ci.get("cred")
         assert cred is not None
         (k, v) = next(iter(cred.items()))

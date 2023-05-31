@@ -17,6 +17,7 @@ import sys
 import traceback
 from lenticularis.control import Control_Api
 from lenticularis.control import erase_minio_ep, erase_pool_data
+from lenticularis.control import list_user_pools
 from lenticularis.table import read_redis_conf
 from lenticularis.table import get_table
 from lenticularis.table import set_conf, get_conf
@@ -137,6 +138,10 @@ def _load_user(tables, u):
 
 
 def _delete_user(tables, uid):
+    pids = list_user_pools(tables, uid, None)
+    for pid in pids:
+        erase_pool_data(tables, pid)
+        pass
     tables.delete_user(uid)
     tables.delete_user_timestamp(uid)
     pass

@@ -112,6 +112,17 @@ def erase_pool_data(tables, pool_id):
     pass
 
 
+def list_user_pools(tables, uid, pool_id):
+    """Lists pools owned by a user.  It checks the owner of a pool if
+    pooi-id is given.
+    """
+    pools = tables.list_pools(pool_id)
+    pids = [pid for pid in pools
+            for p in [tables.get_pool(pid)]
+            if p is not None and p.get("owner_uid") == uid]
+    return pids
+
+
 def _make_new_pool(tables, path, user_id, owner_gid, expiration):
     now = int(time.time())
     pooldesc = {
@@ -718,14 +729,14 @@ class Control_Api():
         ensure_mux_is_running(self.tables)
         ensure_user_is_authorized(self.tables, user_id)
         pool_list = []
-        for pid in self.tables.list_pools(pool_id):
+        pools = list_user_pools(self.tables, user_id, pool_id)
+        for pid in pools:
             pooldesc = gather_pool_desc(self.tables, pid)
             if pooldesc is None:
                 logger.debug(f"Pool removed in race; list-pools runs"
                              f" without a lock (ignored): {pid}")
                 continue
-            if pooldesc["owner_uid"] != user_id:
-                continue
+            assert pooldesc["owner_uid"] == user_id
             pool_list.append(pooldesc)
             pass
         pool_list = sorted(pool_list, key=lambda k: k["buckets_directory"])

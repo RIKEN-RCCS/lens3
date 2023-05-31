@@ -2,28 +2,28 @@
 
 ## Quick Setup of Buckets
 
-Accessing the Web UI first shows "New pool" section.  A _bucket-pool_
-or a pool is a directory to hold buckets.  Each pool corresponds to a
-single MinIO instance.  Buckets and access keys are associated to a
-pool.
+Accessing the Web UI first shows "Manage Pools" section.  A
+_bucket-pool_ or a _pool_ is a directory to hold buckets.  Each pool
+corresponds to a single MinIO instance.  Buckets and access keys are
+associated to a pool.
 
 ![Landing screenshot](ug1.jpg)
 
-The first step is creating a pool.  Fill a directory in a full path
-and select a unix group, them click "CREATE".  The directory needs to
-be writable to the user:group pair, of course.
+The first step is creating a pool.  Fill a directory as a full path
+and select a unix group, them click "CREATE" button (a plus icon).
+The directory needs to be writable to the user:group pair.
 
 ![Pool list screenshot](ug2.jpg)
 
-"Pool list" section shows a list of existing pools.  It is a slider
+"List Pools" section shows a list of existing pools.  It is a slider
 list.  Select a pool by clicking an edit button (a pencil).  It opens
 a "Pool edit" section.  Or, delete a pool by clicking a delete button
 (a trash can).
 
 ![Pool edit screenshot](ug3.jpg)
 
-"Pool edit" section has two independent subsections -- one for buckets
-and the other for access keys.
+"Edit a Pool" section has two independent subsections -- one for
+buckets and the other for access keys.
 
 A bucket has a bucket-policy that specifies a permission to public
 access: "none", "upload", "download", or "public".  A bucket with the
@@ -69,6 +69,11 @@ aws_secret_access_key = DzZv57R8wBIuVZdtAkE1uK1HoebLPMzKM6obA4IDqOhaLIBf
 
 $ aws --endpoint-url=http://lens3.example.com/ s3 ls s3://somebucket1/
 ```
+
+### Diagnosing Access Errors
+
+Accesses rejected at Lens3 only return status numbers but no error
+messages.  It is on the todo list.
 
 ## Overview of Lens3
 

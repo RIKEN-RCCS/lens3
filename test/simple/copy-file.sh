@@ -1,10 +1,9 @@
 #!/bin/ksh -x
 
-# Test by AWS S3 CLI.  Run in the "test/simple" directory.  Tested
-# commands are: {cp, ls, mv, rm, presign}.  It needs shell variables
-# "EP" (an endpoint URL) and "BKT" (a bucket name).  The bucket should
-# be set accessible in advance.  It leaves garbage files in the
-# directory and in the bucket.
+# Test by AWS S3 CLI.  Tested commands are: {cp, ls, mv, rm, presign}.
+# It needs shell variables "EP" (an endpoint URL) and "BKT" (a bucket
+# name).  The bucket should be set accessible in advance.  It leaves
+# garbage files in the directory and in the bucket.
 
 # It reads "epbkt.sh" if it exists.  It assumed it defines EP and BKT.
 # It may include other variables SIZ and DBG.  The file size SIZ
@@ -100,6 +99,20 @@ if [ $status -eq 0 ]; then
     echo "removing failed; a file remains"
     exit 1
 fi
+
+# cat > index.html <<EOF
+# <!DOCTYPE html>
+# <html lang="en">
+# <head>
+# <meta charset="utf-8">
+# <title>title</title>
+# </head>
+# <body>
+# index.html
+# </body>
+# </html>
+# EOF
+# sed -e 's/index/error/' < index.html > error.html
 
 # ${AWS} s3 cp index.html s3://${BKT}/
 # status=$?

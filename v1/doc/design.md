@@ -312,3 +312,7 @@ long delays.  See [rfc7231](https://httpwg.org/specs/rfc7231.htm).
 
 __Python Modules__: "FastAPI" uses "Starlette".  There are no direct
 uses of "Starlette" in the source code.
+
+__MinIO behavior__: MinIO refuses a connection by ECONNRESET
+(Connection reset by peer) at a high load (not too high), instead of
+an expected 503 reply.

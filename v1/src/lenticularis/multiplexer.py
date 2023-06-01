@@ -35,8 +35,11 @@ from lenticularis.utility import logger
 from lenticularis.utility import tracing
 
 
+# MinIO returns ECONNRESET at a high load (not too high).
+
 _connection_errors = [errno.ETIMEDOUT, errno.ECONNREFUSED,
-                      errno.EHOSTDOWN, errno.EHOSTUNREACH]
+                      errno.EHOSTDOWN, errno.EHOSTUNREACH,
+                      errno.ECONNRESET]
 
 
 def _no_buffering(headers):
@@ -58,13 +61,16 @@ def _fake_user_id(access_key):
 
 
 def _check_url_error_is_connection_errors(x):
+    """Checks if a URLError is connection related, then it is logged as a
+    warning, otherwise it is an error.
+    """
     if x.errno in _connection_errors:
-        return x.errno
+        return True
     elif x.reason is not None and x.reason.errno in _connection_errors:
-        return x.reason.errno
+        return True
     else:
-        logger.debug(f"Cannot find errno in URLError={x}")
-        return 0
+        logger.debug(f"Unfamiliar error is returned URLError={x}")
+        return False
 
 
 def _get_pool_of_probe_key(keydesc, access_synopsis):

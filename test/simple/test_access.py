@@ -1,26 +1,25 @@
-"""Lens3 Simple Test."""
+"""Simple Access Test.  It accesses the store using boto3."""
 
 # Copyright (c) 2022-2023 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
 import enum
-import string
-import random
 import sys
 import time
 import json
 import subprocess
-import contextvars
-import urllib.error
 import botocore
 import boto3
 from apiclient import Lens3_Client
+from apiclient import random_string
+from test_api import Test_Base
 
 
-class Expectation(enum.Enum):
+class Respn(enum.Enum):
     OK = "OK"
     E401 = "401"
     E403 = "403"
+    E503 = "503"
     EACCESSDENIED = "AccessDenied"
 
     def __str__(self):
@@ -29,158 +28,12 @@ class Expectation(enum.Enum):
     pass
 
 
-def random_string(n):
-    astr = string.ascii_letters
-    bstr = string.ascii_letters + string.digits
-    a = random.SystemRandom().choice(astr)
-    b = (random.SystemRandom().choice(bstr) for _ in range(n - 1))
-    return (a + "".join(b)).lower()
-
-
-class Test_Base():
-    def __init__(self, client):
-        self.client = client
-        self.working_directory = ""
-        self.working_pool = ""
-        pass
-
-    def make_pool_for_test(self):
-        """Makes a pool in a directory with a random name."""
-        assert self.working_directory == ""
-        self.working_directory = (self.client.home + "/00"
-                                  + random_string(6))
-        desc = self.client.make_pool(self.working_directory)
-        self.working_pool = desc["pool_name"]
-        return desc
-
-    pass
-
-
-class Api_Test(Test_Base):
-    """Simple API Test.  It makes a pool, then makes buckets and
-    access-keys.  It tries to make a conflicting bucket and fails.
-    Finally, it cleans up, but it leaves a directory with a random
-    name in the filesystem.
-    """
-
-    def __init__(self, client):
-        super().__init__(client)
-        pass
-
-    # Failing to send csrf_token.
-
-    def make_buckets_failing(self):
-        bad_csrf_token = "x" + self.client.csrf_token
-        data = {"CSRF-Token": bad_csrf_token}
-        pass
-
-    def run(self):
-
-        #
-        # (1) List pools.
-        #
-
-        pools1 = self.client.list_pools()
-        pids1 = [p["pool_name"] for p in pools1]
-        print(f"pools={pids1}")
-
-        for pid in pids1:
-            desc1 = self.client.get_pool(pid)
-            assert desc1["pool_name"] == pid
-            pass
-
-        #
-        # (2) Find a pool created for this test.
-        #
-
-        desc2 = self.client.find_pool(self.working_directory)
-        assert self.working_pool == desc2["pool_name"]
-
-        #
-        # (3) Make access-keys -- one for each policy.
-        #
-
-        now = int(time.time())
-        expiration = now + (24 * 3600)
-        for policy in self.client.key_policy_set:
-            print(f"Making an access-key with policy={policy}")
-            self.client.make_secret(self.working_pool, policy, expiration)
-            pass
-
-        #
-        # (4) Print an access-key as an aws credential entry.
-        #
-
-        print(f"Printing an AWS credential:")
-        desc4 = self.client.find_pool(self.working_directory)
-        self.client.get_aws_credential(desc4, "readwrite", "default")
-
-        #
-        # (5) Make conflicting buckets.
-        #
-
-        working_buckets5 = set()
-        bucket5 = ("lenticularis-oddity-" + random_string(6))
-        policy5 = "none"
-        print(f"Making a bucket bucket={bucket5}")
-        self.client.make_bucket(self.working_pool, bucket5, policy5)
-        working_buckets5.add(bucket5)
-
-        print(f"Making a duplicate bucket bucket={bucket5}")
-        try:
-            self.client.make_bucket(self.working_pool, bucket5, policy5)
-        except urllib.error.HTTPError as e:
-            assert e.code == 403
-        else:
-            assert False
-            pass
-
-        #
-        # (6) Make buckets.
-        #
-
-        for policy in self.client.bkt_policy_set:
-            while True:
-                bucket = ("lenticularis-oddity-" + random_string(6))
-                if bucket not in working_buckets5:
-                    break
-                pass
-            assert bucket not in working_buckets5
-            print(f"Making a bucket bucket={bucket}")
-            self.client.make_bucket(self.working_pool, bucket, policy)
-            working_buckets5.add(bucket)
-            pass
-
-        #
-        # (7) Delete access-keys.  Delete buckets.
-        #
-
-        desc7 = self.client.find_pool(self.working_directory)
-        keys7 = desc7["access_keys"]
-        bkts7 = desc7["buckets"]
-        # A key has {"access_key", "secret_key", "key_policy"}.
-        # print(f"secrets={keys}")
-        # A bucket has {"name", "bkt_policy"}.
-        # print(f"buckets={bkts}")
-
-        for k in keys7:
-            print(f"Deleting a secret secret={k}")
-            self.client.delete_secret(self.working_pool, k["access_key"])
-            pass
-
-        for b in bkts7:
-            print(f"Deleting a bucket bucket={b}")
-            self.client.delete_bucket(self.working_pool, b["name"])
-            pass
-        pass
-
-    pass
-
-
 class Access_Test(Test_Base):
-    """S3 Access Test.  self.s3_clients[0] holds S3 clients by access key
-    policies, and self.s3_clients[1] is the same but with all keys
-    expired.
+    """S3 Access Test.  It tests various combinations of key policies and
+    bucket policies.  Some uses keys that are expired -- they are
+    created with 10 seconds and it assumes time elapses in some tests.
+    self.s3_clients[0] holds S3 clients by access key policies, and
+    self.s3_clients[1] is the same but with all keys expired.
     """
 
     def __init__(self, client):
@@ -311,70 +164,81 @@ class Access_Test(Test_Base):
         print(f"s3clients={self.s3_clients[expired]}")
         pass
 
-    def put_files_in_buckets(self):
-        expired = 0
+    def put_file_in_buckets(self):
         print("Storing a file in each bucket with the readwrite key.")
-        data = open("gomi-file0.txt", "rb")
+        subprocess.run(["rm", "-f", "gomi-file0.txt"])
+        subprocess.run(["touch", "gomi-file0.txt"])
+        subprocess.run(["shred", "-n", "1", "-s", "64K", "gomi-file0.txt"])
+        with open("gomi-file0.txt", "rb") as f:
+            data = f.read()
+            pass
+        expired = 0
         s3 = self.s3_clients[expired]["readwrite"]
         for (policy, bucket) in self.buckets.items():
             s3.Bucket(bucket).put_object(Key="gomi-file0.txt", Body=data)
             pass
         pass
 
+    # Expected responses.  Expectations in the table are fixed for
+    # expired access keys as Respn("403") (excluding nokey and other
+    # keys).
+
     expectations = [
         # (buket-policy, key-policy, op, expectation)
-        ("none", "nokey", "w", Expectation("401")),
-        ("none", "other", "w", Expectation("403")),
-        ("none", "readwrite", "w", Expectation.OK),
-        ("none", "readonly", "w", Expectation("AccessDenied")),
-        ("none", "writeonly", "w", Expectation.OK),
-        ("none", "nokey", "r", Expectation("401")),
-        ("none", "other", "r", Expectation("403")),
-        ("none", "readwrite", "r", Expectation.OK),
-        ("none", "readonly", "r", Expectation.OK),
-        ("none", "writeonly", "r", Expectation("AccessDenied")),
+        ("none", "nokey", "w", Respn("401")),
+        ("none", "other", "w", Respn("403")),
+        ("none", "readwrite", "w", Respn.OK),
+        ("none", "readonly", "w", Respn("AccessDenied")),
+        ("none", "writeonly", "w", Respn.OK),
+        ("none", "nokey", "r", Respn("401")),
+        ("none", "other", "r", Respn("403")),
+        ("none", "readwrite", "r", Respn.OK),
+        ("none", "readonly", "r", Respn.OK),
+        ("none", "writeonly", "r", Respn("AccessDenied")),
 
-        ("upload", "nokey", "w", Expectation.OK),
-        ("upload", "other", "w", Expectation("403")),
-        ("upload", "readwrite", "w", Expectation.OK),
-        ("upload", "readonly", "w", Expectation("AccessDenied")),
-        ("upload", "writeonly", "w", Expectation.OK),
-        ("upload", "nokey", "r", Expectation("AccessDenied")),
-        ("upload", "other", "r", Expectation("403")),
-        ("upload", "readwrite", "r", Expectation.OK),
-        ("upload", "readonly", "r", Expectation.OK),
-        ("upload", "writeonly", "r", Expectation("AccessDenied")),
+        ("upload", "nokey", "w", Respn.OK),
+        ("upload", "other", "w", Respn("403")),
+        ("upload", "readwrite", "w", Respn.OK),
+        ("upload", "readonly", "w", Respn("AccessDenied")),
+        ("upload", "writeonly", "w", Respn.OK),
+        ("upload", "nokey", "r", Respn("AccessDenied")),
+        ("upload", "other", "r", Respn("403")),
+        ("upload", "readwrite", "r", Respn.OK),
+        ("upload", "readonly", "r", Respn.OK),
+        ("upload", "writeonly", "r", Respn("AccessDenied")),
 
-        ("download", "nokey", "w", Expectation("AccessDenied")),
-        ("download", "other", "w", Expectation("403")),
-        ("download", "readwrite", "w", Expectation.OK),
-        ("download", "readonly", "w", Expectation("AccessDenied")),
-        ("download", "writeonly", "w", Expectation.OK),
-        ("download", "nokey", "r", Expectation.OK),
-        ("download", "other", "r", Expectation("403")),
-        ("download", "readwrite", "r", Expectation.OK),
-        ("download", "readonly", "r", Expectation.OK),
-        ("download", "writeonly", "r", Expectation("AccessDenied")),
+        ("download", "nokey", "w", Respn("AccessDenied")),
+        ("download", "other", "w", Respn("403")),
+        ("download", "readwrite", "w", Respn.OK),
+        ("download", "readonly", "w", Respn("AccessDenied")),
+        ("download", "writeonly", "w", Respn.OK),
+        ("download", "nokey", "r", Respn.OK),
+        ("download", "other", "r", Respn("403")),
+        ("download", "readwrite", "r", Respn.OK),
+        ("download", "readonly", "r", Respn.OK),
+        ("download", "writeonly", "r", Respn("AccessDenied")),
 
-        ("public", "nokey", "w", Expectation.OK),
-        ("public", "other", "w", Expectation("403")),
-        ("public", "readwrite", "w", Expectation.OK),
-        ("public", "readonly", "w", Expectation("AccessDenied")),
-        ("public", "writeonly", "w", Expectation.OK),
-        ("public", "nokey", "r", Expectation.OK),
-        ("public", "other", "r", Expectation("403")),
-        ("public", "readwrite", "r", Expectation.OK),
-        ("public", "readonly", "r", Expectation.OK),
-        ("public", "writeonly", "r", Expectation("AccessDenied"))
+        ("public", "nokey", "w", Respn.OK),
+        ("public", "other", "w", Respn("403")),
+        ("public", "readwrite", "w", Respn.OK),
+        ("public", "readonly", "w", Respn("AccessDenied")),
+        ("public", "writeonly", "w", Respn.OK),
+        ("public", "nokey", "r", Respn.OK),
+        ("public", "other", "r", Respn("403")),
+        ("public", "readwrite", "r", Respn.OK),
+        ("public", "readonly", "r", Respn.OK),
+        ("public", "writeonly", "r", Respn("AccessDenied"))
     ]
 
     def get_put_by_varying_policies(self, expired):
         assert expired == 0 or expired == 1
-        data0 = open("gomi-file0.txt", "rb").read()
+        with open("gomi-file0.txt", "rb") as f:
+            data0 = f.read()
+            pass
         for (bkt, key, op, expectation) in self.expectations:
             # Fix an expectation for an expired key.
             if expired == 1 and key not in {"nokey", "other"}:
-                expectation = Expectation("403")
+                expectation = Respn("403")
                 pass
             expiration = "" if expired == 0 else ", expired"
             print(f"Accessing ({op}) a {bkt}-bucket"
@@ -384,7 +248,7 @@ class Access_Test(Test_Base):
             bucket = s3.Bucket(bucketname)
             obj = bucket.Object("gomi-file0.txt")
             assert op in {"w", "r"}
-            result = Expectation.OK
+            result = Respn.OK
             try:
                 if op == "w":
                     obj.put(Body=data0)
@@ -395,11 +259,10 @@ class Access_Test(Test_Base):
             except botocore.exceptions.ClientError as e:
                 #except urllib.error.HTTPError as e:
                 error = e.response["Error"]["Code"]
-                # print(f"error={error}")
-                result = Expectation(error)
+                result = Respn(error)
                 pass
             else:
-                result = Expectation.OK
+                result = Respn.OK
                 pass
             if not result == expectation:
                 print(f"result={result}; expectation={expectation}")
@@ -407,7 +270,8 @@ class Access_Test(Test_Base):
             pass
         pass
 
-    def upload_file(self):
+    def upload_file__(self):
+        subprocess.run(["rm", "-f", "gomi-file0.txt"])
         subprocess.run(["touch", "gomi-file0.txt"])
         subprocess.run(["shred", "-n", "1", "-s", "64K", "gomi-file0.txt"])
         data = open("gomi-file0.txt", "rb")
@@ -420,21 +284,18 @@ class Access_Test(Test_Base):
     def run(self):
 
         #
-        # (1) Prepare for test.  Make a test file (random 64KB).
+        # (1) Prepare for test.
         #
-
-        subprocess.run(["touch", "gomi-file0.txt"])
-        subprocess.run(["shred", "-n", "1", "-s", "64K", "gomi-file0.txt"])
 
         self.make_s3_clients(0)
         self.make_s3_clients(1)
         self.make_buckets()
 
         #
-        # (2) Test S3 clients with access-keys vs. bucket policies.
+        # (2) Test with various combinations of key+bucket policies.
         #
 
-        self.put_files_in_buckets()
+        self.put_file_in_buckets()
         self.get_put_by_varying_policies(0)
         self.get_put_by_varying_policies(1)
 
@@ -490,6 +351,9 @@ class Access_Test(Test_Base):
         #
 
         print(f"Uploading/downloading a file via S3.Bucket API.")
+        subprocess.run(["rm", "-f", "gomi-file0.txt", "gomi-file1.txt"])
+        subprocess.run(["touch", "gomi-file0.txt"])
+        subprocess.run(["shred", "-n", "1", "-s", "64K", "gomi-file0.txt"])
         # upload_file(file, key); download_file(key, file)
         r = bucket.upload_file("gomi-file0.txt", "gomi-file1.txt")
         r = bucket.download_file("gomi-file1.txt", "gomi-file1.txt")
@@ -500,75 +364,57 @@ class Access_Test(Test_Base):
         # (6) Upload/download files with varying sizes.
         #
 
+        src6 = "gomi-file0.txt"
+        dst6 = "gomi-file1.txt"
+        subprocess.run(["rm", "-f", src6, dst6])
         for i in [0, 1, 2, 3]:
             size = 6113 * (13 ** i)
             print(f"Uploading/downloading a file (size={size}).")
-            subprocess.run(["touch", "gomi0.txt"])
-            subprocess.run(["shred", "-n", "1", "-s", f"{size}", "gomi0.txt"])
-            name = f"gomi-file{i}.txt"
-            r = bucket.upload_file("gomi0.txt", name)
-            r = bucket.download_file(name, "gomi1.txt")
-            with open("gomi0.txt", "rb") as f:
+            subprocess.run(["touch", src6])
+            subprocess.run(["shred", "-n", "1", "-s", f"{size}", src6])
+            name = f"gomi-file{i+3}.txt"
+            r = bucket.upload_file(src6, name)
+            r = bucket.download_file(name, dst6)
+            with open(src6, "rb") as f:
                 data0 = f.read()
                 pass
-            with open("gomi1.txt", "rb") as f:
+            with open(dst6, "rb") as f:
                 data1 = f.read()
                 pass
             assert data0 == data1
             del data0
             del data1
+            subprocess.run(["rm", "-f", src6, dst6])
             pass
         pass
 
     pass
 
 
-def main1():
-    global client1, test1
-    client1 = Lens3_Client("client.json")
-    client1.get_user_info()
-
-    test1 = Api_Test(client1)
-    print(f"API TEST...")
-    print(f"Making a pool for test...")
-    desc1 = test1.make_pool_for_test()
-    print(f"A pool={desc1}")
-    try:
-        test1.run()
-    finally:
-        print(f"Deleting a pool={test1.working_pool}")
-        test1.client.delete_pool(test1.working_pool)
-        pass
-    print("Done")
-    pass
-
-
 def main2():
     global client2, test2
+    print(f"ACCESS TEST...")
     client2 = Lens3_Client("client.json")
     client2.get_user_info()
 
     test2 = Access_Test(client2)
-    print(f"ACCESS TEST...")
-    print(f"Making a pool for test...")
-    desc2 = test2.make_pool_for_test()
-    print(f"A pool={desc2}")
+    print(f"Making working pools for test...")
+    test2.make_working_pool()
     test2.make_another_pool()
     try:
         test2.run()
     finally:
-        print(f"Deleting a pool={test2.working_pool}")
+        print(f"Deleting a working pool={test2.working_pool}")
         test2.client.delete_pool(test2.working_pool)
-        print(f"Deleting a pool={test2.another_pool}")
+        print(f"Deleting a working pool={test2.another_pool}")
         test2.client.delete_pool(test2.another_pool)
         pass
     print("Done")
     pass
 
 
-# >>> exec(open("basic_test.py").read())
+# >>> exec(open("test_access.py").read())
 
 if __name__ == "__main__":
-    main1()
     main2()
     pass

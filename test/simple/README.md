@@ -4,57 +4,50 @@
 
 [copy-file.sh](copy-file.sh) runs a very simple test using AWS S3 CLI.
 It runs commands: __cp__, __ls__, __mv__, __rm__, __presign__,
-__website__.  It generates a file of 32MB, and uploads and downloads
-it.  That file is large enough to start a multipart upload (8MB is the
-default threshold to use a multipart upload).
+__website__.  It generates a file of 32MB randoms, and uploads and
+downloads it.  That file is large enough to start a multipart upload
+(8MB is the default threshold to use a multipart upload).
 
-A secret of S3 should be prepared in ".aws/*".  A bucket needs to be
-created in advance, too.  The shell variables "EP" and "BKT" are set
-to the target, "EP" as an endpoint and "BKT" as a bucket.  Note it
-leaves garbage files.  Run the tests in the "test/simple" directory,
-because it needs sample files in the directory.
+An S3 secret should be prepared in ".aws/*".  A bucket needs to be
+created in advance, too.  The shell variables "EP" and "BKT" are the
+target, "EP" as an endpoint and "BKT" as a bucket.  It reads (sources
+by ".") a file "epbkt.sh" if it exists.
 
-__presign__ is useless.  Lens3 denies a bucket access unless it is
-public.
+Note it leaves garbage files.  Run the tests in the "test/simple"
+directory, because it needs sample files in the directory.
+
+__presign__ is useless.  Lens3 does not understand a secret in URL.
 
 __website__ will fail in Lens3.
 
-## Prerequisite
+## Simple Tests
 
-* boto3
+### Client Setting (credential)
 
-## Other Tests -- Brief Descriptions
+The following tests read a configuration file "client.json".  It
+includes endpoints for S3 and Lens3-Api.  Copy "client-example.json"
+to "client.json" and edit it.  It also includes a credential to access
+Lens3-Api.  A credential may be a user+password pair for
+basic-authentication, a cookie for Apache OIDC, or a user name to
+bypass authentication.  To bypass authentication, access Lens3-Api
+directly (i.e., skip a proxy).  A credential for Apache OIDC can be
+found in a cookie named "mod_auth_openidc_session".  Web browser's
+js-console may be used to check the cookie value.
 
-Run "apitest.py" first, and then run "s3test.py".
+### test_api.py
 
-* (NOT YET) Tests include one sending a false csrf_token.
+[test_api.py](test_api.py) runs Lens3-Api operations.  It makes a
+pool, then makes buckets and access-keys.  It tries to make a
+conflicting bucket which will fail.  Finally, it cleans up.  It leaves
+a directory with a random name ("00xxxxxx") in the home in the
+filesystem.
 
-### apitest.py
+### test_access.py
 
-It tests API operations: pool creation/deletion, access-key
-creation/deletion, and bucket creation/deletion.
-
-It reads a file "testu.yaml", whose contents are as following.  apiep
-is an endpoint of Web-API, and s3ep is an access point of S3.
-home+uid is used as a directory to create a pool.  The password is
-used as a basic authentication key at the http reverse-proxy.
-
-```
-apiep: "lens3.example.com:8008"
-s3ep: "lens3.example.com:8009"
-proto: "http"
-home: "/home"
-uid: "user1"
-gid: "group1"
-password: "xxxxxx"
-```
-
-### s3test.py
-
-It tests S3 operations: file upload/download for combinations of
-bucket policies and access-key policies.  Test uses 64KB file.
-
-It also reads a file "testu.yaml".
+[test_access.py](test_access.py) runs S3 access test.  It uses "boto3"
+library.  It tests various combinations of key policies and bucket
+policies, where some keys are expired.  It uses Lens3-Api operations,
+and thus it is better to run "test_api.py" first.
 
 ## Info
 

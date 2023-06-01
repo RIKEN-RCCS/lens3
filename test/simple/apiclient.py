@@ -4,6 +4,8 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 import platform
+import string
+import random
 import contextvars
 import json
 import base64
@@ -13,6 +15,14 @@ from urllib.request import Request, urlopen
 from urllib.error import HTTPError
 
 # tracing = contextvars.ContextVar("tracing")
+
+
+def random_string(n):
+    astr = string.ascii_letters
+    bstr = string.ascii_letters + string.digits
+    a = random.SystemRandom().choice(astr)
+    b = (random.SystemRandom().choice(bstr) for _ in range(n - 1))
+    return (a + "".join(b)).lower()
 
 
 class Lens3_Error(Exception):

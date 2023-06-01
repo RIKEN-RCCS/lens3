@@ -1,7 +1,8 @@
 {
-  "api_ep": "http://localhost:8003",
-  "s3_ep": "https://localhost",
+  "api_ep": "https://lens3.example.com/api~",
+  "s3_ep": "https://lens3.example.com",
   "gid": "somegroup",
   "home": "/home/someuser",
-  "cred": {"x-remote-user": "someuser"}
+  "cred": {"mod_auth_openidc_session": "uuid"},
+  "ssl_verify": true
 }

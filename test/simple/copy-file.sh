@@ -1,20 +1,18 @@
 #!/bin/ksh -x
 
-# Simple test.  Run in the "test/trivial" directory.  Tested commands
-# are: {cp, ls, mv, rm, presign}.  It needs shell variables "EP" (an
-# endpoint) and "BKT" (a bucket), which should be set accessible in
-# advance.  It optionally reads the "testconf" if it exists.
-# "testconf" may include other variables "DBG" and "SIZ".  The file
-# size should be larger than 8MB for a multipart-upload.  It leaves
-# garbage files in this directory and in the bucket.
+# Test by AWS S3 CLI.  Run in the "test/simple" directory.  Tested
+# commands are: {cp, ls, mv, rm, presign}.  It needs shell variables
+# "EP" (an endpoint URL) and "BKT" (a bucket name).  The bucket should
+# be set accessible in advance.  It leaves garbage files in the
+# directory and in the bucket.
 
-# It reads "testconf" if it exists.  It assumed to define EP and BKT.
-# Set these shell variables like:
-# EP=https://lens3.example.com/
-# BKT=bkt0
+# It reads "epbkt.sh" if it exists.  It assumed it defines EP and BKT.
+# It may include other variables SIZ and DBG.  The file size SIZ
+# should be larger than 8MB for a multipart-upload.  Set these shell
+# variables like: EP=https://lens3.example.com/; BKT=bkt0
 
-if [ -f ./testconf ]; then
-    . ./testconf
+if [ -f ./epbkt.sh ]; then
+    . ./epbkt.sh
 fi
 
 if [ -z "${EP}" -o -z "${BKT}" ]; then
@@ -116,4 +114,4 @@ fi
 #     exit 1
 # fi
 
-echo "done."
+echo "Done"

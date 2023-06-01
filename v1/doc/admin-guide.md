@@ -21,8 +21,8 @@ of ADD/DELETE/ENABLE/DISABLE line.  Loading a CSV file is incremental,
 and it can be used to manage users.
 
 ```
-$ lens3-admin -c conf.json show-user > user-list.csv
-$ lens3-admin -c conf.json load-user user-list.csv
+lens3$ lens3-admin -c conf.json show-user > user-list.csv
+lens3$ lens3-admin -c conf.json load-user user-list.csv
 ```
 
 ## System Maintenance
@@ -33,7 +33,7 @@ MinIO and Mc should be updated manually.  Note that Lens3 may fail to
 operate on updating versions of MinIO or Mc.
 
 ```
-mc admin update
+lens3$ mc admin update
 ```
 
 ### Redis DB Backup
@@ -56,9 +56,9 @@ A json file backup is done by lens3-admin's dump-db and restore-db
 commands.  However, a backup of a Redis database is preferred.
 
 ```
-$ lens3-admin -c conf.json dump-db save.json
-$ lens3-admin -c conf.json --everything -y reset-db
-$ lens3-admin -c conf.json restore-db save.json
+lens3$ lens3-admin -c conf.json dump-db save.json
+lens3$ lens3-admin -c conf.json --everything -y reset-db
+lens3$ lens3-admin -c conf.json restore-db save.json
 ```
 
 ## Design Assumptions

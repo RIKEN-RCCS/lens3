@@ -344,7 +344,7 @@ lens3$ vi mux-conf.yaml
 ```
 lens3$ lens3-admin -c conf.json load-conf api-conf.yaml
 lens3$ lens3-admin -c conf.json load-conf mux-conf.yaml
-lens3$ lens3-admin -c conf.json list-conf
+lens3$ lens3-admin -c conf.json show-conf
 ```
 
 ## Set up Lens3-Api and Lens3-Mux

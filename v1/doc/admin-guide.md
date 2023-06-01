@@ -1,5 +1,30 @@
 # Lenticularis-S3 Administration Guide
 
+## Administration Command (lens3-admin)
+
+Lens3 provides "lens3-admin" command for direct database
+modifications.  Note that it does not change the status of a MinIO
+instance, and the modifications will be reflected at the next start of
+a MinIO instance.  Moreover, modifications could be inconsistent.
+
+"lens3-admin" command should typically be run on the same host of
+Lens3-Api.  See the help by running "lens3-admin -c conf.json help",
+for the list of commands.
+
+### User Mangement
+
+A user must be registered to use Lens3.  The lens3-admin command is
+used to manage users.
+
+A database of users can be saved/restored as a CSV file.  A row is one
+of ADD/DELETE/ENABLE/DISABLE line.  Loading a CSV file is incremental,
+and it can be used to manage users.
+
+```
+$ lens3-admin -c conf.json show-user > user-list.csv
+$ lens3-admin -c conf.json load-user user-list.csv
+```
+
 ## System Maintenance
 
 ### Updating MinIO and Mc Binaries
@@ -34,31 +59,6 @@ commands.  However, a backup of a Redis database is preferred.
 $ lens3-admin -c conf.json dump-db save.json
 $ lens3-admin -c conf.json --everything -y reset-db
 $ lens3-admin -c conf.json restore-db save.json
-```
-
-## Administration Command (lens3-admin)
-
-Lens3 provides "lens3-admin" command for direct database
-modifications.  Note that it does not change the status of a MinIO
-instance, and the modifications will be reflected at the next start of
-a MinIO instance.  Moreover, modifications could be inconsistent.
-
-"lens3-admin" command should typically be run on the same host of
-Lens3-Api.  See the help by running "lens3-admin -c conf.json help",
-for the list of commands.
-
-### User Mangement
-
-A user must be registered to use Lens3.  The lens3-admin command is
-used to manage users.
-
-A database of users can be saved/restored as a CSV file.  A row is one
-of ADD/DELETE/ENABLE/DISABLE line.  Loading a CSV file is incremental,
-and it can be used to manage users.
-
-```
-$ lens3-admin -c conf.json show-user > user-list.csv
-$ lens3-admin -c conf.json load-user user-list.csv
 ```
 
 ## Design Assumptions

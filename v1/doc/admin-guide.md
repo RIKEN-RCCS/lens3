@@ -24,19 +24,16 @@ performed by cron.
 See Redis documents for more information: [Redis
 persistence](https://redis.io/docs/manual/persistence/)
 
-### Json File Backup
+### (Json File Backup)
 
-A database of uses/pools can be saved/restored as a json file.  A json
-file backup is done by a lens3-admin dump command.  However, a
-backup of a Redis database is preferred.
+A database of confs/users/pools can be saved/restored as a json file.
+A json file backup is done by lens3-admin's dump-db and restore-db
+commands.  However, a backup of a Redis database is preferred.
 
 ```
-$ lens3-admin dump users > users.json
-$ lens3-admin dump pools > pools.jsan
-  ......
-$ lens3-admin reset-db
-$ lens3-admin restore users.json
-$ lens3-admin restore pools.json
+$ lens3-admin -c conf.json dump-db save.json
+$ lens3-admin -c conf.json --everything -y reset-db
+$ lens3-admin -c conf.json restore-db save.json
 ```
 
 ## Administration Command (lens3-admin)
@@ -49,6 +46,20 @@ a MinIO instance.  Moreover, modifications could be inconsistent.
 "lens3-admin" command should typically be run on the same host of
 Lens3-Api.  See the help by running "lens3-admin -c conf.json help",
 for the list of commands.
+
+### User Mangement
+
+A user must be registered to use Lens3.  The lens3-admin command is
+used to manage users.
+
+A database of users can be saved/restored as a CSV file.  A row is one
+of ADD/DELETE/ENABLE/DISABLE line.  Loading a CSV file is incremental,
+and it can be used to manage users.
+
+```
+$ lens3-admin -c conf.json show-user > user-list.csv
+$ lens3-admin -c conf.json load-user user-list.csv
+```
 
 ## Design Assumptions
 

@@ -46,7 +46,7 @@ public bucket and two readwrite access keys.
 The current UI is created with
 [vuejs](https://vuejs.org/)+[vuetify](https://vuetifyjs.com/en/).  It
 is not good for your taste, try a simple UI.  The simple UI reveals
-interactions of Web API.  If you are currently accessing the UI by a
+interactions of Web-API.  If you are currently accessing the UI by a
 URL ending with ".../ui/index.html", the simple UI is at
 ".../ui2/index.html".
 
@@ -87,18 +87,20 @@ third-parties.  MinIO is an open-source but commercially supported S3
 server.  Redis is an open-source database system.  A reverse-proxy is
 not specified in Lens3 but it is required for operation.
 
-Lens3-Mux works as a reverse-proxy which forwards file access requests
-to an MinIO instance by looking at a bucket name.  Lens3-Mux
-determines the target MinIO instance using an association of a bucket
-and a user.  This association is stored in a Redis database.
+Lens3-Mux works as a proxy which forwards file access requests to a
+MinIO instance by looking at a bucket name.  Lens3-Mux determines the
+target MinIO instance using an association of a bucket and a user.
+This association is stored in the Redis database.
+
+Lens3-Mux is also in charge of starting and stopping a MinIO instance.
+Lens3-Mux starts a MinIO instance on receiving an access request, and
+after a while, Lens3-Mux stops the instance when it becomes idle.
+Lens3-Mux starts a MinIO instance as a user process using "sudo".
+
 Lens3-Api provides management of buckets.  Lens3-Api manages buckets
-by a bucket pool, which is a unit of a management in Lens3 and
+by a bucket pool, which is a unit of management in Lens3 and
 corresponds to a single MinIO instance.  A user first creates a bucket
-pool, and then registers buckets to the pool.  Lens3-Mux is also in
-charge of starting and stopping a MinIO instance.  Lens3-Mux starts a
-MinIO instance on receiving an access request, and after a while,
-Lens3-Mux stops the instance when accesses become idle.  Lens3-Mux
-starts a MinIO instance as a user process using "sudo".
+pool, then registers buckets to the pool.
 
 ## Bucket-Pool State
 
@@ -171,7 +173,7 @@ by request by filtering server logs.
   instances).
 * Lens3 does not support S3 CLI "presign" command.  Lens3 does not
   recognize a credential attached in a URL.
-* Lens3 does not provide accesses to the rich GUI of MinIO or the MC
+* Lens3 does not provide accesses to the rich UI of MinIO or the MC
   command.
 
 ## Glossary

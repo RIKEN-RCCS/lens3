@@ -162,19 +162,15 @@ by request by filtering server logs.
 
 ## Other Limitations
 
+* S3 operations are restricted to simple ones to objects.
 * No STS support.
-
 * No event notifications support.
-
 * Lens3 does not support listing of buckets by `aws s3 ls`.  Simply,
-Lens3 prohibits accesses to the "/" of the bucket namespace, because
-the bucket namespace is shared by multiple users (and MinIO
-instances).
-
+  Lens3 prohibits accesses to the "/" of the bucket namespace.  It is
+  because the bucket namespace is shared by multiple users (and MinIO
+  instances).
 * Lens3 does not support S3 CLI "presign" command.  Lens3 does not
-recognize a credential attached in an URL, and denies a bucket access
-unless it is public.
-
+  recognize a credential attached in a URL.
 * Lens3 does not provide accesses to the rich GUI of MinIO or the MC
   command.
 
@@ -198,8 +194,8 @@ unless it is public.
   distinct.
 * Access keys have expiration.
 * Rich features are dropped.
-* Some lockings in accessing a database are omitted.  Operations by
+* Some locks in accessing a database are omitted.  Operations by
   Lens3-Api and the administrator tool is sloppy.
-* MC commands are directly invoked at the Lens3-Api host to change the
-  setting of a MinIO instance.  MC commands were only invoked at
-  Lens3-Mux in v1.1.
+* MC commands are directly invoked from Lens3-Api to change the
+  setting of a MinIO instance.  MC commands were invoked at Lens3-Mux
+  in v1.1.

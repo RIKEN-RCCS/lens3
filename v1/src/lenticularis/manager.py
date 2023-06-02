@@ -535,8 +535,8 @@ class Manager():
 
     def _setup_minio(self, p, pooldesc):
         pool_id = self._pool_id
-        with self._mc.alias_set(self._minio_root_user,
-                                self._minio_root_password):
+        with self._mc.mc_alias_set(self._minio_root_user,
+                                   self._minio_root_password):
             try:
                 alarm(self._minio_setup_timeout)
                 self._alarm_section = "alarm-set-in-setup-minio"
@@ -728,13 +728,12 @@ class Manager():
         # kill the subprocess here because it is run via sudo.
         pool_id = self._pool_id
         # logger.debug(f"Manager (pool={pool_id}) stopping MinIO: {p}.")
-        with self._mc.alias_set(self._minio_root_user,
-                                self._minio_root_password):
+        with self._mc.mc_alias_set(self._minio_root_user,
+                                   self._minio_root_password):
             try:
                 alarm(self._minio_stop_timeout)
                 self._alarm_section = "alarm-set-in-stop-minio"
-                r = self._mc.admin_service_stop()
-                assert_mc_success(r, "mc.admin_service_stop")
+                self._mc.stop_minio()
                 # p_status = p.wait()
             except Alarmed as e:
                 logger.error(f"Manager (pool={pool_id})"
@@ -844,12 +843,11 @@ class Manager():
         pool_id = self._pool_id
         r = None
         try:
-            with self._mc.alias_set(self._minio_root_user,
-                                    self._minio_root_password):
+            with self._mc.mc_alias_set(self._minio_root_user,
+                                       self._minio_root_password):
                 alarm(self._heartbeat_timeout)
                 self._alarm_section = "alarm-set-in-heartbeat-minio"
-                rr = self._mc.admin_info()
-                assert_mc_success(rr, "mc.admin_info")
+                rr = self._mc.get_minio_info()
                 alarm(0)
                 self._alarm_section = None
                 pass

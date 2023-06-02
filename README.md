@@ -9,24 +9,23 @@ __Lenticularis-S3 comes with ABSOLUTELY NO WARRANTY.__
 
 Lenticularis-S3 (Lens3) provides an S3 service by running multiple
 MinIO instances at a single access point.  MinIO is an S3 object
-storage service, and refer to [https://min.io](https://min.io) about
-MinIO.  While MinIO is usually started as a root process, Lens3 starts
-MinIO instances as non-root processes to confine unintended operations
-to each user.
+storage service, and please refer to [https://min.io](https://min.io)
+about MinIO.  While a MinIO serivice is usually owned by a single
+user, Lens3 starts MinIO instances as user processes to confine
+unintended operations to each user.
 
 | ![lens3-overview](v1/doc/lens3-overview.svg) |
 |:--:|
 | **Fig. Lens3 overview.** |
 
-Lens3 works as a reverse-proxy and a manager of MinIO instances.  It
-launches a MinIO instance on an S3 request, redirects file access
-requests to the instance, and manages the life-time of the instance.
-This service, called "Lens3-Mux", is started as a systemd service.
-Lens3 also provides a simple Web-UI for managing a bucket pool.  A
-"bucket pool" is a management unit in Lens3 which is associated to
-each MinIO instance.  A Web-UI is used to register S3 buckets to a
-pool.  This service, called "Lens3-Api", is started as a systemd
-serivce, too.
+Lens3 works as a proxy and a manager of MinIO instances.  It launches
+a MinIO instance on an S3 request, redirects access requests to the
+instance, and manages the life-time of the instance.  This service,
+called "Lens3-Mux", is started as a systemd service.  Lens3 also
+provides a simple Web-UI for managing bucket pools.  A "bucket pool"
+is a management unit in Lens3 which is associated to each MinIO
+instance.  A Web-UI is used to register S3 buckets to a pool.  This
+service, called "Lens3-Api", is started as a systemd serivce, too.
 
 ## Guides
 

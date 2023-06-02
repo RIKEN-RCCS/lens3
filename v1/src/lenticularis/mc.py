@@ -1,10 +1,37 @@
-"""MinIO MC control.  It runs MC command to set-up MinIO."""
+"""MinIO MC command.  It runs MC command to manage MinIO."""
 
 # Copyright (c) 2022-2023 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
+"""It depends on the version of MinIO and MC.  This is for
+RELEASE.2022-03-31T04-55-30Z.
+"""
+
 # NOTE: The error cause-code "BucketAlreadyOwnedByYou" returned MC
 # command should be treated as not an error.
+
+# Listing commands (such as of buckets or secrets) return records that
+# are separated by newlines.  Each record includes a status=success.
+
+# A record used in bucket listing:
+# {
+#     "status": "success",
+#     "type": "folder",
+#     "lastModified": "2023-01-01T00:00:00.00+00:00",
+#     "size": 0,
+#     "key": "bkt0/",
+#     "etag": "",
+#     "url": "http://lens3.example.com:9001/",
+#     "versionOrdinal": 1
+# }
+
+# A record used in secret listing:
+# {
+#     "status": "success",
+#     "accessKey": "jfD9kB3tlr19eLILERno",
+#     "policyName": "readwrite",
+#     "userStatus": "enabled"
+# }
 
 import tempfile
 import json
@@ -112,8 +139,8 @@ def _get_message_in_mc_error(e):
 
 class Mc():
     """MC command envirionment.  It works as a context in Python, but a
-    context is created at alias_set().  It uses a pool-id+random as an
-    alias name.
+    context is created at mc_alias_set().  It uses a pool-id + random
+    as an alias name.
     """
 
     def __init__(self, bin_mc, env_mc, minio_ep, pool_id, mc_timeout):
@@ -133,7 +160,7 @@ class Mc():
     def __exit__(self, exc_type, exc_value, traceback):
         try:
             if self._alias is not None:
-                self.alias_remove()
+                self._mc_alias_remove()
         except Exception as e:
             m = rephrase_exception_message(e)
             logger.error(f"MC alias-remove failed: exception=({m})",
@@ -157,7 +184,7 @@ class Mc():
 
     # MC COMMAND PRIMITIVES.
 
-    def alias_set(self, root_user, root_secret):
+    def mc_alias_set(self, root_user, root_secret):
         assert self._alias is None and self._config_dir is None
         url = f"http://{self._minio_ep}"
         self._config_dir = tempfile.TemporaryDirectory()
@@ -171,7 +198,7 @@ class Mc():
             raise Exception(_get_message_in_mc_error(rr[0]))
         return self
 
-    def alias_remove(self):
+    def _mc_alias_remove(self):
         rr = self._execute_cmd("alias_remove",
                                ["alias", "remove", self._alias])
         self._alias = None
@@ -179,70 +206,70 @@ class Mc():
             raise Exception(_get_message_in_mc_error(rr[0]))
         pass
 
-    def admin_info(self):
+    def _mc_admin_info(self):
         rr = self._execute_cmd("admin_info",
                                ["admin", "info", self._alias])
         return rr
 
-    def admin_policy_set(self, access_key, policy):
+    def _mc_admin_policy_set(self, access_key, policy):
         rr = self._execute_cmd("admin_policy_set",
                                ["admin", "policy", "set", self._alias,
                                 policy, f"user={access_key}"])
         return rr
 
-    def admin_service_stop(self):
+    def _mc_admin_service_stop(self):
         rr = self._execute_cmd("admin_service_stop",
                                ["admin", "service", "stop", self._alias])
         return rr
 
-    def admin_user_add(self, access_key, secret_access_key):
+    def _mc_admin_user_add(self, access_key, secret_access_key):
         rr = self._execute_cmd("admin_user_add",
                                ["admin", "user", "add", self._alias,
                                 access_key, secret_access_key])
         return rr
 
-    def admin_user_disable(self, access_key):
+    def _mc_admin_user_disable(self, access_key):
         rr = self._execute_cmd("admin_user_disable",
                                ["admin", "user", "disable", self._alias,
                                 access_key])
         return rr
 
-    def admin_user_enable(self, access_key):
+    def _mc_admin_user_enable(self, access_key):
         rr = self._execute_cmd("admin_user_enable",
                                ["admin", "user", "enable", self._alias,
                                 access_key])
         return rr
 
-    def admin_user_list(self):
+    def _mc_admin_user_list(self):
         rr = self._execute_cmd("admin_user_list",
                                ["admin", "user", "list", self._alias])
         return rr
 
-    def admin_user_remove(self, access_key):
+    def _mc_admin_user_remove(self, access_key):
         assert isinstance(access_key, str)
         rr = self._execute_cmd("admin_user_remove",
                                ["admin", "user", "remove", self._alias,
                                 access_key])
         return rr
 
-    def list_buckets(self):
+    def _mc_list_buckets(self):
         rr = self._execute_cmd("list_buckets",
                                ["ls", f"{self._alias}"])
         return rr
 
-    def make_bucket(self, bucket):
+    def _mc_make_bucket(self, bucket):
         rr = self._execute_cmd("make_bucket",
                                ["mb", f"{self._alias}/{bucket}"])
         return rr
 
-    def remove_bucket(self, bucket):
-        # NEVER USE THIS; The MC-rb command removes the bucket contents.
+    def _mc_remove_bucket(self, bucket):
+        # NEVER USE THIS; THE MC-RB COMMAND REMOVES BUCKET CONTENTS.
         assert False
         rr = self._execute_cmd("remove_bucket",
                                ["rb", f"{self._alias}/{bucket}"])
         return rr
 
-    def policy_set(self, bucket, policy):
+    def _mc_policy_set(self, bucket, policy):
         rr = self._execute_cmd("policy_set",
                                ["policy", "set", policy,
                                 f"{self._alias}/{bucket}"])
@@ -265,14 +292,14 @@ class Mc():
                 errs = str(errs_, "latin-1")
                 p_status = p.poll()
                 if (self._verbose):
-                    logger.debug(f"Running MC command: cmd={cmd};"
+                    logger.debug(f"MC command done: cmd={cmd};"
                                  f" status={p_status},"
                                  f" outs=({outs}), errs=({errs})")
                     pass
                 if p_status is None:
-                    logger.debug(f"Running MC command failed: cmd={cmd};"
-                                 f" command does not finish.")
-                    rr = [_make_mc_error(f"Unfinished MC: ({outs})")]
+                    logger.error(f"MC command unfinished: cmd={cmd};"
+                                 f" outs=({outs}), errs=({errs})")
+                    rr = [_make_mc_error(f"MC command unfinished: ({outs})")]
                     return rr
                 try:
                     ss = outs.split("\n")
@@ -281,11 +308,11 @@ class Mc():
                     (ok, rr) = _simplify_messages_in_mc_error(ee)
                     if ok:
                         if (self._verbose):
-                            logger.debug(f"Running MC command OK: cmd={cmd}")
+                            logger.debug(f"MC command OK: cmd={cmd}")
                         else:
-                            logger.debug(f"Running MC command OK: cmd={name}")
+                            logger.debug(f"MC command OK: cmd={name}")
                     else:
-                        logger.debug(f"Running MC command failed: cmd={cmd};"
+                        logger.debug(f"MC command failed: cmd={cmd};"
                                      f" error={rr}")
                         pass
                     return rr
@@ -299,25 +326,78 @@ class Mc():
         except Exception as e:
             m = rephrase_exception_message(e)
             logger.error(f"Popen failed: cmd={cmd}; exception=({m})")
-            rr = [_make_mc_error(f"Executing MC command failed:"
-                                f" exception=({m})")]
+            rr = [_make_mc_error(f"MC command failed:"
+                                 f" exception=({m})")]
             return rr
         pass
 
     # MC COMMAND UTILITIES (Combinations).
 
-    def make_bucket_with_policy(self, name, policy):
-        # Making a bucket may cause an error.  It is because Lens3
-        # never removes buckets at all, but it just makes inaccessible.
+    def get_minio_info(self):
+        rr = self._mc_admin_info()
+        assert_mc_success(rr, "mc.mc_admin_info")
+        pass
+
+    def stop_minio(self):
+        rr = self._mc_admin_service_stop()
+        assert_mc_success(rr, "mc.mc_admin_service_stop")
+        pass
+
+    def make_bucket(self, bucket, policy):
+        """Makes a bucket in MinIO.  Making a bucket may cause an error.  It
+        is because Lens3 never removes buckets but makes it
+        inaccessible.
+        """
         assert self._alias is not None
         try:
-            r = self.make_bucket(name)
-            assert_mc_success(r, "mc.make_bucket")
+            r = self._mc_make_bucket(bucket)
+            assert_mc_success(r, "mc.mc_make_bucket")
         except Exception:
             pass
-        r = self.policy_set(name, policy)
-        assert_mc_success(r, "mc.policy_set")
+        r = self._mc_policy_set(bucket, policy)
+        assert_mc_success(r, "mc.mc_policy_set")
         pass
+
+    def set_bucket_policy(self, bucket, policy):
+        r = self._mc_policy_set(bucket, policy)
+        assert_mc_success(r, "mc.mc_policy_set")
+        pass
+
+
+    def delete_bucket(self, bucket):
+        """Makes a bucket inaccessible."""
+        r = self._mc_policy_set(bucket, "none")
+        assert_mc_success(r, "mc.mc_policy_set")
+        pass
+
+    def list_buckets(self):
+        bkts0 = self._mc_list_buckets()
+        assert_mc_success(bkts0, "mc.mc_list_buckets")
+        bkts = [intern_mc_list_entry(e) for e in bkts0]
+        return bkts
+
+    def make_secret(self, key, secret, policy):
+        """Makes an access key in MinIO.  Note it does not rollback on a
+        failure in the middle.
+        """
+        r = self._mc_admin_user_add(key, secret)
+        assert_mc_success(r, "mc.mc_admin_user_add")
+        r = self._mc_admin_policy_set(key, policy)
+        assert_mc_success(r, "mc.mc_admin_policy_set")
+        r = self._mc_admin_user_enable(key)
+        assert_mc_success(r, "mc.mc_admin_user_enable")
+        pass
+
+    def delete_secret(self, key):
+        r = self._mc_admin_user_remove(key)
+        assert_mc_success(r, "mc.mc_admin_user_remove")
+        pass
+
+    def list_secrets(self):
+        keys0 = self._mc_admin_user_list()
+        assert_mc_success(keys0, "mc.mc_admin_user_list")
+        keys = [intern_mc_user_info(e) for e in keys0]
+        return keys
 
     def clean_minio_setting(self, pool_id):
         """Tries to delete all access-keys and set the "none"-policy to all
@@ -326,9 +406,7 @@ class Mc():
         failure_message = f"Cleaning MinIO state for pool={pool_id}"
         # Delete access-keys.
         try:
-            keys0 = self.admin_user_list()
-            assert_mc_success(keys0, "mc.admin_user_list")
-            keys = [intern_mc_user_info(e) for e in keys0]
+            keys = self.list_secrets()
         except Exception as e:
             m = rephrase_exception_message(e)
             logger.info(failure_message
@@ -337,8 +415,7 @@ class Mc():
             pass
         for k in keys:
             try:
-                r = self.admin_user_remove(k.get("access_key"))
-                assert_mc_success(r, "mc.admin_user_remove")
+                self.delete_secret(k["access_key"])
             except Exception as e:
                 m = rephrase_exception_message(e)
                 logger.info(failure_message
@@ -347,9 +424,7 @@ class Mc():
             pass
         # Set none-policy to buckets.
         try:
-            bkts0 = self.list_buckets()
-            assert_mc_success(bkts0, "mc.list_buckets")
-            bkts = [intern_mc_list_entry(e) for e in bkts0]
+            bkts = self.list_buckets()
         except Exception as e:
             m = rephrase_exception_message(e)
             logger.info(failure_message
@@ -358,8 +433,7 @@ class Mc():
             pass
         for b in bkts:
             try:
-                r = self.policy_set(b.get("name"), "none")
-                assert_mc_success(r, "mc.policy_set")
+                self.delete_bucket(b["name"])
             except Exception as e:
                 m = rephrase_exception_message(e)
                 logger.info(failure_message
@@ -379,10 +453,8 @@ class Mc():
         does not return a policy setting.
         """
         bkts = [self._drop_auxiliary_bucket_slots(b) for b in bkts]
-        recorded = self.list_buckets()
-        assert_mc_success(recorded, "mc.list_buckets")
-        recorded = [intern_mc_list_entry(b) for b in recorded]
-        recorded = [self._drop_auxiliary_bucket_slots(b) for b in recorded]
+        recorded1 = self.list_buckets()
+        recorded = [self._drop_auxiliary_bucket_slots(b) for b in recorded1]
         (ll, pp, rr) = list_diff3(recorded, lambda b: b.get("name"),
                                   bkts, lambda b: b.get("name"))
         dels = ll
@@ -400,8 +472,7 @@ class Mc():
         failure_message = f"Updating MinIO state for pool={pool_id}"
         for b in dels:
             try:
-                r = self.policy_set(b["name"], "none")
-                assert_mc_success(r, "mc.policy_set")
+                self.delete_bucket(b["name"])
             except Exception as e:
                 m = rephrase_exception_message(e)
                 logger.info(failure_message
@@ -410,10 +481,7 @@ class Mc():
             pass
         for b in adds:
             try:
-                r = self.make_bucket(b["name"])
-                assert_mc_success(r, "mc.make_bucket")
-                r = self.policy_set(b["name"], b["bkt_policy"])
-                assert_mc_success(r, "mc.policy_set")
+                self.make_bucket(b["name"], b["bkt_policy"])
             except Exception as e:
                 m = rephrase_exception_message(e)
                 logger.info(failure_message
@@ -422,8 +490,7 @@ class Mc():
             pass
         for b in mods:
             try:
-                r = self.policy_set(b["name"], b["bkt_policy"])
-                assert_mc_success(r, "mc.policy_set")
+                self.set_bucket_policy(b["name"], b["bkt_policy"])
             except Exception as e:
                 m = rephrase_exception_message(e)
                 logger.info(failure_message
@@ -448,10 +515,8 @@ class Mc():
         # MinIO side.
 
         keys = [self._drop_auxiliary_key_slots(k) for k in keys]
-        recorded = self.admin_user_list()
-        assert_mc_success(recorded, "mc.admin_user_list")
-        recorded = [intern_mc_user_info(k) for k in recorded]
-        recorded = [self._drop_auxiliary_key_slots(k) for k in recorded]
+        recorded1 = self.list_secrets()
+        recorded = [self._drop_auxiliary_key_slots(k) for k in recorded1]
         (ll, pp, rr) = list_diff3(recorded, lambda k: k.get("access_key"),
                                   keys, lambda k: k.get("access_key"))
         mm = [n for (o, n) in pp if o != n]
@@ -468,8 +533,7 @@ class Mc():
         failure_message = f"Updating MinIO state for pool={pool_id}"
         for k in dels:
             try:
-                r = self.admin_user_remove(k["access_key"])
-                assert_mc_success(r, "mc.admin_user_remove")
+                self.delete_secret(k["access_key"])
             except Exception as e:
                 m = rephrase_exception_message(e)
                 logger.info(failure_message
@@ -477,13 +541,11 @@ class Mc():
                 pass
             pass
         for k in adds:
+            key = k["access_key"]
+            secret = k["secret_key"]
+            policy = k["key_policy"]
             try:
-                r = self.admin_user_add(k["access_key"], k["secret_key"])
-                assert_mc_success(r, "mc.admin_user_add")
-                r = self.admin_policy_set(k["access_key"], k["key_policy"])
-                assert_mc_success(r, "mc.admin_policy_set")
-                r = self.admin_user_enable(k["access_key"])
-                assert_mc_success(r, "mc.admin_user_enable")
+                self.make_secret(key, secret, policy)
             except Exception as e:
                 m = rephrase_exception_message(e)
                 logger.info(failure_message
@@ -492,34 +554,4 @@ class Mc():
             pass
         pass
 
-# # UNSED -- FOR FUTURE DEVELOPER --
-# # THIS CODE IS USED TO EXECUTE MC, WITHOUT WAITING FOR FINISHING
-# # EXECUTION. MANAGER DOES NOT RECEIVE FINISH STATUS FROM MC AND
-# #ASK INIT PROCESS TO WAIT ZOMBIE PROCESS OF MC.
-# def unwait(cmd, env):
-#     try:
-#         pid = os.fork()
-#         if pid != 0:
-#             (pid, status) = os.waitpid(pid, 0)
-#             return status
-#     except OSError as e:
-#         logger.error(f"fork: {os.strerror(e.errno)}")
-#         logger.exception(e)
-#         return ERROR_FORK_FORK
-#
-#     try:
-#         pid = os.fork()
-#         if pid != 0:
-#             sys.exit(0)
-#     except OSError as e:
-#         logger.error(f"fork: {os.strerror(e.errno)}")
-#         logger.exception(e)
-#         sys.exit(ERROR_EXIT_FORK)
-#
-#     try:
-#         with Popen(cmd, stdin=PIPE, stdout=PIPE, stderr=PIPE, env=env) as p:
-#             (out, err) = p.communicate()
-#             status = p.wait()
-#             logger.debug(f"status: {status} out: {out} err: {err}")
-#     finally:
-#         sys.exit(0)
+    pass

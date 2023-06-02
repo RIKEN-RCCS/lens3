@@ -337,7 +337,7 @@ class Control_Api():
         password = minioproc["password"]
         mc = Mc(self._bin_mc, self._env_mc, ep, pool_id, self._mc_timeout)
         try:
-            mc.alias_set(admin, password)
+            mc.mc_alias_set(admin, password)
             return mc
         except Exception:
             mc.__exit__(None, None, None)
@@ -765,7 +765,7 @@ class Control_Api():
             mc = self._make_mc_for_pool(pool_id)
             assert mc is not None
             with mc:
-                mc.make_bucket_with_policy(bucket, bkt_policy)
+                mc.make_bucket(bucket, bkt_policy)
                 pass
         except Exception:
             self.tables.delete_bucket(bucket)
@@ -786,9 +786,7 @@ class Control_Api():
             mc = self._make_mc_for_pool(pool_id)
             assert mc is not None
             with mc:
-                bkts0 = mc.list_buckets()
-                assert_mc_success(bkts0, "mc.list_buckets")
-                bkts = [intern_mc_list_entry(e) for e in bkts0]
+                bkts = mc.list_buckets()
                 entry = [d for d in bkts
                          if d.get("name") == bucket]
                 if entry == []:
@@ -796,8 +794,7 @@ class Control_Api():
                                  f" in deleting a bucket:"
                                  f" pool={pool_id}, bucket={bucket}")
                 else:
-                    r = mc.policy_set(bucket, "none")
-                    assert_mc_success(r, "mc.policy_set")
+                    mc.delete_bucket(bucket)
                     pass
                 pass
         except Exception as e:
@@ -828,13 +825,8 @@ class Control_Api():
             mc = self._make_mc_for_pool(pool_id)
             assert mc is not None
             with mc:
-                r = mc.admin_user_add(key, secret)
-                assert_mc_success(r, "mc.admin_user_add")
-                r = mc.admin_policy_set(key, key_policy)
-                assert_mc_success(r, "mc.admin_policy_set")
-                r = mc.admin_user_enable(key)
-                assert_mc_success(r, "mc.admin_user_enable")
-            pass
+                mc.make_secret(key, secret, key_policy)
+                pass
         except Exception:
             self.tables.delete_xid_unconditionally("akey", key)
             raise
@@ -855,9 +847,7 @@ class Control_Api():
             mc = self._make_mc_for_pool(pool_id)
             assert mc is not None
             with mc:
-                keys0 = mc.admin_user_list()
-                assert_mc_success(keys0, "mc.admin_user_list")
-                keys = [intern_mc_user_info(e) for e in keys0]
+                keys = mc.list_secrets()
                 entry = [d for d in keys
                          if d.get("access_key") == access_key]
                 if entry == []:
@@ -865,8 +855,7 @@ class Control_Api():
                                  f" in deleting an access-key:"
                                  f" pool={pool_id}, access-key={access_key}")
                 else:
-                    r = mc.admin_user_remove(access_key)
-                    assert_mc_success(r, "mc.admin_user_remove")
+                    mc.delete_secret(access_key)
                     pass
                 pass
             self.tables.delete_xid_unconditionally("akey", access_key)

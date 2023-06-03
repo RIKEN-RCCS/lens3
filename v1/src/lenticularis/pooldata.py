@@ -16,6 +16,7 @@ from lenticularis.utility import tracing
 
 
 class Api_Error(Exception):
+
     def __init__(self, code, *args):
         self.code = code
         super().__init__(*args)

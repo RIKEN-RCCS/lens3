@@ -29,14 +29,10 @@ typestubs::
 	pyright --createstub fastapi_csrf_protect.exceptions
 
 typestubs0::
-	pyright --createstub lenticularis
-	pyright --createstub lenticularis.api
-	pyright --createstub lenticularis.dbase
-	pyright --createstub lenticularis.readconf
-	pyright --createstub lenticularis.utility
+	pyright --createstub lenticularis.mc
 
 tags::
-	ctags *.py webui/scripts/*.js
+	ctags *.py ui2/*.js
 
 clean::
 	rm -f tags

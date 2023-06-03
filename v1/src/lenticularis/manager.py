@@ -18,7 +18,7 @@ import contextlib
 import json
 from urllib.request import urlopen
 from urllib.error import HTTPError, URLError
-from lenticularis.mc import Mc, assert_mc_success
+from lenticularis.mc import Mc
 from lenticularis.table import get_table
 from lenticularis.table import read_redis_conf
 from lenticularis.table import get_conf
@@ -543,7 +543,7 @@ class Manager():
                 bkts = gather_buckets(self.tables, pool_id)
                 self._mc.setup_minio_on_buckets(bkts)
                 keys = gather_keys(self.tables, pool_id)
-                self._mc.setup_minio_on_keys(keys)
+                self._mc.setup_minio_on_secrets(keys)
                 alarm(0)
                 self._alarm_section = None
             except Alarmed as e:

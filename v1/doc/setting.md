@@ -321,9 +321,16 @@ Note: Starting Redis will fail when the file owner of
 ## Load Settings in Redis
 
 Lens3-Mux and Lens3-Api load configurations from Redis.  This section
-prepares for it.  See [mux-conf-yaml.md](mux-conf-yaml.md) and
-[api-conf-yaml.md](api-conf-yaml.md) for descriptions of the fields.
-It is better to run `lens3-admin` on the same node running Lens3-Api.
+prepares for it.  It is better to run `lens3-admin` on the same host
+running Lens3-Api.  See the following lists for descriptions of the
+fields of the configurations.
+
+* [mux-conf-yaml.md](mux-conf-yaml.md)
+* [api-conf-yaml.md](api-conf-yaml.md)
+
+Make the configurations in files, then load them in Redis.  Note that
+`lens3-admin` needs its configuration file containing connection
+information to Redis.
 
 * Prepare the Lens3-Mux/Api configurations
   * Copy and edit the configuration files

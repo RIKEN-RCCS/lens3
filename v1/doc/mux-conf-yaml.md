@@ -48,6 +48,7 @@ multiplexer:
     forwarding_timeout: 60
     probe_access_timeout: 60
     bad_response_delay: 1
+    busy_suspension_time: 180
     # mux_node_name: ""
 ```
 
@@ -69,6 +70,10 @@ multiplexer:
 * __bad_response_delay__ is an added wait when an error response is to
   be returned.  It is to avoid denial attacks.
 
+* __busy_suspension_time__ is an interval waited in by a suspended
+  pool before retrying to start MinIO.  It can tentatively be 1/10 of
+  the minio_awake_duration, if there is no good value.
+
 * __mux_node_name__ is optional.  It is used as a host name on which
   Lens3-Mux is running.  It needs to be set when a host name that the
   system returns is not appropriate.
@@ -81,7 +86,7 @@ minio_manager:
     port_min: 9000
     port_max: 9999
     minio_awake_duration: 1800
-    minio_setup_at_restart: true
+    minio_setup_at_start: true
     heartbeat_interval: 61
     heartbeat_miss_tolerance: 3
     heartbeat_timeout: 30
@@ -99,9 +104,9 @@ minio_manager:
 * __minio_awake_duration__ specifies a duration until an MinIO
   instance will be shutdown.
 
-* __minio_setup_at_restart__ specifies to reinitialized an MinIO
-  instance.  If it is true, bucket settings are reinitialized as to
-  the states known to Lens3 service.
+* __minio_setup_at_start__ specifies to reinitialize an MinIO
+  instance.  If it is true, access-key and bucket settings are reset
+  to the state known to the Lens3 service.
 
 * __heartbeat_interval__ and __heartbeat_miss_tolerance__ specify an
   interval and a count of a heartbeat failure.

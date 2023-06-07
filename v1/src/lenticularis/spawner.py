@@ -1,4 +1,4 @@
-"""A starter of a Manager of a MinIO."""
+"""A starter of a Manager of MinIO."""
 
 # Copyright (c) 2022-2023 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
@@ -14,7 +14,7 @@ from lenticularis.utility import tracing
 
 
 class Spawner():
-    """A starter of a Manager of a MinIO."""
+    """A starter of a Manager of MinIO."""
 
     _manager_command = "lenticularis.manager"
 
@@ -31,19 +31,19 @@ class Spawner():
         pass
 
     def start_spawner(self, pool_id):
-        """Runs a MinIO on a local host.  It returns 200 and an endpoint, or
-        500 on failure.
+        """Runs MinIO on a local host.  It returns an endpoint or None on
+        failure.
         """
         ok = self._start_manager(pool_id)
         if not ok:
-            return (500, None)
+            return None
         ep = self.tables.get_minio_ep(pool_id)
         if ep is None:
-            return (500, None)
-        return (200, ep)
+            return None
+        return ep
 
     def _start_manager(self, pool_id):
-        """Starts a MinIO under a manager process.  It waits for a manager to
+        """Starts MinIO under a manager process.  It waits for a manager to
         write a message host:port on stdout.
         """
         cmd = [self.executable, "-m", self._manager_command]

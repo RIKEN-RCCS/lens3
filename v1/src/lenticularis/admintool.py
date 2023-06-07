@@ -150,7 +150,7 @@ def _delete_user(tables, uid):
 def _enable_disable_user(tables, uid, enabled):
     u = tables.get_user(uid)
     if u is None:
-        raise Api_Error(500, f"Bad user (unknown): {uid}")
+        raise Api_Error(404, f"Bad user (unknown): {uid}")
     u["enabled"] = enabled
     tables.add_user(u)
     pass
@@ -255,9 +255,7 @@ def _determine_expiration_time(maxexpiry):
 
 
 class Command():
-    """Administration commands.  Api_Error is used as a placeholder and
-    its status code is 500 always.
-    """
+    """Administration commands."""
 
     def __init__(self, redis, args, rest):
         self._redis = redis
@@ -433,7 +431,7 @@ class Command():
             pass
         # MinIO.
         eps = self._tables.list_minio_ep()
-        eps = [{ep: {"pool": pid}} for (pid, ep) in eps]
+        # eps = [{ep: {"pool": pid}} for (pid, ep) in eps]
         print("---")
         print("# MinIO")
         for o in eps:

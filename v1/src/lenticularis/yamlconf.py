@@ -114,6 +114,7 @@ def _mux_conf_schema():
             "forwarding_timeout": {"type": "number"},
             "probe_access_timeout": {"type": "number"},
             "bad_response_delay": {"type": "number"},
+            "busy_suspension_time": {"type": "number"},
             "mux_node_name": {"type": "string"},
         },
         "required": [
@@ -123,6 +124,7 @@ def _mux_conf_schema():
             "forwarding_timeout",
             "probe_access_timeout",
             "bad_response_delay",
+            "busy_suspension_time",
         ],
         "additionalProperties": False,
     }
@@ -133,7 +135,7 @@ def _mux_conf_schema():
             "port_min": {"type": "number"},
             "port_max": {"type": "number"},
             "minio_awake_duration": {"type": "number"},
-            "minio_setup_at_restart": {"type": "boolean"},
+            "minio_setup_at_start": {"type": "boolean"},
             "heartbeat_interval": {"type": "number"},
             "heartbeat_miss_tolerance": {"type": "number"},
             "heartbeat_timeout": {"type": "number"},
@@ -147,7 +149,7 @@ def _mux_conf_schema():
             "port_min",
             "port_max",
             "minio_awake_duration",
-            "minio_setup_at_restart",
+            "minio_setup_at_start",
             "heartbeat_interval",
             "heartbeat_miss_tolerance",
             "heartbeat_timeout",

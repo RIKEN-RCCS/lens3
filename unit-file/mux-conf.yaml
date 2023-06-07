@@ -21,6 +21,7 @@ multiplexer:
     forwarding_timeout: 60
     probe_access_timeout: 60
     bad_response_delay: 1
+    busy_suspension_time: 180
     mux_node_name: ""
 
 minio_manager:
@@ -28,7 +29,7 @@ minio_manager:
     port_min: 9000
     port_max: 9999
     minio_awake_duration: 1800
-    minio_setup_at_restart: true
+    minio_setup_at_start: true
     heartbeat_interval: 61
     heartbeat_miss_tolerance: 3
     heartbeat_timeout: 30

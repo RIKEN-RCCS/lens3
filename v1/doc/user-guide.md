@@ -109,16 +109,18 @@ state reflecting the state of a MinIO instance.  But, the state does
 not include the process status of an instance.
 
 * Bucket-pool state is:
-  * __None__ quickly moves to the INITIAL state.
-  * __INITIAL__ indicates some setup is not performed yet on a MinIO
-    instance (a transient state).
+  * __None__ quickly moves to the __INITIAL__ state.
+  * __INITIAL__ indicates a setup is not performed on a MinIO
+    instance.
   * __READY__ indicates a service is ready, a setup for servicing is
     done.  It does not mean a MinIO instance is running.
-  * __DISABLED__ indicates a pool is temporarily unusable.  It may
-    transition between "READY" and "DISABLED" by actions of a user or
-    an administrator.  The causes of a transition include an
-    expiry of a pool, disabling a user account, or making a pool
-    offline.
+  * __SUSPENED__ indicates a pool is temporarily unusable by server
+    busyness.  It needs several minutes for a cease of the
+    condition.
+  * __DISABLED__ indicates a pool is set unusable.  A transition
+    between __READY__ and __DISABLED__ is by actions by an
+    administrator.  The causes of a transition include an expiry of a
+    pool, disabling a user account, or making a pool offline.
   * __INOPERABLE__ indicates an error state and a pool is permanently
     unusable.  Mainly, it has failed to run a MinIO instance.  This
     pool cannot be used and should be removed.

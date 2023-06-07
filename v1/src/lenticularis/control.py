@@ -1,21 +1,20 @@
-"""Lens3-Api implementation. This implements pool mangement of
-Lens3-Api.
+"""Lens3-Api implementation.  This implements pool mangement API.
 """
 
 # Copyright (c) 2022-2023 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
-import inspect
 import os
-import sys
 import time
 import posixpath
-import traceback
+import inspect
 import lenticularis
 from lenticularis.mc import Mc
 from lenticularis.table import get_table
-from lenticularis.pooldata import Api_Error
 from lenticularis.pooldata import Pool_State
+from lenticularis.pooldata import Api_Error
+from lenticularis.pooldata import Pool_State, Pool_Reason
+from lenticularis.pooldata import set_pool_state
 from lenticularis.pooldata import gather_pool_desc
 from lenticularis.pooldata import check_user_naming
 from lenticularis.pooldata import access_mux
@@ -36,6 +35,21 @@ from lenticularis.utility import pick_one
 from lenticularis.utility import host_port
 from lenticularis.utility import rephrase_exception_message
 from lenticularis.utility import logger
+
+
+def _grant_access(tables, user_id, pool_id, check_pool_state):
+    """Checks an access to a pool is granted.  It does not check the
+    pool-state on deleting a pool.
+    """
+    ensure_mux_is_running(tables)
+    ensure_user_is_authorized(tables, user_id)
+    if pool_id is not None:
+        ensure_pool_owner(tables, pool_id, user_id)
+        pass
+    if pool_id is not None and check_pool_state:
+        ensure_pool_state(tables, pool_id, True)
+        pass
+    pass
 
 
 def erase_minio_ep(tables, pool_id):
@@ -165,7 +179,7 @@ def _make_new_pool(tables, path, user_id, owner_gid, expiration):
 
 
 class Control_Api():
-    """Setting Web-API."""
+    """Management Web-API."""
 
     def __init__(self, api_conf, redis):
         self._api_conf = api_conf
@@ -202,7 +216,7 @@ class Control_Api():
         self.tables = get_table(redis)
         pass
 
-    def _ensure_make_pool_arguments(self, user_id, pooldesc):
+    def _check_make_pool_arguments(self, user_id, pooldesc):
         """Checks the entires of buckets_directory and owner_gid.  It
         normalizes (in the posix sense) the path of a
         buckets-directory.
@@ -260,15 +274,15 @@ class Control_Api():
             return True
         pass
 
-    def _set_pool_state(self, pool_id, state, reason):
-        (o, _) = self.tables.get_pool_state(pool_id)
-        logger.debug(f"Pool-state change pool={pool_id}: {o} to {state}")
-        self.tables.set_pool_state(pool_id, state, reason)
-        pass
+    # def _set_pool_state(self, pool_id, state, reason):
+    #     (o, _, _) = self.tables.get_pool_state(pool_id)
+    #     logger.debug(f"Pool-state change pool={pool_id}: {o} to {state}")
+    #     self.tables.set_pool_state(pool_id, state, reason)
+    #     pass
 
-    def _get_pool_state(self, pool_id):
-        (poolstate, _) = self.tables.get_pool_state(pool_id)
-        return poolstate
+    # def _get_pool_state(self, pool_id):
+    #     (state, _, _) = self.tables.get_pool_state(pool_id)
+    #     return state
 
     def _determine_expiration_time(self):
         now = int(time.time())
@@ -281,13 +295,13 @@ class Control_Api():
                 and (expiration <= (now + self._max_pool_expiry)))
 
     def access_mux_for_pool(self, pool_id):
-        """Tries to access a Mux from Api for a pool.  It accesses an
-        arbitrary Mux when no MinIO is running, which will start a new
-        MinIO.
+        """Tries to access a Mux from Api for a pool.  It will start MinIO as
+        a result.  It accesses an arbitrary Mux when no MinIO is
+        running, which will start a new MinIO.
         """
         pooldesc = self.tables.get_pool(pool_id)
         if pooldesc is None:
-            raise Api_Error(500, (f"Pool removed: pool={pool_id}"))
+            raise Api_Error(404, (f"Pool removed: pool={pool_id}"))
 
         procdesc = self.tables.get_minio_proc(pool_id)
         if procdesc is not None:
@@ -318,15 +332,15 @@ class Control_Api():
         return status
 
     def _make_mc_for_pool(self, pool_id):
-        """Returns an MC command instance.  It accesses a Mux to start a
-        MinIO, or to keep it running for a while even when a MinIO is
-        running.
+        """Returns an MC command instance.  It first accesses a Mux to start
+        MinIO or to keep it running for a while.  A failure to start
+        MinIO returns code=503.
         """
         logger.debug(f"Access a Mux to start Minio for pool={pool_id}.")
         status = self.access_mux_for_pool(pool_id)
         minioproc = self.tables.get_minio_proc(pool_id)
         if minioproc is None:
-            raise Api_Error(500, (f"Cannot start MinIO for pool={pool_id}:"
+            raise Api_Error(503, (f"Cannot start MinIO for pool={pool_id}:"
                                   f" status={status}"))
         else:
             pass
@@ -551,8 +565,7 @@ class Control_Api():
     # API implementation.
 
     def _api_get_user_info(self, user_id):
-        ensure_mux_is_running(self.tables)
-        ensure_user_is_authorized(self.tables, user_id)
+        _grant_access(self.tables, user_id, None, False)
         u = self.tables.get_user(user_id)
         assert u is not None
         groups = u.get("groups")
@@ -569,9 +582,8 @@ class Control_Api():
     # Pools handling implementation.
 
     def _api_make_pool(self, user_id, makepool):
-        ensure_mux_is_running(self.tables)
-        ensure_user_is_authorized(self.tables, user_id)
-        self._ensure_make_pool_arguments(user_id, makepool)
+        _grant_access(self.tables, user_id, None, False)
+        self._check_make_pool_arguments(user_id, makepool)
         path = makepool["buckets_directory"]
         owner_gid = makepool["owner_gid"]
         pool_id = self._do_make_pool(path, user_id, owner_gid)
@@ -596,17 +608,21 @@ class Control_Api():
         return pool_id
 
     def _activate_pool(self, pool_id, path):
-        """Starts a Mux once.  Note that it is not an error, even if it fails.
-        It is an error of Mux and is indicated in the MinIO state.
+        """Starts MinIO once, by accessing a Mux.  Note that failing to start
+        is normal, and it does not undo creating a pool.  A failure of
+        accessing a Mux is indicated in the pool-state.
         """
         assert pool_id is not None
+        tables = self.tables
         try:
-            self._set_pool_state(pool_id, Pool_State.INITIAL, "-")
-            self.tables.set_access_timestamp(pool_id)
+            # self._set_pool_state(pool_id, Pool_State.INITIAL, "-")
+            # self.tables.set_access_timestamp(pool_id)
+            reason = Pool_Reason.NORMAL
+            set_pool_state(tables, pool_id, Pool_State.INITIAL, reason)
             status = self.access_mux_for_pool(pool_id)
-            if status == 200:
-                self._set_pool_state(pool_id, Pool_State.READY, "-")
-                pass
+            # if status == 200:
+            #     self._set_pool_state(pool_id, Pool_State.READY, "-")
+            #    pass
         except Exception:
             # self.tables.delete_buckets_directory(path)
             # self.tables.delete_pool(pool_id)
@@ -615,18 +631,16 @@ class Control_Api():
             raise
         else:
             pass
-        poolstate = self._get_pool_state(pool_id)
-        if poolstate not in {Pool_State.READY}:
-            logger.error(f"Initialization error: pool-state is not ready:"
-                         f" {poolstate}")
+        # state = self._get_pool_state(pool_id)
+        (state, _, _) = tables.get_pool_state(pool_id)
+        if state not in {Pool_State.READY}:
+            logger.error(f"Initialization failed: pool-state is not ready:"
+                         f" {state}")
             pass
         pass
 
     def _api_delete_pool(self, user_id, pool_id):
-        ensure_mux_is_running(self.tables)
-        ensure_user_is_authorized(self.tables, user_id)
-        ensure_pool_owner(self.tables, pool_id, user_id)
-        # ensure_pool_state(self.tables, pool_id)
+        _grant_access(self.tables, user_id, pool_id, False)
         ok = self._do_delete_pool(pool_id)
         return (200, None, None)
 
@@ -637,7 +651,7 @@ class Control_Api():
         return True
 
     def _clean_minio(self, pool_id):
-        # Cleans MinIO status.
+        """Cleans MinIO status."""
         try:
             mc = self._make_mc_for_pool(pool_id)
             assert mc is not None
@@ -654,7 +668,7 @@ class Control_Api():
         pass
 
     def erase_minio_ep__(self, pool_id):
-        # Clears a MinIO endpoint.
+        """Clears a MinIO endpoint."""
         try:
             self.tables.delete_minio_ep(pool_id)
         except Exception as e:
@@ -724,8 +738,7 @@ class Control_Api():
         pass
 
     def _api_list_pools(self, user_id, pool_id):
-        ensure_mux_is_running(self.tables)
-        ensure_user_is_authorized(self.tables, user_id)
+        _grant_access(self.tables, user_id, None, False)
         pool_list = []
         pools = list_user_pools(self.tables, user_id, pool_id)
         for pid in pools:
@@ -743,10 +756,7 @@ class Control_Api():
     # Buckets handling implementation.
 
     def _api_make_bucket(self, user_id, pool_id, bucket, policy):
-        ensure_mux_is_running(self.tables)
-        ensure_user_is_authorized(self.tables, user_id)
-        ensure_pool_owner(self.tables, pool_id, user_id)
-        ensure_pool_state(self.tables, pool_id)
+        _grant_access(self.tables, user_id, pool_id, True)
         self._do_make_bucket(pool_id, bucket, policy)
         pooldesc = gather_pool_desc(self.tables, pool_id)
         return (200, None, {"pool_desc": pooldesc})
@@ -771,10 +781,7 @@ class Control_Api():
         pass
 
     def _api_delete_bucket(self, user_id, pool_id, bucket):
-        ensure_mux_is_running(self.tables)
-        ensure_user_is_authorized(self.tables, user_id)
-        ensure_pool_owner(self.tables, pool_id, user_id)
-        ensure_pool_state(self.tables, pool_id)
+        _grant_access(self.tables, user_id, pool_id, True)
         ensure_bucket_owner(self.tables, bucket, pool_id)
         pooldesc = self._do_delete_bucket(pool_id, bucket)
         return (200, None, {"pool_desc": pooldesc})
@@ -807,10 +814,7 @@ class Control_Api():
     # Secrets handling implementation.
 
     def _api_make_secret(self, user_id, pool_id, key_policy, expiration):
-        ensure_mux_is_running(self.tables)
-        ensure_user_is_authorized(self.tables, user_id)
-        ensure_pool_owner(self.tables, pool_id, user_id)
-        ensure_pool_state(self.tables, pool_id)
+        _grant_access(self.tables, user_id, pool_id, True)
         secret = generate_secret_key()
         info = {"secret_key": secret, "key_policy": key_policy,
                 "expiration_time": expiration}
@@ -832,10 +836,7 @@ class Control_Api():
         return pooldesc1
 
     def _api_delete_secret(self, user_id, pool_id, access_key):
-        ensure_mux_is_running(self.tables)
-        ensure_user_is_authorized(self.tables, user_id)
-        ensure_pool_owner(self.tables, pool_id, user_id)
-        ensure_pool_state(self.tables, pool_id)
+        _grant_access(self.tables, user_id, pool_id, True)
         ensure_secret_owner_only(self.tables, access_key, pool_id)
         pooldesc = self._do_delete_secret(pool_id, access_key)
         return (200, None, {"pool_desc": pooldesc})

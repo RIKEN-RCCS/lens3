@@ -25,19 +25,6 @@ class Api_Error(Exception):
     pass
 
 
-class Pool_State(enum.Enum):
-    """A pool state."""
-    INITIAL = "initial"
-    READY = "ready"
-    DISABLED = "disabled"
-    INOPERABLE = "inoperable"
-
-    def __str__(self):
-        return self.value
-
-    pass
-
-
 class Key_Policy(enum.Enum):
     """A policy to an access-key; names are taken from MinIO."""
     # (NOT USED YET).
@@ -61,6 +48,51 @@ class Bkt_Policy(enum.Enum):
 
     def __str__(self):
         return self.value
+
+    pass
+
+
+class Pool_State(enum.Enum):
+    """A state of a pool."""
+
+    INITIAL = "initial"
+    READY = "ready"
+    SUSPENDED = "suspended"
+    DISABLED = "disabled"
+    INOPERABLE = "inoperable"
+
+    def __str__(self):
+        return self.value
+
+    pass
+
+
+class Pool_Reason():
+    """Constant strings of reasons of state transitions.  It is not an
+    enum to include other messages from MinIO.  POOL_REMOVED is not
+    stored in the state of a pool.  EXEC_FAILED and SETUP_FAILED will
+    be appended with a further reason.
+    """
+
+    # Pool_State.INITIAL or Pool_State.READY:
+    NORMAL = "-"
+
+    # Pool_State.SUSPENDED:
+    BACKEND_BUSY = "backend busy"
+
+    # Pool_State.DISABLED:
+    POOL_EXPIRED = "pool expired"
+    USER_DISABLED = "user disabled"
+    POOL_OFFLINE = "pool offline"
+
+    # Pool_State.INOPERABLE:
+    POOL_REMOVED = "pool removed"
+    USER_REMOVED = "user removed"
+    EXEC_FAILED = "start failed: "
+    SETUP_FAILED = "initialization failed: "
+    # Other reasons are exceptions and messages from MinIO.
+
+    # POOL_DISABLED_INITIALLY = "pool disabled initially"
 
     pass
 
@@ -151,6 +183,68 @@ def _pool_desc_schema():
     return schema
 
 
+def set_pool_state(tables, pool_id, state, reason):
+    (o, _, _) = tables.get_pool_state(pool_id)
+    logger.debug(f"Manager (pool={pool_id}):"
+                 f" Pool-state change: {o} to {state}")
+    tables.set_pool_state(pool_id, state, reason)
+    pass
+
+
+def update_pool_state(tables, pool_id):
+    """Checks changes of the user and pool setting, and updates the state.
+    This code should be placed at a location where it is called
+    periodically.  It returns a pair of a status and a reason.
+    """
+    desc = tables.get_pool(pool_id)
+    if desc is None:
+        return (Pool_State.INOPERABLE, Pool_Reason.POOL_REMOVED)
+    (state, reason, ts) = tables.get_pool_state(pool_id)
+    if state is None:
+        logger.error(f"Mux (pool={pool_id}): pool-state not found.")
+        return (Pool_State.INOPERABLE, Pool_Reason.POOL_REMOVED)
+    if state in {Pool_State.SUSPENDED, Pool_State.INOPERABLE}:
+        return (state, reason)
+
+    # Check a state transition.
+
+    assert state in {Pool_State.INITIAL, Pool_State.READY, Pool_State.DISABLED}
+    user_id = desc["owner_uid"]
+    u = tables.get_user(user_id)
+    if u is None:
+        reason = Pool_Reason.USER_REMOVED
+        set_pool_state(tables, pool_id, Pool_State.INOPERABLE, reason)
+        return (False, reason)
+    now = int(time.time())
+    enabled = u["enabled"]
+    unexpired = now < desc["expiration_time"]
+    online = desc["online_status"]
+    ok = (enabled and unexpired and online)
+    if ok:
+        if state in {Pool_State.DISABLED}:
+            # It forces to setup MinIO by a transition to initial,
+            # without regard to the minio_setup_at_start value.
+            state = Pool_State.INITIAL
+            reason = Pool_Reason.NORMAL
+            set_pool_state(tables, pool_id, Pool_State.INITIAL, reason)
+            pass
+        return (state, reason)
+    else:
+        reason = Pool_Reason.NORMAL
+        if not enabled:
+            reason = Pool_Reason.USER_DISABLED
+        elif not unexpired:
+            reason = Pool_Reason.POOL_EXPIRED
+        elif not online:
+            reason = Pool_Reason.POOL_OFFLINE
+        else:
+            reason = Pool_Reason.NORMAL
+            pass
+        set_pool_state(tables, pool_id, Pool_State.DISABLED, reason)
+        return (state, reason)
+    pass
+
+
 def ensure_bucket_policy(bucket, desc, access_key):
     """Performs a very weak check that a bucket accepts any public access
        or an access has an access-key.
@@ -181,15 +275,23 @@ def ensure_mux_is_running(tables):
     pass
 
 
-def ensure_pool_state(tables, pool_id):
-    (poolstate, _) = tables.get_pool_state(pool_id)
-    if poolstate != Pool_State.READY:
-        if poolstate == Pool_State.DISABLED:
-            raise Api_Error(403, f"Pool disabled")
-        elif poolstate == Pool_State.INOPERABLE:
-            raise Api_Error(500, f"Pool inoperable")
-        else:
-            raise Api_Error(500, f"Pool is in {poolstate}")
+def ensure_pool_state(tables, pool_id, reject_initial_state):
+    (state, reason) = update_pool_state(tables, pool_id)
+    if state == Pool_State.INITIAL:
+        if reject_initial_state:
+            logger.error(f"Manager (pool={pool_id}) is in initial state.")
+            raise Api_Error(403, f"Pool is in initial state")
+        pass
+    elif state == Pool_State.READY:
+        pass
+    elif state == Pool_State.SUSPENDED:
+        raise Api_Error(503, f"Pool suspended")
+    elif state == Pool_State.DISABLED:
+        raise Api_Error(403, f"Pool disabled")
+    elif state == Pool_State.INOPERABLE:
+        raise Api_Error(403, f"Pool inoperable")
+    else:
+        assert False
         pass
     pass
 
@@ -213,15 +315,16 @@ def ensure_bucket_owner(tables, bucket, pool_id):
 
 
 def ensure_secret_owner(tables, access_key, pool_id):
-    """Checks a key belongs to a given pool, and also checks a key is not
-    expired.  Note that it accepts access-key=None.
+    """Checks an access-key belongs to a given pool, and also checks a key
+    is not expired.  Note that it accepts access-key=None.
     """
     _ensure_secret_owner(tables, access_key, pool_id, True)
     pass
 
 
 def ensure_secret_owner_only(tables, access_key, pool_id):
-    """Checks a key belongs to a given pool regardless of its expiration.
+    """Checks an access-key belongs to a given pool regardless of its
+    expiration.
     """
     _ensure_secret_owner(tables, access_key, pool_id, False)
     pass
@@ -263,11 +366,11 @@ def get_pool_owner_for_messages(tables, pool_id):
     return pooldesc.get("owner_uid")
 
 
-def get_manager_name_for_messages(manager):
-    if manager is None:
-        return "unknown-mux-ep"
-    muxep = host_port(manager["mux_host"], manager["mux_port"])
-    return muxep
+# def get_manager_name_for_messages__(manager):
+#     if manager is None:
+#         return "unknown-mux-ep"
+#     muxep = host_port(manager["mux_host"], manager["mux_port"])
+#     return muxep
 
 
 def tally_manager_expiry(tolerance, interval, timeout):
@@ -365,9 +468,9 @@ def check_pool_is_well_formed(pooldesc, user_):
 
 
 def access_mux(ep, access_key, front_host, front_host_ip, timeout):
-    """Tries to access Mux.  See access_mux_for_pool(), this is used in
-    it.  Mux requires several http headers, especially including
-    "X-REAL-IP".  Check the code of Mux.
+    """Tries to access a Mux.  This is used in access_mux_for_pool().  A
+    Mux requires several http headers, especially including
+    "X-REAL-IP".  Check the code of a Mux.
     """
     proto = "http"
     url = f"{proto}://{ep}/"
@@ -434,8 +537,8 @@ def gather_pool_desc(tables, pool_id):
     #
     # Gather dynamic states.
     #
-    (poolstate, reason) = tables.get_pool_state(pool_id)
-    pooldesc["minio_state"] = str(poolstate)
+    (state, reason, _) = tables.get_pool_state(pool_id)
+    pooldesc["minio_state"] = str(state)
     pooldesc["minio_reason"] = str(reason)
     user_id = pooldesc["owner_uid"]
     u = tables.get_user(user_id)
@@ -514,9 +617,9 @@ def _restore_pool(tables, pooldesc):
     owner_gid = pooldesc["owner_gid"]
     u = tables.get_user(user_id)
     if u is None:
-        raise Api_Error(500, f"Bad user (unknown): {user_id}")
+        raise Api_Error(401, f"Bad user (unknown): {user_id}")
     if owner_gid not in u["groups"]:
-        raise Api_Error(500, f"Bad group for a user: {owner_gid}")
+        raise Api_Error(401, f"Bad group for a user: {owner_gid}")
     #
     # Restore a pool.
     #
@@ -569,6 +672,6 @@ def _restore_pool(tables, pooldesc):
         }
         ok = tables.set_ex_xid(xid, "akey", entry3)
         if not ok:
-            raise Api_Error(500, "Duplicate access-key: {key}")
+            raise Api_Error(400, "Duplicate access-key: {key}")
         pass
     pass

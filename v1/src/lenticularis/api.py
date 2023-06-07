@@ -258,7 +258,7 @@ def _get_ui(ui_dir, file, client, user_id, request):
         return response
     except Exception as e:
         m = rephrase_exception_message(e)
-        code = 500
+        code = status.HTTP_404_NOT_FOUND
         body = {"status": "error", "reason": m}
         logger.error(f"get_ui failed: user={user_id}; exception=({m})",
                      exc_info=True)

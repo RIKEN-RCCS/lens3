@@ -12,7 +12,7 @@ import jsonschema
 import redis
 from redis import Redis
 from lenticularis.yamlconf import redis_json_schema
-from lenticularis.pooldata import Pool_State
+from lenticularis.pooldata import Pool_State, Pool_Reason
 from lenticularis.utility import rephrase_exception_message
 from lenticularis.utility import generate_access_key
 from lenticularis.utility import logger
@@ -535,6 +535,9 @@ class _Storage_Table(Table_Common):
         "pool_name", "owner_uid", "owner_gid", "buckets_directory",
         "probe_key", "online_status", "expiration_time", "modification_time"}
 
+    _pool_state_keys = {
+        "state", "reason", "modification_time"}
+
     def set_pool(self, pool_id, pooldesc):
         assert set(pooldesc.keys()) == self._pool_desc_keys
         key = f"{self._pool_desc_prefix}{pool_id}"
@@ -554,20 +557,31 @@ class _Storage_Table(Table_Common):
         pass
 
     def set_pool_state(self, pool_id, state : Pool_State, reason):
-        key = f"{self._pool_state_prefix}{pool_id}"
         assert reason is not None
-        s = str(state)
-        v = json.dumps((s, reason))
+        now = int(time.time())
+        record = {"state": str(state), "reason": reason,
+                  "modification_time": now}
+        assert set(record.keys()) == self._pool_state_keys
+        key = f"{self._pool_state_prefix}{pool_id}"
+        v = json.dumps(record)
         self.db.set(key, v)
         pass
 
     def get_pool_state(self, pool_id):
         key = f"{self._pool_state_prefix}{pool_id}"
         v = self.db.get(key)
-        (s, reason) = (json.loads(v)
-                       if v is not None else (None, None))
-        state = Pool_State(s) if s is not None else None
-        return (state, reason)
+        record = (json.loads(v)
+                  if v is not None else None)
+        if record is not None:
+            state = Pool_State(record["state"])
+            reason = record["reason"]
+            ts = record["modification_time"]
+        else:
+            state = None
+            reason = None
+            ts = None
+            pass
+        return (state, reason, ts)
 
     def delete_pool_state(self, pool_id):
         key = f"{self._pool_state_prefix}{pool_id}"

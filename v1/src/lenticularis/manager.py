@@ -342,6 +342,10 @@ class Manager():
         used = set(self._list_minio_ports())
         ports = list(availables - used)
         random.shuffle(ports)
+        if self._verbose:
+            logger.debug(f"Manager (pool={pool_id}) tries to start MinIO:"
+                         f" ports={ports}")
+            pass
         (p, continuable) = (None, True)
         for port in ports:
             (p, continuable) = self._try_start_minio(port, user_id, group_id,
@@ -538,14 +542,14 @@ class Manager():
                     (errs, closed) = _read_stream(p.stderr)
                     if errs != "":
                         logger.info(f"Manager (pool={pool_id}):"
-                                    f" Message on MinIO stderr=({errs})")
+                                    f" MinIO outputs: stderr=({errs})")
                         pass
                     pass
                 if p.stdout in readable:
                     (outs, closed) = _read_stream(p.stdout)
                     if outs != "":
                         logger.info(f"Manager (pool={pool_id}):"
-                                    f" Message on MinIO stdout=({outs})")
+                                    f" MinIO outputs: stdout=({outs})")
                         pass
                     if closed:
                         raise Termination("MinIO closed stdout.")
@@ -703,11 +707,11 @@ class Manager():
             errs = str(errs_, "latin-1")
             if errs != "":
                 logger.info(f"Manager (pool={pool_id}):"
-                            f" Message on MinIO stderr=({errs})")
+                            f" MinIO outputs: stderr=({errs})")
                 pass
             if outs != "":
                 logger.info(f"Manager (pool={pool_id}):"
-                            f" Message on MinIO stdout=({outs})")
+                            f" MinIO outputs: stdout=({outs})")
                 pass
         except TimeoutExpired:
             pass

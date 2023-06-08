@@ -37,34 +37,20 @@ from lenticularis.utility import rephrase_exception_message
 from lenticularis.utility import logger
 
 
-def _grant_access(tables, user_id, pool_id, check_pool_state):
-    """Checks an access to a pool is granted.  It does not check the
-    pool-state on deleting a pool.
-    """
-    ensure_mux_is_running(tables)
-    ensure_user_is_authorized(tables, user_id)
-    if pool_id is not None:
-        ensure_pool_owner(tables, pool_id, user_id)
-        pass
-    if pool_id is not None and check_pool_state:
-        ensure_pool_state(tables, pool_id, True)
-        pass
-    pass
-
-
 def erase_minio_ep(tables, pool_id):
     # Clears a MinIO endpoint.
     try:
         tables.delete_minio_ep(pool_id)
     except Exception as e:
         m = rephrase_exception_message(e)
-        logger.info(f"delete_minio_ep failed: exception=({m})")
+        logger.info(f"Api (pool={pool_id}) delete_minio_ep failed:"
+                    f" exception=({m})")
         pass
     try:
         tables.delete_access_timestamp(pool_id)
     except Exception as e:
         m = rephrase_exception_message(e)
-        logger.info(f"delete_access_timestamp failed:"
+        logger.info(f"Api (pool={pool_id}) delete_access_timestamp failed:"
                     f" exception=({m})")
         pass
     pass
@@ -75,51 +61,56 @@ def erase_pool_data(tables, pool_id):
     path = tables.get_buckets_directory_of_pool(pool_id)
     bkts = tables.list_buckets(pool_id)
     keys = tables.list_access_keys_of_pool(pool_id)
-    logger.debug(f"Deleting buckets-directory (pool={pool_id}): {path}")
+    logger.debug(f"Api (pool={pool_id}) Deleting buckets-directory: {path}")
     try:
         tables.delete_buckets_directory(path)
     except Exception as e:
         m = rephrase_exception_message(e)
-        logger.info(f"delete_buckets_directory failed: exception=({m})")
+        logger.info(f"Api (pool={pool_id}) delete_buckets_directory failed:"
+                    f" exception=({m})")
         pass
     bktnames = [b["name"] for b in bkts]
-    logger.debug(f"Deleting buckets (pool={pool_id}): {bktnames}")
+    logger.debug(f"Api (pool={pool_id}) Deleting buckets: {bktnames}")
     for b in bktnames:
         try:
             tables.delete_bucket(b)
         except Exception as e:
             m = rephrase_exception_message(e)
-            logger.info(f"delete_bucket failed: exception=({m})")
+            logger.info(f"Api (pool={pool_id}) delete_bucket failed:"
+                        f" exception=({m})")
             pass
         pass
     keynames = [k["access_key"] for k in keys]
-    logger.debug(f"Deleting access-keys pool={pool_id}: {keynames}")
+    logger.debug(f"Api (pool={pool_id}) Deleting access-keys: {keynames}")
     for k in keynames:
         try:
             tables.delete_xid_unconditionally("akey", k)
         except Exception as e:
             m = rephrase_exception_message(e)
-            logger.info(f"delete_xid_unconditionally failed: exception=({m})")
+            logger.info(f"Api (pool={pool_id}) delete_xid failed:"
+                        f" exception=({m})")
             pass
         pass
-    logger.debug(f"Deleting pool states (pool={pool_id})")
+    logger.debug(f"Api (pool={pool_id}) Deleting pool states")
     try:
         tables.delete_pool(pool_id)
     except Exception as e:
         m = rephrase_exception_message(e)
-        logger.info(f"delete_pool failed: exception=({m})")
+        logger.info(f"Api (pool={pool_id}) delete_pool failed:"
+                    f" exception=({m})")
         pass
     try:
         tables.delete_pool_state(pool_id)
     except Exception as e:
         m = rephrase_exception_message(e)
-        logger.info(f"delete_pool_state failed: exception=({m})")
+        logger.info(f"Api (pool={pool_id}) delete_pool_state failed:"
+                    f" exception=({m})")
         pass
     try:
         tables.delete_xid_unconditionally("pool", pool_id)
     except Exception as e:
         m = rephrase_exception_message(e)
-        logger.info(f"delete_xid_unconditionally failed: exception=({m})")
+        logger.info(f"Api (pool={pool_id}) delete_xid failed: exception=({m})")
         pass
     pass
 
@@ -137,7 +128,7 @@ def list_user_pools(tables, uid, pool_id):
 
 def _make_new_pool(tables, path, user_id, owner_gid, expiration):
     now = int(time.time())
-    pooldesc = {
+    desc = {
         "pool_name": "(* given-later *)",
         "buckets_directory": path,
         "owner_uid": user_id,
@@ -151,18 +142,18 @@ def _make_new_pool(tables, path, user_id, owner_gid, expiration):
     probe_key = None
     try:
         pool_id = tables.make_unique_xid("pool", user_id, {})
-        pooldesc["pool_name"] = pool_id
+        desc["pool_name"] = pool_id
         info = {"secret_key": "", "key_policy": "readwrite",
                 "expiration_time": expiration}
         probe_key = tables.make_unique_xid("akey", pool_id, info)
-        pooldesc["probe_key"] = probe_key
+        desc["probe_key"] = probe_key
         (ok, holder) = tables.set_ex_buckets_directory(path, pool_id)
         if not ok:
             owner = get_pool_owner_for_messages(tables, holder)
             raise Api_Error(400, (f"Buckets-directory is already used:"
                                   f" path=({path}), holder={owner}"))
         try:
-            tables.set_pool(pool_id, pooldesc)
+            tables.set_pool(pool_id, desc)
         except Exception:
             tables.delete_buckets_directory(path)
             raise
@@ -175,6 +166,8 @@ def _make_new_pool(tables, path, user_id, owner_gid, expiration):
             tables.delete_xid_unconditionally("akey", probe_key)
             pass
         raise
+    assert pool_id is not None
+    set_pool_state(tables, pool_id, Pool_State.INITIAL, Pool_Reason.NORMAL)
     return pool_id
 
 
@@ -294,7 +287,22 @@ class Control_Api():
         return (((now - 10) <= expiration)
                 and (expiration <= (now + self._max_pool_expiry)))
 
-    def access_mux_for_pool(self, pool_id):
+    def _grant_access(self, user_id, pool_id, check_pool_state):
+        """Checks an access to a pool is granted.  It does not check the
+        pool-state on deleting a pool.
+        """
+        tables = self.tables
+        ensure_mux_is_running(tables)
+        ensure_user_is_authorized(tables, user_id)
+        if pool_id is not None:
+            ensure_pool_owner(tables, pool_id, user_id)
+            pass
+        if pool_id is not None and check_pool_state:
+            ensure_pool_state(tables, pool_id, True)
+            pass
+        pass
+
+    def access_mux_by_pool(self, pool_id):
         """Tries to access a Mux from Api for a pool.  It will start MinIO as
         a result.  It accesses an arbitrary Mux when no MinIO is
         running, which will start a new MinIO.
@@ -324,24 +332,68 @@ class Control_Api():
         status = access_mux(ep, access_key,
                             self._front_host, self._front_host_ip,
                             self._probe_access_timeout)
-        logger.debug(f"Access Mux for pool={pool_id}: status={status}")
+        logger.debug(f"Api (pool={pool_id}) Accessing a Mux done:"
+                     f" status={status}")
         if status != 200:
-            logger.error(f"Accessing a Mux by Api failed for"
-                         f" pool={pool_id}: status={status}")
+            logger.error(f"Api (pool={pool_id}) Accessing a Mux failed:"
+                         f" status={status}")
             pass
         return status
 
-    def _make_mc_for_pool(self, pool_id):
-        """Returns an MC command instance.  It first accesses a Mux to start
-        MinIO or to keep it running for a while.  A failure to start
-        MinIO returns code=503.
+    def _activate_minio(self, pool_id, accept_failure):
+        """Starts MinIO by accessing a Mux.  Failing to start MinIO is
+        accepted in creating a pool, and a failure is indicated in the
+        pool-state.  Otherwise, starting MinIO is a precondition to
+        command execution, and a failure triggers an exception with
+        code=503.
         """
-        logger.debug(f"Access a Mux to start Minio for pool={pool_id}.")
-        status = self.access_mux_for_pool(pool_id)
+        tables = self.tables
+        status = self.access_mux_by_pool(pool_id)
+        if accept_failure:
+            (state, _, _) = tables.get_pool_state(pool_id)
+            if state not in {Pool_State.READY}:
+                logger.warn(f"Api (pool={pool_id}) Initialization failed:"
+                            f" pool-state is not ready: {state}")
+                pass
+            pass
+        else:
+            minio = tables.get_minio_proc(pool_id)
+            if minio is None:
+                logger.error(f"Api (pool={pool_id}) Starting MinIO failed:"
+                             f" status={status}")
+                raise Api_Error(503, (f"Cannot start MinIO for pool={pool_id}:"
+                                      f" status={status}"))
+            pass
+        pass
+
+    # def _activate_minio__(self, pool_id):
+    #     """Starts MinIO as it is a precondition to command execution.  A
+    #     failure to start MinIO raises an exception with code=503.
+    #     """
+    #     tables = self.tables
+    #     logger.debug(f"Api (pool={pool_id}) Accessing a Mux to start Minio.")
+    #     status = self.access_mux_by_pool(pool_id)
+    #     minioproc = tables.get_minio_proc(pool_id)
+    #     if minioproc is None:
+    #         logger.error(f"Api (pool={pool_id}) Starting MinIO failed:"
+    #                      f" status={status}"))
+    #         raise Api_Error(503, (f"Cannot start MinIO for pool={pool_id}:"
+    #                               f" status={status}"))
+    #     pass
+
+    def _make_mc_for_pool(self, pool_id):
+        """Returns an MC command instance.  It assumes MinIO is already
+        started by _activate_minio().
+        """
+        # """Returns an MC command instance.  It first accesses a Mux to start
+        # MinIO or to keep it running for a while.  A failure to start
+        # MinIO raises an exception with code=503.
+        # """
+        # logger.debug(f"Api (pool={pool_id}) Accessing a Mux to start Minio.")
+        # status = self.access_mux_by_pool(pool_id)
         minioproc = self.tables.get_minio_proc(pool_id)
         if minioproc is None:
-            raise Api_Error(503, (f"Cannot start MinIO for pool={pool_id}:"
-                                  f" status={status}"))
+            raise Api_Error(503, f"Cannot start MinIO for pool={pool_id}")
         else:
             pass
         ep = minioproc["minio_ep"]
@@ -368,8 +420,8 @@ class Control_Api():
             return (e.code, f"{e}", None)
         except Exception as e:
             m = rephrase_exception_message(e)
-            logger.error((f"get_user_info failed: user={user_id};"
-                          f" exception=({m})"),
+            logger.error((f"Api () get_user_info failed:"
+                          f" user={user_id}; exception=({m})"),
                          exc_info=True)
             time.sleep(self._bad_response_delay)
             return (500, m, None)
@@ -392,8 +444,8 @@ class Control_Api():
             return (e.code, f"{e}", None)
         except Exception as e:
             m = rephrase_exception_message(e)
-            logger.error((f"list_pools failed: user={user_id},"
-                          f" pool={pool_id}; exception=({m})"),
+            logger.error((f"Api (pool={pool_id}) list_pools failed:"
+                          f" user={user_id}; exception=({m})"),
                          exc_info=True)
             time.sleep(self._bad_response_delay)
             return (500, m, None)
@@ -411,8 +463,8 @@ class Control_Api():
             return (e.code, f"{e}", None)
         except Exception as e:
             m = rephrase_exception_message(e)
-            logger.error((f"make_pool failed: user={user_id},"
-                          f" pool=({body}); exception=({m})"),
+            logger.error((f"Api (user={user_id}) make_pool failed:"
+                          f" args=({body}); exception=({m})"),
                          exc_info=True)
             time.sleep(self._bad_response_delay)
             return (500, m, None)
@@ -432,8 +484,8 @@ class Control_Api():
             return (e.code, f"{e}", None)
         except Exception as e:
             m = rephrase_exception_message(e)
-            logger.error((f"delete_pool failed: user={user_id},"
-                          f" pool={pool_id}; exception=({m})"),
+            logger.error((f"Api (pool={pool_id}) delete_pool failed:"
+                          f" user={user_id}; exception=({m})"),
                          exc_info=True)
             time.sleep(self._bad_response_delay)
             return (500, m, None)
@@ -456,8 +508,8 @@ class Control_Api():
                 raise Api_Error(403, f"Bad bucket name={bucket}", None)
             if policy not in {"none", "public", "upload", "download"}:
                 raise Api_Error(403, f"Bad bucket policy={policy}", None)
-            logger.debug(f"Adding a bucket to pool={pool_id}"
-                         f": name={bucket}, policy={policy}")
+            logger.debug(f"Api (pool={pool_id}) Adding a bucket:"
+                         f" name={bucket}, policy={policy}")
             triple = self._api_make_bucket(user_id, pool_id, bucket, policy)
             return triple
         except Api_Error as e:
@@ -465,8 +517,8 @@ class Control_Api():
             return (e.code, f"{e}", None)
         except Exception as e:
             m = rephrase_exception_message(e)
-            logger.error((f"make_bucket failed: user={user_id},"
-                          f" pool={pool_id}, args={body};"
+            logger.error((f"Api (pool={pool_id}) make_bucket failed:"
+                          f" user={user_id}, args={body};"
                           f" exception=({m})"),
                          exc_info=True)
             time.sleep(self._bad_response_delay)
@@ -482,7 +534,7 @@ class Control_Api():
                 raise Api_Error(403, f"Bad pool={pool_id}", None)
             if not check_bucket_naming(bucket):
                 raise Api_Error(403, f"Bad bucket name={bucket}", None)
-            logger.debug(f"Deleting a bucket: {bucket}")
+            logger.debug(f"Api (pool={pool_id}) Deleting a bucket: {bucket}")
             triple = self._api_delete_bucket(user_id, pool_id, bucket)
             return triple
         except Api_Error as e:
@@ -490,8 +542,8 @@ class Control_Api():
             return (e.code, f"{e}", None)
         except Exception as e:
             m = rephrase_exception_message(e)
-            logger.error((f"delete_bucket failed: user={user_id},"
-                          f" pool={pool_id}, bucket={bucket};"
+            logger.error((f"Api (pool={pool_id}) delete_bucket failed:"
+                          f" user={user_id}, bucket={bucket};"
                           f" exception=({m})"),
                          exc_info=True)
             time.sleep(self._bad_response_delay)
@@ -521,7 +573,7 @@ class Control_Api():
                 raise Api_Error(403, f"Bad expiration={tv}", None)
             if not self._check_expiration_range(expiration):
                 raise Api_Error(403, f"Bad range expiration={tv}", None)
-            logger.debug(f"Adding a new secret: {rw}")
+            logger.debug(f"Api (pool={pool_id}) Adding a new secret: {rw}")
             triple = self._api_make_secret(user_id, pool_id, rw, expiration)
             return triple
         except Api_Error as e:
@@ -529,8 +581,8 @@ class Control_Api():
             return (e.code, f"{e}", None)
         except Exception as e:
             m = rephrase_exception_message(e)
-            logger.error((f"make_secret failed: user={user_id},"
-                          f" pool={pool_id}, args={body};"
+            logger.error((f"Api (pool={pool_id}) make_secret failed:"
+                          f" user={user_id}, args={body};"
                           f" exception=({m})"),
                          exc_info=True)
             time.sleep(self._bad_response_delay)
@@ -546,7 +598,8 @@ class Control_Api():
                 raise Api_Error(403, f"Bad pool-id={pool_id}", None)
             if not check_pool_naming(access_key):
                 raise Api_Error(403, f"Bad access-key={access_key}", None)
-            logger.debug(f"Deleting a secret: {access_key}")
+            logger.debug(f"Api (pool={pool_id}) Deleting a secret:"
+                         f" {access_key}")
             triple = self._api_delete_secret(user_id, pool_id, access_key)
             return triple
         except Api_Error as e:
@@ -554,8 +607,8 @@ class Control_Api():
             return (e.code, f"{e}", None)
         except Exception as e:
             m = rephrase_exception_message(e)
-            logger.error((f"delete_secret failed: user={user_id},"
-                          f" pool={pool_id}, key={access_key};"
+            logger.error((f"Api (pool={pool_id}) delete_secret failed:"
+                          f" user={user_id}, key={access_key};"
                           f" exception=({m})"),
                          exc_info=True)
             time.sleep(self._bad_response_delay)
@@ -565,7 +618,7 @@ class Control_Api():
     # API implementation.
 
     def _api_get_user_info(self, user_id):
-        _grant_access(self.tables, user_id, None, False)
+        self._grant_access(user_id, None, False)
         u = self.tables.get_user(user_id)
         assert u is not None
         groups = u.get("groups")
@@ -582,7 +635,7 @@ class Control_Api():
     # Pools handling implementation.
 
     def _api_make_pool(self, user_id, makepool):
-        _grant_access(self.tables, user_id, None, False)
+        self._grant_access(user_id, None, False)
         self._check_make_pool_arguments(user_id, makepool)
         path = makepool["buckets_directory"]
         owner_gid = makepool["owner_gid"]
@@ -595,52 +648,22 @@ class Control_Api():
             return (200, None, {"pool_desc": pooldesc1})
         except Exception as e:
             m = rephrase_exception_message(e)
-            logger.error(f"Created pool is not well-formed (internal error):"
-                         f" pool={pool_id}; exception=({m})",
+            logger.error(f"Api (pool={pool_id})"
+                         f" Created pool is not well-formed (internal error):"
+                         f" exception=({m})",
                          exc_info=True)
             raise
         pass
 
     def _do_make_pool(self, path, uid, gid):
+        tables = self.tables
         expiration = self._determine_expiration_time()
-        pool_id = _make_new_pool(self.tables, path, uid, gid, expiration)
-        self._activate_pool(pool_id, path)
+        pool_id = _make_new_pool(tables, path, uid, gid, expiration)
+        self._activate_minio(pool_id, True)
         return pool_id
 
-    def _activate_pool(self, pool_id, path):
-        """Starts MinIO once, by accessing a Mux.  Note that failing to start
-        is normal, and it does not undo creating a pool.  A failure of
-        accessing a Mux is indicated in the pool-state.
-        """
-        assert pool_id is not None
-        tables = self.tables
-        try:
-            # self._set_pool_state(pool_id, Pool_State.INITIAL, "-")
-            # self.tables.set_access_timestamp(pool_id)
-            reason = Pool_Reason.NORMAL
-            set_pool_state(tables, pool_id, Pool_State.INITIAL, reason)
-            status = self.access_mux_for_pool(pool_id)
-            # if status == 200:
-            #     self._set_pool_state(pool_id, Pool_State.READY, "-")
-            #    pass
-        except Exception:
-            # self.tables.delete_buckets_directory(path)
-            # self.tables.delete_pool(pool_id)
-            # self.tables.delete_pool_state(pool_id)
-            # self.tables.delete_access_timestamp(pool_id)
-            raise
-        else:
-            pass
-        # state = self._get_pool_state(pool_id)
-        (state, _, _) = tables.get_pool_state(pool_id)
-        if state not in {Pool_State.READY}:
-            logger.error(f"Initialization failed: pool-state is not ready:"
-                         f" {state}")
-            pass
-        pass
-
     def _api_delete_pool(self, user_id, pool_id):
-        _grant_access(self.tables, user_id, pool_id, False)
+        self._grant_access(user_id, pool_id, False)
         ok = self._do_delete_pool(pool_id)
         return (200, None, None)
 
@@ -653,6 +676,7 @@ class Control_Api():
     def _clean_minio(self, pool_id):
         """Cleans MinIO status."""
         try:
+            self._activate_minio(pool_id, False)
             mc = self._make_mc_for_pool(pool_id)
             assert mc is not None
             with mc:
@@ -662,7 +686,8 @@ class Control_Api():
                 # assert_mc_success(r, "mc.admin_service_stop")
         except Exception as e:
             m = rephrase_exception_message(e)
-            logger.error(f"clean_minio failed: exception=({m})",
+            logger.error(f"Api (pool={pool_id}) clean_minio failed:"
+                         f" exception=({m})",
                          exc_info=True)
             pass
         pass
@@ -673,13 +698,14 @@ class Control_Api():
             self.tables.delete_minio_ep(pool_id)
         except Exception as e:
             m = rephrase_exception_message(e)
-            logger.info(f"delete_minio_ep failed: exception=({m})")
+            logger.info(f"Api (pool={pool_id}) delete_minio_ep failed:"
+                        f" exception=({m})")
             pass
         try:
             self.tables.delete_access_timestamp(pool_id)
         except Exception as e:
             m = rephrase_exception_message(e)
-            logger.info(f"delete_access_timestamp failed:"
+            logger.info(f"Api (pool={pool_id}) delete_access_timestamp failed:"
                         f" exception=({m})")
             pass
         pass
@@ -689,63 +715,70 @@ class Control_Api():
         path = self.tables.get_buckets_directory_of_pool(pool_id)
         bkts = self.tables.list_buckets(pool_id)
         keys = self.tables.list_access_keys_of_pool(pool_id)
-        logger.debug(f"Deleting buckets-directory (pool={pool_id}): {path}")
+        logger.debug(f"Api (pool={pool_id}) Deleting buckets-directory:"
+                     f" {path}")
         try:
             self.tables.delete_buckets_directory(path)
         except Exception as e:
             m = rephrase_exception_message(e)
-            logger.info(f"delete_buckets_directory failed: exception=({m})")
+            logger.info(f"Api (pool={pool_id}) delete_buckets_directory"
+                        f" failed: exception=({m})")
             pass
         bktnames = [b["name"] for b in bkts]
-        logger.debug(f"Deleting buckets (pool={pool_id}): {bktnames}")
+        logger.debug(f"Api (pool={pool_id}) Deleting buckets: {bktnames}")
         for b in bktnames:
             try:
                 self.tables.delete_bucket(b)
             except Exception as e:
                 m = rephrase_exception_message(e)
-                logger.info(f"delete_bucket failed: exception=({m})")
+                logger.info(f"Api (pool={pool_id}) delete_bucket failed:"
+                            f" exception=({m})")
                 pass
             pass
         keynames = [k["access_key"] for k in keys]
-        logger.debug(f"Deleting access-keys pool={pool_id}: {keynames}")
+        logger.debug(f"Api (pool={pool_id}) Deleting access-keys: {keynames}")
         for k in keynames:
             try:
                 self.tables.delete_xid_unconditionally("akey", k)
             except Exception as e:
                 m = rephrase_exception_message(e)
-                logger.info(f"delete_xid_unconditionally failed: exception=({m})")
+                logger.info(f"Api (pool={pool_id}) delete_xid failed:"
+                            f" exception=({m})")
                 pass
             pass
-        logger.debug(f"Deleting pool states (pool={pool_id})")
+        logger.debug(f"Api (pool={pool_id}) Deleting pool states")
         try:
             self.tables.delete_pool(pool_id)
         except Exception as e:
             m = rephrase_exception_message(e)
-            logger.info(f"delete_pool failed: exception=({m})")
+            logger.info(f"Api (pool={pool_id}) delete_pool failed:"
+                        f" exception=({m})")
             pass
         try:
             self.tables.delete_pool_state(pool_id)
         except Exception as e:
             m = rephrase_exception_message(e)
-            logger.info(f"delete_pool_state failed: exception=({m})")
+            logger.info(f"Api (pool={pool_id}) delete_pool_state failed:"
+                        f" exception=({m})")
             pass
         try:
             self.tables.delete_xid_unconditionally("pool", pool_id)
         except Exception as e:
             m = rephrase_exception_message(e)
-            logger.info(f"delete_xid_unconditionally failed: exception=({m})")
+            logger.info(f"Api (pool={pool_id}) delete_xid failed:"
+                        f" exception=({m})")
             pass
         pass
 
     def _api_list_pools(self, user_id, pool_id):
-        _grant_access(self.tables, user_id, None, False)
+        self._grant_access(user_id, None, False)
         pool_list = []
         pools = list_user_pools(self.tables, user_id, pool_id)
         for pid in pools:
             pooldesc = gather_pool_desc(self.tables, pid)
             if pooldesc is None:
-                logger.debug(f"Pool removed in race; list-pools runs"
-                             f" without a lock (ignored): {pid}")
+                logger.debug(f"Api (pool={pool_id}) Removing a pool in race;"
+                             f" list-pools runs without a lock (ignored).")
                 continue
             assert pooldesc["owner_uid"] == user_id
             pool_list.append(pooldesc)
@@ -756,7 +789,8 @@ class Control_Api():
     # Buckets handling implementation.
 
     def _api_make_bucket(self, user_id, pool_id, bucket, policy):
-        _grant_access(self.tables, user_id, pool_id, True)
+        self._activate_minio(pool_id, False)
+        self._grant_access(user_id, pool_id, True)
         self._do_make_bucket(pool_id, bucket, policy)
         pooldesc = gather_pool_desc(self.tables, pool_id)
         return (200, None, {"pool_desc": pooldesc})
@@ -781,13 +815,17 @@ class Control_Api():
         pass
 
     def _api_delete_bucket(self, user_id, pool_id, bucket):
-        _grant_access(self.tables, user_id, pool_id, True)
+        self._grant_access(user_id, pool_id, False)
         ensure_bucket_owner(self.tables, bucket, pool_id)
         pooldesc = self._do_delete_bucket(pool_id, bucket)
         return (200, None, {"pool_desc": pooldesc})
 
     def _do_delete_bucket(self, pool_id, bucket):
+        """Deletes a bucket.  Deletion will be done even if starting MinIO
+        failed.
+        """
         try:
+            self._activate_minio(pool_id, False)
             mc = self._make_mc_for_pool(pool_id)
             assert mc is not None
             with mc:
@@ -795,16 +833,17 @@ class Control_Api():
                 entry = [d for d in bkts
                          if d.get("name") == bucket]
                 if entry == []:
-                    logger.error(f"Inconsistency is found in MinIO and Lens3"
-                                 f" in deleting a bucket:"
-                                 f" pool={pool_id}, bucket={bucket}")
+                    logger.error(f"Api (pool={pool_id}) Inconsistency found"
+                                 f" in MinIO and Lens3 in deleting a bucket:"
+                                 f" bucket={bucket}")
                 else:
                     mc.delete_bucket(bucket)
                     pass
                 pass
         except Exception as e:
             m = rephrase_exception_message(e)
-            logger.error(f"delete_bucket failed: exception=({m})",
+            logger.error(f"Api (pool={pool_id}) delete_bucket failed:"
+                         f" exception=({m})",
                          exc_info=True)
             pass
         self.tables.delete_bucket(bucket)
@@ -814,15 +853,16 @@ class Control_Api():
     # Secrets handling implementation.
 
     def _api_make_secret(self, user_id, pool_id, key_policy, expiration):
-        _grant_access(self.tables, user_id, pool_id, True)
+        self._activate_minio(pool_id, False)
+        self._grant_access(user_id, pool_id, True)
+        pooldesc = self._do_make_secret(pool_id, key_policy, expiration)
+        return (200, None, {"pool_desc": pooldesc})
+
+    def _do_make_secret(self, pool_id, key_policy, expiration):
         secret = generate_secret_key()
         info = {"secret_key": secret, "key_policy": key_policy,
                 "expiration_time": expiration}
         key = self.tables.make_unique_xid("akey", pool_id, info)
-        pooldesc = self._do_record_secret(pool_id, key, secret, key_policy)
-        return (200, None, {"pool_desc": pooldesc})
-
-    def _do_record_secret(self, pool_id, key, secret, key_policy):
         try:
             mc = self._make_mc_for_pool(pool_id)
             assert mc is not None
@@ -836,13 +876,17 @@ class Control_Api():
         return pooldesc1
 
     def _api_delete_secret(self, user_id, pool_id, access_key):
-        _grant_access(self.tables, user_id, pool_id, True)
+        self._grant_access(user_id, pool_id, False)
         ensure_secret_owner_only(self.tables, access_key, pool_id)
         pooldesc = self._do_delete_secret(pool_id, access_key)
         return (200, None, {"pool_desc": pooldesc})
 
     def _do_delete_secret(self, pool_id, access_key):
+        """Deletes a secret.  Deletion will be done even if starting MinIO
+        failed.
+        """
         try:
+            self._activate_minio(pool_id, False)
             mc = self._make_mc_for_pool(pool_id)
             assert mc is not None
             with mc:
@@ -850,7 +894,8 @@ class Control_Api():
                 entry = [d for d in keys
                          if d.get("access_key") == access_key]
                 if entry == []:
-                    logger.error(f"Inconsistency is found in MinIO and Lens3"
+                    logger.error(f"Api (pool={pool_id}) Inconsistency found"
+                                 f" in MinIO and Lens3"
                                  f" in deleting an access-key:"
                                  f" pool={pool_id}, access-key={access_key}")
                 else:

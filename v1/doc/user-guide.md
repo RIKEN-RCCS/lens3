@@ -108,22 +108,27 @@ A bucket-pool is a management unit of S3 buckets in Lens3 and it has a
 state reflecting the state of a MinIO instance.  But, the state does
 not include the process status of an instance.
 
-* Bucket-pool state is:
-  * __None__ quickly moves to the __INITIAL__ state.
-  * __INITIAL__ indicates a setup is not performed on a MinIO
+Bucket-pool state is:
+* __None__ quickly moves to the __INITIAL__ state.
+* __INITIAL__ indicates a setup is not performed on a MinIO
     instance.
-  * __READY__ indicates a service is ready, a setup for servicing is
+* __READY__ indicates a service is ready, a setup for servicing is
     done.  It does not mean a MinIO instance is running.
-  * __SUSPENED__ indicates a pool is temporarily unusable by server
+* __SUSPENED__ indicates a pool is temporarily unusable by server
     busyness.  It needs several minutes for a cease of the
     condition.
-  * __DISABLED__ indicates a pool is set unusable.  A transition
+* __DISABLED__ indicates a pool is set unusable.  A transition
     between __READY__ and __DISABLED__ is by actions by an
     administrator.  The causes of a transition include an expiry of a
     pool, disabling a user account, or making a pool offline.
-  * __INOPERABLE__ indicates an error state and a pool is permanently
+* __INOPERABLE__ indicates an error state and a pool is permanently
     unusable.  Mainly, it has failed to run a MinIO instance.  This
     pool cannot be used and should be removed.
+
+Deletions of buckets and secrets are accepted during suspension of a
+pool, in which it is unable to start a MinIO instance.  It is to make
+a user's action take effect immediately.  In contrast, additions of
+buckets and secrets are rejected.
 
 ## Restrictions of Lens3
 

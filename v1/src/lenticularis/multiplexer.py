@@ -1,6 +1,4 @@
-"""Lens3-Mux implementation.  It is a proxy to forward requests to
-MinIO.
-"""
+"""Lens3-Mux implementation.  It is a proxy to MinIO."""
 
 # Copyright (c) 2022-2023 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
@@ -89,11 +87,11 @@ def _pick_bucket_in_path(path, access_synopsis):
     bucket = pathc[0]
     # Check a bucket name.
     if bucket == "":
-        log_access("404", *access_synopsis)
-        raise Api_Error(404, f"Bad URL, accessing the root: url={request_url}")
+        log_access("400", *access_synopsis)
+        raise Api_Error(400, f"Bad URL, accessing the root: url={request_url}")
     if not check_bucket_naming(bucket):
         log_access("400", *access_synopsis)
-        raise Api_Error(400, f"Bad URL, bad bucket: url={request_url}")
+        raise Api_Error(400, f"Bad URL, bad bucket name: url={request_url}")
     return bucket
 
 
@@ -153,7 +151,7 @@ class Multiplexer():
         try:
             return self._process_request(environ, start_response)
         except Api_Error as e:
-            logger.error(f"Mux ({self._mux_host}): Work failed:"
+            logger.error(f"Mux ({self._mux_host}) Work failed:"
                          f" exception=({e})",
                          exc_info=self._verbose)
             # Delay returning a response for a while.
@@ -163,7 +161,7 @@ class Multiplexer():
             return []
         except Exception as e:
             m = rephrase_exception_message(e)
-            logger.error((f"Mux ({self._mux_host}): Got"
+            logger.error((f"Mux ({self._mux_host}) Got"
                           f" an unhandled exception: exception=({m})"),
                          exc_info=True)
             pass
@@ -172,7 +170,8 @@ class Multiplexer():
 
     def periodic_work(self):
         interval = self._periodic_work_interval
-        logger.debug(f"Mux periodic_work started: interval={interval}.")
+        logger.debug(f"Mux ({self._mux_host}) periodic work started:"
+                     f" interval={interval}.")
         assert self._periodic_work_interval >= 10
         time.sleep(10 * random.random())
         while True:
@@ -180,7 +179,8 @@ class Multiplexer():
                 self._register_mux()
             except Exception as e:
                 m = rephrase_exception_message(e)
-                logger.error(f"Mux periodic_work failed: exception=({m})")
+                logger.error(f"Mux ({self._mux_host}) periodic work failed:"
+                             f" exception=({m})")
                 pass
             jitter = ((interval * random.random()) / 8)
             time.sleep(interval + jitter)
@@ -193,7 +193,8 @@ class Multiplexer():
 
     def _register_mux(self):
         if self._verbose:
-            logger.debug(f"Updating Mux info (periodically).")
+            logger.debug(f"Mux ({self._mux_host}) Updating Mux info"
+                         f" (periodically).")
             pass
         ep = host_port(self._mux_host, self._mux_port)
         ok = self.tables.set_mux_expiry(ep, self._mux_expiry)
@@ -287,7 +288,8 @@ class Multiplexer():
 
         ok = self.tables.set_manager_expiry(pool_id, self._manager_expiry)
         if not ok:
-            logger.warning(f"Manager (pool={pool_id}) failed to set expiry.")
+            logger.warning(f"Mux ({self._mux_host}) Setting expiry failed:"
+                           f" pool={pool_id}")
             pass
 
         pooldesc = self.tables.get_pool(pool_id)
@@ -321,18 +323,17 @@ class Multiplexer():
         pass
 
     def _wait_for_service_starts(self, pool_id):
-        logger.debug(f"Mux ({self._mux_host}): Wait for service starts.")
+        logger.debug(f"Mux ({self._mux_host}) Waiting for service.")
         limit = (int(time.time()) + self._minio_start_timeout
                  + self._minio_setup_timeout)
         while int(time.time()) < limit:
             ep = self.tables.get_minio_ep(pool_id)
             if ep is not None:
-                logger.debug(f"Mux ({self._mux_host}): Service started.")
+                logger.debug(f"Mux ({self._mux_host}) Service started.")
                 return ep
             time.sleep(self._service_starts_check_interval)
             pass
-        logger.warning(f"Mux ({self._mux_host}): Failed in"
-                       f" waiting for service starts.")
+        logger.warning(f"Mux ({self._mux_host}) Waiting for service failed.")
         return None
 
     def _choose_server_host__(self, pool_id):
@@ -391,14 +392,14 @@ class Multiplexer():
         path = posixpath.normpath(u.path)
 
         access_synopsis = [client_addr, fake_user, request_method, request_url]
-        failure_message = f"Bad URL, bad bucket: url={request_url}"
 
-        logger.debug(f"Mux ({self._mux_host}): Got a request:"
+        logger.debug(f"Mux ({self._mux_host}) Got a request:"
                      f" {request_method} {request_url};"
                      f" remote=({client_addr}), auth=({authorization})")
 
         if not self._check_forwarding_host_trusted(peer_addr):
-            logger.error(f"Untrusted proxy or unknonwn Mux: {peer_addr};"
+            logger.error(f"Mux ({self._mux_host}) Got a request from"
+                         f" untrusted proxy or unknonwn Mux: {peer_addr};"
                          f" Check configuration")
             log_access("403", *access_synopsis)
             raise Api_Error(403, f"Bad access from remote={client_addr}")
@@ -417,8 +418,8 @@ class Multiplexer():
             self._awake_suspended_pool(pool_id)
             ensure_pool_state(self.tables, pool_id, False)
             if self._verbose:
-                logger.debug(f"Mux ({self._mux_host}): Probe-accesses"
-                             f" for pool={pool_id}")
+                logger.debug(f"Mux ({self._mux_host}) Probe-accessing"
+                             f" on pool={pool_id}")
                 pass
         else:
             try:
@@ -438,13 +439,14 @@ class Multiplexer():
                 ensure_secret_owner(self.tables, access_key, pool_id)
                 ensure_bucket_policy(bucket, bucketdesc, access_key)
             except Api_Error as e:
-                # Reraise an error with a less-informative message.
-                logger.debug(f"Mux ({self._mux_host}): Failed in"
-                             f" access check: exception=({e})")
+                logger.debug(f"Mux ({self._mux_host}) Access check failed:"
+                             f" exception=({e})")
                 log_access(f"{e.code}", *access_synopsis)
-                raise Api_Error(e.code, failure_message)
+                # Reraise an error with a less-informative message.
+                # raise Api_Error(e.code, failure_message1)
+                raise
             if self._verbose:
-                logger.debug(f"Mux ({self._mux_host}): Access"
+                logger.debug(f"Mux ({self._mux_host}) Accessing"
                              f" for bucket={path} and pool={pool_id}")
                 pass
             pass
@@ -460,7 +462,7 @@ class Multiplexer():
             minio_ep = self._start_service(pool_id, True)
             if minio_ep is None:
                 log_access("503", *access_synopsis)
-                raise Api_Error(503, failure_message)
+                raise Api_Error(503, f"Cannot start MinIO for pool={pool_id}")
             pass
         assert minio_ep is not None
 
@@ -491,31 +493,31 @@ class Multiplexer():
 
         req = Request(url, data=rinput, headers=q_headers,
                       method=request_method)
-        failure_message = (f"urlopen failure: url={url}"
-                           f" for {request_method} {request_url};")
+        failure_message2 = (f"Mux ({self._mux_host}) urlopen failure:"
+                            f" url={url} for {request_method} {request_url};")
         try:
             res = urlopen(req, timeout=self._forwarding_timeout)
             status = f"{res.status}"
             r_headers = res.getheaders()
             response = self._response_output(res, environ)
         except HTTPError as e:
-            logger.error(failure_message + f" exception=({e})")
+            logger.error(failure_message2 + f" exception=({e})")
             status = f"{e.code}"
             r_headers = [(k, e.headers[k]) for k in e.headers]
             response = self._response_output(e, environ)
         except URLError as e:
             if _check_url_error_is_connection_errors(e):
                 # "Connection refused" etc.
-                logger.warning(failure_message + f" exception=({e})")
+                logger.warning(failure_message2 + f" exception=({e})")
             else:
-                logger.error(failure_message + f" exception=({e})")
+                logger.error(failure_message2 + f" exception=({e})")
                 pass
             status = "503"
             r_headers = []
             response = []
         except Exception as e:
             m = rephrase_exception_message(e)
-            logger.error(failure_message + f" exception=({m})",
+            logger.error(failure_message2 + f" exception=({m})",
                          exc_info=True)
             status = "500"
             r_headers = []

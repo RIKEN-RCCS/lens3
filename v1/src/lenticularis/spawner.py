@@ -84,10 +84,10 @@ class Spawner():
                     logger.debug(f"A Manager started.")
                 else:
                     ok = False
-                    logger.warning(f"A Manager exited with status={p_status}")
+                    logger.warning(f"A Manager exited: status={p_status}")
                     pass
                 if outs != "" or errs != "":
-                    logger.info(f"Output from a Manager:"
+                    logger.info(f"A Manager outputs:"
                                 f" stdout=({outs}), stderr=({errs})")
                     pass
         except Exception as e:
@@ -95,7 +95,7 @@ class Spawner():
             logger.error(f"Starting a Manager failed: exception=({m})",
                          exc_info=True)
             if outs != "" or errs != "":
-                logger.error(f"Output from a Manager:"
+                logger.error(f"A Manager outputs:"
                              f" stdout=({outs}), stderr=({errs})")
                 pass
             pass

@@ -183,7 +183,7 @@ heartbeating.
 
 * __None__ → __INITIAL__: It is a quick transition.
 * __INITIAL__ → __READY__: It is at a start of MinIO.
-* {__INITIAL__, __READY__} → __SUSPENDED__: It is by a condition the
+* {__INITIAL__, __READY__} → __SUSPENDED__: It is on a condition the
   server is busy (all ports are used).
 * __SUSPENDED__ → __INITIAL__: It is performed periodically.  It will
   move back again to the __SUSPENDED__ state if a potential condition
@@ -195,6 +195,10 @@ heartbeating.
 * ? → __INOPERABLE__: It is at a failure of starting MinIO.  This
   state is a deadend.  A bucket-pool should be removed.
 
+Deleting buckets and secrets may act only on Lens3 during suspension.
+It moves not to READY but INITIAL, which adjusts MinIO in a consistent
+state with Lens3 at the next start.
+
 ### Lens3-Mux/Lens3-Api systemd Services
 
 All states of services are stored in Redis.  systemd services can be
@@ -204,12 +208,11 @@ stoped/started.
 
 ### Lens3-Api Processes
 
-Lens3-Api is not designed as load-balanced.  Lens3-Api may consist of
-some processes started by Gunicorn, but they are not distributed.
+Lens3-Api is not designed to work in distributed for load-balancing.
 
 ### Lens3-Mux Processes
 
-There exists multiple Lens3-Mux processes for a single Lens3-Mux
+There exist multiple Lens3-Mux processes for a single Lens3-Mux
 service, as it is started by Gunicorn.  Some book-keeping periodical
 operations (running in background threads) are performed more
 frequently than expected.
@@ -294,6 +297,8 @@ change in versions of MinIO,
 * Rewrite in Go-lang.  The code will be in Go in the next release.
 * Let a reply contain a message on a rejected access at Lens3-Mux.  It
   returns only a status number in v1.2.
+* UI does not refresh the MinIO state, when it is edited and it
+  transitions from SUSPENDED to READY.
 * Run a remover of orphaned directories, buckets, and keys at
   Lens3-Api startup.  Adding a bucket/key and removing a pool have a
   race.  A crash at creation/deletion of a pool may leave an orphaned
@@ -339,3 +344,7 @@ uses of "Starlette" in the source code.
 __MinIO behavior__: MinIO refuses a connection by ECONNRESET
 (Connection reset by peer) at a high load (not too high), instead of
 an expected 503 reply.
+
+__Accepting pool creation in busy situations__: Lens3 accepts creation
+of a pool even if it cannot start MinIO due to busyness of the server.
+It is to display the error condition in the UI's "minio_state" slot.

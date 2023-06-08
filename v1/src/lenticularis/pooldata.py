@@ -186,7 +186,7 @@ def _pool_desc_schema():
 def set_pool_state(tables, pool_id, state, reason):
     (o, _, _) = tables.get_pool_state(pool_id)
     logger.debug(f"Manager (pool={pool_id}):"
-                 f" Pool-state change: {o} to {state}")
+                 f" pool-state change: {o} to {state}")
     tables.set_pool_state(pool_id, state, reason)
     pass
 
@@ -468,7 +468,7 @@ def check_pool_is_well_formed(pooldesc, user_):
 
 
 def access_mux(ep, access_key, front_host, front_host_ip, timeout):
-    """Tries to access a Mux.  This is used in access_mux_for_pool().  A
+    """Tries to access a Mux.  This is used in access_mux_by_pool().  A
     Mux requires several http headers, especially including
     "X-REAL-IP".  Check the code of a Mux.
     """
@@ -485,7 +485,7 @@ def access_mux(ep, access_key, front_host, front_host_ip, timeout):
         headers["X-TRACEID"] = traceid
         pass
     req = Request(url, headers=headers)
-    logger.debug(f"urlopen with url={url}, timeout={timeout},"
+    logger.debug(f"urlopen to Mux: url={url}, timeout={timeout},"
                  f" headers={headers}")
     try:
         with urlopen(req, timeout=timeout) as response:
@@ -494,17 +494,17 @@ def access_mux(ep, access_key, front_host, front_host_ip, timeout):
         assert isinstance(status, int)
     except urllib.error.HTTPError as e:
         body = e.read()
-        logger.warning(f"urlopen to Mux failed for url=({url}):"
+        logger.warning(f"urlopen to Mux failed: url=({url}):"
                        f" exception=({e}); body=({body})")
         status = e.code
         assert isinstance(status, int)
     except urllib.error.URLError as e:
-        logger.error(f"urlopen to Mux failed for url=({url}):"
+        logger.error(f"urlopen to Mux failed: url=({url}):"
                      f" exception=({e})")
         status = 400
     except Exception as e:
         m = rephrase_exception_message(e)
-        logger.error(f"urlopen to Mux failed for url=({url}):"
+        logger.error(f"urlopen to Mux failed: url=({url}):"
                      f" exception=({m})",
                      exc_info=True)
         status = 400

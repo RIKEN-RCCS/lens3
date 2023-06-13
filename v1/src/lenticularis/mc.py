@@ -3,9 +3,10 @@
 # Copyright (c) 2022-2023 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
-# NOTES. (1) It depends on the version of MinIO and MC.  Rewriting
-# this code may be necessary on updating MinIO and MC.  This is for
-# MinIO RELEASE.2022-03-31T04-55-30Z.  (2) The error-cause code
+# NOTES. (1) It depends on the versions of MinIO and MC.  It is
+# necessary to rewrite this code when updating MinIO and MC.  This is
+# tested on MINIO RELEASE.2023-06-09T07-32-12Z and MC
+# RELEASE.2023-06-06T13-48-56Z.  (2) The error-cause code
 # "BucketAlreadyOwnedByYou" returned by an MC command should be
 # treated as not an error.
 
@@ -190,7 +191,7 @@ class Mc():
         assert self._alias is None and self._config_dir is None
         url = f"http://{self._minio_ep}"
         self._config_dir = tempfile.TemporaryDirectory()
-        self._alias = f"{self._pool_id}{random_str(12).lower()}"
+        self._alias = f"{self._pool_id}-{random_str(12).lower()}"
         vv = self._execute_cmd("alias_set",
                                ["alias", "set", self._alias, url,
                                 root_user, root_secret,
@@ -215,26 +216,21 @@ class Mc():
                                ["admin", "info", self._alias])
         return vv
 
-    def _mc_admin_policy_set(self, access_key, policy):
-        vv = self._execute_cmd("admin_policy_set",
-                               ["admin", "policy", "set", self._alias,
-                                policy, f"user={access_key}"])
-        return vv
-
     def _mc_admin_service_stop(self):
         vv = self._execute_cmd("admin_service_stop",
                                ["admin", "service", "stop", self._alias])
         return vv
 
-    def _mc_admin_user_add(self, access_key, secret_access_key):
+    def _mc_admin_user_add(self, access_key, secret_key):
         vv = self._execute_cmd("admin_user_add",
                                ["admin", "user", "add", self._alias,
-                                access_key, secret_access_key])
+                                access_key, secret_key])
         return vv
 
-    def _mc_admin_user_disable(self, access_key):
-        vv = self._execute_cmd("admin_user_disable",
-                               ["admin", "user", "disable", self._alias,
+    def _mc_admin_user_remove(self, access_key):
+        assert isinstance(access_key, str)
+        vv = self._execute_cmd("admin_user_remove",
+                               ["admin", "user", "remove", self._alias,
                                 access_key])
         return vv
 
@@ -244,16 +240,27 @@ class Mc():
                                 access_key])
         return vv
 
+    def _mc_admin_user_disable(self, access_key):
+        vv = self._execute_cmd("admin_user_disable",
+                               ["admin", "user", "disable", self._alias,
+                                access_key])
+        return vv
+
     def _mc_admin_user_list(self):
         vv = self._execute_cmd("admin_user_list",
                                ["admin", "user", "list", self._alias])
         return vv
 
-    def _mc_admin_user_remove(self, access_key):
-        assert isinstance(access_key, str)
-        vv = self._execute_cmd("admin_user_remove",
-                               ["admin", "user", "remove", self._alias,
-                                access_key])
+    def _mc_admin_policy_attach_user(self, access_key, policy):
+        vv = self._execute_cmd("admin_policy_attach",
+                               ["admin", "policy", "attach", self._alias,
+                                policy, "--user", f"{access_key}"])
+        return vv
+
+    def _mc_admin_policy_detach_user(self, access_key, policy):
+        vv = self._execute_cmd("admin_policy_detach",
+                               ["admin", "policy", "detach", self._alias,
+                                policy, "--user", f"{access_key}"])
         return vv
 
     def _mc_list_buckets(self):
@@ -273,40 +280,40 @@ class Mc():
                                ["rb", f"{self._alias}/{bucket}"])
         return vv
 
-    def _mc_policy_set(self, bucket, policy):
-        vv = self._execute_cmd("policy_set",
-                               ["policy", "set", policy,
+    def _mc_anonymous_set(self, bucket, policy):
+        # Sets a policy for anonymous accesses to a bucket.
+        vv = self._execute_cmd("anonymous_set",
+                               ["anonymous", "set", policy,
                                 f"{self._alias}/{bucket}"])
         return vv
 
     def _execute_cmd(self, name, args):
         # (Currently, it does not check the exit code of MC command.)
         assert self._alias is not None and self._config_dir is not None
-        cmd = ([self.mc, "--json", f"--config-dir={self._config_dir.name}"]
+        cmd = ([self.mc, f"--config-dir={self._config_dir.name}", "--json"]
                + list(args))
         assert all(isinstance(i, str) for i in cmd)
         try:
             p = Popen(cmd, stdin=DEVNULL, stdout=PIPE, stderr=PIPE,
                       env=self.env)
             with p:
-                (outs_, errs_) = p.communicate(timeout=self._mc_timeout)
-                outs = str(outs_, "latin-1")
-                errs = str(errs_, "latin-1")
+                (o_, e_) = p.communicate(timeout=self._mc_timeout)
+                outs = str(o_, "latin-1").strip()
+                errs = str(e_, "latin-1").strip()
                 p_status = p.poll()
                 if (self._verbose):
                     logger.debug(f"MC command done: cmd={cmd};"
-                                 f" status={p_status},"
-                                 f" stdout=({outs}), stderr=({errs})")
+                                 f" status={p_status}"
+                                 f" stdout=({outs}) stderr=({errs})")
                     pass
                 if p_status is None:
                     logger.error(f"MC command unfinished: cmd={cmd};"
-                                 f" stdout=({outs}), stderr=({errs})")
+                                 f" stdout=({outs}) stderr=({errs})")
                     vv = _make_mc_error(f"MC command unfinished: ({outs})")
                     return vv
                 try:
                     ee = [json.loads(e)
-                          for e in outs.split("\n")
-                          if e != ""]
+                          for e in outs.splitlines()]
                     vv = _simplify_mc_message(ee)
                     (ok, values, message) = vv
                     if ok == True:
@@ -315,8 +322,9 @@ class Mc():
                         else:
                             logger.debug(f"MC command OK: cmd={name}")
                     else:
-                        logger.debug(f"MC command failed: cmd={cmd};"
-                                     f" error={message}")
+                        logger.error(f"MC command failed: cmd={cmd};"
+                                     f" error={message}"
+                                     f" stdout=({outs}) stderr=({errs})")
                         pass
                     return vv
                 except Exception as e:
@@ -356,19 +364,19 @@ class Mc():
         assert self._alias is not None
         vv = self._mc_make_bucket(bucket)
         _assert_mc_success(vv, "mc.mc_make_bucket")
-        vv = self._mc_policy_set(bucket, policy)
+        vv = self._mc_anonymous_set(bucket, policy)
         _assert_mc_success(vv, "mc.mc_policy_set")
         pass
 
     def set_bucket_policy(self, bucket, policy):
-        vv = self._mc_policy_set(bucket, policy)
+        vv = self._mc_anonymous_set(bucket, policy)
         _assert_mc_success(vv, "mc.mc_policy_set")
         pass
 
 
     def delete_bucket(self, bucket):
         """Makes a bucket inaccessible."""
-        vv = self._mc_policy_set(bucket, "none")
+        vv = self._mc_anonymous_set(bucket, "none")
         _assert_mc_success(vv, "mc.mc_policy_set")
         pass
 
@@ -386,10 +394,10 @@ class Mc():
         """
         vv = self._mc_admin_user_add(key, secret)
         _assert_mc_success(vv, "mc.mc_admin_user_add")
-        vv = self._mc_admin_policy_set(key, policy)
-        _assert_mc_success(vv, "mc.mc_admin_policy_set")
-        vv = self._mc_admin_user_enable(key)
-        _assert_mc_success(vv, "mc.mc_admin_user_enable")
+        vv = self._mc_admin_policy_attach_user(key, policy)
+        _assert_mc_success(vv, "mc.mc_admin_policy_attach")
+        # vv = self._mc_admin_user_enable(key)
+        # _assert_mc_success(vv, "mc.mc_admin_user_enable")
         pass
 
     def delete_secret(self, key):

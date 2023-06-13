@@ -74,7 +74,7 @@
         <v-card-title>New access key</v-card-title>
         <v-text-field
           type="date"
-          v-bind:min="new Date().toISOString().substring(0, 10)"
+          v-bind:min="new Date()"
           label="Expiration (00:00:00 UTC)"
           v-model="pool_data.key_expiration_time">
         </v-text-field>

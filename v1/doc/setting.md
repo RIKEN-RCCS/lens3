@@ -488,7 +488,7 @@ lens3$ aws --endpoint-url https://lens3.example.com/ s3 cp s3://bkt1/somefile1 -
 
 Note that Lens3 does not support listing of buckets by `aws s3 ls`.
 
-## Troubleshoot
+## Troubleshooting
 
 ### Early Troubles
 
@@ -538,5 +538,5 @@ lens3$ redis-cli -p 6378 --scan --pattern '*'
 ### Running MinIO by Hand
 
 ```
-lens3$ minio server --anonymous --json --address :9001 /home/UUU/pool-directory
+lens3$ minio --json --anonymous server --address :9001 /home/UUU/pool-directory
 ```

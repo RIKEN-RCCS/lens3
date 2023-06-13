@@ -271,12 +271,61 @@ old Lens3-Mux + MinIO pair.
 
 Note that alias commands are local (not connect to a MinIO).
 
-### MinIO Startup Messages
+### MinIO Start Messages
 
-Lens3 recognizes a few of the messages at a MinIO startup.  It retries
-starting MinIO on a port-in-use error.  The code to match messages
-needs to be updated after updating MinIO, because these messages may
-change in versions of MinIO,
+Lens3 recognizes some messages from MinIO at a start to judge a run is
+successful.  A failure in starting MinIO make the pool inoperable.  A
+message of level=FATAL is treated as erroneous, but level=ERROR is
+not.  An exception is a port-in-use error which is level=FATAL.  Lens3
+retries to start MinIO in that case.  The patterns of messages in the
+source code may require fixing after updating MinIO and MC command.
+
+A successful run will output several messages of level=INFO.  Lens3
+looks for a message starting with "S3-API:" to be successful.  The
+messages look like as follows (some slots are omitted).
+
+```
+
+{"level":"INFO", ..., "message":"MinIO Object Storage Server"}
+...
+{"level":"INFO", ..., "message":"S3-API: http://XX.XX.XX.XX:9000
+ http://127.0.0.1:9000 "}
+
+{"level":"INFO", ..., "message":"Console: http://XX.XX.XX.XX:38671
+ http://127.0.0.1:38671 "}
+...
+```
+
+Lens3 looks for a message "Specified port is already in use" on a
+port-in-use error.  It will be retried.  Messages look like:
+
+```
+{"level":"FATAL", ..., "message":"Specified port is already in use:
+ listen tcp XX.XX.XX.XX:9000: bind: address already in use",
+ "error":{"message":"Specified port is already in use: listen tcp
+ XX.XX.XX.XX:9000: bind: address already in use", ...}}
+```
+
+Other typical messages are listed below.  Note some messages of
+level=ERROR precede a message of level=FATAL.  Messages from a run
+specifying a non-writable directory look like:
+
+```
+{"level":"ERROR", ..., "error":{...}}
+{"level":"ERROR", ..., "error":{...}}
+{"level":"FATAL", ..., "message":"Invalid arguments specified",
+ "error":{"message":"Invalid arguments specified", "source":[...]}}
+```
+
+Messages from a run with exisiting incompatible ".minio.sys" (created
+by an older version of MinIO) look like:
+
+```
+{"level":"FATAL", ..., "message":"Invalid arguments specified",
+ "error":{"message":"Invalid arguments specified", "source":[...]}}
+```
+
+MESSAGES from older versions
 
 ```
 {"level": "INFO", ..., "message": "API: http://n.n.n.n:n  http://n.n.n.n:n"}
@@ -294,20 +343,31 @@ change in versions of MinIO,
 
 ## Short-Term Todo, or Deficiency
 
-* Rewrite in Go-lang.  The code will be in Go in the next release.
-* Let a reply contain a message on a rejected access at Lens3-Mux.  It
-  returns only a status number in v1.2.
-* UI does not refresh the MinIO state, when it is edited and it
-  transitions from SUSPENDED to READY.
-* Run a remover of orphaned directories, buckets, and keys at
-  Lens3-Api startup.  Adding a bucket/key and removing a pool have a
-  race.  A crash at creation/deletion of a pool may leave an orphaned
-  directory.
-* Make access-key generation of Lens3-Api behave like STS.
-* Add control on the pool status "online".  It is always online currently.
+* Rewrite in Go-lang.  The code will be in Go in the next release
+  (v2.1).
+
+* Avoid polling of a start of MinIO.  Currently, a Mux waits for MinIO
+  by frequent polling in the database.  See wait_for_service_starts().
+
+* Make a reply contain a message on a access rejection at Lens3-Mux.
+  It returns only a status code in v1.2.
+
+* Make access-key generation of Lens3-Api like STS.
+
+* Make UI refresh the MinIO state, when a pool is edited and
+  transitions such as from READY to INOPERABLE or from SUSPENDED to
+  READY.
+
+* Run a reaper of orphaned directories, buckets, and secrets at a
+  Lens3-Api start.  Adding a bucket/secret and removing a pool may
+  have a race.  Or, a crash at creation/deletion of a pool may leave
+  an orphaned directory.
+
 * Make starting a MinIO instance through the frontend proxy.
-  Currently, arbitrary Mux is chosen.  The proxy can balance the
+  Currently, an arbitrary Mux is chosen.  The proxy can balance the
   loads.
+
+* Add control on the pool status "online".  It is always online currently.
 
 ## RANDOM MEMO
 

@@ -29,11 +29,15 @@ lens3$ lens3-admin -c conf.json load-user user-list.csv
 
 ### Updating MinIO and Mc Binaries
 
-MinIO and Mc should be updated manually.  Note that Lens3 may fail to
-operate on updating versions of MinIO or Mc.
+MinIO and Mc command should be updated manually.  It is recommended to
+stop the Lens3 service.  Note that Lens3 only works with a specific
+version of MinIO because it checks output messages from MinIO and Mc.
+It may fail to operate after updating.
 
 ```
-lens3$ mc admin update
+lens3$ mc alais set ALIAS ...
+lens3$ mc admin update ALIAS
+lens3$ mc update
 ```
 
 ### Redis DB Backup

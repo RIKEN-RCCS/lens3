@@ -17697,7 +17697,7 @@ function _sfc_render$2(_ctx, _cache, $props, $setup, $data, $options) {
               }),
               createVNode(VTextField, {
                 type: "date",
-                min: (/* @__PURE__ */ new Date()).toISOString().substring(0, 10),
+                min: /* @__PURE__ */ new Date(),
                 label: "Expiration (00:00:00 UTC)",
                 modelValue: $props.pool_data.key_expiration_time,
                 "onUpdate:modelValue": _cache[2] || (_cache[2] = ($event) => $props.pool_data.key_expiration_time = $event)

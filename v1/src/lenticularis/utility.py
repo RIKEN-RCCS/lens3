@@ -221,7 +221,7 @@ def copy_minimal_environ(oenv):
         "PATH",
         "SHELL",
         "USER",
-        "USERNAME",
+        #"USERNAME",
         "LENS3_CONF",
         "LENS3_MUX_NAME",
     }
@@ -364,35 +364,47 @@ def make_typical_ip_address(ip):
     pass
 
 
-def wait_one_line_on_stdout(p, timeout):
-    """Waits until a line is on stdout.  A returned line can be more than
-    one.  Note that closure is undetectable on a pipe created by Popen
-    until a subprocess exits.  It drains stdout/stderr and returns a
-    pair of byte-strings (outs, errs).
+def wait_line_on_stdout(p, outs, errs, limit):
+    """Waits until at-least one line is on stdout.  It collects
+    stdout/stderr in (outs, errs) as a pair of byte-strings.  It can
+    return more than one line.  It returns a 4-tuple
+    (outs,err,closed,timeout).  Note that a closure is undetectable on
+    a pipe created by Popen until a subprocess exits.
     """
-    (outs, errs, closed) = (b"", b"", False)
+    (closed, timeout) = (False, False)
     ss = [p.stdout, p.stderr]
-    while ss != [] and b"\n" not in outs and not closed:
-        (readable, _, _) = select.select(ss, [], [], timeout)
+    while len(ss) > 0:
+        if limit is None:
+            to = None
+        else:
+            to = limit - int(time.time())
+            if to <= 0:
+                timeout = True
+                break
+            pass
+        (readable, _, _) = select.select(ss, [], [], to)
         if readable == []:
+            timeout = True
             break
         if p.stderr in readable:
-            e0 = p.stderr.read1()
-            if (e0 == b""):
+            e1 = p.stderr.read1()
+            if (e1 == b""):
                 ss = [s for s in ss if s != p.stderr]
                 pass
-            errs += e0
+            errs += e1
             pass
         if p.stdout in readable:
-            o0 = p.stdout.read1()
-            if (o0 == b""):
+            o1 = p.stdout.read1()
+            if (o1 == b""):
                 ss = [s for s in ss if s != p.stdout]
                 closed = True
-                pass
-            outs += o0
+                break
+            outs += o1
+            if b"\n" in o1:
+                break
             pass
         pass
-    return (outs, errs, closed)
+    return (outs, errs, closed, timeout)
 
 
 def _check_direct_hostname_flat(host_label):

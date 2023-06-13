@@ -7,7 +7,7 @@ import os
 from subprocess import Popen, DEVNULL, PIPE, TimeoutExpired
 import sys
 from lenticularis.utility import copy_minimal_environ
-from lenticularis.utility import wait_one_line_on_stdout
+from lenticularis.utility import wait_line_on_stdout
 from lenticularis.utility import rephrase_exception_message
 from lenticularis.utility import logger
 from lenticularis.utility import tracing
@@ -59,23 +59,22 @@ class Spawner():
         ok = False
         (outs, errs) = ("", "")
         try:
-            # It waits for a Manager to write a line on stdout.
             logger.info(f"Starting a Manager: cmd={cmd+args}")
             with Popen(cmd + args, stdin=DEVNULL, stdout=PIPE, stderr=PIPE,
                        env=env) as p:
-                (outs_, errs_, closed) = wait_one_line_on_stdout(p, None)
+                (o1, e1, closed, _) = wait_line_on_stdout(p, b"", b"", None)
                 p_status = p.poll()
                 if p_status is None:
                     try:
-                        (o_, e_) = p.communicate(timeout=self._extra_timeout)
-                        outs_ += o_
-                        errs_ += e_
+                        (o2, e2) = p.communicate(timeout=self._extra_timeout)
+                        o1 += o2
+                        e1 += e2
                     except TimeoutExpired:
                         pass
                     p_status = p.poll()
                     pass
-                outs = str(outs_, "latin-1")
-                errs = str(errs_, "latin-1")
+                outs = str(o1, "latin-1").strip()
+                errs = str(e1, "latin-1").strip()
                 if p_status is None:
                     ok = False
                     logger.warning(f"A Manager may not go background.")

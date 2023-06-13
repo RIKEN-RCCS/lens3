@@ -71,8 +71,9 @@ multiplexer:
   be returned.  It is to avoid denial attacks.
 
 * __busy_suspension_time__ is an interval waited in by a suspended
-  pool before retrying to start MinIO.  It can tentatively be 1/10 of
-  the minio_awake_duration, if there is no good value.
+  pool before retrying to start MinIO.  It can tentatively be a few
+  minutes or a fraction of the minio_awake_duration, becuase it takes
+  a minio_awake_duration before each MinIO instance to stop.
 
 * __mux_node_name__ is optional.  It is used as a host name on which
   Lens3-Mux is running.  It needs to be set when a host name that the
@@ -84,7 +85,7 @@ multiplexer:
 minio_manager:
     sudo: /usr/bin/sudo
     port_min: 9000
-    port_max: 9999
+    port_max: 9029
     minio_awake_duration: 1800
     minio_setup_at_start: true
     heartbeat_interval: 61
@@ -99,7 +100,8 @@ minio_manager:
 * __sudo__ is a path of the sudo command.
 
 * __port_min__ and __port_max__ specifies the port range used to run a
-  Manager.
+  Manager.  The range of ports may be used to limit the number of
+  MinIO instances running on the server host.
 
 * __minio_awake_duration__ specifies a duration until an MinIO
   instance will be shutdown.

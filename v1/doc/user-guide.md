@@ -130,6 +130,21 @@ pool, in which it is unable to start a MinIO instance.  It is to make
 a user's action take effect immediately.  In contrast, additions of
 buckets and secrets are rejected.
 
+## Troubleshooting (Typical Problems)
+
+* A failure in starting MinIO makes the pool INOPERABLE.  For
+  diagnosing, the reason button on UI shows the message from MinIO.
+  However, it may not help much.  It is just `"Invalid arguments
+  specified"` that is the same despite of the reason.  A message of
+  earlier versions of MinIO was more helpful.
+
+* Starting MinIO may fail after updating MinIO and its MC command.
+  MinIO server stores its state in a directory ".minio.sys" in the
+  directory it services for.  The state can be incompatible between
+  versions, and it makes the pool INOPERABLE.  Recovering from the
+  problem needs two steps: remove the directory ".minio.sys", and
+  delete the pool.
+
 ## Restrictions of Lens3
 
 ### No Bucket Operations

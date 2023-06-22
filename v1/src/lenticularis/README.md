@@ -2,27 +2,30 @@
 
 ## Files
 
-* [mux.py](mux.py)
-* [multiplexer.py](multiplexer.py)
-* [manager.py](manager.py)
-* [spawner.py](spawner.py)
+* Lens3-Mux
+  * [mux.py](mux.py)
+  * [multiplexer.py](multiplexer.py)
+  * [manager.py](manager.py)
+  * [spawner.py](spawner.py)
+  * [mc.py](mc.py)
+  * [pooldata.py](pooldata.py)
 
-* [api.py](api.py)
-* [control.py](control.py)
-* [webui/setting.html](webui/setting.html): Lens3-Api page -- it is a
-  template embedding a "base_path" configuration variable in a page.
-* [webui/scripts/lens3ui.js](webui/scripts/lens3ui.js)
+* Lens3-Api
+  * [api.py](api.py)
+  * [control.py](control.py)
 
-* [admintool.py](admintool.py)
-* [start_service.py](start_service.py)
+* lens3-admin command and a service
+  * [admintool.py](admintool.py)
+  * [start_service.py](start_service.py)
 
-* [readconf.py](readconf.py)
-* [mc.py](mc.py)
-* [pooldata.py](pooldata.py)
-* [table.py](table.py)
-* [utility.py](utility.py)
+* Utils
+  * [yamlconf.py](yamlconf.py)
+  * [table.py](table.py)
+  * [y.py](utility.py)
 
-* [test](test): Simple tests.  NOT MAINTAINED NOW.
+* Web UI
+  * [ui](ui): Lens3-Api UI (generated files by vue.js + vuetify)
+  * [ui2/index.html](ui2/index.html): Simple Lens3-Api UI.
+  * [ui2/lens3ui.js](ui2/lens3ui.js)
 
-* [makefile](makefile): It defines rules for running pycodestyle,
-  pylint, and pyright.
+* [makefile](makefile): It includes rules for running pyright.

@@ -123,10 +123,6 @@ function kick_copy_to_clipboard(key) {
   copy_to_clipboard(key);
 }
 
-function kick_dump() {
-  run_dump();
-}
-
 /* Rendering Control. */
 
 function display_pool_list(v) {
@@ -169,9 +165,8 @@ function render_user_info() {
 
 function render_secret_expiration_default() {
   const e = document.getElementById("secret_expiration");
-  const time1 = Math.floor(Date.now() / 1000) + (7 * 24 * 3600);
-  //const date2 = format_time_z(time1).substring(0, 10);
-  e.valueAsDate = new Date(time1 * 1000);
+  const day7 = Math.floor(Date.now() / 1000) + (7 * 24 * 3600);
+  e.valueAsDate = new Date(day7 * 1000);
 }
 
 function render_pool_list(pool_li_items) {
@@ -678,7 +673,18 @@ function format_time_z(d) {
   }
 }
 
-function run_dump() {
+// Causes an error.  It calls API with a wrong csrf-token header
+// value.
+
+function kick_test_csrf() {
+  console.log("test_csrf");
+  const save = pool_data.x_csrf_token;
+  pool_data.x_csrf_token = "af3d34829c5f8ee19f8de0f97849bf7fc8a7e268";
+  api_list_pools();
+  pool_data.x_csrf_token = save;
+}
+
+function kick_dump() {
   console.log("DUMP INTERNAL DATA");
   console.log("base_path_=" + base_path_);
   console.log("document.cookie=" + document.cookie);

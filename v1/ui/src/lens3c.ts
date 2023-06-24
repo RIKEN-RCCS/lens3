@@ -129,7 +129,7 @@ const pool_data_ = {
 
   api_make_secret(pool : string, rw : string) {
     console.log("make_secret: " + rw);
-    const expiration = parse_time_z(pool_data.key_expiration_time);
+    const expiration = new Date(pool_data.key_expiration_time).getTime() / 1000;
     const method = "POST";
     const path = (base_path + "/pool/" + pool_data.pool_name
                   + "/secret");
@@ -178,6 +178,10 @@ function set_user_info_data(data : any) {
   pool_data.footer_banner = d["footer_banner"];
 
   pool_data.edit_pool_visible = false;
+
+  //const day7 = new Date().getTime() + (7 * 24 * 3600 * 1000);
+  //pool_data.key_expiration_time.setTime(day7);
+  //console.log("key_expiration_time=" + pool_data.key_expiration_time);
 
   /* Shows the pool list. */
 

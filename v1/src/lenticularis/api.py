@@ -152,7 +152,7 @@ def _get_ui(ui_name, file, client, user_id, request):
 
 
 class _CsrfSettings(BaseModel):
-    secret_key : str = _api_conf["controller"]["csrf_secret_key"]
+    secret_key : str = _api_conf["controller"]["csrf_secret_seed"]
 
     pass
 

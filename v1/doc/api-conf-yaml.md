@@ -18,8 +18,8 @@ gunicorn:
     port: 8003
     workers: 2
     timeout: 120
-    access_logfile: "/var/tmp/lenticularis/lens3-gunicorn-api-access-log"
-    log_file: "/var/tmp/lenticularis/lens3-gunicorn-api-log"
+    access_logfile: "/var/log/lenticularis/lens3-gunicorn-api-access-log"
+    log_file: "/var/log/lenticularis/lens3-gunicorn-api-log"
     log_level: debug
     #log_syslog_facility: LOCAL8
     reload: yes
@@ -40,9 +40,7 @@ controller:
     probe_access_timeout: 60
     minio_mc_timeout: 10
     max_pool_expiry: 630720000
-    csrf_secret_key: xyzxyz
-    s3_url: https://lens3.example.com
-    footer_banner: This site is operated by example.com
+    csrf_secret_seed: xyzxyz
 ```
 
 * __front_host__ is a host name of a proxy.  It is used as a HOST
@@ -71,14 +69,22 @@ controller:
 * __max_pool_expiry__ is a time limit of a pool is active.  630720000
   is 10 years.
 
-* __csrf_secret_key__: is a salt (?) used by fastapi_csrf_protect
-  module.
+* __csrf_secret_seed__: is a seed used by CSRF prevention in
+  fastapi_csrf_protect module.
 
-* __s3_url__: is just information.  It is displayed in the UI as an
-  S3 endpoint.
+## UI Part
 
-* __footer_banner__: is also just information.  It is displayed in the
-  UI as a footer.
+```
+ui:
+    s3_url: https://lens3.example.com
+    footer_banner: This site is operated by example.com
+```
+
+* __s3_url__: is just information.  It is displayed as an S3 endpoint
+  in the UI.
+
+* __footer_banner__: is also just information.  It is displayed as a
+  footer in the UI.
 
 ## MinIO Part
 
@@ -93,10 +99,11 @@ These specify commands of MinIO.
 ## Logging Part
 
 ```
-log_file: "/var/tmp/lenticularis/lens3-api-log"
+log_file: "/var/log/lenticularis/lens3-api-log"
 log_syslog:
     facility: LOCAL7
     priority: DEBUG
 ```
 
-* __log_file__ entry is optional.
+* __log_file__: specifies a log file.  This entry is optional.  If
+  log_file is specified, the log_syslog section is ignored.

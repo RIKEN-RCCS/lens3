@@ -17984,7 +17984,7 @@ const pool_data_ = {
   },
   api_make_secret(pool, rw) {
     console.log("make_secret: " + rw);
-    const expiration = parse_time_z(pool_data.key_expiration_time);
+    const expiration = new Date(pool_data.key_expiration_time).getTime() / 1e3;
     const method = "POST";
     const path = base_path + "/pool/" + pool_data.pool_name + "/secret";
     const args = {
@@ -18071,9 +18071,6 @@ function format_time_in_keys(keys) {
       "expiration_time": format_time_z(k["expiration_time"])
     };
   });
-}
-function parse_time_z(s) {
-  return new Date(s).getTime() / 1e3;
 }
 function format_time_z(d) {
   if (d == 0) {

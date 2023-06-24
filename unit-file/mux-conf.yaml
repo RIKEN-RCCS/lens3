@@ -3,15 +3,15 @@ version: "v1.2"
 aws_signature: "AWS4-HMAC-SHA256"
 
 gunicorn:
-    port: 8004
+    port: 8003
     workers: 4
     threads: 4
     timeout: 60
-    reload: yes
-    access_logfile: "/var/tmp/lenticularis/lens3-gunicorn-mux-access-log"
-    log_file: "/var/tmp/lenticularis/lens3-gunicorn-mux-log"
+    access_logfile: "/var/log/lenticularis/lens3-gunicorn-mux-access-log"
+    log_file: "/var/log/lenticularis/lens3-gunicorn-mux-log"
     log_level: debug
     #log_syslog_facility: LOCAL7
+    reload: yes
 
 multiplexer:
     front_host: lens3.example.com
@@ -27,7 +27,7 @@ multiplexer:
 minio_manager:
     sudo: /usr/bin/sudo
     port_min: 9000
-    port_max: 9999
+    port_max: 9029
     minio_awake_duration: 1800
     minio_setup_at_start: true
     heartbeat_interval: 61
@@ -42,7 +42,7 @@ minio:
     minio: /home/lens3/bin/minio
     mc: /home/lens3/bin/mc
 
-log_file: "/var/tmp/lenticularis/lens3-mux-log"
+log_file: "/var/log/lenticularis/lens3-mux-log"
 log_syslog:
     facility: LOCAL7
     priority: DEBUG

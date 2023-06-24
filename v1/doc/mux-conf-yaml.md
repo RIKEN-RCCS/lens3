@@ -28,8 +28,8 @@ gunicorn:
     threads: 4
     timeout: 60
     reload: yes
-    access_logfile: "/var/tmp/lenticularis/lens3-gunicorn-mux-access-log"
-    log_file: "/var/tmp/lenticularis/lens3-gunicorn-mux-log"
+    access_logfile: "/var/log/lenticularis/lens3-gunicorn-mux-access-log"
+    log_file: "/var/log/lenticularis/lens3-gunicorn-mux-log"
     log_level: debug
     #log_syslog_facility: LOCAL7
 ```
@@ -136,10 +136,11 @@ These specify commands of MinIO.
 ## Logging Part
 
 ```
-log_file: "/var/tmp/lenticularis/lens3-mux-log"
+log_file: "/var/log/lenticularis/lens3-mux-log"
 log_syslog:
     facility: LOCAL7
     priority: DEBUG
 ```
 
-* __log_file__ entry is optional.
+* __log_file__: specifies a log file.  This entry is optional.  If
+  log_file is specified, the log_syslog section is ignored.

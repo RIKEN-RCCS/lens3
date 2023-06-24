@@ -180,6 +180,8 @@ class Control_Api():
         self._lens3_version = "v1.2.1"
         self._api_version = "v1.2"
 
+        self.pkg_dir = os.path.dirname(inspect.getfile(lenticularis))
+
         api_param = api_conf["controller"]
         self._front_host = api_param["front_host"]
         self._front_host_ip = get_ip_addresses(self._front_host)[0]
@@ -191,14 +193,11 @@ class Control_Api():
         self._probe_access_timeout = int(api_param["probe_access_timeout"])
         self._mc_timeout = int(api_param["minio_mc_timeout"])
         self._max_pool_expiry = int(api_param["max_pool_expiry"])
+        self.csrf_key = api_param["csrf_secret_seed"]
 
-        # pkgdir = os.path.dirname(inspect.getfile(lenticularis))
-        # self.webui_dir = os.path.join(pkgdir, "webui")
-        self.pkg_dir = os.path.dirname(inspect.getfile(lenticularis))
-
-        self.csrf_key = api_param["csrf_secret_key"]
-        self._s3_url = api_param.get("s3_url") or ""
-        self._footer_banner = api_param.get("footer_banner") or ""
+        ui_param = api_conf["ui"]
+        self._s3_url = ui_param.get("s3_url", "")
+        self._footer_banner = ui_param.get("footer_banner", "").strip()
 
         minio_param = api_conf["minio"]
         self._bin_mc = minio_param["mc"]
@@ -628,7 +627,7 @@ class Control_Api():
             "groups": groups,
             "lens3_version": self._lens3_version,
             "s3_url": self._s3_url,
-            "footer_banner": self._footer_banner.strip(),
+            "footer_banner": self._footer_banner,
         }
         return {"user_info": info}
 

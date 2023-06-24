@@ -3,25 +3,27 @@ version: "v1.2"
 aws_signature: "AWS4-HMAC-SHA256"
 
 gunicorn:
-    port: 8003
+    port: 8004
     workers: 2
     timeout: 120
-    reload: yes
-    access_logfile: "/var/tmp/lenticularis/lens3-gunicorn-api-access-log"
-    log_file: "/var/tmp/lenticularis/lens3-gunicorn-api-log"
+    access_logfile: "/var/log/lenticularis/lens3-gunicorn-api-access-log"
+    log_file: "/var/log/lenticularis/lens3-gunicorn-api-log"
     log_level: debug
     #log_syslog_facility: LOCAL8
+    reload: yes
 
 controller:
     front_host: lens3.example.com
     trusted_proxies:
         - localhost
-    base_path: "/api"
+    base_path: "/lens3.api"
     claim_uid_map: email-name
     probe_access_timeout: 60
     minio_mc_timeout: 10
     max_pool_expiry: 630720000
-    csrf_secret_key: xyzxyz
+    csrf_secret_seed: xyzxyz
+
+ui:
     s3_url: https://lens3.example.com
     footer_banner: This site is operated by example.com
 
@@ -29,7 +31,7 @@ minio:
     minio: /home/lens3/bin/minio
     mc: /home/lens3/bin/mc
 
-log_file: "/var/tmp/lenticularis/lens3-api-log"
+log_file: "/var/log/lenticularis/lens3-api-log"
 log_syslog:
     facility: LOCAL7
     priority: DEBUG

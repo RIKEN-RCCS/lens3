@@ -201,9 +201,7 @@ def _api_conf_schema():
             "probe_access_timeout": {"type": "number"},
             "minio_mc_timeout": {"type": "number"},
             "max_pool_expiry": {"type": "number"},
-            "csrf_secret_key": {"type": "string"},
-            "s3_url": {"type": "string"},
-            "footer_banner": {"type": "string"},
+            "csrf_secret_seed": {"type": "string"},
         },
         "required": [
             "front_host",
@@ -213,7 +211,17 @@ def _api_conf_schema():
             "probe_access_timeout",
             "minio_mc_timeout",
             "max_pool_expiry",
-            "csrf_secret_key",
+            "csrf_secret_seed",
+        ],
+        "additionalProperties": False,
+    }
+    ui = {
+        "type": "object",
+        "properties": {
+            "s3_url": {"type": "string"},
+            "footer_banner": {"type": "string"},
+        },
+        "required": [
         ],
         "additionalProperties": False,
     }
@@ -225,6 +233,7 @@ def _api_conf_schema():
             "aws_signature": {"type": "string"},
             "gunicorn": _gunicorn_json_schema,
             "controller": controller,
+            "ui": ui,
             "minio": _minio_json_schema,
             "log_file": {"type": "string"},
             "log_syslog": _syslog_json_schema,

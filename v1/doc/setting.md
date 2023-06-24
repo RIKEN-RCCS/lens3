@@ -106,12 +106,14 @@ such as by `umask 022`.
 ```
 
 Download MinIO binaries "minio" and "mc" from min.io, then fix the
-file permission.
+permission.  The home, ~/bin, ~/bin/minio, and ~/bin/mc are set to be
+accessible as permission=755 so that anyone can run minio and mc.
 
 ```
 # su - lens3
 lens3$ cd ~
 lens3$ mkdir bin
+lens3$ chmod 755 ~ ~/bin
 lens3$ curl https://dl.min.io/server/minio/release/linux-amd64/minio -o /tmp/minio
 lens3$ install -m 755 -c /tmp/minio ~/bin/minio
 lens3$ curl https://dl.min.io/client/mc/release/linux-amd64/mc -o /tmp/mc

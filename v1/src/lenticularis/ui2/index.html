@@ -113,8 +113,14 @@
         <span class="label">SERVER RESPONSE</span>
       </div>
       <div id="server_response"></div>
-      <button onclick="kick_dump()">Dump</button> (Dumps some internal
-      data on the javascript console)
+      <div>
+        <button onclick="kick_test_csrf()">Test CSRF</button> (Calls API
+        with a fake csrf-token header)
+      </div>
+      <div>
+        <button onclick="kick_dump()">Dump</button> (Dumps some internal
+        data on the javascript console)
+      </div>
     </div>
 
     PLACE_BASE_PATH_SETTING_HERE

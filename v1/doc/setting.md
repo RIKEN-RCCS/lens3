@@ -20,18 +20,18 @@ The steps are:
 
 Lens3 needs a couple of services as depicted in the configuration
 figure above.  A (reverse) proxy can be any server, but Apache HTTP
-Server is used in this setting.  Redis runs at port=6378.  Lens3-Mux
-and Lens3-Api are Lens3 services, and Lens3-Mux runs at port=8003 and
-Lens3-Api run at port=8004.  The proxy is set up to forward requests
-to Lens3-Mux and Lens3-Api.  A pseudo user "lens3" is the owner of the
-services, who is given a privilege of a "sudoers".  Optionally,
-"lens3-admin" represents an administrator, anyone who can can access
-Lens3 package and a configuration file.  ("lens3-admin" can be
-"lens3").  We assume RedHat/Rocky 8.8 and Python 3.9 at this writing
-(in June 2023).
+Server is used in this setting.  A key-value database server, Redis,
+runs at port=6378.  Lens3-Mux and Lens3-Api are Lens3 services, and
+they run at port=8003 and port=8004.  The proxy is set up to forward
+requests to Lens3-Mux and Lens3-Api.
 
-* Python
-  * 3.9 and later
+A pseudo user "lens3" is the owner of the services, who is given a
+privilege of a "sudoers".  An optional second pseudo user
+"lens3-admin" represents an administrator, anyone who can can access
+Lens3 package and a configuration file.
+
+We assume RedHat/Rocky 8.8 and Python 3.9 at this writing (in June
+2023).
 
 * Services
   * HTTP Proxy (port=433)
@@ -55,7 +55,9 @@ Lens3 package and a configuration file.  ("lens3-admin" can be
   * /etc/nginx/conf.d/lens3proxy.conf
   * /etc/nginx/private/htpasswd
 
-* Prerequisite software
+* Software
+  * RedHat/Rocky 8.8
+  * Python 3.9
   * git
 
 ## Install Prerequisites
@@ -96,8 +98,8 @@ downloaded Lens3 package.
 
 Make a pseudo-user for the services.  UID/GID will be selected from a
 lower range below 1000 that won't conflict with users.  Most of the
-installation is done by "lens3".  Fix the umask appropriately such as
-by `umask 022`.
+installation is done by the user "lens3".  Fix its umask appropriately
+such as by `umask 022`.
 
 ```
 # useradd -K UID_MIN=300 -K UID_MAX=499 -U -d /home/lens3 lens3
@@ -117,7 +119,7 @@ lens3$ install -m 755 -c /tmp/mc ~/bin/mc
 ```
 
 Install Lens3 and Python packages.  Installation should be run in the
-"$TOP/v1" directory.  Run `make install` in the $TOP/v1 directory
+"$TOP/v1" directory.  Run `make install` in the "$TOP/v1" directory
 does the same work.
 
 ```
@@ -140,7 +142,7 @@ security attributes "system_u:object_r:tmp_t:s0".
 # ls -dlZ /var/log/lenticularis
 ```
 
-## Enable Local http Connections
+## Enable http Connections
 
 Let SELinux accept connections inside a local host.
 
@@ -152,7 +154,16 @@ Let SELinux accept connections inside a local host.
 # setsebool -P httpd_can_network_connect 1
 ```
 
-## Start an HTTP Proxy
+Modify the firewall to accept connection to port=443.
+
+```
+# firewall-cmd --state
+# firewall-cmd --list-all
+# firewall-cmd --zone=public --add-port=443/tcp --permanent
+# firewall-cmd --reload
+```
+
+## Set up an HTTP Proxy
 
 It is highly site dependent.
 
@@ -235,15 +246,6 @@ file.  Change the lines of crt and key in "/etc/httpd/conf.d/ssl.conf".
 > SSLCertificateKeyFile /etc/pki/tls/private/lens3.key
 ```
 
-Check firewall state for Apache.
-
-```
-# firewall-cmd --state
-# firewall-cmd --list-all
-# firewall-cmd --zone=public --add-port=443/tcp --permanent
-# firewall-cmd --reload
-```
-
 ### Proxy by NGINX
 
 The following example is for basic authentication.  First, prepare a
@@ -305,9 +307,9 @@ ngx_http_core_module parameters:
 See for the AWS S3 CLI parameters:
 [https://docs.aws.amazon.com/cli/latest/topic/s3-config.html](https://docs.aws.amazon.com/cli/latest/topic/s3-config.html).
 
-## Set up Redis
+## Start Redis
 
-Lens3 uses a separate Redis instance running on port=6378.
+Lens3 uses a separate Redis instance running at port=6378.
 
 Prepare a configuration file as "/etc/lenticularis/redis.conf".
 Change the owner and edit the fields.  Note starting Redis will fail
@@ -348,9 +350,9 @@ file.
 ## Store Settings in Redis
 
 Lens3-Mux and Lens3-Api load the configuration from Redis.  This
-section prepares for it.  It is better to run `lens3-admin` on the
-same host running Lens3-Api.  See the following lists for descriptions
-of the fields of the configurations.
+section prepares it.  It is better to run `lens3-admin` on the same
+host running Redis.  See the following descriptions of the fields of
+the configurations.
 
 * [mux-conf-yaml.md](mux-conf-yaml.md)
 * [api-conf-yaml.md](api-conf-yaml.md)
@@ -384,8 +386,8 @@ lens3$ lens3-admin -c conf.json show-conf
 
 Lens3 runs MinIO as a non-root process, and thus, it uses sudo to
 start MinIO.  The provided example setting is that the user "lens3" is
-only allowed to run "/home/lens3/bin/minio".  Copy and edit a sudoers
-entry in "/etc/sudoers.d".
+only allowed to run "/home/lens3/bin/minio".  Copy and edit an entry
+in "/etc/sudoers.d/lenticularis-sudoers".
 
 ```
 # cp $TOP/unit-file/mux/lenticularis-sudoers /etc/sudoers.d/
@@ -471,7 +473,7 @@ Redis status:
 # systemctl status lenticularis-redis
 ```
 
-* Lens3-Mux and Lens3-Api status:
+Lens3-Mux and Lens3-Api status:
 
 ```
 # systemctl status lenticularis-mux
@@ -481,8 +483,8 @@ lens3$ cd ~
 lens3$ lens3-admin -c conf.json show-ep
 ```
 
-`show-ep` shows endpoints of Lens3-Mux and MinIO instances.  Something
-goes wrong if there are no entries of Lens3-Mux.
+The admin command `show-ep` shows the endpoints of Lens3-Mux and MinIO
+instances.  Something goes wrong if there are no entries of Lens3-Mux.
 
 ## Test Accesses
 

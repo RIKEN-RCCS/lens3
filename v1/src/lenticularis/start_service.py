@@ -69,7 +69,7 @@ def _run_api():
     env = copy_minimal_environ(os.environ)
     assert "LENS3_CONF" in env
     cmd = [sys.executable, "-m", "gunicorn"]
-    args = ["--worker-class", "uvicorn.workers.UvicornWorker", "--bind", bind]
+    args = ["--bind", bind, "--worker-class", "uvicorn.workers.UvicornWorker"]
     options = _list_gunicorn_command_options(gunicorn_conf)
     args += options
     args += ["lenticularis.api:app()"]

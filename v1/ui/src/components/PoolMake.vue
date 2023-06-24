@@ -3,9 +3,10 @@
     <div class="text-h5 text-center w-100">Manage Pools</div>
     <v-card variant="outlined" class="w-100 ma-4">
       <v-card-text>
-        A pool is a directory where S3 buckets are created. It is
-        associated to a MinIO instance. The first thing to do is
-        to create a new pool.
+        A pool is a directory where S3 buckets are created. Each pool
+        is associated to a MinIO instance.  A MinIO instance will run
+        in the specified directory and accesses/modifies the
+        contents. The first thing to do is to create a new pool.
       </v-card-text>
     </v-card>
 

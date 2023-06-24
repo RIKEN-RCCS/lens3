@@ -161,8 +161,7 @@ class Multiplexer():
             return []
         except Exception as e:
             m = rephrase_exception_message(e)
-            logger.error((f"Mux ({self._mux_host}) Got"
-                          f" an unhandled exception: exception=({m})"),
+            logger.error(f"Mux GOT AN UNHANDLED EXCEPTION: ({m})",
                          exc_info=True)
             pass
         start_response("500", [])

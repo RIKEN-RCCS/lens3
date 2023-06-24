@@ -103,7 +103,7 @@ export default {
     },
   },
   data() {
-    this.pool_data.api_list_pools();
+    //this.pool_data.api_list_pools();
     return {};
   },
   methods: {

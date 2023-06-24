@@ -8,7 +8,7 @@
 
 import {reactive, computed} from "vue";
 
-let csrf_token : string;
+let x_csrf_token : string = "";
 const base_path : string = Function("return base_path_")();
 
 /* Editor State. */
@@ -53,12 +53,9 @@ const pool_data_ = {
 
   edit_pool_visible: false,
   menu_visible: false,
-  //pool_name_visible: true,
-  //pool_args_visible: false,
-  //make_pool_mode: false,
 
   dialog_text: "",
-  dialog_show: false,
+  dialog_visible: false,
 
   edit_pool(i : number) {
     const d = this.pool_list[i]
@@ -90,8 +87,7 @@ const pool_data_ = {
     const method = "POST";
     const path = (base_path + "/pool");
     const args = {"buckets_directory": directory,
-                  "owner_gid": gid,
-                  "CSRF-Token": csrf_token};
+                  "owner_gid": gid};
     const body = JSON.stringify(args);
     const triple = {method, path, body};
     return submit_request("Make pool", triple,
@@ -102,7 +98,7 @@ const pool_data_ = {
     console.log("delete_pool: id=" + pool);
     const method = "DELETE";
     const path = (base_path + "/pool/" + pool);
-    const args = {"CSRF-Token": csrf_token};
+    const args = {};
     const body = JSON.stringify(args);
     const triple = {method, path, body};
     return submit_request("Delete pool", triple,
@@ -114,8 +110,7 @@ const pool_data_ = {
     const method = "PUT";
     const path = (base_path + "/pool/" + pool + "/bucket");
     const args = {"name": name,
-                  "bkt_policy": policy,
-                  "CSRF-Token": csrf_token};
+                  "bkt_policy": policy};
     const body = JSON.stringify(args);
     const triple = {method, path, body};
     return submit_request("Make bucket", triple, set_pool_data);
@@ -126,7 +121,7 @@ const pool_data_ = {
     const method = "DELETE";
     const path = (base_path + "/pool/" + pool_data.pool_name
                   + "/bucket/" + name);
-    const args = {"CSRF-Token": csrf_token};
+    const args = {};
     const body = JSON.stringify(args);
     const triple = {method, path, body};
     return submit_request("Delete bucket", triple, set_pool_data);
@@ -139,8 +134,7 @@ const pool_data_ = {
     const path = (base_path + "/pool/" + pool_data.pool_name
                   + "/secret");
     const args = {"key_policy": rw,
-                  "expiration_time": expiration,
-                  "CSRF-Token": csrf_token};
+                  "expiration_time": expiration};
     const body = JSON.stringify(args);
     const triple = {method, path, body};
     return submit_request("Make secret", triple, set_pool_data);
@@ -151,7 +145,7 @@ const pool_data_ = {
     const method = "DELETE";
     const path = (base_path + "/pool/" + pool_data.pool_name
                   + "/secret/" + key);
-    const args = {"CSRF-Token": csrf_token};
+    const args = {};
     const body = JSON.stringify(args);
     const triple = {method, path, body};
     return submit_request("Delete secret", triple, set_pool_data);
@@ -161,19 +155,33 @@ const pool_data_ = {
 
 export const pool_data = reactive(pool_data_);
 
+// Sets the user-info, then shows the pool list.  These are sequential
+// executed because the CSRF state is initialized after getting the
+// user-info.
+
 function set_user_info_data(data : any) {
   console.assert(data && data["user_info"]);
   const d = data["user_info"];
   console.assert(d["api_version"] == "v1.2", "Lens3 api mismatch");
+
+  if (data["x_csrf_token"] != null) {
+    x_csrf_token = data["x_csrf_token"];
+    console.log("x_csrf_token=" + x_csrf_token);
+  }
+
+  pool_data.base_path = base_path;
   pool_data.user = d["uid"];
   pool_data.group = d["groups"][0];
   pool_data.group_choices = d["groups"];
   pool_data.lens3_version = d["lens3_version"];
   pool_data.s3_url = d["s3_url"];
   pool_data.footer_banner = d["footer_banner"];
-  pool_data.base_path = base_path;
 
   pool_data.edit_pool_visible = false;
+
+  /* Shows the pool list. */
+
+  pool_data.api_list_pools();
 }
 
 function set_pool_list(data : any) {
@@ -254,14 +262,23 @@ function submit_request(op_name : string, triple : any, process_response : (data
   const path = triple.path;
   //const path = "http://localhost:8003" + triple.path;
   const body : string = triple.body;
+  const headers = {
+    "Content-Type": "application/json",
+  };
+  if (x_csrf_token != "") {
+    Object.assign(headers, {"X-CSRF-Token": x_csrf_token});
+  };
+
   console.log("method: " + method);
   console.log("path: " + path);
   console.log("body: " + body);
+  console.log("headers: " + JSON.stringify(headers));
 
   const options = {
     method: method,
-    mode: "cors" as RequestMode,
+    //mode: "cors" as RequestMode,
     body: body,
+    headers: headers,
     //headers: {
     //"sec-fetch-site": "cross-site",
     //"X-REMOTE-USER": "m-matsuda",
@@ -272,21 +289,18 @@ function submit_request(op_name : string, triple : any, process_response : (data
       if (!response.ok) {
         response.json().then(
           (data) => {
-            console.log("response-data: " + data);
+            console.log("response-data: " + JSON.stringify(data));
             console.log(op_name + " ... error: " + JSON.stringify(data));
             const slots = (({status, reason}) => ({status, reason}))(data);
             pool_data.dialog_text = (op_name + " failed: "
                                      + JSON.stringify(slots));
-            pool_data.dialog_show = true;
+            pool_data.dialog_visible = true;
             throw new Error(JSON.stringify(data));
           })
       } else {
         response.json().then(
           (data) => {
             console.log(op_name + " ... done: " + JSON.stringify(data));
-            if (data["CSRF-Token"] != null) {
-              csrf_token = data["CSRF-Token"];
-            }
             process_response(data);
           })}
     })

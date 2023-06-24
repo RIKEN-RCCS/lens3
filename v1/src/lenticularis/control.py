@@ -38,7 +38,7 @@ from lenticularis.utility import logger
 
 
 def erase_minio_ep(tables, pool_id):
-    # Clears a MinIO endpoint.
+    """Clears a MinIO endpoint."""
     try:
         tables.delete_minio_ep(pool_id)
     except Exception as e:
@@ -57,7 +57,7 @@ def erase_minio_ep(tables, pool_id):
 
 
 def erase_pool_data(tables, pool_id):
-    # Clears database about the pool.
+    """Clears database about the pool."""
     path = tables.get_buckets_directory_of_pool(pool_id)
     bkts = tables.list_buckets(pool_id)
     keys = tables.list_access_keys_of_pool(pool_id)

@@ -35,21 +35,6 @@ export default defineConfig({
       '.vue',
     ],
   },
-  server: {
-    host: "0.0.0.0",
-    port: 8009,
-    cors: true,
-    /*
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "*",
-    },
-    */
-  },
-  preview: {
-    host: "0.0.0.0",
-    port: 8009,
-  },
   build: {
     minify: false,
     outDir: "../src/lenticularis/ui",

@@ -16710,7 +16710,7 @@ function _sfc_render$4(_ctx, _cache, $props, $setup, $data, $options) {
         default: withCtx(() => [
           createVNode(VCardText, null, {
             default: withCtx(() => [
-              createTextVNode(" A pool is a directory where S3 buckets are created. It is associated to a MinIO instance. The first thing to do is to create a new pool. ")
+              createTextVNode(" A pool is a directory where S3 buckets are created. Each pool is associated to a MinIO instance. A MinIO instance will run in the specified directory and accesses/modifies the contents. The first thing to do is to create a new pool. ")
             ]),
             _: 1
           })
@@ -16778,7 +16778,6 @@ const _sfc_main$5 = {
     }
   },
   data() {
-    this.pool_data.api_list_pools();
     return {};
   },
   methods: {
@@ -17519,7 +17518,6 @@ const _sfc_main$4 = {
     }
   },
   data() {
-    this.pool_data.api_list_pools();
     return {};
   },
   methods: {
@@ -17839,7 +17837,7 @@ const _sfc_main$3 = {
   }
 };
 function _sfc_render$1(_ctx, _cache, $props, $setup, $data, $options) {
-  return $props.pool_data.dialog_show ? (openBlock(), createBlock(VDialog, {
+  return $props.pool_data.dialog_visible ? (openBlock(), createBlock(VDialog, {
     key: 0,
     modelValue: $props.pool_data.dialog_text,
     "onUpdate:modelValue": _cache[1] || (_cache[1] = ($event) => $props.pool_data.dialog_text = $event),
@@ -17854,7 +17852,7 @@ function _sfc_render$1(_ctx, _cache, $props, $setup, $data, $options) {
             default: withCtx(() => [
               createVNode(VBtn, {
                 block: "",
-                onClick: _cache[0] || (_cache[0] = ($event) => $props.pool_data.dialog_show = false)
+                onClick: _cache[0] || (_cache[0] = ($event) => $props.pool_data.dialog_visible = false)
               }, {
                 default: withCtx(() => [
                   createTextVNode("Close")
@@ -17872,7 +17870,7 @@ function _sfc_render$1(_ctx, _cache, $props, $setup, $data, $options) {
   }, 8, ["modelValue"])) : createCommentVNode("", true);
 }
 const AlertPopup = /* @__PURE__ */ _export_sfc(_sfc_main$3, [["render", _sfc_render$1]]);
-let csrf_token;
+let x_csrf_token = "";
 const base_path = Function("return base_path_")();
 const pool_data_ = {
   /* Entries for PoolMake. */
@@ -17906,11 +17904,8 @@ const pool_data_ = {
   key_expiration_time: "",
   edit_pool_visible: false,
   menu_visible: false,
-  //pool_name_visible: true,
-  //pool_args_visible: false,
-  //make_pool_mode: false,
   dialog_text: "",
-  dialog_show: false,
+  dialog_visible: false,
   edit_pool(i) {
     const d = this.pool_list[i];
     const data = { "pool_desc": d };
@@ -17939,8 +17934,7 @@ const pool_data_ = {
     const path = base_path + "/pool";
     const args = {
       "buckets_directory": directory,
-      "owner_gid": gid,
-      "CSRF-Token": csrf_token
+      "owner_gid": gid
     };
     const body = JSON.stringify(args);
     const triple = { method, path, body };
@@ -17956,7 +17950,7 @@ const pool_data_ = {
     console.log("delete_pool: id=" + pool);
     const method = "DELETE";
     const path = base_path + "/pool/" + pool;
-    const args = { "CSRF-Token": csrf_token };
+    const args = {};
     const body = JSON.stringify(args);
     const triple = { method, path, body };
     return submit_request(
@@ -17973,8 +17967,7 @@ const pool_data_ = {
     const path = base_path + "/pool/" + pool + "/bucket";
     const args = {
       "name": name,
-      "bkt_policy": policy,
-      "CSRF-Token": csrf_token
+      "bkt_policy": policy
     };
     const body = JSON.stringify(args);
     const triple = { method, path, body };
@@ -17984,7 +17977,7 @@ const pool_data_ = {
     console.log("delete_bucket: name=" + name);
     const method = "DELETE";
     const path = base_path + "/pool/" + pool_data.pool_name + "/bucket/" + name;
-    const args = { "CSRF-Token": csrf_token };
+    const args = {};
     const body = JSON.stringify(args);
     const triple = { method, path, body };
     return submit_request("Delete bucket", triple, set_pool_data);
@@ -17996,8 +17989,7 @@ const pool_data_ = {
     const path = base_path + "/pool/" + pool_data.pool_name + "/secret";
     const args = {
       "key_policy": rw,
-      "expiration_time": expiration,
-      "CSRF-Token": csrf_token
+      "expiration_time": expiration
     };
     const body = JSON.stringify(args);
     const triple = { method, path, body };
@@ -18007,7 +17999,7 @@ const pool_data_ = {
     console.log("delete_secret: " + key);
     const method = "DELETE";
     const path = base_path + "/pool/" + pool_data.pool_name + "/secret/" + key;
-    const args = { "CSRF-Token": csrf_token };
+    const args = {};
     const body = JSON.stringify(args);
     const triple = { method, path, body };
     return submit_request("Delete secret", triple, set_pool_data);
@@ -18018,14 +18010,19 @@ function set_user_info_data(data) {
   console.assert(data && data["user_info"]);
   const d = data["user_info"];
   console.assert(d["api_version"] == "v1.2", "Lens3 api mismatch");
+  if (data["x_csrf_token"] != null) {
+    x_csrf_token = data["x_csrf_token"];
+    console.log("x_csrf_token=" + x_csrf_token);
+  }
+  pool_data.base_path = base_path;
   pool_data.user = d["uid"];
   pool_data.group = d["groups"][0];
   pool_data.group_choices = d["groups"];
   pool_data.lens3_version = d["lens3_version"];
   pool_data.s3_url = d["s3_url"];
   pool_data.footer_banner = d["footer_banner"];
-  pool_data.base_path = base_path;
   pool_data.edit_pool_visible = false;
+  pool_data.api_list_pools();
 }
 function set_pool_list(data) {
   console.assert(data && data["pool_list"]);
@@ -18090,13 +18087,21 @@ function submit_request(op_name, triple, process_response) {
   const method = triple.method;
   const path = triple.path;
   const body = triple.body;
+  const headers = {
+    "Content-Type": "application/json"
+  };
+  if (x_csrf_token != "") {
+    Object.assign(headers, { "X-CSRF-Token": x_csrf_token });
+  }
   console.log("method: " + method);
   console.log("path: " + path);
   console.log("body: " + body);
+  console.log("headers: " + JSON.stringify(headers));
   const options = {
     method,
-    mode: "cors",
-    body
+    //mode: "cors" as RequestMode,
+    body,
+    headers
     //headers: {
     //"sec-fetch-site": "cross-site",
     //"X-REMOTE-USER": "m-matsuda",
@@ -18106,11 +18111,11 @@ function submit_request(op_name, triple, process_response) {
     if (!response.ok) {
       response.json().then(
         (data) => {
-          console.log("response-data: " + data);
+          console.log("response-data: " + JSON.stringify(data));
           console.log(op_name + " ... error: " + JSON.stringify(data));
           const slots = (({ status, reason }) => ({ status, reason }))(data);
           pool_data.dialog_text = op_name + " failed: " + JSON.stringify(slots);
-          pool_data.dialog_show = true;
+          pool_data.dialog_visible = true;
           throw new Error(JSON.stringify(data));
         }
       );
@@ -18118,9 +18123,6 @@ function submit_request(op_name, triple, process_response) {
       response.json().then(
         (data) => {
           console.log(op_name + " ... done: " + JSON.stringify(data));
-          if (data["CSRF-Token"] != null) {
-            csrf_token = data["CSRF-Token"];
-          }
           process_response(data);
         }
       );

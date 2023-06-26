@@ -3,6 +3,8 @@
 # Copyright (c) 2022-2023 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
+# For cookies, See https://datatracker.ietf.org/doc/html/rfc2965.html
+
 import platform
 import string
 import random
@@ -39,6 +41,30 @@ def _basic_auth_token(user, password):
     return f"Basic {s}"
 
 
+def _cookie_join(d):
+    """Returns a string by concatenating the entries as "key=value;" in a
+    dictionary.
+    """
+    return ";".join([urllib.parse.urlencode({k1: v1})
+                     for (k1, v1) in d.items()])
+
+
+def _cookie_split(ss):
+    """Returns a dictionary by taking the first "key=value;" string in a
+    cookie entry.
+    """
+    ee = ss.split(";")
+    if len(ee) >= 1:
+        kv = urllib.parse.unquote(ee[0]).split("=", 1)
+        if len(kv) == 2:
+            return {kv[0]: kv[1]}
+        else:
+            return dict()
+    else:
+        return dict()
+    pass
+
+
 class Api_Client():
     """Http-client.  It represents an access endpoint."""
 
@@ -60,16 +86,21 @@ class Api_Client():
         self.api_ep = ci["api_ep"]
         self.s3_ep = ci["s3_ep"]
         self.ssl_verify = ci.get("ssl_verify", True)
+        self.cred = ""
+        self.csrf_token = ""
+        self.csrf_cookie = ""
         cred = ci.get("cred")
         assert cred is not None
-        (k, v) = next(iter(cred.items()))
-        if k not in {"mod_auth_openidc_session", "x-remote-user"}:
-            token = _basic_auth_token(k, v)
+        (k2, v2) = next(iter(cred.items()))
+        if k2 not in {"mod_auth_openidc_session", "x-remote-user"}:
+            self.cred = ""
+            token = _basic_auth_token(k2, v2)
             self.headers = {"AUTHORIZATION": token}
-        elif k == "mod_auth_openidc_session":
-            cookies = {k: v}
-            self.headers = {"Cookie": urllib.parse.urlencode(cookies)}
-        elif k == "x-remote-user":
+        elif k2 == "mod_auth_openidc_session":
+            self.cred = v2
+            self.headers = {}
+        elif k2 == "x-remote-user":
+            self.cred = ""
             self.headers = {"X-REMOTE-USER": v}
         else:
             assert False
@@ -79,23 +110,55 @@ class Api_Client():
     def access(self, method, path, data):
         headers = dict()
         headers.update(self.headers)
+        if data is not None:
+            headers["Content-Type"] = "application/json"
+            pass
+        if not len(self.csrf_token) == 0:
+            headers["X-CSRF-Token"] = self.csrf_token
+            pass
+        cookies1 = dict()
+        if not len(self.cred) == 0:
+            cookies1["mod_auth_openidc_session"] = self.cred
+            pass
+        if not len(self.csrf_cookie) == 0:
+            cookies1["fastapi-csrf-token"] = self.csrf_cookie
+            pass
+        if not len(cookies1) == 0:
+            headers["Cookie"] = ("$Version=1;"
+                                 + _cookie_join(cookies1))
+            pass
         #headers["HOST"] = "localhost"
         #headers["X-REAL-IP"] = self.running_host
         #headers["X-Forwarded-For"] = self.running_host
         #headers["REMOTE-ADDR"] = self.running_host
         url = f"{self.api_ep}{path}"
         req = Request(url, headers=headers, method=method, data=data)
-        # print(f"headers={headers}")
+        # print(f"request.headers={req.header_items()}")
         # print(f"url={url}; request={req}")
         context = ssl.create_default_context()
         context.check_hostname = False
         context.verify_mode = ssl.CERT_NONE
         try:
+            # print(f"urlopen(url={url})...")
             res = urlopen(req, context=context, timeout=300)
             s = res.read().decode()
             v = json.loads(s)
             assert v["status"] == "success"
-            # print(f"value={v}")
+            # print(f"response.headers={res.getheaders()}")
+            # print(f"response={v}")
+            cv = [hv for (hk, hv) in res.getheaders()
+                  if hk.lower() == "set-cookie"]
+            if len(cv) > 0:
+                cookies2 = {k: v for cc in cv
+                            for (k, v) in _cookie_split(cc).items()}
+                self.csrf_cookie = cookies2.get("fastapi-csrf-token", "")
+                # print(f"csrf_cookie={self.csrf_cookie}")
+                pass
+            tv = v.get("x_csrf_token", None)
+            if tv is not None:
+                self.csrf_token = tv
+                # print(f"csrf_token={self.csrf_token}")
+                pass
             return v
         except HTTPError as e:
             print(f"error={e}")
@@ -128,8 +191,9 @@ class Lens3_Client(Api_Client):
 
     def get_user_info(self):
         path = "/user-info"
+        self.csrf_token = ""
         reply = self.access("GET", path, data=None)
-        self.csrf_token = reply.get("CSRF-Token")
+        self.csrf_token = reply.get("x_csrf_token")
         assert self.csrf_token is not None
         info = reply["user_info"]
         api_version = info.get("api_version")
@@ -143,7 +207,6 @@ class Lens3_Client(Api_Client):
         body = {
             "buckets_directory": directory,
             "owner_gid": self.gid,
-            "CSRF-Token": self.csrf_token,
         }
         path = f"/pool"
         data = json.dumps(body).encode()
@@ -167,7 +230,7 @@ class Lens3_Client(Api_Client):
     def delete_pool(self, pool):
         assert self.csrf_token is not None
         path = f"/pool/{pool}"
-        body = {"CSRF-Token": self.csrf_token}
+        body = dict()
         data = json.dumps(body).encode()
         reply = self.access("DELETE", path, data=data)
         return None
@@ -178,7 +241,6 @@ class Lens3_Client(Api_Client):
         body = {
             "name": bucket,
             "bkt_policy": policy,
-            "CSRF-Token": self.csrf_token,
         }
         data = json.dumps(body).encode()
         reply = self.access("PUT", path, data=data)
@@ -188,7 +250,7 @@ class Lens3_Client(Api_Client):
     def delete_bucket(self, pool, bucket):
         assert self.csrf_token is not None
         path = f"/pool/{pool}/bucket/{bucket}"
-        body = {"CSRF-Token": self.csrf_token}
+        body = dict()
         data = json.dumps(body).encode()
         reply = self.access("DELETE", path, data=data)
         desc = reply["pool_desc"]
@@ -200,7 +262,6 @@ class Lens3_Client(Api_Client):
         body = {
             "key_policy": policy,
             "expiration_time": expiration,
-            "CSRF-Token": self.csrf_token,
         }
         data = json.dumps(body).encode()
         reply = self.access("POST", path, data=data)
@@ -209,7 +270,7 @@ class Lens3_Client(Api_Client):
 
     def delete_secret(self, pool, key):
         path = f"/pool/{pool}/secret/{key}"
-        body = {"CSRF-Token": self.csrf_token}
+        body = dict()
         data = json.dumps(body).encode()
         reply = self.access("DELETE", path, data=data)
         desc = reply["pool_desc"]

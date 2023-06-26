@@ -20,34 +20,35 @@ __presign__ is useless.  Lens3 does not understand a secret in URL.
 
 __website__ will fail in Lens3.
 
-## Simple Tests
+## Basic Tests
 
 ### Client Setting (credential)
 
-The following tests read a configuration file "client.json".  It
-includes endpoints for S3 and Lens3-Api.  Copy "client-example.json"
-to "client.json" and edit it.  It also includes a credential to access
-Lens3-Api.  A credential may be a user+password pair for
-basic-authentication, a cookie for Apache OIDC, or a user name to
-bypass authentication.  To bypass authentication, access Lens3-Api
-directly (i.e., skip a proxy).  A credential for Apache OIDC can be
-found in a cookie named "mod_auth_openidc_session".  Web browser's
-js-console may be used to check the cookie value.
+The following tests "test_api.py" and "test_access.py" read a
+configuration file "client.json".  It includes endpoints for S3 and
+Lens3-Api.  Copy "client-example.json" to "client.json" and edit it.
+It also includes a credential to access Lens3-Api.  A credential may
+be a user+password pair for basic-authentication, a cookie for Apache
+OIDC, or a user name to bypass authentication.  To bypass
+authentication, it needs to access Lens3-Api directly (i.e., skipping
+the proxy).  A credential for Apache OIDC can be found in a cookie
+named "mod_auth_openidc_session".  Web browser's js-console may be
+used to check the cookie value.
 
 ### test_api.py
 
 [test_api.py](test_api.py) runs Lens3-Api operations.  It makes a
 pool, then makes buckets and access-keys.  It tries to make a
 conflicting bucket which will fail.  Finally, it cleans up.  It leaves
-a directory with a random name ("00xxxxxx") in the home in the
-filesystem.
+directories with random names ("00xxxxxx") in the user's home
+directory.
 
 ### test_access.py
 
 [test_access.py](test_access.py) runs S3 access test.  It uses "boto3"
 library.  It tests various combinations of key policies and bucket
-policies, where some keys are expired.  It uses Lens3-Api operations,
-and thus it is better to run "test_api.py" first.
+policies, and also tests with expired keys.  It uses Lens3-Api
+operations, and thus it is better to run after "test_api.py".
 
 ## Info
 

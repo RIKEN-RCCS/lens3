@@ -397,21 +397,6 @@ in "/etc/sudoers.d/lenticularis-sudoers".
 # chmod 440 /etc/sudoers.d/lenticularis-sudoers
 ```
 
-## (Optional) Set up Log Rotation
-
-Lens3-Mux/Lens3-Api logs are rotated by themselves (using
-logging.handlers.TimedRotatingFileHandler).  Other Gunicorn and Redis
-logs are rotated by "copytruncate", although it has a minor race.  The
-Gunicorn document says the signal USR1 could be used to reopen files
-at rotation, but it does terminate the process (reasons unknown).  A
-rotation rule for Redis is taken from /etc/logrotate.d/redis.
-
-```
-# cp $TOP/unit-file/logrotate/lenticularis /etc/logrotate.d/
-# vi /etc/logrotate.d/lenticularis
-# chmod 644 /etc/logrotate.d/lenticularis
-```
-
 ## Start Lens3-Mux and Lens3-Api Services
 
 Lens3-Mux and Lens3-Api will be started as a system service with
@@ -432,6 +417,21 @@ Lens3-Api and Lens3-Mux.
 # systemctl status lenticularis-mux
 # systemctl status lenticularis-api
 
+```
+
+## (Optional) Set up Log Rotation
+
+Lens3-Mux/Lens3-Api logs are rotated by themselves (using
+logging.handlers.TimedRotatingFileHandler).  Other Gunicorn and Redis
+logs are rotated with "copytruncate", although it has a minor race.
+The Gunicorn document says the signal USR1 could be used to reopen
+files at a rotation, but it does terminate the process (reasons
+unknown).  A rule for Redis is taken from /etc/logrotate.d/redis.
+
+```
+# cp $TOP/unit-file/logrotate/lenticularis /etc/logrotate.d/
+# vi /etc/logrotate.d/lenticularis
+# chmod 644 /etc/logrotate.d/lenticularis
 ```
 
 ## Register Users

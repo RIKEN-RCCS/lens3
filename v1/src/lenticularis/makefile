@@ -28,14 +28,8 @@ typestubs::
 	pyright --createstub fastapi_csrf_protect
 	pyright --createstub fastapi_csrf_protect.exceptions
 
-typestubs0::
-	pyright --createstub lenticularis.mc
-
 tags::
 	ctags *.py ui2/*.js
 
 clean::
 	rm -f tags
-
-test::
-	cd test && $(MAKE)

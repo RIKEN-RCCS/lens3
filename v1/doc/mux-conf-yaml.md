@@ -23,7 +23,7 @@ choose the setting with subject="mux:mux1".
 
 ```
 gunicorn:
-    port: 8004
+    port: 8003
     workers: 4
     threads: 4
     timeout: 60

@@ -15,7 +15,7 @@ Do not change these lines.
 
 ```
 gunicorn:
-    port: 8003
+    port: 8004
     workers: 2
     timeout: 120
     access_logfile: "/var/log/lenticularis/lens3-gunicorn-api-access-log"

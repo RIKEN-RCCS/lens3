@@ -1,0 +1,30 @@
+/var/log/lenticularis/lens3-gunicorn-*-log {
+    weekly 1
+    copytruncate
+    delaycompress
+    compress
+    notifempty
+    missingok
+    sharedscripts
+    # postrotate
+    #     systemctl kill --signal=USR1 lenticularis-mux lenticularis-api
+    # endscript
+}
+
+/var/log/lenticularis/lens3-redis.log {
+    weekly 1
+    rotate 15
+    copytruncate
+    delaycompress
+    compress
+    notifempty
+    missingok
+}
+
+/var/log/lenticularis/lens3-redis-dump.rdb {
+    daily
+    rotate 100
+    nocompress
+    notifempty
+    missingok
+}

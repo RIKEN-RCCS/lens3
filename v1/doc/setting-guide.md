@@ -1,4 +1,4 @@
-# Setup of Lenticularis-S3 (Minimal)
+# Lenticularis-S3 Setting Guide
 
 ## Outline
 
@@ -97,9 +97,9 @@ Note "$TOP" in the following refers to the top directory in the
 downloaded Lens3 package.
 
 Make a pseudo-user for the services.  UID/GID will be selected from a
-lower range below 1000 that won't conflict with users.  Most of the
-installation is done by the user "lens3".  Fix its umask appropriately
-such as by `umask 022`.
+lower range below 1000 that won't conflict with true users.  Most of
+the installation is done by the user "lens3".  Fix its umask
+appropriately such as by `umask 022`.
 
 ```
 # useradd -K UID_MIN=300 -K UID_MAX=499 -U -d /home/lens3 lens3
@@ -144,7 +144,7 @@ security attributes "system_u:object_r:tmp_t:s0".
 # ls -dlZ /var/log/lenticularis
 ```
 
-## Enable http Connections
+## Enable HTTP Connections
 
 Let SELinux accept connections inside a local host.
 
@@ -171,7 +171,7 @@ It is highly site dependent.
 
 ### Required Headers
 
-Lens3-Api requires {"X-Remote-User"}, which holds an authenticated
+Lens3-Api requires "X-Remote-User", which holds an authenticated
 user claim.  Lens3-Api trusts the "X-Remote-User" header passed by the
 proxy.  Make sure the header is properly prepared by the proxy.
 
@@ -187,14 +187,14 @@ implicitly set by Apache proxy.
 ### Proxy Path Choices
 
 A path, "location" or "proxypass", should be "/" for Lens3-Mux,
-because a path cannot be specified for S3 service.  If Lens3-Mux and
-Lens3-Api are co-hosted, the Lens3-Mux path should be "/" and the
+because a path cannot be specified for the S3 service.  If Lens3-Mux
+and Lens3-Api are co-hosted, the Lens3-Mux path should be "/" and the
 Lens3-Api path should be something like "/lens3.api/" that is NOT
 legitimate bucket names.  We will use "lens3.api" in the following.
 
 Please refer to the note on running MinIO with a proxy, saying: "The
 S3 API signature calculation algorithm does not support proxy schemes
-... on a subpath".  See the bottom of the following page:
+... on a subpath".  See near the bottom of the following page:
 
 [Configure NGINX Proxy for MinIO
 Server](https://min.io/docs/minio/linux/integrations/setup-nginx-proxy-with-minio.html).
@@ -372,7 +372,7 @@ lens3$ vi api-conf.yaml
 lens3$ vi mux-conf.yaml
 ```
 
-* Load the Lens3 configuration from files
+Load the Lens3 configuration from the files.
 
 ```
 # cp /etc/lenticularis/conf.json /home/lens3/conf.json
@@ -395,6 +395,21 @@ in "/etc/sudoers.d/lenticularis-sudoers".
 # cp $TOP/unit-file/mux/lenticularis-sudoers /etc/sudoers.d/
 # vi /etc/sudoers.d/lenticularis-sudoers
 # chmod 440 /etc/sudoers.d/lenticularis-sudoers
+```
+
+## (Optional) Set up Log Rotation
+
+Lens3-Mux/Lens3-Api logs are rotated by themselves (using
+logging.handlers.TimedRotatingFileHandler).  Other Gunicorn and Redis
+logs are rotated by "copytruncate", although it has a minor race.  The
+Gunicorn document says the signal USR1 could be used to reopen files
+at rotation, but it does terminate the process (reasons unknown).  A
+rotation rule for Redis is taken from /etc/logrotate.d/redis.
+
+```
+# cp $TOP/unit-file/logrotate/lenticularis /etc/logrotate.d/
+# vi /etc/logrotate.d/lenticularis
+# chmod 644 /etc/logrotate.d/lenticularis
 ```
 
 ## Start Lens3-Mux and Lens3-Api Services
@@ -564,3 +579,9 @@ lens3$ redis-cli -p 6378 --scan --pattern '*'
 ```
 lens3$ minio --json --anonymous server --address :9001 /home/UUU/pool-directory
 ```
+
+### No Support for Multiple Hosts
+
+Current version requires all the proxy, Lens3-Mux, and Lens3-Api run
+on a single host.  To set up for multiple hosts, it needs at least to
+specify options to Gunicorn to accept non-local connections.

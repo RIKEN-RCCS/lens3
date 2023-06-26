@@ -36,7 +36,7 @@ For administrators,
 see [v1/doc/admin-guide.md](v1/doc/admin-guide.md).
 
 For site managers,
-see [v1/doc/setting.md](v1/doc/setting.md).
+see [v1/doc/setting-guide.md](v1/doc/setting-guide.md).
 
 For programmers,
 see [v1/doc/design.md](v1/doc/design.md).

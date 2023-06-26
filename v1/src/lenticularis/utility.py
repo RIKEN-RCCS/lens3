@@ -60,9 +60,9 @@ def openlog(file, facility, priority):
     so = "/dev/log"
 
     if file is not None:
-        # TimedRotatingFileHandler
-        # FileHandler, WatchedFileHandler
-        handler = logging.FileHandler(file)
+        # FileHandler, WatchedFileHandler, TimedRotatingFileHandler
+        # handler = logging.FileHandler(file)
+        handler = logging.handlers.TimedRotatingFileHandler(file, when="W0")
     elif facility in {
             "KERN", "USER", "MAIL", "DAEMON", "AUTH", "LPR",
             "NEWS", "UUCP", "CRON", "SYSLOG", "AUTHPRIV", "FTP",

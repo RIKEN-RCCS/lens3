@@ -7,18 +7,42 @@ used.  Please inform us, if some software is missing.
 
 * minio + mc
 
-## Modules installed by pip3
+## Python Modules
 
 * gunicorn
 * uvicorn
 * fastapi
 * fastapi_csrf_protect
 * redis
-* hiredis
 * jsonschema
 * pyyaml
 * wheel
 * boto3
+* pytest
+
+## Python Modules (used transitively)
+
+* anyio
+* async-timeout
+* attrs
+* click
+* deprecated
+* exceptiongroup
+* h11
+* idna
+* iniconfig
+* itsdangerous
+* packaging
+* pluggy
+* pydantic
+* pyparsing
+* pyrsistent
+* setuptools
+* sniffio
+* starlette
+* tomli
+* typing-extensions
+* wrapt
 
 ## Development Tools
 
@@ -28,9 +52,11 @@ used.  Please inform us, if some software is missing.
 * httpd-tools
 * git
 * unzip
+* pyright
 
 ## UI Tools
 
 * vue.js
 * vuetify
 * vite
+* nodejs

@@ -314,7 +314,7 @@ def _main():
     pass
 
 
-# >>> exec(open("apiclient.py").read())
+# >>> exec(open("lens3_client.py").read())
 
 
 if __name__ == "__main__":

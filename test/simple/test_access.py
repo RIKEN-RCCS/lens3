@@ -10,8 +10,8 @@ import json
 import subprocess
 import botocore
 import boto3
-from apiclient import Lens3_Client
-from apiclient import random_string
+from lens3_client import Lens3_Client
+from lens3_client import random_string
 from test_api import Test_Base
 
 

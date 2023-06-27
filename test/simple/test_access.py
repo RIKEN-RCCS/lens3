@@ -234,6 +234,7 @@ class Access_Test(Test_Base):
             data0 = f.read()
             pass
         for (bkt, key, op, expectation) in self.expectations:
+            #time.sleep(10)
             # Fix an expectation for an expired key.
             if expired == 1 and key not in {"nokey", "other"}:
                 expectation = Respn("403")
@@ -400,13 +401,10 @@ def main2():
     print(f"Making working pools for test...")
     test2.make_working_pool()
     test2.make_another_pool()
-    clean_working_pools = True
     try:
         test2.run()
-    except:
-        clean_working_pools = False
-        pass
     finally:
+        clean_working_pools = True
         if clean_working_pools:
             print(f";; Deleting a working pool={test2.working_pool}")
             test2.client.delete_pool(test2.working_pool)

@@ -22,18 +22,23 @@ __website__ will fail in Lens3.
 
 ## Basic Tests
 
-### Client Setting (credential)
+The "test_api.py" and "test_access.py" tests run basic tests.
+"test_api.py" tests Lens3-Api functions.  "test_access.py" test
+Lens3-Mux for bucket accesses.
 
-The following tests "test_api.py" and "test_access.py" read a
-configuration file "client.json".  It includes endpoints for S3 and
-Lens3-Api.  Copy "client-example.json" to "client.json" and edit it.
-It also includes a credential to access Lens3-Api.  A credential may
-be a user+password pair for basic-authentication, a cookie for Apache
-OIDC, or a user name to bypass authentication.  To bypass
-authentication, it needs to access Lens3-Api directly (i.e., skipping
-the proxy).  A credential for Apache OIDC can be found in a cookie
-named "mod_auth_openidc_session".  Web browser's js-console may be
-used to check the cookie value.
+### Client Setting
+
+These tests read a configuration file "client.json".  It includes the
+endpoints for S3 and Lens3-Api.  Copy "client-example.json" to
+"client.json" and edit it.
+
+"client.json" also includes a credential to access Lens3-Api.  A
+credential may be a cookie for Apache OIDC, a user+password pair for
+basic-authentication, or a user name to bypass authentication.  To
+bypass authentication, it needs to access Lens3-Api directly (i.e.,
+skipping the proxy).  A credential for Apache OIDC can be found in a
+"mod_auth_openidc_session" cookie.  Web browser's js-console may be
+used to obtain the cookie value.
 
 ### test_api.py
 

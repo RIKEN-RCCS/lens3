@@ -234,7 +234,6 @@ class Access_Test(Test_Base):
             data0 = f.read()
             pass
         for (bkt, key, op, expectation) in self.expectations:
-            #time.sleep(10)
             # Fix an expectation for an expired key.
             if expired == 1 and key not in {"nokey", "other"}:
                 expectation = Respn("403")

@@ -1,6 +1,8 @@
 # Simple Tests
 
-## copy-file.sh
+## A Test by AWS S3 CLI
+
+### copy-file.sh
 
 [copy-file.sh](copy-file.sh) runs a very simple test using AWS S3 CLI.
 It runs commands: __cp__, __ls__, __mv__, __rm__, __presign__,
@@ -22,9 +24,9 @@ __website__ will fail in Lens3.
 
 ## Basic Tests
 
-The "test_api.py" and "test_access.py" tests run basic tests.
-"test_api.py" tests Lens3-Api functions.  "test_access.py" test
-Lens3-Mux for bucket accesses.
+The "test_api.py" and "test_access.py" run tests on basic functions.
+"test_api.py" tests Lens3-Api.  "test_access.py" tests Lens3-Mux for
+bucket accesses.
 
 ### Client Setting
 
@@ -54,6 +56,10 @@ directory.
 library.  It tests various combinations of key policies and bucket
 policies, and also tests with expired keys.  It uses Lens3-Api
 operations, and thus it is better to run after "test_api.py".
+
+## A Test for Administration
+
+
 
 ## Info
 

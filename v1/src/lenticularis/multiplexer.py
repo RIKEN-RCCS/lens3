@@ -30,11 +30,16 @@ from lenticularis.utility import logger
 from lenticularis.utility import tracing
 
 
-# MinIO returns ECONNRESET at a high load (not too high).
+# _connection_errors is a list of possible errors by urlopen().  These
+# are handled as a warning.  MinIO returns ECONNRESET sometimes.
+# MinIO (June 2023) returns EPIPE, when trying to put an object by a
+# readonly-key or to put an object to a download-bucket without a key.
+# Lens3 returns 503 in such situations.  However, it makes clients
+# retry badly.
 
 _connection_errors = [errno.ETIMEDOUT, errno.ECONNREFUSED,
                       errno.EHOSTDOWN, errno.EHOSTUNREACH,
-                      errno.ECONNRESET]
+                      errno.ECONNRESET, errno.EPIPE]
 
 
 def _no_buffering__(headers):

@@ -402,8 +402,13 @@ __Python Modules__: "FastAPI" uses "Starlette".  There are no direct
 uses of "Starlette" in the source code.
 
 __MinIO behavior__: MinIO refuses a connection by ECONNRESET
-(Connection reset by peer) at a high load (not too high), instead of
-an expected 503 reply.
+sometimes, maybe at a slightly high load.  Lens3 returns 503 on
+ECONNRESET.
+
+__MinIO behavior__: MinIO refuses a connection by EPIPE for some
+illegal accesses.  That is, when trying to put an object by a
+readonly-key or to put an object to a download-bucket without a key.
+Lens3 returns 503 on EPIPE, but, it makes clients retry badly.
 
 __Accepting pool creation in busy situations__: Lens3 accepts creation
 of a pool even if it cannot start MinIO due to busyness of the server.

@@ -1,6 +1,7 @@
 /var/log/lenticularis/lens3-gunicorn-*-log {
     weekly 1
     copytruncate
+    dateext
     delaycompress
     compress
     notifempty
@@ -15,6 +16,7 @@
     weekly 1
     rotate 15
     copytruncate
+    dateext
     delaycompress
     compress
     notifempty
@@ -24,6 +26,8 @@
 /var/log/lenticularis/lens3-redis-dump.rdb {
     daily
     rotate 100
+    copy
+    dateext
     nocompress
     notifempty
     missingok

@@ -91,17 +91,17 @@ class Api_Client():
         self.csrf_cookie = ""
         cred = ci.get("cred")
         assert cred is not None
-        (k2, v2) = next(iter(cred.items()))
-        if k2 not in {"mod_auth_openidc_session", "x-remote-user"}:
+        (k1, v1) = next(iter(cred.items()))
+        if k1 not in {"mod_auth_openidc_session", "x-remote-user"}:
             self.cred = ""
-            token = _basic_auth_token(k2, v2)
+            token = _basic_auth_token(k1, v1)
             self.headers = {"AUTHORIZATION": token}
-        elif k2 == "mod_auth_openidc_session":
-            self.cred = v2
+        elif k1 == "mod_auth_openidc_session":
+            self.cred = v1
             self.headers = {}
-        elif k2 == "x-remote-user":
+        elif k1 == "x-remote-user":
             self.cred = ""
-            self.headers = {"X-REMOTE-USER": v}
+            self.headers = {"X-REMOTE-USER": v1}
         else:
             assert False
             pass

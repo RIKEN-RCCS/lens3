@@ -164,7 +164,7 @@ def main1():
     try:
         test1.run()
     finally:
-        print(f"Deleting a working pool={test1.working_pool}")
+        print(f";; Deleting a working pool={test1.working_pool}")
         test1.client.delete_pool(test1.working_pool)
         pass
     print("Done")

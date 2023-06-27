@@ -81,7 +81,7 @@ class Access_Test(Test_Base):
                 bucket = ("lenticularis-oddity-" + random_string(6))
                 pass
             assert bucket not in self.working_buckets
-            print(f"Making a bucket bucket={bucket}")
+            print(f"Making a bucket with policy={policy} bucket={bucket}")
             self.client.make_bucket(self.working_pool, bucket, policy)
             self.working_buckets.add(bucket)
             pass
@@ -120,28 +120,27 @@ class Access_Test(Test_Base):
             secret2 = k["secret_key"]
             policy2 = k["key_policy"]
             session1 = boto3.Session(
-                profile_name="default",
                 aws_access_key_id=access2,
                 aws_secret_access_key=secret2)
-            sc1 = session1.resource(
+            client1 = session1.resource(
                 service_name="s3",
                 endpoint_url=self.client.s3_ep,
                 verify=self.client.ssl_verify)
-            self.s3_clients[expired][policy2] = sc1
+            self.s3_clients[expired][policy2] = client1
             pass
         assert self.s3_clients[expired].keys() == self.client.key_policy_set
         #
-        # Make a public access client (without a key).
+        # Make an S3 client for public access (without a key).
         #
-        session2 = boto3.Session(profile_name="default")
-        sc2 = session2.resource(
+        session2 = boto3.Session()
+        client2 = session2.resource(
             service_name="s3",
             endpoint_url=self.client.s3_ep,
             config=botocore.config.Config(signature_version=botocore.UNSIGNED),
             verify=self.client.ssl_verify)
-        self.s3_clients[expired]["nokey"] = sc2
+        self.s3_clients[expired]["nokey"] = client2
         #
-        # Make a readwrite access client for another pool.
+        # Make an S3 client with an unusable key (a key for another pool).
         #
         policy3 = "readwrite"
         assert policy3 in self.client.key_policy_set
@@ -153,14 +152,13 @@ class Access_Test(Test_Base):
         access3 = k3["access_key"]
         secret3 = k3["secret_key"]
         session3 = boto3.Session(
-            profile_name="default",
             aws_access_key_id=access3,
             aws_secret_access_key=secret3)
-        sc3 = session3.resource(
+        client3 = session3.resource(
             service_name="s3",
             endpoint_url=self.client.s3_ep,
             verify=self.client.ssl_verify)
-        self.s3_clients[expired]["other"] = sc3
+        self.s3_clients[expired]["other"] = client3
         print(f"s3clients={self.s3_clients[expired]}")
         pass
 
@@ -236,6 +234,7 @@ class Access_Test(Test_Base):
             data0 = f.read()
             pass
         for (bkt, key, op, expectation) in self.expectations:
+            #time.sleep(10)
             # Fix an expectation for an expired key.
             if expired == 1 and key not in {"nokey", "other"}:
                 expectation = Respn("403")
@@ -266,6 +265,7 @@ class Access_Test(Test_Base):
                 pass
             if not result == expectation:
                 print(f"result={result}; expectation={expectation}")
+                pass
             assert result == expectation
             pass
         pass
@@ -401,13 +401,22 @@ def main2():
     print(f"Making working pools for test...")
     test2.make_working_pool()
     test2.make_another_pool()
+    clean_working_pools = True
     try:
         test2.run()
+    except:
+        clean_working_pools = False
+        pass
     finally:
-        print(f"Deleting a working pool={test2.working_pool}")
-        test2.client.delete_pool(test2.working_pool)
-        print(f"Deleting a working pool={test2.another_pool}")
-        test2.client.delete_pool(test2.another_pool)
+        if clean_working_pools:
+            print(f";; Deleting a working pool={test2.working_pool}")
+            test2.client.delete_pool(test2.working_pool)
+            print(f";; Deleting a working pool={test2.another_pool}")
+            test2.client.delete_pool(test2.another_pool)
+        else:
+            print(f";; Leave a working pool={test2.working_pool}")
+            print(f";; Leave a working pool={test2.another_pool}")
+            pass
         pass
     print("Done")
     pass

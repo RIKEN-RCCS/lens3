@@ -57,9 +57,17 @@ library.  It tests various combinations of key policies and bucket
 policies, and also tests with expired keys.  It uses Lens3-Api
 operations, and thus it is better to run after "test_api.py".
 
-## A Test for Administration
+## Disabling User Test
 
+### user_disable.py
 
+[user_disable.py](user_disable.py) checks if a put fails after
+disabling a user.  It directly modifies the Redis database, and thus,
+it should be run on the host where the Lens3 service is running.  It
+reads a "conf.json".  Use "conf-example.json" as a template of
+"conf.json".  It is necessary to create a bucket and an access-key in
+advance.  Keep "conf.json" secure, because it includes the password of
+Redis.
 
 ## Info
 

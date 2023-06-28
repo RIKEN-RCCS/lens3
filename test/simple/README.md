@@ -4,19 +4,18 @@
 
 ### copy-file.sh
 
-[copy-file.sh](copy-file.sh) runs a very simple test using AWS S3 CLI.
-It runs commands: __cp__, __ls__, __mv__, __rm__, __presign__,
+[copy-file.sh](copy-file.sh) runs a simple copying test using AWS S3
+CLI.  It runs commands: __cp__, __ls__, __mv__, __rm__, __presign__,
 __website__.  It generates a file of 32MB randoms, and uploads and
-downloads it.  That file is large enough to start a multipart upload
+downloads it.  The file is large enough to start a multipart upload
 (8MB is the default threshold to use a multipart upload).
 
-An S3 secret should be prepared in ".aws/*".  A bucket needs to be
-created in advance, too.  The shell variables "EP" and "BKT" are the
-target, "EP" as an endpoint and "BKT" as a bucket.  It reads (sources
-by ".") a file "epbkt.sh" if it exists.
+An S3 secret should be prepared in ".aws/credentials".  A bucket needs
+to be created in advance, too.  The shell variables "EP" and "BKT" are
+the target, "EP" as an endpoint and "BKT" as a bucket.  It reads
+(sources by ".") a file "copy-file-conf.sh" if it exists.
 
-Note it leaves garbage files.  Run the tests in the "test/simple"
-directory, because it needs sample files in the directory.
+Note it leaves garbage files.
 
 __presign__ is useless.  Lens3 does not understand a secret in URL.
 
@@ -57,17 +56,20 @@ library.  It tests various combinations of key policies and bucket
 policies, and also tests with expired keys.  It uses Lens3-Api
 operations, and thus it is better to run after "test_api.py".
 
-## Disabling User Test
+## User Disable Test
 
 ### user_disable.py
 
 [user_disable.py](user_disable.py) checks if a put fails after
-disabling a user.  It directly modifies the Redis database, and thus,
-it should be run on the host where the Lens3 service is running.  It
-reads a "conf.json".  Use "conf-example.json" as a template of
-"conf.json".  It is necessary to create a bucket and an access-key in
-advance.  Keep "conf.json" secure, because it includes the password of
-Redis.
+disabling a user.  It directly modifies the Redis database to disable
+a user.  Thus, it should be run on the host where the Lens3 service is
+running.  It reads a "user_disable_conf.json".  Use
+"user_disable_conf-example.json" as a template of
+"user_disable_conf.json".  It is necessary to create a bucket and an
+access-key in advance.  Keep "conf.json" secure, because it includes
+the password of Redis.
+
+## Busy Server Test
 
 ## Info
 

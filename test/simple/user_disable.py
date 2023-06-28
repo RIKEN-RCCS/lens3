@@ -26,7 +26,7 @@ class User_Disable_Test():
         self.conf = None
         self.s3_client = None
         self.db = None
-        with open("conf.json") as f:
+        with open("user_disable_conf.json") as f:
             self.conf = json.loads(f.read())
             pass
         pass

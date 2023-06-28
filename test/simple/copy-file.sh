@@ -5,13 +5,13 @@
 # name).  The bucket should be set accessible in advance.  It leaves
 # garbage files in the directory and in the bucket.
 
-# It reads "epbkt.sh" if it exists.  It assumed it defines EP and BKT.
-# It may include other variables SIZ and DBG.  The file size SIZ
-# should be larger than 8MB for a multipart-upload.  Set these shell
-# variables like: EP=https://lens3.example.com/; BKT=bkt0
+# It reads "copy-file-conf.sh" if it exists.  It assumed it defines EP
+# and BKT.  It may include other variables SIZ and DBG.  The file size
+# SIZ should be larger than 8MB for a multipart-upload.  Set these
+# shell variables like: EP=https://lens3.example.com/; BKT=bkt0
 
-if [ -f ./epbkt.sh ]; then
-    . ./epbkt.sh
+if [ -f ./copy-file-conf.sh ]; then
+    . ./copy-file-conf.sh
 fi
 
 if [ -z "${EP}" -o -z "${BKT}" ]; then

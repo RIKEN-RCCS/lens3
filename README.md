@@ -46,15 +46,13 @@ see [v1/doc/design.md](v1/doc/design.md).
 Lens3 is copyrighted by RIKEN R-CCS.  Part of the results is
 obtained by using Fugaku at RIKEN R-CCS.
 
-Lens3 utilizes third-party open source software, which is listed in
-[acknowledgement](v1/ACKNOWLEDGEMENT.txt).  It may fail to include
-software transitively used.  The directory "test/s3-benchmark" is a
-third-party benchmark program, which is copyrighted by Wasabi-Tech and
-is licensed with LGPL.
-
 Lens3 uses MinIO as a backend S3 server.  Lens3 lacks a way to display
 a credit to MinIO, because it blocks accesses to MinIO's user
 interfaces.  Please refer to [https://min.io](https://min.io).
+
+Lens3 utilizes third-party open source software, which is listed in
+[acknowledgement](v1/ACKNOWLEDGEMENT.txt).  It may fail to include
+software transitively used.
 
 Lens3 UI is created with vuejs+vuetify.  Please refer to
 [https://vuejs.org](https://vuejs.org/) and

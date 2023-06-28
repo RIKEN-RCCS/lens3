@@ -3,29 +3,31 @@
 ## Files
 
 * Lens3-Mux
-  * [mux.py](mux.py)
-  * [multiplexer.py](multiplexer.py)
-  * [manager.py](manager.py)
+  * [mux.py](mux.py): Gunicorn entries
+  * [multiplexer.py](multiplexer.py): Mux implementation
+  * [manager.py](manager.py): a sentinel of MinIO process
   * [spawner.py](spawner.py)
   * [mc.py](mc.py)
   * [pooldata.py](pooldata.py)
 
 * Lens3-Api
-  * [api.py](api.py)
-  * [control.py](control.py)
+  * [api.py](api.py): Gunicorn/Fastapi entries
+  * [control.py](control.py): Api implementation
 
-* lens3-admin command and a service
+* lens3-admin Command and Service Starter
   * [admintool.py](admintool.py)
   * [start_service.py](start_service.py)
 
 * Utils
+  * [table.py](table.py): Redis access routines
   * [yamlconf.py](yamlconf.py)
-  * [table.py](table.py)
-  * [y.py](utility.py)
+  * [utility.py](utility.py)
 
-* Web UI
-  * [ui](ui): Lens3-Api UI (generated files by vue.js + vuetify)
-  * [ui2/index.html](ui2/index.html): Simple Lens3-Api UI.
+* Lens3-Api UI (generated files by vue.js + vuetify)
+  * [ui](ui)
+
+* Alternate Simple Lens3-Api UI
+  * [ui2/index.html](ui2/index.html)
   * [ui2/lens3ui.js](ui2/lens3ui.js)
 
-* [makefile](makefile): It includes rules for running pyright.
+* [makefile](makefile) It includes rules for running pyright.

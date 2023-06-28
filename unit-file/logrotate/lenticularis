@@ -12,7 +12,7 @@
     # endscript
 }
 
-/var/log/lenticularis/lens3-redis.log {
+/var/log/lenticularis-redis/lens3-redis.log {
     weekly 1
     rotate 15
     copytruncate
@@ -23,7 +23,7 @@
     missingok
 }
 
-/var/log/lenticularis/lens3-redis-dump.rdb {
+/var/log/lenticularis-redis/lens3-redis-dump.rdb {
     daily
     rotate 100
     copy

@@ -18005,7 +18005,7 @@ const pool_data_ = {
     return submit_request("Delete secret", triple, set_pool_data);
   }
 };
-const pool_data = reactive(pool_data_);
+let pool_data = reactive(pool_data_);
 function set_user_info_data(data) {
   console.assert(data && data["user_info"]);
   const d = data["user_info"];

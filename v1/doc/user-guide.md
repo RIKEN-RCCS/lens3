@@ -145,6 +145,12 @@ buckets and secrets are rejected.
   problem needs two steps: remove the directory ".minio.sys", and
   delete the pool.
 
+* Recreating a bucket once removed in the same directory causes an
+  internal error.  Lens3 leaves the contents of a removed bucket, and
+  the residue state causes an error.  It is necessary to remove the
+  directory of the bucket, first.  Internally, MinIO issues an error
+  with "Code=BucketAlreadyOwnedByYou".
+
 ## Restrictions of Lens3
 
 ### No Bucket Operations

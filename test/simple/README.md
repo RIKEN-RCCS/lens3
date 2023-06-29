@@ -71,6 +71,27 @@ the password of Redis.
 
 ## Busy Server Test
 
+### busy_server_prepare.py
+
+[busy_server_prepare.py](busy_server_prepare.py) prepares for the busy
+server test.  It creates many pools exceeding the number of MinIO
+instances that can run at the same time.  The number of instances is
+controlled by the port range for connections.  Simultaneously
+accessing many pools would suspend some of the pools, and the
+operations on the pools are rejected.  Running
+"busy_server_prepare.py" creates many pools, and the preparation work
+itself behaves as the busy server test.
+
+Set "clients" and "minio_awake_duration" slots appropriately in the
+"client.json" file.  For "clients", the value should be something that
+exceeds the numbers in the port range -- exceeding by 3 to 5 will be
+enough.  For "minio_awake_duration", take the same value in the
+"mux-conf.yaml" file.  The "minio_awake_duration" value is the
+lifetime of a MinIO instance after it becomes idle.
+
+Running "busy_server_prepare.py" will take a long time, because it
+will wait for some MinIO instances expire its lifetime.
+
 ## Info
 
 For S3 CLI, refer to the links:

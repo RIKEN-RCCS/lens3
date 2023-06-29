@@ -153,7 +153,9 @@ const pool_data_ = {
 
 };
 
-export const pool_data = reactive(pool_data_);
+// Let "pool_data" not a constant to make it visible in js console.
+
+export let pool_data = reactive(pool_data_);
 
 // Sets the user-info, then shows the pool list.  These are sequential
 // executed because the CSRF state is initialized after getting the

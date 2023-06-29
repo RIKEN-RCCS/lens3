@@ -29,7 +29,9 @@
 
 /* Editor Data. */
 
-const pool_data = {
+// Let "pool_data" not a constant to make it visible in js console.
+
+let pool_data = {
   owner: "",
   group_choices: [],
 

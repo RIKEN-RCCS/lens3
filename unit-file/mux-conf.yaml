@@ -28,7 +28,7 @@ minio_manager:
     sudo: /usr/bin/sudo
     port_min: 9000
     port_max: 9029
-    minio_awake_duration: 1800
+    minio_awake_duration: 900
     minio_setup_at_start: true
     heartbeat_interval: 61
     heartbeat_miss_tolerance: 3

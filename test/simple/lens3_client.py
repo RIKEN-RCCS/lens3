@@ -11,6 +11,7 @@ import random
 import contextvars
 import json
 import base64
+import socket
 import ssl
 import urllib
 from urllib.request import Request, urlopen
@@ -70,7 +71,7 @@ class Api_Client():
 
     def __init__(self, client_json):
         """Creates a Client with a client setting file.  A credential pair is
-        contained in a setting file.  The key part of a credential
+        required in the setting.  The key part of a credential
         determines the authentication method.
         "mod_auth_openidc_session" is for Apache OIDC, "x-remote-user"
         for bypassing authentication, or else for
@@ -83,31 +84,33 @@ class Api_Client():
         with open(client_json) as f:
             ci = json.loads(f.read())
             pass
+        self.conf = ci
+        self.urlopen_error_message = b""
         self.api_ep = ci["api_ep"]
         self.s3_ep = ci["s3_ep"]
         self.ssl_verify = ci.get("ssl_verify", True)
-        self.cred = ""
+        self.cred_cookie = ""
         self.csrf_token = ""
         self.csrf_cookie = ""
         cred = ci.get("cred")
         assert cred is not None
         (k1, v1) = next(iter(cred.items()))
         if k1 not in {"mod_auth_openidc_session", "x-remote-user"}:
-            self.cred = ""
+            self.cred_cookie = ""
             token = _basic_auth_token(k1, v1)
             self.headers = {"AUTHORIZATION": token}
         elif k1 == "mod_auth_openidc_session":
-            self.cred = v1
+            self.cred_cookie = v1
             self.headers = {}
         elif k1 == "x-remote-user":
-            self.cred = ""
+            self.cred_cookie = ""
             self.headers = {"X-REMOTE-USER": v1}
         else:
             assert False
             pass
         pass
 
-    def access(self, method, path, data):
+    def do_access(self, method, path, data):
         headers = dict()
         headers.update(self.headers)
         if data is not None:
@@ -117,8 +120,8 @@ class Api_Client():
             headers["X-CSRF-Token"] = self.csrf_token
             pass
         cookies1 = dict()
-        if not len(self.cred) == 0:
-            cookies1["mod_auth_openidc_session"] = self.cred
+        if not len(self.cred_cookie) == 0:
+            cookies1["mod_auth_openidc_session"] = self.cred_cookie
             pass
         if not len(self.csrf_cookie) == 0:
             cookies1["fastapi-csrf-token"] = self.csrf_cookie
@@ -140,7 +143,7 @@ class Api_Client():
         context.verify_mode = ssl.CERT_NONE
         try:
             # print(f"urlopen(url={url})...")
-            res = urlopen(req, context=context, timeout=300)
+            res = urlopen(req, context=context, timeout=30)
             s = res.read().decode()
             v = json.loads(s)
             assert v["status"] == "success"
@@ -151,8 +154,11 @@ class Api_Client():
             if len(cv) > 0:
                 cookies2 = {k: v for cc in cv
                             for (k, v) in _cookie_split(cc).items()}
-                self.csrf_cookie = cookies2.get("fastapi-csrf-token", "")
-                # print(f"csrf_cookie={self.csrf_cookie}")
+                cookie = cookies2.get("fastapi-csrf-token", "")
+                if not len(cookie) == 0:
+                    self.csrf_cookie = cookie
+                    # print(f"csrf_cookie={cookie}")
+                    pass
                 pass
             tv = v.get("x_csrf_token", None)
             if tv is not None:
@@ -160,10 +166,11 @@ class Api_Client():
                 # print(f"csrf_token={self.csrf_token}")
                 pass
             return v
-        except HTTPError as e:
-            print(f"error={e}")
-            s = e.read()
+        except HTTPError as ex:
+            print(f"error={ex}")
+            s = ex.read()
             #v = json.loads(s)
+            self.urlopen_error_message = s
             print(f"urlopen failed with: ({s})")
             raise
         pass
@@ -192,7 +199,7 @@ class Lens3_Client(Api_Client):
     def get_user_info(self):
         path = "/user-info"
         self.csrf_token = ""
-        reply = self.access("GET", path, data=None)
+        reply = self.do_access("GET", path, data=None)
         self.csrf_token = reply.get("x_csrf_token")
         assert self.csrf_token is not None
         info = reply["user_info"]
@@ -210,20 +217,20 @@ class Lens3_Client(Api_Client):
         }
         path = f"/pool"
         data = json.dumps(body).encode()
-        reply = self.access("POST", path, data=data)
+        reply = self.do_access("POST", path, data=data)
         desc = reply["pool_desc"]
         assert desc is not None
         return desc
 
     def get_pool(self, pool):
         path = f"/pool/{pool}"
-        reply = self.access("GET", path, data=None)
+        reply = self.do_access("GET", path, data=None)
         desc = reply["pool_list"][0]
         return desc
 
     def list_pools(self):
         path = f"/pool"
-        reply = self.access("GET", path, data=None)
+        reply = self.do_access("GET", path, data=None)
         pools = reply["pool_list"]
         return pools
 
@@ -232,7 +239,7 @@ class Lens3_Client(Api_Client):
         path = f"/pool/{pool}"
         body = dict()
         data = json.dumps(body).encode()
-        reply = self.access("DELETE", path, data=data)
+        reply = self.do_access("DELETE", path, data=data)
         return None
 
     def make_bucket(self, pool, bucket, policy):
@@ -243,7 +250,7 @@ class Lens3_Client(Api_Client):
             "bkt_policy": policy,
         }
         data = json.dumps(body).encode()
-        reply = self.access("PUT", path, data=data)
+        reply = self.do_access("PUT", path, data=data)
         desc = reply["pool_desc"]
         return desc
 
@@ -252,7 +259,7 @@ class Lens3_Client(Api_Client):
         path = f"/pool/{pool}/bucket/{bucket}"
         body = dict()
         data = json.dumps(body).encode()
-        reply = self.access("DELETE", path, data=data)
+        reply = self.do_access("DELETE", path, data=data)
         desc = reply["pool_desc"]
         return desc
 
@@ -264,7 +271,7 @@ class Lens3_Client(Api_Client):
             "expiration_time": expiration,
         }
         data = json.dumps(body).encode()
-        reply = self.access("POST", path, data=data)
+        reply = self.do_access("POST", path, data=data)
         desc = reply["pool_desc"]
         return desc
 
@@ -272,7 +279,7 @@ class Lens3_Client(Api_Client):
         path = f"/pool/{pool}/secret/{key}"
         body = dict()
         data = json.dumps(body).encode()
-        reply = self.access("DELETE", path, data=data)
+        reply = self.do_access("DELETE", path, data=data)
         desc = reply["pool_desc"]
         return desc
 
@@ -307,7 +314,7 @@ class Lens3_Client(Api_Client):
 def _main():
     # client = Api_Client("client.json")
     # path = "/user-info"
-    # client.access("GET", path, data=None)
+    # client.do_access("GET", path, data=None)
     client = Lens3_Client("client.json")
     v = client.get_user_info()
     print(f"client.get_user_info={v}")

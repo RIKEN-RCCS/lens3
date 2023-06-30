@@ -1,0 +1,10 @@
+wheel
+jsonschema
+pyyaml
+redis
+gunicorn
+uvicorn
+fastapi
+fastapi_csrf_protect
+pytest
+.

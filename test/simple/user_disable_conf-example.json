@@ -1,0 +1,13 @@
+{
+  "redis": {
+    "host": "localhost",
+    "port": 6378,
+    "password": "long-string-for-redis-password"
+  },
+  "user": "some-user",
+  "endpoint": "https://lens3.example.com/",
+  "bucket": "lenticularis-oddity-001",
+  "access_key": "stAKA1ke790glFF5XMHo",
+  "secret_key": "sreveUMuF0DBw1nAN44YHzIvrR87Z9zMrNbNBJTOKwxsWrGw",
+  "ssl_verify": true
+}

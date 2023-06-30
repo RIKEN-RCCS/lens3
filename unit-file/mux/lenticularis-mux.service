@@ -1,0 +1,19 @@
+[Unit]
+Description=Lenticularis-mux service (gunicorn app)
+After=syslog.target network-online.target remote-fs.target nss-lookup.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=lens3
+Group=lens3
+WorkingDirectory=/var/tmp
+Environment=LENS3_CONF=/etc/lenticularis/conf.json
+StandardOutput=journal
+StandardError=journal
+#PrivateTmp=true
+
+ExecStart=python3 -m lenticularis.start_service mux
+
+[Install]
+WantedBy=multi-user.target

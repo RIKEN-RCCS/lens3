@@ -1,5 +1,0 @@
-#! /bin/sh
-
-. ./config
-./newsyslog
-lxc stop $containers

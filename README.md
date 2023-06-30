@@ -1,52 +1,74 @@
-Copyright (c) 2022 RIKEN R-CCS
+# Lens3
 
-# lens3
-Lenticularis-S3, a multiplexer to MinIO to service multiple MinIO instances at a single access point.
+Lenticularis-S3 is a multiplexer to MinIO to service multiple MinIO
+instances at a single access point.
 
-# OVERVIEW
+__Lenticularis-S3 comes with ABSOLUTELY NO WARRANTY.__
 
-Lenticularis is an S3 compatible autonomous object storage service system.  
-End users can launch their own object storage service (called zone) 
-via Web UI.  Zone consists of Access Key set, location of buckets on file 
-system, and meta information such as expiration date or user/group-id 
-for the S3 server.
+## Overview
 
-Once a zone is launched, on an S3 access to the zone, the system automatically 
-initiates S3 server (minio) for the targeted zone and start relaying the
-session.  Zones are identified by Access Key and multiplexer distributes 
-S3 session to appropriate S3 server.  Inactive S3 server is automatically 
-purged to save system resources.
+Lenticularis-S3 (Lens3) provides an S3 service by running multiple
+MinIO instances at a single access point.  MinIO is an S3 object
+storage service, and please refer to [https://min.io](https://min.io)
+about MinIO.  While a MinIO serivice is usually owned by a single
+user, Lens3 starts MinIO instances as multiple user processes to
+confine unintended operations to each user.
 
-End users can give individual domain name to their zone, which can
-be used as an dedicated endpoint (direct hostname) for the zone.
-Access to direct hostname requires no S3 Access Key,
-therefore access to a bucket of a zone that has direct hostname is 
-appropriately relayed by the system.  Putting the bucket to be public, 
-anonymous user may access to the bucket.
+| ![lens3-overview](v1/doc/lens3-overview.svg) |
+|:--:|
+| **Fig. Lens3 overview.** |
 
-# INSTALL
+Lens3 works as a proxy and a manager of MinIO instances.  It launches
+a MinIO instance on an S3 request, redirects access requests to the
+instance, and manages the life-time of the instance.  This service,
+called "Lens3-Mux", is started as a systemd service.  Lens3 also
+provides a simple Web-UI for managing bucket pools.  A "bucket pool"
+is a management unit in Lens3 which is associated to each MinIO
+instance.  A Web-UI is used to register S3 buckets to a pool.  This
+service, called "Lens3-Api", is started as a systemd serivce, too.
 
-see docs/install.md
+## Guides
 
-# Documents
+For users,
+see [v1/doc/user-guide.md](v1/doc/user-guide.md).
 
-for Administrator,
-see docs/administrators-guide.md
+For administrators,
+see [v1/doc/admin-guide.md](v1/doc/admin-guide.md).
 
-for User,
-see docs/users-manual.md
+For site managers,
+see [v1/doc/setting-guide.md](v1/doc/setting-guide.md).
 
+For programmers,
+see [v1/doc/design.md](v1/doc/design.md).
 
-# MANIFESTO
+## ACKNOWLEDGEMENT
 
-devel		for developer
-devel/lxc       lxc environment for developer
-devel/install   install script for lxc
-docs		documents
-etc		templates for multiplexer's configuration files
-reverseproxy	templates for reverse proxy's configuration files
-src		source code
-test		test tools
-webui		templates for API's configuration files
+Lens3 is copyrighted by RIKEN R-CCS.  Part of the results is
+obtained by using Fugaku at RIKEN R-CCS.
 
-[eof]
+Lens3 uses MinIO as a backend S3 server.  Lens3 lacks a way to display
+a credit to MinIO, because it blocks accesses to MinIO's user
+interfaces.  Please refer to [https://min.io](https://min.io).
+
+Lens3 utilizes third-party open source software, which is listed in
+[acknowledgement](v1/ACKNOWLEDGEMENT.txt).  It may fail to include
+software transitively used.
+
+Lens3 UI is created with vuejs+vuetify.  Please refer to
+[https://vuejs.org](https://vuejs.org/) and
+[https://vuetifyjs.com](https://vuetifyjs.com/en/).
+
+Lens3 is developed by R-CSS and the [authors](AUTHORS.txt).  But, the
+code was reviewed by zzmatu and remaining bugs are his responsibility.
+
+## Directories
+
+```
+v1/doc               documents
+v1/src/lenticularis  source code
+v1/ui                UI source code (Vuetify)
+unit-file            configuration and systemd templates
+nginx                example settings of a proxy
+apache               example settings of a proxy
+test                 test code
+```

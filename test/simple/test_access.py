@@ -111,7 +111,7 @@ class Access_Test(Test_Base):
             self.client.make_secret(self.working_pool, policy, expiration)
             pass
         desc2 = self.client.get_pool(self.working_pool)
-        keyslist2 = [k for k in desc2["access_keys"]
+        keyslist2 = [k for k in desc2["secrets"]
                      if k["expiration_time"] == expiration]
         assert len(keyslist2) == len(self.client.key_policy_set)
         # s3 = boto3.resource("s3")
@@ -145,7 +145,7 @@ class Access_Test(Test_Base):
         policy3 = "readwrite"
         assert policy3 in self.client.key_policy_set
         desc3 = self.client.make_secret(self.another_pool, policy3, expiration)
-        keyslist3 = [k for k in desc3["access_keys"]
+        keyslist3 = [k for k in desc3["secrets"]
                      if k["expiration_time"] == expiration]
         assert len(keyslist3) == 1
         k3 = keyslist3[0]

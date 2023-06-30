@@ -294,7 +294,7 @@ class Lens3_Client(Api_Client):
 
     def get_aws_credential(self, pooldesc, policy, section_title):
         assert policy in self.key_policy_set
-        keys = pooldesc["access_keys"]
+        keys = pooldesc["secrets"]
         # {"use", "owner", "access_key", "secret_key", "key_policy"}
         pair = next(((k["access_key"], k["secret_key"]) for k in keys
                      if k["key_policy"] == policy),

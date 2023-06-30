@@ -187,7 +187,7 @@ def _pool_key_order(e):
         "owner_gid",
         "buckets_directory",
         "buckets",
-        "access_keys",
+        "secrets",
         "minio_state",
         "minio_reason",
         "expiration_time",

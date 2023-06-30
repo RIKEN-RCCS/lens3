@@ -17886,7 +17886,7 @@ const pool_data_ = {
   pool_list: [],
   /* Entries for PoolEdit. */
   buckets: [],
-  access_keys: [],
+  secrets: [],
   probe_key: "",
   expiration_time: "",
   online_status: "",
@@ -17895,9 +17895,9 @@ const pool_data_ = {
   minio_reason: "",
   modification_time: "",
   access_key_set: {},
-  access_keys_rw: [],
-  access_keys_ro: [],
-  access_keys_wo: [],
+  secrets_rw: [],
+  secrets_ro: [],
+  secrets_wo: [],
   pool_name: "",
   bucket_name: "",
   bucket_policy: "",
@@ -18039,7 +18039,7 @@ function set_pool_data(data) {
   pool_data.user = d["owner_uid"];
   pool_data.group = d["owner_gid"];
   pool_data.buckets = d["buckets"];
-  pool_data.access_keys = d["access_keys"];
+  pool_data.secrets = d["secrets"];
   pool_data.probe_key = d["probe_key"];
   pool_data.expiration_time = d["expiration_time"];
   pool_data.online_status = d["online_status"];
@@ -18047,17 +18047,17 @@ function set_pool_data(data) {
   pool_data.minio_state = d["minio_state"];
   pool_data.minio_reason = d["minio_reason"];
   pool_data.modification_time = d["modification_time"];
-  const keys = d["access_keys"];
+  const keys = d["secrets"];
   const rwkeys = keys.filter((k) => k["key_policy"] == "readwrite");
   const rokeys = keys.filter((k) => k["key_policy"] == "readonly");
   const wokeys = keys.filter((k) => k["key_policy"] == "writeonly");
-  pool_data.access_keys_rw = format_time_in_keys(rwkeys);
-  pool_data.access_keys_ro = format_time_in_keys(rokeys);
-  pool_data.access_keys_wo = format_time_in_keys(wokeys);
+  pool_data.secrets_rw = format_time_in_keys(rwkeys);
+  pool_data.secrets_ro = format_time_in_keys(rokeys);
+  pool_data.secrets_wo = format_time_in_keys(wokeys);
   pool_data.access_key_set = [
-    { policy: "readwrite", keys: pool_data.access_keys_rw },
-    { policy: "readonly", keys: pool_data.access_keys_ro },
-    { policy: "writeonly", keys: pool_data.access_keys_wo }
+    { policy: "readwrite", keys: pool_data.secrets_rw },
+    { policy: "readonly", keys: pool_data.secrets_ro },
+    { policy: "writeonly", keys: pool_data.secrets_wo }
   ];
   pool_data.bucket_name = "";
   pool_data.bucket_policy = "none";

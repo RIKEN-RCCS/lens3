@@ -122,7 +122,7 @@ def _pool_desc_schema():
         "additionalProperties": False,
     }
 
-    access_key_schema = {
+    secret_schema = {
         "type": "object",
         "properties": {
             "access_key": {"type": "string"},
@@ -154,7 +154,7 @@ def _pool_desc_schema():
             "owner_uid": {"type": "string"},
             "owner_gid": {"type": "string"},
             "buckets": {"type": "array", "items": bucket_schema},
-            "access_keys": {"type": "array", "items": access_key_schema},
+            "secrets": {"type": "array", "items": secret_schema},
             "probe_key": {"type": "string"},
             "expiration_time": {"type": "integer"},
             "online_status": {"type": "boolean"},
@@ -169,7 +169,7 @@ def _pool_desc_schema():
             "owner_gid",
             "buckets_directory",
             "buckets",
-            "access_keys",
+            "secrets",
             "probe_key",
             "expiration_time",
             "online_status",
@@ -461,7 +461,7 @@ def check_pool_is_well_formed(pooldesc, user_):
     # for bucket in pooldesc.get("buckets", []):
     #     _check_bkt_policy(bucket["bkt_policy"])
     #     pass
-    # for accessKey in pooldesc.get("access_keys", []):
+    # for accessKey in pooldesc.get("secrets", []):
     #     _check_key_policy(accessKey["key_policy"])
     #     pass
     pass
@@ -533,7 +533,7 @@ def gather_pool_desc(tables, pool_id):
     # Gather access-keys.
     #
     keys = gather_keys(tables, pool_id)
-    pooldesc["access_keys"] = keys
+    pooldesc["secrets"] = keys
     #
     # Gather dynamic states.
     #
@@ -559,10 +559,11 @@ def gather_buckets(tables, pool_id):
 
 
 def gather_keys(tables, pool_id):
-    """Gathers access-keys in a pool.  A returned list is sorted for
-    displaying.  It excludes a probe-key (which is internally used).
+    """Gathers secrets (access-keys) in a pool.  A returned list is sorted
+    for displaying.  It excludes a probe-key (which is internally
+    used).
     """
-    keys1 = tables.list_access_keys_of_pool(pool_id)
+    keys1 = tables.list_secrets_of_pool(pool_id)
     keys2 = sorted(keys1, key=lambda k: k["modification_time"])
     keys3 = [k for k in keys2
              if (k is not None and k.get("secret_key") != "")]
@@ -660,7 +661,7 @@ def _restore_pool(tables, pooldesc):
     #
     # Restore access-keys.
     #
-    keys = pooldesc["access_keys"]
+    keys = pooldesc["secrets"]
     for k in keys:
         xid = k["access_key"]
         entry3 = {

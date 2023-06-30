@@ -340,8 +340,8 @@ class Table():
         self._monokey_table.delete_xid_unconditionally(usage, xid)
         pass
 
-    def list_access_keys_of_pool(self, pool_id):
-        return self._monokey_table.list_access_keys_of_pool(pool_id)
+    def list_secrets_of_pool(self, pool_id):
+        return self._monokey_table.list_secrets_of_pool(pool_id)
 
     # Clear tables.
 
@@ -984,9 +984,10 @@ class _Monokey_Table(Table_Common):
         self.db.delete(key)
         pass
 
-    def list_access_keys_of_pool(self, pool_id):
-        """Lists access-keys of a pool.  It includes an probe-key.  A
-        probe-key is an access-key but has no corresponding secret-key.
+    def list_secrets_of_pool(self, pool_id):
+        """Lists secrets (access-keys) of a pool.  It includes an probe-key.
+        A probe-key is an access-key but has no corresponding
+        secret-key.
         """
         keyi = _scan_table(self.db, self._key_prefix, None)
         keys = [{"access_key": i, **d}

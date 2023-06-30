@@ -130,7 +130,7 @@ class Api_Test(Test_Base):
         #
 
         desc7 = self.client.find_pool(self.working_directory)
-        keys7 = desc7["access_keys"]
+        keys7 = desc7["secrets"]
         bkts7 = desc7["buckets"]
         # A key has {"access_key", "secret_key", "key_policy"}.
         # print(f"secrets={keys}")

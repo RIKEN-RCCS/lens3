@@ -60,7 +60,7 @@ def erase_pool_data(tables, pool_id):
     """Clears database about the pool."""
     path = tables.get_buckets_directory_of_pool(pool_id)
     bkts = tables.list_buckets(pool_id)
-    keys = tables.list_access_keys_of_pool(pool_id)
+    keys = tables.list_secrets_of_pool(pool_id)
     logger.debug(f"Api (pool={pool_id}) Deleting buckets-directory: {path}")
     try:
         tables.delete_buckets_directory(path)
@@ -713,7 +713,7 @@ class Control_Api():
         # Clears database about the pool.
         path = self.tables.get_buckets_directory_of_pool(pool_id)
         bkts = self.tables.list_buckets(pool_id)
-        keys = self.tables.list_access_keys_of_pool(pool_id)
+        keys = self.tables.list_secrets_of_pool(pool_id)
         logger.debug(f"Api (pool={pool_id}) Deleting buckets-directory:"
                      f" {path}")
         try:

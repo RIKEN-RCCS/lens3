@@ -127,7 +127,7 @@ class Busy_Test_Prepare():
                     raise
                 pass
             pass
-        if len(pool["access_keys"]) == 0:
+        if len(pool["secrets"]) == 0:
             print(f"Making secret...")
             while True:
                 try:

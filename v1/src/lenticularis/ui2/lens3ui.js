@@ -558,7 +558,7 @@ function make_pool_entry_for_printing(desc) {
     {text: {label: "Public upload buckets", value: bkts_upload}},
   ];
   /*
-  const keys = desc["access_keys"];
+  const keys = desc["secrets"];
   const rwkeys = keys.filter(d => d["key_policy"] == "readwrite");
   const rokeys = keys.filter(d => d["key_policy"] == "readonly");
   const wokeys = keys.filter(d => d["key_policy"] == "writeonly");
@@ -612,7 +612,7 @@ function copy_pool_data_for_edit(desc) {
   pool_data.group_choices = desc["groups"];
   pool_data.bucket_list = desc["buckets"];
 
-  const keys = desc["access_keys"];
+  const keys = desc["secrets"];
   const rw = keys.filter(d => d["key_policy"] == "readwrite");
   const ro = keys.filter(d => d["key_policy"] == "readonly");
   const wo = keys.filter(d => d["key_policy"] == "writeonly");

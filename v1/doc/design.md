@@ -344,13 +344,17 @@ MESSAGES from older versions
 ## Short-Term Todo, or Deficiency
 
 * Rewrite in Go-lang.  The code will be in Go in the next release
-  (v2.1).
+  (v2.1.1).
 
-* Avoid polling of a start of MinIO.  Currently, a Mux waits for MinIO
-  by frequent polling in the database.  See wait_for_service_starts().
+* Avoid polling of a start of MinIO.  Currently, a Lens3-Mux waits for
+  MinIO by frequent polling in the database.  See
+  wait_for_service_starts().
 
-* Make a reply contain a message on a access rejection at Lens3-Mux.
-  It returns only a status code in v1.2.
+* Make Lens3-Mux reply a message containing a reason of an access
+  rejection.  It returns only a status code in v1.2.
+
+* Make it not an error when an MC command returns
+  "Code=BucketAlreadyOwnedByYou".  It can be ignored safely.
 
 * Make access-key generation of Lens3-Api like STS.
 
@@ -412,4 +416,5 @@ Lens3 returns 503 on EPIPE, but, it makes clients retry badly.
 
 __Accepting pool creation in busy situations__: Lens3 accepts creation
 of a pool even if it cannot start MinIO due to busyness of the server.
-It is to display the error condition in the UI's "minio_state" slot.
+It is done on purpose to display the error condition in UI's
+"minio_state" slot.

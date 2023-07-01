@@ -132,28 +132,28 @@ lens3$ pip3 install --user -r requirements.txt
 lens3$ ls ~/.local/lib/python3.9/site-packages/lenticularis
 ```
 
-## Prepare a Log File Directory
+## Prepare Log File Directories
 
-Create a directory for logging, and modify the security attributes.
-Redis needs "redis_log_t" to write its logs.
+Create directories for logging, and modify their security attributes.
+Redis usually requires "redis_log_t" to write its logs.  "logrotate"
+requires file-types such as "var_log_t" or "redis_log_t".
+"tmp_t"-type won't work due to the policy for "logrotate".
 
 ```
 # mkdir /var/log/lenticularis
 # chown lens3:lens3 /var/log/lenticularis
 # chmod 700 /var/log/lenticularis
-# chcon -u system_u -t var_log_t /var/log/lenticularis-redis
 # ls -dlZ /var/log/lenticularis
+(* Check the context is with var_log_t on /var/log/lenticularis. *)
 
 # mkdir /var/log/lenticularis-redis
 # chown lens3:lens3 /var/log/lenticularis-redis
 # chmod 700 /var/log/lenticularis-redis
-# chcon -u system_u -t redis_log_t /var/log/lenticularis-redis
+# semanage fcontext -a -t redis_log_t /var/log/lenticularis-redis
+# restorecon -v /var/log/lenticularis-redis
 # ls -dlZ /var/log/lenticularis-redis
+(* Check the context is with redis_log_t on /var/log/lenticularis-redis. *)
 ```
-
-These settings are not reflected in the system, so, they revert when
-running restorecon.  The file-type "var_t" won't work due to the
-policy for logrotate.
 
 ## Enable HTTP Connections
 

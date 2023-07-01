@@ -167,7 +167,7 @@ Let SELinux accept connections inside a local host.
 # setsebool -P httpd_can_network_connect 1
 ```
 
-Modify the firewall to accept connection to port=443.
+Modify the firewall to accept connections to port=443.
 
 ```
 # firewall-cmd --state
@@ -182,26 +182,27 @@ It is highly site dependent.
 
 ### Required Headers
 
-Lens3-Api requires "X-Remote-User", which holds an authenticated
-user claim.  Lens3-Api trusts the "X-Remote-User" header passed by the
-proxy.  Make sure the header is properly prepared by the proxy.
+Lens3-Api requires "X-Remote-User", which holds an authenticated user
+claim.  Lens3-Api trusts the "X-Remote-User" header passed by the
+proxy.  Make sure the header is properly filtered and prepared by the
+proxy.
 
-The following headers are passed to the Lens3-Mux and Lens3-Api by the
-proxy.  Lens3-Mux requires {"Host", "X-Forwarded-For",
-"X-Forwarded-Host", "X-Forwarded-Server", "X-Forwarded-Proto",
-"X-Real-IP"}.  "Connection" (for keep-alive) is forced unset for
-Lens3-Mux.  These are all practically standard headers.
+Lens3-Mux requires {"Host", "X-Forwarded-For", "X-Forwarded-Host",
+"X-Forwarded-Server", "X-Forwarded-Proto", "X-Real-IP"}.  "Connection"
+(for keep-alive) is forced unset for Lens3-Mux.
 
-Note {"X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Server"} are
-implicitly set by Apache proxy.
+These are all practically standard headers.  Note {"X-Forwarded-For",
+"X-Forwarded-Host", "X-Forwarded-Server"} are implicitly set by
+Apache.
 
 ### Proxy Path Choices
 
 A path, "location" or "proxypass", should be "/" for Lens3-Mux,
 because a path cannot be specified for the S3 service.  If Lens3-Mux
-and Lens3-Api are co-hosted, the Lens3-Mux path should be "/" and the
-Lens3-Api path should be something like "/lens3.api/" that is NOT
-legitimate bucket names.  We will use "lens3.api" in the following.
+and Lens3-Api services are co-hosted, the Lens3-Mux path should be "/"
+and the Lens3-Api path should be something like "/lens3.api/" that is
+NOT legitimate bucket names.  We will use "lens3.api" in the
+following.
 
 Please refer to the note on running MinIO with a proxy, saying: "The
 S3 API signature calculation algorithm does not support proxy schemes
@@ -215,8 +216,8 @@ Server](https://min.io/docs/minio/linux/integrations/setup-nginx-proxy-with-mini
 Set up a configuration file with needed authentication, and (re)start
 the service.
 
-Prepare a configuration file in "/etc/httpd/conf.d/" Sample files can
-be found in $TOP/apache/.  Copy one as
+Prepare a configuration file in "/etc/httpd/conf.d/".  Sample files
+can be found in $TOP/apache/.  Copy one as
 "/etc/httpd/conf.d/lens3proxy.conf" and edit it.
 
 ```
@@ -228,10 +229,11 @@ be found in $TOP/apache/.  Copy one as
 # ls -lZ /etc/httpd/conf.d/lens3proxy.conf
 ```
 
-Hints for setting: Since a proxy forwards directory accesses to
-Lens3-Api, a trailing slash is necessary (in both the pattern part and
-the URL part as noted in the Apache documents).  As a result, accesses
-by `https://lens3.exmaple.com/lens3.api` (without a slash) will fail.
+Hints for setting: A trailing slash is necessary (in both the pattern
+part and the URL part as noted in the Apache documents), in order to
+let the proxy forward directory accesses to Lens3-Api.  As a
+consequence, accesses by `https://lens3.exmaple.com/lens3.api`
+(without a slash) will fail.
 
 ```
 ProxyPass /lens3.api/ http://localhost:8004/
@@ -262,7 +264,7 @@ file.  Change the lines of crt and key in "/etc/httpd/conf.d/ssl.conf".
 ### Proxy by NGINX
 
 The following example is for basic authentication.  First, prepare a
-configuration file in "/etc/nginx/conf.d/" maybe by copying a sample
+configuration file in "/etc/nginx/conf.d/", maybe by copying a sample
 file in $TOP/nginx/.
 
 ```
@@ -308,7 +310,7 @@ CLI has parameters for file transfers "multipart_threshold"
 (default=8MB) and "multipart_chunksize" (default=8MB).  Especially,
 "multipart_chunksize" has the minimum 5MB.
 
-It is recommended to check the limits of a proxy when encountering a
+It is recommended to check the limits of the proxy when encountering a
 413 error (Request Entity Too Large).
 
 NGINX parameters are specified in the server section (or in the http
@@ -317,16 +319,17 @@ defined in ngx_http_core_module.  See for the NGINX
 ngx_http_core_module parameters:
 [https://nginx.org/en/docs/http/ngx_http_core_module.html](https://nginx.org/en/docs/http/ngx_http_core_module.html#client_max_body_size)
 
-See for the AWS S3 CLI parameters:
+See below for the AWS S3 CLI parameters:
 [https://docs.aws.amazon.com/cli/latest/topic/s3-config.html](https://docs.aws.amazon.com/cli/latest/topic/s3-config.html).
 
 ## Start Redis
 
-Lens3 uses a separate Redis instance running at port=6378.
+Lens3 uses a separate Redis instance running at port=6378 (not
+port=6379).
 
 Prepare a configuration file as "/etc/lenticularis/redis.conf".
-Change the owner and edit the fields.  Note starting Redis will fail
-when the owner of /etc/lenticularis/redis.conf is not "lens3".
+Change the owner and edit the fields.  Starting Redis will fail when
+the owner of /etc/lenticularis/redis.conf is not "lens3".
 
 * bind: Network interfaces; localhost by default
 * port: A port for Redis
@@ -372,7 +375,7 @@ the configurations.
 
 Make the configurations in files, then load them in Redis.  Note
 `lens3-admin` needs "conf.json" containing connection information to
-Redis.  Keep "conf.json" secure.
+Redis.
 
 ```
 # su - lens3
@@ -383,11 +386,13 @@ lens3$ vi api-conf.yaml
 lens3$ vi mux-conf.yaml
 ```
 
-Load the Lens3 configuration from the files.
+Load the Lens3 configuration from the files.  KEEP "conf.json" SECURE
+ALL THE TIME -- access keys are stored in the database in raw text.
 
 ```
 # cp /etc/lenticularis/conf.json /home/lens3/conf.json
-# chown lens3 /home/lens3/conf.json
+# chown lens3:lens3 /home/lens3/conf.json
+# chmod 660 /home/lens3/conf.json
 # su - lens3
 lens3$ cd ~
 lens3$ lens3-admin -c conf.json load-conf api-conf.yaml

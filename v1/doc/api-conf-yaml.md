@@ -35,7 +35,7 @@ controller:
     front_host: lens3.example.com
     trusted_proxies:
         - localhost
-    base_path: "/api~"
+    base_path: "/lens3.api"
     claim_uid_map: email-name
     probe_access_timeout: 60
     minio_mc_timeout: 10

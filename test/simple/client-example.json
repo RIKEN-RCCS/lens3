@@ -1,5 +1,5 @@
 {
-  "api_ep": "https://lens3.example.com/lens3.api",
+  "api_ep": "https://lens3.example.com/lens3.sts",
   "s3_ep": "https://lens3.example.com",
   "gid": "some-group",
   "home": "/home/some-user",

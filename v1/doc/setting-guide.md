@@ -200,8 +200,8 @@ Apache.
 A path, "location" or "proxypass", should be "/" for Lens3-Mux,
 because a path cannot be specified for the S3 service.  If Lens3-Mux
 and Lens3-Api services are co-hosted, the Lens3-Mux path should be "/"
-and the Lens3-Api path should be something like "/lens3.api/" that is
-NOT legitimate bucket names.  We will use "lens3.api" in the
+and the Lens3-Api path should be something like "/lens3.sts/" that is
+NOT legitimate bucket names.  We will use "lens3.sts" in the
 following.
 
 Please refer to the note on running MinIO with a proxy, saying: "The
@@ -232,12 +232,12 @@ can be found in $TOP/apache/.  Copy one as
 Hints for setting: A trailing slash is necessary (in both the pattern
 part and the URL part as noted in the Apache documents), in order to
 let the proxy forward directory accesses to Lens3-Api.  As a
-consequence, accesses by `https://lens3.exmaple.com/lens3.api`
+consequence, accesses by `https://lens3.exmaple.com/lens3.sts`
 (without a slash) will fail.
 
 ```
-ProxyPass /lens3.api/ http://localhost:8004/
-ProxyPassReverse /lens3.api/ http://localhost:8004/
+ProxyPass /lens3.sts/ http://localhost:8004/
+ProxyPassReverse /lens3.sts/ http://localhost:8004/
 ```
 
 For OIDC (OpenID Connect) authentication, there is a good tutorial for
@@ -522,7 +522,7 @@ instances.  Something goes wrong if there are no entries of Lens3-Mux.
 ## Test Accesses
 
 Access Lens3-Api by a browser (for example):
-`http://lens3.example.com/lens3.api/`
+`http://lens3.example.com/lens3.sts/`
 
 For accessing buckets from S3 client, copy the access/secret keys
 created in UI to the AWS "credentials" file.  Note that Lens3 does not

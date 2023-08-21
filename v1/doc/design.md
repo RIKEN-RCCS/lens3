@@ -14,13 +14,13 @@ This describes design notes of Lenticularis-S3.
 ## Redis Databases (prefixes of keys)
 
 Lens3 uses a couple of Redis databases (by database numbers), but the
-division is arbitrary as the distinct prefixes are used.  Most of the
+division is arbitrary as distinct prefixes are used.  Most of the
 entries are json records, and others are simple strings.
 
-Note: In the tables below, entries with "\*1" are set atomically (by
+NOTE: In the tables below, entries with "\*1" are set atomically (by
 "setnx"), and entries with "\*2" are with expiry.
 
-A date+time is by unix seconds.  Web-API also passes a date+time by
+A date+time is by unix seconds.  Web-UI also passes a date+time by
 unix seconds.
 
 Mux, Api, and Managers make (potentially) many connections to Redis,
@@ -39,20 +39,21 @@ because they use multiple databases.
 The Setting-Table stores semi-static information.
 
 __cf:api__ and __cf:mux__ (literal strings) entries store the settings
-of services.  __cf:mux:mux-name__ is used to give a specific setting
-to each Mux service, whose mux-name is given by "LENS3_MUX_NAME" at a
-start of a service in environment variables.
+of services.  __cf:mux:mux-name__ is used to choose a specific setting
+to each Mux service, whose mux-name is replaced by a string in an
+environment variable "LENS3_MUX_NAME" passed to a service.
 
 A __uu:uid__ entry is a record of a user-info: {"uid", "groups",
 "claim", "enabled", "modification_time"}, where "groups" is a string
 list, "claim" is a string (maybe empty), and "enabled" is a boolean.
 
-A __um:claim__ entry is a map from a user claim to a uid.  Entries are
-used only when Lens-Api is configured with "claim_uid_map=map".
+A __um:claim__ entry is a map from a user claim to a uid.  It is
+optional and an entry is used only when Lens-Api is configured with
+"claim_uid_map=map".
 
-One reason for storing configurations in the database is to let them
-parsed at storing in the database.  Detecting typos at a start of a
-service is very annoying.
+A primary reason for storing configurations in the database is to let
+them parsed at storing in the database.  Detecting typos at a start of
+a service is very annoying.
 
 ### Storage-Table (DB=1)
 
@@ -68,14 +69,16 @@ A __po:pool-id__ entry is a pool description: {"pool_name",
 the semi-static part of pool information.
 
 A __ps:pool-id__ entry is a pool-state which is a record {"state",
-"reason", "modification_time"}.  A state is one of: "initial",
-"ready", "disabled", and "inoperable".  Reason is a string.  Sometimes
-a reason string may be a long error message.
+"reason", "modification_time"}.  A state is one of: {"initial",
+"ready", "suspended", "disabled", "inoperable"}.  A value of reason is
+a string, which can be a long string of an error message.
 
 A __bd:directory__ is a bucket-directory entry.  The entry is
 atomically assigned.  Lens3 forbids running multiple MinIO instances
-in the same directory.  Note, however, MinIO instances may possibly
-run in a transient state at a race in starting/stopping an instance.
+in the same directory.  Note, however, (symbolic) links can fool the
+detection of the same directory.  In addition, MinIO instances may run
+in the same directory transiently in a race in starting/stopping
+instances.
 
 ### Process-Table (DB=2)
 
@@ -85,15 +88,16 @@ run in a transient state at a race in starting/stopping an instance.
 | mn:pool-id      | MinIO-process   | |
 | mx:mux-endpoint | Mux-description | \*2 |
 
-An __ma:pool-id__ entry holds a MinIO-manager under which a MinIO
+An __ma:pool-id__ entry records a MinIO-manager under which a MinIO
 process runs.  It is a record: {"mux_host", "mux_port", "start_time"}.
-A start time makes the entry distinguishable.  It is atomically set to
-ensure uniqueness of a running Manager (a loser will quit).
+It is atomically set to ensure uniqueness of a running Manager (a
+loser will quit).  A start-time makes the chosen entry distinguishable
+(but not strictly distinguishable).
 
 An __mn:pool-id__ entry is a MinIO-process description: {"minio_ep",
 "minio_pid", "admin", "password", "mux_host", "mux_port",
 "manager_pid", "modification_time"}.  A admin/password pair specifies
-an administrator.
+an administrator of a MinIO instance.
 
 An __mx:mux-endpoint__ entry is a Lens3-Mux description that is a
 record: {"host", "port", "start_time", "modification_time"}.  A key is
@@ -122,7 +126,7 @@ A __ts:pool-id__ entry is a last access timestamp of a pool.  It is
 used to decide whether to stop a MinIO instance.
 
 A __us:uid__ is an access timestamp of a user.  It is just a record.
-It is to check inactive users.
+It is used to find out inactive users (no tools are provided).
 
 ### Monokey-Table (DB=4)
 
@@ -144,8 +148,8 @@ where an owner is a pool-id.  A key-policy is one of {"readwrite",
 
 ## Bucket policy
 
-Public r/w policy is given to a bucket by Lens3.  Lens3 invokes the mc
-command, one of the following.
+Public read/write policy is given to a bucket by Lens3.  Lens3 invokes
+the mc command, one of the following.
 
 ```
 mc policy set public alias/bucket
@@ -155,24 +159,24 @@ mc policy set none alias/bucket
 ```
 
 Accesses to deleted buckets in Lens3 are refused at Lens3-Mux, but
-they remain accessbile in MinIO, which have access policy "none" and
-are accessible using access-keys.
+they remain potentially accessible in MinIO, which have access policy
+"none" and are accessible using access-keys.
 
 ## Redis Database Operations
 
-A single Redis instance is used, and not distributed.
+A single Redis instance is used, and is not distributed.
 
-Usually, it is required an uniqueness guarantee, such as for an
+It is usually required an uniqueness guarantee, such as for an
 access-keys and ID's for pools, and atomic set is suffice.  A failure
-is concidered only for MinIO endpoints, and timeouts are set for
-"ma:pool-id" entries.  See the section Redis Database Keys.
+condition is only considered for MinIO endpoints, and timeouts are set
+to "ma:pool-id" entries.  See the section Redis Database Keys.
 
-Redis client routines catches socket related exceptions (including
+Redis client routines catches exceptions related to sockets (including
 ConnectionError and TimeoutError).  Others are not checked at all by
 Lens3.
 
-Operations by an administrator is NOT mutexed.  They include
-modifications on the user-list.
+Operations by an administrator is NOT mutexed.  Some operations should
+be performed carefully.  They include modifications on the user-list.
 
 ## Pool State Transition
 
@@ -182,9 +186,10 @@ a transition of a state.  Also, a Manager checks a condition at
 heartbeating.
 
 * __None__ → __INITIAL__: It is a quick transition.
-* __INITIAL__ → __READY__: It is at a start of MinIO.
+* __INITIAL__ → __READY__: It is at a start of MinIO.  Note the READY
+  state does not imply a MinIO instance is running.
 * {__INITIAL__, __READY__} → __SUSPENDED__: It is on a condition the
-  server is busy (all ports are used).
+  server is busy (all reserved ports are used).
 * __SUSPENDED__ → __INITIAL__: It is performed periodically.  It will
   move back again to the __SUSPENDED__ state if a potential condition
   remains.
@@ -195,14 +200,15 @@ heartbeating.
 * ? → __INOPERABLE__: It is at a failure of starting MinIO.  This
   state is a deadend.  A bucket-pool should be removed.
 
-Deleting buckets and secrets may act only on Lens3 during suspension.
-It moves not to READY but INITIAL, which adjusts MinIO in a consistent
-state with Lens3 at the next start.
+Deleting buckets and secrets may act on Lens3 during suspension.  So,
+it moves the state not to READY but to INITIAL after waking up from
+suspension, which will adjust an MinIO instance in a consistent state
+with the state recorded in Lens3 at the next start.
 
 ### Lens3-Mux/Lens3-Api systemd Services
 
-All states of services are stored in Redis.  systemd services can be
-stoped/started.
+All states of services are stored in Redis.  It is safe to stop/start
+systemd services.
 
 ## Processes
 
@@ -350,6 +356,10 @@ MESSAGES from older versions
   MinIO by frequent polling in the database.  See
   wait_for_service_starts().
 
+* Reject certain bucket-directory paths so that it does service in
+  directories with dots.  Servicing in ".ssh" should be avoided, for
+  example.
+
 * Make Lens3-Mux reply a message containing a reason of an access
   rejection.  It returns only a status code in v1.2.
 
@@ -371,7 +381,8 @@ MESSAGES from older versions
   Currently, an arbitrary Mux is chosen.  The proxy can balance the
   loads.
 
-* Add control on the pool status "online".  It is always online currently.
+* Add a control on the pool status "online".  It is always online,
+  currently.
 
 ## RANDOM MEMO
 

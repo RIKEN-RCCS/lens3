@@ -20,6 +20,8 @@ list.  Select a pool by clicking an edit button (a pencil).  It opens
 a "Pool edit" section.  Or, delete a pool by clicking a delete button
 (a trash can).
 
+Check the status of a pool.  A pool in "inoperable"-state is UNUSABLE.
+
 ![Pool edit screenshot](ug3.jpg)
 
 "Edit a Pool" section has two independent subsections -- one for
@@ -40,6 +42,8 @@ only handles it by date at 00:00:00-UTC.
 
 The last figure shows a screenshot after some operations.  It has one
 public bucket and two readwrite access keys.
+
+The S3 endpoint is shown in the top-left corner menu.
 
 ### Simple UI
 

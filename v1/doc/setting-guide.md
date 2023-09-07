@@ -64,7 +64,6 @@ We assume RedHat/Rocky 8.8 and Python 3.9 at this writing (in June
 ## Install Prerequisites
 
 Install "Python", "Redis", and "Development-Tools" onto the host.
-("Development-Tools" may not be necessary).
 
 ```
 # dnf groupinstall "Development Tools"
@@ -78,14 +77,22 @@ Ensure using Python3.9, if necessary.
 # update-alternatives --config python3
 ```
 
-Install a proxy, Apache or NGINX.
+Check the version of Python3.
+
+```
+$ python3 --version
+$ update-alternatives --display python3
+```
+
+Install a proxy, either Apache or NGINX.  Install Apache (with
+optional OpenID Connect).
 
 ```
 # dnf install httpd mod_ssl mod_proxy_html
 # dnf install mod_auth_openidc
 ```
 
-Or,
+Or, install NGINX.
 
 ```
 # dnf install nginx
@@ -103,7 +110,7 @@ the installation is done by the user "lens3".  Fix its umask
 appropriately such as by `umask 022`.
 
 ```
-# useradd -K UID_MIN=300 -K UID_MAX=499 -U -d /home/lens3 lens3
+# useradd -K UID_MIN=300 -K UID_MAX=499 -K GID_MIN=300 -K GID_MAX=499 -U -d /home/lens3 lens3
 ```
 
 Download MinIO binaries "minio" and "mc" from min.io, then fix the
@@ -211,7 +218,7 @@ S3 API signature calculation algorithm does not support proxy schemes
 [Configure NGINX Proxy for MinIO
 Server](https://min.io/docs/minio/linux/integrations/setup-nginx-proxy-with-minio.html).
 
-### Proxy by Apache
+### CASE: Proxy by Apache
 
 Set up a configuration file with needed authentication, and (re)start
 the service.
@@ -229,11 +236,12 @@ can be found in $TOP/apache/.  Copy one as
 # ls -lZ /etc/httpd/conf.d/lens3proxy.conf
 ```
 
-Hints for setting: A trailing slash is necessary (in both the pattern
-part and the URL part as noted in the Apache documents), in order to
-let the proxy forward directory accesses to Lens3-Api.  As a
-consequence, accesses by `https://lens3.exmaple.com/lens3.sts`
-(without a slash) will fail.
+Hints for setting: A trailing slash in ProxyPass/ProxyPassReverse
+lines is necessary (in both the pattern part and the URL part as noted
+in Apache documents).  It instructs the proxy to forward directory
+accesses to Lens3-Api.  As a consequence, accesses by
+`https://lens3.exmaple.com/lens3.sts` (without a slash) will fail.
+
 
 ```
 ProxyPass /lens3.sts/ http://localhost:8004/
@@ -245,6 +253,26 @@ setting Apache with Keyclock -- "3. Configure OnDemand to authenticate
 with Keycloak".  See below.
 
 [https://osc.github.io/ood-documentation/.../install_mod_auth_openidc.html](https://osc.github.io/ood-documentation/latest/authentication/tutorial-oidc-keycloak-rhel7/install_mod_auth_openidc.html)
+
+Prepare passwords for basic authentication.
+
+```
+# mkdir /etc/httpd/passwd
+# chown apache:apache /etc/httpd/passwd
+# chmod 770 /etc/httpd/passwd
+# touch /etc/httpd/passwd/passwords
+# chown apache:apache /etc/httpd/passwd/passwords
+# chmod 660 /etc/httpd/passwd/passwords
+# htpasswd -b /etc/httpd/passwd/passwords user pass
+# ......
+```
+
+Start Apache.
+
+```
+# systemctl enable httpd
+# systemctl start httpd
+```
 
 #### Other Settings for Apache (Tips)
 
@@ -261,7 +289,7 @@ file.  Change the lines of crt and key in "/etc/httpd/conf.d/ssl.conf".
 > SSLCertificateKeyFile /etc/pki/tls/private/lens3.key
 ```
 
-### Proxy by NGINX
+### CASE: Proxy by NGINX
 
 The following example is for basic authentication.  First, prepare a
 configuration file in "/etc/nginx/conf.d/", maybe by copying a sample
@@ -272,16 +300,17 @@ file in $TOP/nginx/.
 # vi /etc/nginx/conf.d/lens3proxy.conf
 ```
 
-Prepare password for basic authentication.
+Prepare passwords for basic authentication.
 
 ```
 # mkdir /etc/nginx/private
-# touch /etc/nginx/private/htpasswd
-# htpasswd -b /etc/nginx/private/htpasswd user pass
 # chown nginx:nginx /etc/nginx/private
-# chmod 660 /etc/nginx/private
+# chmod 770 /etc/nginx/private
+# touch /etc/nginx/private/htpasswd
 # chown nginx:nginx /etc/nginx/private/htpasswd
 # chmod 660 /etc/nginx/private/htpasswd
+# htpasswd -b /etc/nginx/private/htpasswd user pass
+# ......
 ```
 
 Stop/start NGINX during configuration changes.

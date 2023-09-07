@@ -11,6 +11,51 @@ utility in this directory ("$TOP/v1/ui") as described below.
 ## Prerequisites: Newer nodejs and npm
 
 vuejs+vuetifty requires much newer versions of "nodejs" and "npm" than
+the ones in the standard dnf repository in RedHat/Rocky.  While Rocky
+8.8 is distributing nodejs 10.x, the latest is nodejs 20.x at this
+writing (September 2023).
+
+See the sections "Installation Instructions" in
+[https://github.com/nodesource/distributions](https://github.com/nodesource/distributions).
+The below is a copy of the instructions (for Redhat) with a change to
+use dnf:
+
+```
+# dnf install https://rpm.nodesource.com/pub_20.x/nodistro/repo/nodesource-release-nodistro-1.noarch.rpm
+# dnf install nodejs --setopt=nodesource-nodejs.module_hotfixes=1
+```
+
+This build uses a specific version of Vuetify 3.3.x that is 3.3.4 and
+later.  It is because it uses an early-release, the "labs", version of
+"v-date-picker" component.  It is explicit (3.3.15) in "package.json".
+
+```
+  "dependencies": {... "vuetify": "3.3.15", ...}
+```
+
+```
+$ cd $TOP/v1/ui
+$ npm install
+
+$ npm run dev or build or lint
+```
+
+If "v-date-picker" is generally available as a production-ready
+component, it is necessary to remove a import statement from the
+source code.  The code should look like below.
+
+```
+<script lang="ts" setup>
+    import {VDatePicker} from 'vuetify/labs/VDatePicker'
+</script>
+```
+
+npm install
+npm build vuetify
+
+## ~~Prerequisites: Newer nodejs and npm (obsolete)~~
+
+vuejs+vuetifty requires much newer versions of "nodejs" and "npm" than
 the ones in RedHat/Rocky.  Rocky 8.8 is distributing nodejs 10.x and
 npm 6.x at the time of this writing (June 2023).  The versions of
 nodejs 18.x and npm 9.x can be installed as follows.

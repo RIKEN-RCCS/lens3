@@ -197,13 +197,14 @@ heartbeating.
   disables a pool, including disabling a user account, an expiry of a
   pool, or making a pool offline.
 * __DISABLED__ → __INITIAL__: It is at a cease of a disabling condition.
-* ? → __INOPERABLE__: It is at a failure of starting MinIO.  This
+* any → __INOPERABLE__: It is at a failure of starting MinIO.  This
   state is a deadend.  A bucket-pool should be removed.
 
-Deleting buckets and secrets may act on Lens3 during suspension.  So,
-it moves the state not to READY but to INITIAL after waking up from
-suspension, which will adjust an MinIO instance in a consistent state
-with the state recorded in Lens3 at the next start.
+Deleting buckets and secrets during suspension will alter only the
+state of Lens3 but not the state of MinIO (becuase MinIO is not
+running).  At waking up from suspension, it moves the state to INITIAL
+(not READY) so that it will adjust the state of MinIO to a consistent
+state with the state of Lens3 at the next start.
 
 ### Lens3-Mux/Lens3-Api systemd Services
 
@@ -228,19 +229,18 @@ frequently than expected.
 A Manager becomes a session leader (by calling setsid), and a MinIO
 process will be terminated when a Manager exits.
 
-## UI
+## Building UI
 
 Lens3 UI is created by vuejs+vuetify.  The code for Vuetify is in the
-"v1/ui" directory.  See README.md in [ui](../ui/) for building UI
-code.
+"v1/ui" directory.  See [v1/ui/README.md](../ui/README.md) for building UI.
 
 ## Security
 
 Security mainly depends on the setting of the frontend proxy.  Please
 consult experts for setting up the proxy.  Accesses to Lens3-Api are
-authenticated as it is behind the proxy, and thus it is less concern.
-Lens3-Mux restricts accesses by checking a pair of a bucket and a
-secret.  The checker functions are named as beginning with "ensure_".
+authenticated as it is behind the proxy, and thus it is of less
+concern.  Lens3-Mux restricts accesses by checking a pair of a bucket
+and a secret.  Checker functions have names beginning with "ensure_".
 Please review those functions intensively.
 
 ## HTTP Status Code

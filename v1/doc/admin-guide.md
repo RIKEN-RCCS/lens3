@@ -1,6 +1,6 @@
 # Lenticularis-S3 Administration Guide
 
-## Administration Command (lens3-admin)
+## Admin Command (lens3-admin)
 
 Lens3 provides "lens3-admin" command for direct database
 modifications.  Note that it does not change the status of a MinIO

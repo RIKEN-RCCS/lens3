@@ -49,7 +49,7 @@ const pool_data_ = {
   pool_name: "",
   bucket_name: "",
   bucket_policy: "",
-  key_expiration_time: "",
+  key_expiration_time: new Date(),
 
   edit_pool_visible: false,
   menu_visible: false,
@@ -129,7 +129,16 @@ const pool_data_ = {
 
   api_make_secret(pool : string, rw : string) {
     console.log("make_secret: " + rw);
-    const expiration = new Date(pool_data.key_expiration_time).getTime() / 1000;
+    console.log("key_expiration_time=" + pool_data.key_expiration_time);
+
+    /* The date-picker returns a date at midnight local time.  So, a
+       date may shift when it is interpreted in UTC.  It is necessary
+       to fix a value of a date to one at midnight UTC. */
+
+    const tv0 = (pool_data.key_expiration_time).getTime() / 1000;
+    const tzfix = ((pool_data.key_expiration_time).getTimezoneOffset() * 60);
+    const expiration = tv0 - tzfix;
+
     const method = "POST";
     const path = (base_path + "/pool/" + pool_data.pool_name
                   + "/secret");

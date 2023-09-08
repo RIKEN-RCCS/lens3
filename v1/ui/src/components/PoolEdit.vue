@@ -3,17 +3,15 @@
                v-if="pool_data.edit_pool_visible">
     <div class="text-h5 text-center w-100">Edit a Pool</div>
     <div class="text-h6 text-center w-100">{{pool_data.buckets_directory}}</div>
+    <!-- BUCKETS -->
+
     <v-card variant="outlined" class="w-100 ma-4">
       <v-card-text>
-        Edit pool lists buckets and access keys. You can
-        add/delete them.  A bucket name should be unique in all
-        pools including ones owned by others. An expiration of an
-        access key is limited by the date in the future set by a
-        site manager.
+        Edit pool lists buckets and access keys. You can add/delete
+        buckets. A bucket name should be unique in all pools
+        including ones owned by others.
       </v-card-text>
     </v-card>
-
-    <!-- BUCKETS -->
 
     <v-row align="center">
       <v-spacer />
@@ -67,17 +65,19 @@
 
     <!-- KEYS -->
 
+    <v-card variant="outlined" class="w-100 ma-4">
+      <v-card-text>
+        You can also add/delete access keys. An expiration of an
+        access key is limited by the date in the future set by a site
+        manager.
+      </v-card-text>
+    </v-card>
+
     <v-divider v-bind:thickness="5" class="border-opacity-0"></v-divider>
     <v-row align="center">
       <v-spacer />
       <v-card class="w-75 pa-4 ma-4">
         <v-card-title>New access key</v-card-title>
-        <v-text-field
-          type="date"
-          v-bind:min="new Date()"
-          label="Expiration (00:00:00 UTC)"
-          v-model="pool_data.key_expiration_time">
-        </v-text-field>
         <v-btn prepend-icon="mdi-key-plus"
                v-on:click="kick_make_secret('readwrite')">
           Create readwrite key
@@ -92,6 +92,18 @@
                v-on:click="kick_make_secret('writeonly')">
           Create writeonly key
         </v-btn>
+        <v-spacer />
+        <v-row>
+          <v-date-picker
+            title="Expiration (00:00:00 UTC)"
+            header=""
+            v-bind:hide-actions="true"
+            input-mode="keyboard"
+            v-bind:min="new Date(Date.now() - 24*3600*1000)"
+            v-model="pool_data.key_expiration_time"
+            v-bind:landscape="true"
+            elevation="0"></v-date-picker>
+        </v-row>
       </v-card>
       <v-spacer />
     </v-row>
@@ -150,6 +162,7 @@
 </template>
 
 <script lang="ts">
+import {VDatePicker} from 'vuetify/labs/VDatePicker';
 export default {
   props: {
     pool_data: {
@@ -160,6 +173,9 @@ export default {
   data() {
     //this.pool_data.api_list_pools();
     return {};
+  },
+  components: {
+    VDatePicker,
   },
   methods: {
     kick_make_bucket() {

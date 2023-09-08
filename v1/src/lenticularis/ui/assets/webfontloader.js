@@ -17,9 +17,6 @@ function _mergeNamespaces(n, m) {
   }
   return Object.freeze(Object.defineProperty(n, Symbol.toStringTag, { value: "Module" }));
 }
-function getDefaultExportFromCjs(x) {
-  return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, "default") ? x["default"] : x;
-}
 var webfontloader$2 = { exports: {} };
 (function(module) {
   (function() {
@@ -46,7 +43,7 @@ var webfontloader$2 = { exports: {} };
       return p.apply(null, arguments);
     }
     var q = Date.now || function() {
-      return +/* @__PURE__ */ new Date();
+      return +new Date();
     };
     function ca(a, b) {
       this.a = a;
@@ -506,7 +503,7 @@ var webfontloader$2 = { exports: {} };
       this.a = [];
       this.c = {};
     }
-    var za = { latin: "BESbswy", "latin-ext": "çöüğş", cyrillic: "йяЖ", greek: "αβΣ", khmer: "កខគ", Hanuman: "កខគ" }, Aa = { thin: "1", extralight: "2", "extra-light": "2", ultralight: "2", "ultra-light": "2", light: "3", regular: "4", book: "4", medium: "5", "semi-bold": "6", semibold: "6", "demi-bold": "6", demibold: "6", bold: "7", "extra-bold": "8", extrabold: "8", "ultra-bold": "8", ultrabold: "8", black: "9", heavy: "9", l: "3", r: "4", b: "7" }, Ba = { i: "i", italic: "i", n: "n", normal: "n" }, Ca = /^(thin|(?:(?:extra|ultra)-?)?light|regular|book|medium|(?:(?:semi|demi|extra|ultra)-?)?bold|black|heavy|l|r|b|[1-9]00)?(n|i|normal|italic)?$/;
+    var za = { latin: "BESbswy", "latin-ext": "\xE7\xF6\xFC\u011F\u015F", cyrillic: "\u0439\u044F\u0416", greek: "\u03B1\u03B2\u03A3", khmer: "\u1780\u1781\u1782", Hanuman: "\u1780\u1781\u1782" }, Aa = { thin: "1", extralight: "2", "extra-light": "2", ultralight: "2", "ultra-light": "2", light: "3", regular: "4", book: "4", medium: "5", "semi-bold": "6", semibold: "6", "demi-bold": "6", demibold: "6", bold: "7", "extra-bold": "8", extrabold: "8", "ultra-bold": "8", ultrabold: "8", black: "9", heavy: "9", l: "3", r: "4", b: "7" }, Ba = { i: "i", italic: "i", n: "n", normal: "n" }, Ca = /^(thin|(?:(?:extra|ultra)-?)?light|regular|book|medium|(?:(?:semi|demi|extra|ultra)-?)?bold|black|heavy|l|r|b|[1-9]00)?(n|i|normal|italic)?$/;
     function Da(a) {
       for (var b = a.f.length, c = 0; c < b; c++) {
         var d = a.f[c].split(":"), e = d[0].replace(/\+/g, " "), f = ["n4"];
@@ -618,12 +615,11 @@ var webfontloader$2 = { exports: {} };
     module.exports ? module.exports = Z : (window.WebFont = Z, window.WebFontConfig && Y.load(window.WebFontConfig));
   })();
 })(webfontloader$2);
-var webfontloaderExports = webfontloader$2.exports;
-const webfontloader = /* @__PURE__ */ getDefaultExportFromCjs(webfontloaderExports);
+const webfontloader = webfontloader$2.exports;
 const webfontloader$1 = /* @__PURE__ */ _mergeNamespaces({
   __proto__: null,
   default: webfontloader
-}, [webfontloaderExports]);
+}, [webfontloader$2.exports]);
 export {
   webfontloader$1 as w
 };

@@ -218,7 +218,7 @@ S3 API signature calculation algorithm does not support proxy schemes
 [Configure NGINX Proxy for MinIO
 Server](https://min.io/docs/minio/linux/integrations/setup-nginx-proxy-with-minio.html).
 
-### CASE: Proxy by Apache
+## CASE1: Proxy by Apache
 
 Set up a configuration file with needed authentication, and (re)start
 the service.
@@ -231,7 +231,7 @@ can be found in $TOP/apache/.  Copy one as
 # cp $TOP/apache/lens3proxy-basic.conf /etc/httpd/conf.d/lens3proxy.conf
 # vi /etc/httpd/conf.d/lens3proxy.conf
 # chown apache:apache /etc/httpd/conf.d/lens3proxy.conf
-# chmod 660 /etc/httpd/conf.d/lens3proxy.conf
+# chmod 440 /etc/httpd/conf.d/lens3proxy.conf
 # chcon -u system_u -u system_u /etc/httpd/conf.d/lens3proxy.conf
 # ls -lZ /etc/httpd/conf.d/lens3proxy.conf
 ```
@@ -274,7 +274,7 @@ Start Apache.
 # systemctl start httpd
 ```
 
-#### Other Settings for Apache (Tips)
+### Other Settings for Apache (Tips)
 
 To add a cert for Apache, copy the cert and edit the configuration
 file.  Change the lines of crt and key in "/etc/httpd/conf.d/ssl.conf".
@@ -282,14 +282,14 @@ file.  Change the lines of crt and key in "/etc/httpd/conf.d/ssl.conf".
 ```
 # cp lens3.crt /etc/pki/tls/certs/lens3.crt
 # cp lens3.key /etc/pki/tls/private/lens3.key
-# chown apache:apache /etc/pki/tls/private/lens3.key
-# chmod 400 /etc/pki/tls/private/lens3.key
+# chown root:root /etc/pki/tls/private/lens3.key
+# chmod 600 /etc/pki/tls/private/lens3.key
 # vi /etc/httpd/conf.d/ssl.conf
 > SSLCertificateFile /etc/pki/tls/certs/lens3.crt
 > SSLCertificateKeyFile /etc/pki/tls/private/lens3.key
 ```
 
-### CASE: Proxy by NGINX
+## CASE2: Proxy by NGINX
 
 The following example is for basic authentication.  First, prepare a
 configuration file in "/etc/nginx/conf.d/", maybe by copying a sample
@@ -322,7 +322,7 @@ Stop/start NGINX during configuration changes.
 # systemctl start nginx
 ```
 
-### A Note about NGINX parameters
+## A Note about NGINX parameters
 
 NGINX has a parameter of the limit "client_max_body_size"
 (default=1MB).  The default value is too small.  The size "10M" seems

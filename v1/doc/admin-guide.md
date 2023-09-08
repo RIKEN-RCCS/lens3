@@ -109,6 +109,15 @@ authentication header must include the string "AWS4-HMAC-SHA256".  If
 request has no valid authentication information and it is very likely
 the authentication header is wrong.
 
+## MinIO Vulnerability Information
+
+* https://github.com/minio/minio/security
+* https://blog.min.io/tag/security-advisory/
+* https://www.cvedetails.com/vulnerability-list/vendor_id-18671/Minio.html
+
+A list in cvedetails.com is a summary of vulnerability databases
+created by cvedetails.com.
+
 ## RANDOM MEMO
 
 __Increasing Logging verbosity__: Some classes has a `self._verbose`

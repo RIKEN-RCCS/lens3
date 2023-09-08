@@ -322,7 +322,7 @@ Stop/start NGINX during configuration changes.
 # systemctl start nginx
 ```
 
-## A Note about NGINX parameters
+### A Note about NGINX parameters
 
 NGINX has a parameter of the limit "client_max_body_size"
 (default=1MB).  The default value is too small.  The size "10M" seems

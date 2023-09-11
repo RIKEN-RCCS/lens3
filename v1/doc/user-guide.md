@@ -7,8 +7,8 @@ _bucket-pool_ or a _pool_ is a directory to hold buckets.  Each pool
 corresponds to a single MinIO instance.  Buckets and access keys are
 associated to a pool.
 
-The first step is creating a pool.  Fill a directory as a full path
-and select a unix group, then click the _create_ button (a plus icon).
+The first step is to create a pool.  Fill a directory as a full path
+and select a unix group, then click the create button (a plus icon).
 The directory needs to be writable to the user:group pair.
 
 ![Landing page screenshot](ug1.jpg)
@@ -18,8 +18,8 @@ list.  Check the MinIO-status of the pool just created.  It should be
 _ready_.  A pool in _inoperable_ state is unusable (often, the reason
 is the directory is not writable).
 
-Select a pool by clicking an _edit_ button (a pencil icon).  It opens
-__Edit a Pool__ section.  Or, delete a pool by clicking a _delete_
+Select a pool by clicking the edit button (a pencil icon).  It opens
+__Edit a Pool__ section.  Or, delete a pool by clicking the delete
 button (a trash-can icon).
 
 ![Pool list screenshot](ug2.jpg)

@@ -2,48 +2,50 @@
 
 ## Quick Setup of Buckets
 
-Accessing the Web UI first shows "Manage Pools" section.  A
+Accessing the Web UI first shows __Manage Pools__ section.  A
 _bucket-pool_ or a _pool_ is a directory to hold buckets.  Each pool
 corresponds to a single MinIO instance.  Buckets and access keys are
 associated to a pool.
 
-![Landing screenshot](ug1.jpg)
-
 The first step is creating a pool.  Fill a directory as a full path
-and select a unix group, them click "CREATE" button (a plus icon).
+and select a unix group, then click the _create_ button (a plus icon).
 The directory needs to be writable to the user:group pair.
+
+![Landing page screenshot](ug1.jpg)
+
+__List Pools__ section shows a list of existing pools.  It is a slider
+list.  Check the MinIO-status of the pool just created.  It should be
+_ready_.  A pool in _inoperable_ state is unusable (often, the reason
+is the directory is not writable).
+
+Select a pool by clicking an _edit_ button (a pencil icon).  It opens
+__Edit a Pool__ section.  Or, delete a pool by clicking a _delete_
+button (a trash-can icon).
 
 ![Pool list screenshot](ug2.jpg)
 
-"List Pools" section shows a list of existing pools.  It is a slider
-list.  Select a pool by clicking an edit button (a pencil).  It opens
-a "Pool edit" section.  Or, delete a pool by clicking a delete button
-(a trash can).
-
-Check the status of a pool.  A pool in "inoperable"-state is UNUSABLE.
-
-![Pool edit screenshot](ug3.jpg)
-
-"Edit a Pool" section has two independent subsections -- one for
+__Edit a Pool__ section has two independent subsections -- one for
 buckets and the other for access keys.
 
 A bucket has a bucket-policy that specifies a permission to public
-access: "none", "upload", "download", or "public".  A bucket with the
-"none"-policy is accessible only with access-keys.  These policy names
+access: _none_, _upload_, _download_, or _public_.  A bucket with the
+_none_-policy is accessible only with access-keys.  These policy names
 are taken from MinIO.
 
-An access-key has a key-policy: "readwrite", "readonly", or
-"writeonly".  Accesses to buckets are restricted by these policies.
+An access-key has a key-policy: _readwrite_, _readonly_, or
+_writeonly_.  Accesses to buckets are restricted by these policies.
 These policy names are taken from MinIO.  An expiration date must be a
 future.  An expiration date is actually a time in second, but the UI
-only handles it by date at 00:00:00-UTC.
+only handles it by date at midnight UTC.
 
-![Pool list screenshot](ug4.jpg)
+![Pool edit screenshot](ug3.jpg)
 
 The last figure shows a screenshot after some operations.  It has one
-public bucket and two readwrite access keys.
+public bucket and two access keys (one readwrite, one readonly).
 
-The S3 endpoint is shown in the top-left corner menu.
+The S3-endpoint URL can be found in the menu at the top-left corner.
+
+![Pool list screenshot](ug4.jpg)
 
 ### Simple UI
 

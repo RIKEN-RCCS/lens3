@@ -2,52 +2,57 @@
 
 ## Quick Setup of Buckets
 
-Accessing the Web UI first shows "Manage Pools" section.  A
+Accessing the Web UI first shows __Manage Pools__ section.  A
 _bucket-pool_ or a _pool_ is a directory to hold buckets.  Each pool
 corresponds to a single MinIO instance.  Buckets and access keys are
 associated to a pool.
 
-![Landing screenshot](ug1.jpg)
-
-The first step is creating a pool.  Fill a directory as a full path
-and select a unix group, them click "CREATE" button (a plus icon).
+The first step is to create a pool.  Fill a directory as a full path
+and select a unix group, then click the create button (a plus icon).
 The directory needs to be writable to the user:group pair.
+
+![Landing page screenshot](ug1.jpg)
+
+__List Pools__ section shows a list of existing pools.  It is a slider
+list.  Check the MinIO-status of the pool just created.  It should be
+_ready_.  A pool in _inoperable_ state is unusable (often, the reason
+is the directory is not writable).
+
+Select a pool by clicking the edit button (a pencil icon).  It opens
+__Edit a Pool__ section.  Or, delete a pool by clicking the delete
+button (a trash-can icon).
 
 ![Pool list screenshot](ug2.jpg)
 
-"List Pools" section shows a list of existing pools.  It is a slider
-list.  Select a pool by clicking an edit button (a pencil).  It opens
-a "Pool edit" section.  Or, delete a pool by clicking a delete button
-(a trash can).
-
-![Pool edit screenshot](ug3.jpg)
-
-"Edit a Pool" section has two independent subsections -- one for
+__Edit a Pool__ section has two independent subsections -- one for
 buckets and the other for access keys.
 
 A bucket has a bucket-policy that specifies a permission to public
-access: "none", "upload", "download", or "public".  A bucket with the
-"none"-policy is accessible only with access-keys.  These policy names
+access: _none_, _upload_, _download_, or _public_.  A bucket with the
+_none_-policy is accessible only with access-keys.  These policy names
 are taken from MinIO.
 
-An access-key has a key-policy: "readwrite", "readonly", or
-"writeonly".  Accesses to buckets are restricted by these policies.
+An access-key has a key-policy: _readwrite_, _readonly_, or
+_writeonly_.  Accesses to buckets are restricted by these policies.
 These policy names are taken from MinIO.  An expiration date must be a
 future.  An expiration date is actually a time in second, but the UI
-only handles it by date at 00:00:00-UTC.
+only handles it by date at midnight UTC.
+
+![Pool edit screenshot](ug3.jpg)
+
+The last figure shows a screenshot after some operations.  It has one
+private bucket and two access keys (one readwrite, one readonly).
+
+The S3-endpoint URL can be found in the menu at the top-left corner.
 
 ![Pool list screenshot](ug4.jpg)
 
-The last figure shows a screenshot after some operations.  It has one
-public bucket and two readwrite access keys.
-
 ### Simple UI
 
-The current UI is created with
-[vuejs](https://vuejs.org/)+[vuetify](https://vuetifyjs.com/en/).  It
-is not good for your taste, try a simple UI.  The simple UI reveals
-interactions of Web-API.  If you are currently accessing the UI by a
-URL ending with ".../ui/index.html", the simple UI is at
+The current UI is created with vuejs+vuetify.  It is not good for your
+taste, try simple UI.  Simple UI reveals interactions with Web-Api.
+If you are currently accessing the UI by a URL ending with
+".../ui/index.html", the simple UI is avaiable at
 ".../ui2/index.html".
 
 ## S3 Client Access Example
@@ -102,11 +107,11 @@ by a bucket pool, which is a unit of management in Lens3 and
 corresponds to a single MinIO instance.  A user first creates a bucket
 pool, then registers buckets to the pool.
 
-## Bucket-Pool State
+## Bucket-Pool State (MinIO-state)
 
 A bucket-pool is a management unit of S3 buckets in Lens3 and it has a
-state reflecting the state of a MinIO instance.  But, the state does
-not include the process status of an instance.
+state reflecting the state of a MinIO instance (MinIO-state).  But,
+the state does not include the process status of an instance.
 
 Bucket-pool state is:
 * __None__ quickly moves to the __INITIAL__ state.
@@ -125,10 +130,11 @@ Bucket-pool state is:
     unusable.  Mainly, it has failed to run a MinIO instance.  This
     pool cannot be used and should be removed.
 
-Deletions of buckets and secrets are accepted during suspension of a
-pool, in which it is unable to start a MinIO instance.  It is to make
-a user's action take effect immediately.  In contrast, additions of
-buckets and secrets are rejected.
+Deletions of buckets and secrets are accepted during the suspension
+state of a pool.  However, it delays to make a user's action take
+effect, since it is unable to start a MinIO instance in the suspension
+state.  In contrast, additions of buckets and secrets are rejected
+immediately.
 
 ## Troubleshooting (Typical Problems)
 

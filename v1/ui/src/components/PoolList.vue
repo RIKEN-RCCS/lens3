@@ -29,15 +29,7 @@
                   <td>{{pool_data.pool_list[n]["owner_gid"]}}</td>
                 </tr>
                 <tr>
-                  <td>online?</td>
-                  <td>{{pool_data.pool_list[n]["online_status"]}}</td>
-                </tr>
-                <tr>
-                  <td>enabled?</td>
-                  <td>{{pool_data.pool_list[n]["user_enabled_status"]}}</td>
-                </tr>
-                <tr>
-                  <td>minio_state</td>
+                  <td>minio-state</td>
                   <td>{{pool_data.pool_list[n]["minio_state"]}}
                     <v-btn
                       variant="plain"
@@ -63,6 +55,14 @@
                       </v-dialog>
                     </v-btn>
                   </td>
+                </tr>
+                <tr>
+                  <td>online?</td>
+                  <td>{{pool_data.pool_list[n]["online_status"]}}</td>
+                </tr>
+                <tr>
+                  <td>enabled?</td>
+                  <td>{{pool_data.pool_list[n]["user_enabled_status"]}}</td>
                 </tr>
                 <tr>
                   <td>internal-id</td>

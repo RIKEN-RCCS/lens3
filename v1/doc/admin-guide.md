@@ -1,6 +1,6 @@
 # Lenticularis-S3 Administration Guide
 
-## Administration Command (lens3-admin)
+## Admin Command (lens3-admin)
 
 Lens3 provides "lens3-admin" command for direct database
 modifications.  Note that it does not change the status of a MinIO
@@ -108,6 +108,15 @@ authentication header must include the string "AWS4-HMAC-SHA256".  If
 "pubic-access-user" appears in the access-log, it indicates the
 request has no valid authentication information and it is very likely
 the authentication header is wrong.
+
+## MinIO Vulnerability Information
+
+* https://github.com/minio/minio/security
+* https://blog.min.io/tag/security-advisory/
+* https://www.cvedetails.com/vulnerability-list/vendor_id-18671/Minio.html
+
+A list in cvedetails.com is a summary of vulnerability databases
+created by cvedetails.com.
 
 ## RANDOM MEMO
 

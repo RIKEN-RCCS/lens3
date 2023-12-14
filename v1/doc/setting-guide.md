@@ -2,8 +2,7 @@
 
 ## Outline
 
-This document describes minimal setting for Lenticularis-S3 (Lens3).
-THE SETTING FOR SELINUX IS UNTRUSTWORTHY.
+This document describes setting for Lenticularis-S3 (Lens3).
 
 | ![lens3-setting](lens3-setting.svg) |
 |:--:|
@@ -19,17 +18,17 @@ The steps are:
 
 ## Assumptions
 
-Lens3 needs a couple of services as depicted in the configuration
-figure above.  A (reverse) proxy can be any server, but Apache HTTP
-Server is used in this setting.  A key-value database server, Redis,
-runs at port=6378.  Lens3-Mux and Lens3-Api are Lens3 services, and
-they run at port=8003 and port=8004.  The proxy is set up to forward
-requests to Lens3-Mux and Lens3-Api.
+Lens3 consists of a couple of services as depicted in the
+configuration figure above.  A reverse-proxy can be any server, but
+Apache HTTP Server is used in this guide.  A key-value database
+server, Redis, runs at port=6378.  Lens3-Mux and Lens3-Api are Lens3
+services, and they run at port=8003 and port=8004, respectively.  The
+proxy is set up to forward requests to Lens3-Mux and Lens3-Api.
 
-A pseudo user "lens3" is the owner of the services, who is given a
-privilege of a "sudoers".  An optional second pseudo user
-"lens3-admin" represents an administrator, anyone who can can access
-Lens3 package and a configuration file.
+A pseudo user "lens3" is the owner of the services in this guide, who
+is given a privilege of sudoers.  Optionally, a second pseudo user,
+anyone who can access the Lens3 configuration file, is prepared as an
+administrator.
 
 We assume RedHat/Rocky 8.8 and Python 3.9 at this writing (in June
 2023).
@@ -42,7 +41,6 @@ We assume RedHat/Rocky 8.8 and Python 3.9 at this writing (in June
 
 * User IDs
   * `lens3:lens3` -- a pseudo user for services
-  * `lens3-admin:lens3` -- a pseudo administrator user
   * `httpd` or `nginx`
 
 * Files and directories
@@ -106,11 +104,11 @@ downloaded Lens3 package.
 
 Make a pseudo-user for the services.  UID/GID will be selected from a
 lower range below 1000 that won't conflict with true users.  Most of
-the installation is done by the user "lens3".  Fix its umask
+the installation is performed by the user "lens3".  Fix its umask
 appropriately such as by `umask 022`.
 
 ```
-# useradd -K UID_MIN=300 -K UID_MAX=499 -K GID_MIN=300 -K GID_MAX=499 -U -d /home/lens3 lens3
+# useradd -K UID_MIN=301 -K UID_MAX=499 -K GID_MIN=301 -K GID_MAX=499 -U -d /home/lens3 lens3
 ```
 
 Download MinIO binaries "minio" and "mc" from min.io, then fix the
@@ -129,8 +127,8 @@ lens3$ install -m 755 -c /tmp/mc ~/bin/mc
 ```
 
 Install Lens3 and Python packages.  Installation should be run in the
-"$TOP/v1" directory.  Run `make install` in the "$TOP/v1" directory
-does the same work.
+"$TOP/v1" directory.  Running `make install` in the "$TOP/v1"
+directory does the same work.
 
 ```
 # su - lens3
@@ -187,7 +185,7 @@ Modify the firewall to accept connections to port=443.
 
 It is highly site dependent.
 
-### Required Headers
+### A Note on Required HTTP Headers
 
 Lens3-Api requires "X-Remote-User", which holds an authenticated user
 claim.  Lens3-Api trusts the "X-Remote-User" header passed by the
@@ -202,13 +200,13 @@ These are all practically standard headers.  Note {"X-Forwarded-For",
 "X-Forwarded-Host", "X-Forwarded-Server"} are implicitly set by
 Apache.
 
-### Proxy Path Choices
+### A Note on Proxy Path Choices
 
 A path, "location" or "proxypass", should be "/" for Lens3-Mux,
-because a path cannot be specified for the S3 service.  If Lens3-Mux
+because a path cannot be specified for the S3 service.  When Lens3-Mux
 and Lens3-Api services are co-hosted, the Lens3-Mux path should be "/"
 and the Lens3-Api path should be something like "/lens3.sts/" that is
-NOT legitimate bucket names.  We will use "lens3.sts" in the
+NOT a legitimate bucket name.  We will use "lens3.sts" in the
 following.
 
 Please refer to the note on running MinIO with a proxy, saying: "The
@@ -229,10 +227,10 @@ can be found in $TOP/apache/.  Copy one as
 
 ```
 # cp $TOP/apache/lens3proxy-basic.conf /etc/httpd/conf.d/lens3proxy.conf
+# chown root:root /etc/httpd/conf.d/lens3proxy.conf
+# chmod 640 /etc/httpd/conf.d/lens3proxy.conf
 # vi /etc/httpd/conf.d/lens3proxy.conf
-# chown apache:apache /etc/httpd/conf.d/lens3proxy.conf
-# chmod 440 /etc/httpd/conf.d/lens3proxy.conf
-# chcon -u system_u -u system_u /etc/httpd/conf.d/lens3proxy.conf
+# chcon -u system_u /etc/httpd/conf.d/lens3proxy.conf
 # ls -lZ /etc/httpd/conf.d/lens3proxy.conf
 ```
 
@@ -241,7 +239,6 @@ lines is necessary (in both the pattern part and the URL part as noted
 in Apache documents).  It instructs the proxy to forward directory
 accesses to Lens3-Api.  As a consequence, accesses by
 `https://lens3.exmaple.com/lens3.sts` (without a slash) will fail.
-
 
 ```
 ProxyPass /lens3.sts/ http://localhost:8004/
@@ -367,9 +364,9 @@ the owner of /etc/lenticularis/redis.conf is not "lens3".
 ```
 # mkdir /etc/lenticularis
 # cp $TOP/unit-file/redis/redis.conf /etc/lenticularis/redis.conf
-# vi /etc/lenticularis/redis.conf
 # chown lens3:lens3 /etc/lenticularis/redis.conf
 # chmod 660 /etc/lenticularis/redis.conf
+# vi /etc/lenticularis/redis.conf
 ```
 
 Prepare a systemd unit file for Redis, and start/restart Redis.
@@ -387,9 +384,9 @@ file.
 
 ```
 # cp $TOP/unit-file/conf.json /etc/lenticularis/conf.json
-# vi /etc/lenticularis/conf.json
 # chown lens3:lens3 /etc/lenticularis/conf.json
 # chmod 660 /etc/lenticularis/conf.json
+# vi /etc/lenticularis/conf.json
 ```
 
 ## Store Settings in Redis
@@ -402,9 +399,7 @@ the configurations.
 * [mux-conf-yaml.md](mux-conf-yaml.md)
 * [api-conf-yaml.md](api-conf-yaml.md)
 
-Make the configurations in files, then load them in Redis.  Note
-`lens3-admin` needs "conf.json" containing connection information to
-Redis.
+Make the configurations in files to load them in Redis.
 
 ```
 # su - lens3
@@ -415,8 +410,10 @@ lens3$ vi api-conf.yaml
 lens3$ vi mux-conf.yaml
 ```
 
-Load the Lens3 configuration from the files.  KEEP "conf.json" SECURE
-ALL THE TIME -- access keys are stored in the database in raw text.
+Load the Lens3 configuration from the files.  Note `lens3-admin` needs
+"conf.json" containing connection information to Redis.  KEEP
+"conf.json" SECURE ALL THE TIME -- access keys to S3 are stored in the
+database in raw text.
 
 ```
 # cp /etc/lenticularis/conf.json /home/lens3/conf.json
@@ -502,7 +499,7 @@ Register users by `lens3-admin` command.
 
 ```
 lens3$ lens3-admin -c conf.json load-user {csv-file}
-lens3$ lens3-admin -c conf.json list-user
+lens3$ lens3-admin -c conf.json show-user
 ```
 
 (Optionally) Prepare a list of users enabled to access.  An entry is a
@@ -516,7 +513,7 @@ Register an enabled-user list by `lens3-admin` command.
 
 ```
 lens3$ lens3-admin -c conf.json load-user {csv-file}
-lens3$ lens3-admin -c conf.json list-user
+lens3$ lens3-admin -c conf.json show-user
 ```
 
 ## Check the Status

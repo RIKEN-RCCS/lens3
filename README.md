@@ -9,10 +9,10 @@ __Lenticularis-S3 comes with ABSOLUTELY NO WARRANTY.__
 
 Lenticularis-S3 (Lens3) provides an S3 service by running multiple
 MinIO instances at a single access point.  MinIO is an S3 object
-storage service, and please refer to [https://min.io](https://min.io)
-about MinIO.  While a MinIO serivice is usually owned by a single
-user, Lens3 starts MinIO instances as multiple user processes to
-confine unintended operations to each user.
+storage server.  Please refer to [https://min.io](https://min.io)
+about MinIO.  While a MinIO service is usually owned by a single user,
+Lens3 starts multiple MinIO instances one for each user to confine
+operations by user's permission.
 
 | ![lens3-overview](v1/doc/lens3-overview.svg) |
 |:--:|

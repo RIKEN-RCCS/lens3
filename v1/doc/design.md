@@ -384,6 +384,10 @@ MESSAGES from older versions
 * Add a control on the pool status "online".  It is always online,
   currently.
 
+* Add site setting variations.  Examples: Enable users by default (it
+  needs explicit enabling users currently); Disallow public access
+  buckets at all.
+
 ## RANDOM MEMO
 
 __Load balancing__: The "scheduler.py" file is not used in v1.2, which

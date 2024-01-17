@@ -10,7 +10,7 @@ This document describes setting for Lenticularis-S3 (Lens3).
 
 The steps are:
 * Prepare prerequisite software and install Lens3
-* Set up a (reverse) proxy
+* Set up a proxy (Apache HTTPD)
 * Start Redis
 * Start Lens3-Mux (a Multiplexer service)
 * Start Lens3-Api (a Web-API service)
@@ -21,19 +21,19 @@ The steps are:
 Lens3 consists of a couple of services as depicted in the
 configuration figure above.  A reverse-proxy can be any server, but
 Apache HTTP Server is used in this guide.  A key-value database
-server, Redis, runs at port=6378.  Lens3-Mux and Lens3-Api are Lens3
-services, and they run at port=8003 and port=8004, respectively.  The
-proxy is set up to forward requests to Lens3-Mux and Lens3-Api.
+server, Redis, runs at port=6378.  The Lens3 services, Lens3-Mux and
+Lens3-Api, run at port=8003 and port=8004, respectively.  The proxy is
+set up to forward requests to Lens3-Mux and Lens3-Api.
 
 A pseudo user "lens3" is the owner of the services in this guide, who
 is given a privilege of sudoers.  Optionally, a second pseudo user,
-anyone who can access the Lens3 configuration file, is prepared as an
-administrator.
+anyone who can access the Lens3 configuration file, may be prepared as
+an administrator.
 
 We assume RedHat/Rocky 8.8 and Python 3.9 at this writing (in June
 2023).
 
-* Services
+* Services and thier ports
   * HTTP Proxy (port=433)
   * Redis (port=6378)
   * Lens3-Mux (port=8003)
@@ -49,10 +49,11 @@ We assume RedHat/Rocky 8.8 and Python 3.9 at this writing (in June
   * /usr/lib/systemd/system/lenticularis-redis.service
   * /etc/lenticularis/conf.json
   * /etc/lenticularis/redis.conf
-  * /run/lenticularis-redis (temporary)
+  * /var/log/lenticularis/
+  * /var/log/lenticularis-redis/
+  * /run/lenticularis-redis/ (temporary)
   * /etc/httpd/
-  * /etc/nginx/conf.d/lens3proxy.conf
-  * /etc/nginx/private/htpasswd
+  * /etc/nginx/conf.d/
 
 * Software
   * RedHat/Rocky 8.8
@@ -140,9 +141,10 @@ lens3$ ls ~/.local/lib/python3.9/site-packages/lenticularis
 ## Prepare Log File Directories
 
 Create directories for logging, and modify their security attributes.
-Redis usually requires "redis_log_t" to write its logs.  "logrotate"
-requires file-types such as "var_log_t" or "redis_log_t".
-"tmp_t"-type won't work due to the policy for "logrotate".
+Redis usually requires "redis_log_t" to write its logs, and
+"logrotate" requires "var_log_t" or "redis_log_t".  Note "tmp_t"-type
+won't work due to the policy for "logrotate".  Enforce the attribute
+by "restorecon" (or using "chcon -t redis_log_t").
 
 ```
 # mkdir /var/log/lenticularis
@@ -172,42 +174,28 @@ Let SELinux accept connections inside a local host.
 # setsebool -P httpd_can_network_connect 1
 ```
 
-Modify the firewall to accept connections to port=443.
+Modify the firewall to accept connections to port=443 and port=80.
 
 ```
 # firewall-cmd --state
 # firewall-cmd --list-all
-# firewall-cmd --zone=public --add-port=443/tcp --permanent
+# firewall-cmd --zone=public --add-port=443/tcp --add-port=80/tcp --permanent
 # firewall-cmd --reload
 ```
 
 ## Set up an HTTP Proxy
 
-It is highly site dependent.
-
-### A Note on Required HTTP Headers
-
-Lens3-Api requires "X-Remote-User", which holds an authenticated user
-claim.  Lens3-Api trusts the "X-Remote-User" header passed by the
-proxy.  Make sure the header is properly filtered and prepared by the
-proxy.
-
-Lens3-Mux requires {"Host", "X-Forwarded-For", "X-Forwarded-Host",
-"X-Forwarded-Server", "X-Forwarded-Proto", "X-Real-IP"}.  "Connection"
-(for keep-alive) is forced unset for Lens3-Mux.
-
-These are all practically standard headers.  Note {"X-Forwarded-For",
-"X-Forwarded-Host", "X-Forwarded-Server"} are implicitly set by
-Apache.
+HTTP Proxy seeting is highly site dependent.  Please ask the site
+manager for setting.
 
 ### A Note on Proxy Path Choices
 
 A path, "location" or "proxypass", should be "/" for Lens3-Mux,
-because a path cannot be specified for the S3 service.  When Lens3-Mux
-and Lens3-Api services are co-hosted, the Lens3-Mux path should be "/"
-and the Lens3-Api path should be something like "/lens3.sts/" that is
-NOT a legitimate bucket name.  We will use "lens3.sts" in the
-following.
+because a path cannot be specified for the S3 service.  Thus, when
+Lens3-Mux and Lens3-Api services are co-hosted, the Lens3-Mux path
+should be "/" and the Lens3-Api path should be something like
+"/lens3.sts/" that is NOT a legitimate bucket name.  We will use
+"lens3.sts" in the following.
 
 Please refer to the note on running MinIO with a proxy, saying: "The
 S3 API signature calculation algorithm does not support proxy schemes
@@ -216,29 +204,47 @@ S3 API signature calculation algorithm does not support proxy schemes
 [Configure NGINX Proxy for MinIO
 Server](https://min.io/docs/minio/linux/integrations/setup-nginx-proxy-with-minio.html).
 
+### A Note on Required HTTP Headers
+
+Lens3-Api trusts the "X-Remote-User" header passed by the proxy, which
+holds an authenticated user claim.  Make sure the header is properly
+filtered and prepared by the proxy.
+
+Lens3-Mux requires {"Host", "X-Forwarded-For", "X-Forwarded-Host",
+"X-Forwarded-Server", "X-Forwarded-Proto", "X-Real-IP"}.  "Connection"
+(for keep-alive) is forced unset for Lens3-Mux.
+
+These are all practically standard headers.  Note {"X-Forwarded-For",
+"X-Forwarded-Host", "X-Forwarded-Server"} are implicitly set by Apache
+HTTPD.
+
 ## CASE1: Proxy by Apache
 
-Set up a configuration file with needed authentication, and (re)start
-the service.
+Set up a configuration file with the needed authentication, and
+(re)start the service.
 
 Prepare a configuration file in "/etc/httpd/conf.d/".  Sample files
 can be found in $TOP/apache/.  Copy one as
-"/etc/httpd/conf.d/lens3proxy.conf" and edit it.
+"/etc/httpd/conf.d/lens3proxy.conf" and edit it.  Note running
+"restorecon" sets the "system_u"-user on the file (or, you may run
+"chcon -u system_u" on the file).
 
 ```
 # cp $TOP/apache/lens3proxy-basic.conf /etc/httpd/conf.d/lens3proxy.conf
 # chown root:root /etc/httpd/conf.d/lens3proxy.conf
 # chmod 640 /etc/httpd/conf.d/lens3proxy.conf
 # vi /etc/httpd/conf.d/lens3proxy.conf
-# chcon -u system_u /etc/httpd/conf.d/lens3proxy.conf
+# restorecon -v /etc/httpd/conf.d/lens3proxy.conf
 # ls -lZ /etc/httpd/conf.d/lens3proxy.conf
+(* Check the context is with system_u on it. *)
 ```
 
-Hints for setting: A trailing slash in ProxyPass/ProxyPassReverse
-lines is necessary (in both the pattern part and the URL part as noted
-in Apache documents).  It instructs the proxy to forward directory
-accesses to Lens3-Api.  As a consequence, accesses by
-`https://lens3.exmaple.com/lens3.sts` (without a slash) will fail.
+A note for proxy setting: A trailing slash in
+ProxyPass/ProxyPassReverse lines is necessary (in both the pattern
+part and the URL part as noted in Apache documents).  It instructs the
+proxy to forward directory accesses to Lens3-Api.  As a consequence,
+accesses by "https://lens3.exmaple.com/lens3.sts" (without a slash)
+will fail.
 
 ```
 ProxyPass /lens3.sts/ http://localhost:8004/
@@ -251,7 +257,14 @@ with Keycloak".  See below.
 
 [https://osc.github.io/ood-documentation/.../install_mod_auth_openidc.html](https://osc.github.io/ood-documentation/latest/authentication/tutorial-oidc-keycloak-rhel7/install_mod_auth_openidc.html)
 
-Prepare passwords for basic authentication.
+OIDC logging messages are generated in "ssl_error_log".  Verbosity can
+be increased by setting "LogLevel" to "debug" in the "<Location
+/lens3.sts>" section.  The "LoadModule" line in the sample file
+"lens3proxy-oidc.conf" may be redundant, and it generates a warning
+message.
+
+
+Or, prepare passwords for basic authentication.
 
 ```
 # mkdir /etc/httpd/passwd
@@ -264,7 +277,7 @@ Prepare passwords for basic authentication.
 # ......
 ```
 
-Start Apache.
+Start Apache HTTPD.
 
 ```
 # systemctl enable httpd
@@ -274,7 +287,8 @@ Start Apache.
 ### Other Settings for Apache (Tips)
 
 To add a cert for Apache, copy the cert and edit the configuration
-file.  Change the lines of crt and key in "/etc/httpd/conf.d/ssl.conf".
+file.  Change the lines of cert and key in
+"/etc/httpd/conf.d/ssl.conf".
 
 ```
 # cp lens3.crt /etc/pki/tls/certs/lens3.crt
@@ -321,7 +335,7 @@ Stop/start NGINX during configuration changes.
 
 ### A Note about NGINX parameters
 
-NGINX has a parameter of the limit "client_max_body_size"
+NGINX has a parameter on the limit "client_max_body_size"
 (default=1MB).  The default value is too small.  The size "10M" seems
 adequate or "0" which means unlimited may also be adequate.
 
@@ -331,31 +345,30 @@ server {
 }
 ```
 
-"client_max_body_size" limits the payload.  On the other hand, AWS S3
-CLI has parameters for file transfers "multipart_threshold"
-(default=8MB) and "multipart_chunksize" (default=8MB).  Especially,
-"multipart_chunksize" has the minimum 5MB.
-
 It is recommended to check the limits of the proxy when encountering a
-413 error (Request Entity Too Large).
+413 error (Request Entity Too Large).  "client_max_body_size" limits
+the payload.  On the other hand, AWS S3 CLI has parameters for file
+transfers "multipart_threshold" (default=8MB) and
+"multipart_chunksize" (default=8MB).  Especially,
+"multipart_chunksize" has the minimum of 5MB.
 
 NGINX parameters are specified in the server section (or in the http
-section).  Refer to "lens3proxy.conf".  The "client_max_body_size" is
-defined in ngx_http_core_module.  See for the NGINX
-ngx_http_core_module parameters:
+section) in the configuration.  The "client_max_body_size" is defined
+in ngx_http_core_module.  See for the NGINX ngx_http_core_module
+parameters:
 [https://nginx.org/en/docs/http/ngx_http_core_module.html](https://nginx.org/en/docs/http/ngx_http_core_module.html#client_max_body_size)
-
-See below for the AWS S3 CLI parameters:
+See also for the AWS S3 CLI parameters:
 [https://docs.aws.amazon.com/cli/latest/topic/s3-config.html](https://docs.aws.amazon.com/cli/latest/topic/s3-config.html).
 
 ## Start Redis
 
 Lens3 uses a separate Redis instance running at port=6378 (not
-port=6379).
+well-known port=6379).
 
 Prepare a configuration file as "/etc/lenticularis/redis.conf".
 Change the owner and edit the fields.  Starting Redis will fail when
-the owner of /etc/lenticularis/redis.conf is not "lens3".
+the owner of /etc/lenticularis/redis.conf is not "lens3".  Keep it
+secure.  The following fields need be changed from the sample file:
 
 * bind: Network interfaces; localhost by default
 * port: A port for Redis
@@ -379,8 +392,8 @@ Prepare a systemd unit file for Redis, and start/restart Redis.
 ```
 
 Lens3-Mux and Lens3-Api connect to Redis using the information held in
-"/etc/lenticularis/conf.json".  Copy and edit a Lens3 configuration
-file.
+"/etc/lenticularis/conf.json".  Copy and edit the configuration file.
+Keep it secure as it holds the password to Redis.
 
 ```
 # cp $TOP/unit-file/conf.json /etc/lenticularis/conf.json
@@ -389,7 +402,7 @@ file.
 # vi /etc/lenticularis/conf.json
 ```
 
-## Store Settings in Redis
+## Store Lens3 Settings in Redis
 
 Lens3-Mux and Lens3-Api load the configuration from Redis.  This
 section prepares it.  It is better to run `lens3-admin` on the same
@@ -439,6 +452,22 @@ in "/etc/sudoers.d/lenticularis-sudoers".
 # chmod 440 /etc/sudoers.d/lenticularis-sudoers
 ```
 
+## (Optional) Set up Log Rotation
+
+Logs from Lens3-Mux, Lens3-Api, Gunicorn, and Redis are rotated with
+"copytruncate".  Note the "copytruncate" method has a minor race.  The
+USR1 signal to Gunicorn is not used because it would terminate the
+process (in our environment), contrary to the Gunicorn document.  A
+rule for Redis is a modified copy of /etc/logrotate.d/redis.  We
+didn't use Python's logging.handlers.TimedRotatingFileHandler, because
+its work differs from what we expected.
+
+```
+# cp $TOP/unit-file/logrotate/lenticularis /etc/logrotate.d/
+# vi /etc/logrotate.d/lenticularis
+# chmod 644 /etc/logrotate.d/lenticularis
+```
+
 ## Start Lens3-Mux and Lens3-Api Services
 
 Lens3-Mux and Lens3-Api will be started as a system service with
@@ -459,21 +488,6 @@ Lens3-Api and Lens3-Mux.
 # systemctl status lenticularis-mux
 # systemctl status lenticularis-api
 
-```
-
-## (Optional) Set up Log Rotation
-
-Lens3-Mux/Lens3-Api logs are rotated by themselves (using
-logging.handlers.TimedRotatingFileHandler).  Other Gunicorn and Redis
-logs are rotated with "copytruncate", although it has a minor race.
-The Gunicorn document says the signal USR1 could be used to reopen
-files at a rotation, but it does terminate the process (reasons
-unknown).  A rule for Redis is taken from /etc/logrotate.d/redis.
-
-```
-# cp $TOP/unit-file/logrotate/lenticularis /etc/logrotate.d/
-# vi /etc/logrotate.d/lenticularis
-# chmod 644 /etc/logrotate.d/lenticularis
 ```
 
 ## Register Users

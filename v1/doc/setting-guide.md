@@ -612,23 +612,25 @@ logs of Gunicorn.
 It is a bit tricky when MinIO does not behave as expected.  In that
 case, it will help to connect to MinIO with "mc" command.
 
-The necessary information to use "mc" command, ACCESSKEY and
-SECRETKEY, can be taken by "show-minio" subcommand of "lens3-admin".
-Running "show-minio" displays the information of admin's ACCESSKEY
-under the key "admin" and SECRETKEY under "password".  Note that the
-"show-minio" subcommand is only useful when a MinIO instance is
-running.  To keep the MinIO instance running, call the "access-mux"
-subcommand periodically.  Otherwise, it will stop after a while.
+The necessary information to use "mc" command, URL, ACCESSKEY and
+SECRETKEY, can be taken by "show-minio" command of "lens3-admin".
+First, run "show-pool" to list all the pools.  Then, run "show-minio"
+with a pool-id to display the information.  It displays URL
+(host+port) of MinIO as "minio_ep".  It also displays admin's
+ACCESSKEY under the key "admin" and SECRETKEY under "password".  Note
+that the "show-minio" command is only useful while a MinIO instance is
+running.  To keep a MinIO instance running, call the "access-mux"
+command periodically.  Otherwise, it will stop after a while.
 
 ```
+lens3$ lens3-admin -c conf.json show-pool
 lens3$ lens3-admin -c conf.json show-minio POOLID
 lens3$ lens3-admin -c conf.json access-mux POOLID
 ```
 
 For example, the following commands can be used to dump tracing logs
-from MinIO.  ALIAS can be any string, and URL would be like
-"http://lens3.example.com:9012".  URL (host+port), ACCESSKEY, and
-SECRETKEY are taken from the output from "show-minio".
+from MinIO.  ALIAS can be any string, and URL would be something like
+"http://lens3.example.com:9012".
 
 ```
 lens3$ mc alias set ALIAS URL ACCESSKEY SECRETKEY

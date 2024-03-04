@@ -121,7 +121,7 @@ accessible as permission=755 so that anyone can run minio and mc.
 NOTE: Use old "minio" that is earlier than
 RELEASE.2022-06-02T02-11-04Z.  "mc" is old, too, correspondingly.  It
 is because versions from that release use an erasure-coding backend,
-which stores files in chunks and does not work on exporting existing
+which stores files in chunks and does not work for exporting existing
 files.
 
 See [Deploy MinIO: Single-Node Single-Drive](https://min.io/docs/minio/linux/operations/install-deploy-manage/deploy-minio-single-node-single-drive.html)
@@ -610,25 +610,25 @@ logs of Gunicorn.
 ### Examining MinIO Behavior
 
 It is a bit tricky when MinIO does not behave as expected.  In that
-case, it will help to connect to MinIO with "mc" command.  The
-necessary information to use "mc" command, especially ACCESSKEY and
-SECRETKEY, can be taken by "show-minio" command of "lens3-admin".  The
-command is only useful when a MinIO instance is running.
+case, it will help to connect to MinIO with "mc" command.
+
+The necessary information to use "mc" command, ACCESSKEY and
+SECRETKEY, can be taken by "show-minio" subcommand of "lens3-admin".
+Running "show-minio" displays the information of admin's ACCESSKEY
+under the key "admin" and SECRETKEY under "password".  Note that the
+"show-minio" subcommand is only useful when a MinIO instance is
+running.  To keep the MinIO instance running, call the "access-mux"
+subcommand periodically.  Otherwise, it will stop after a while.
 
 ```
 lens3$ lens3-admin -c conf.json show-minio POOLID
 lens3$ lens3-admin -c conf.json access-mux POOLID
 ```
 
-Running "show-minio" displays the information under the keys "admin"
-and "password", where admin corresponds to ACCESSKEY and password to
-SECRETKEY.  Running "access-mux" periodically keeps the MinIO instance
-alive, otherwise it will stop after a while.
-
-As an example, the following commands can be used to dump tracing logs
-from MinIO.  ALIAS can be any string and URL would be like
-"http://lens3.example.com:9012".  URL, ACCESSKEY, and SECRETKEY are
-taken from the output "show-minio".
+For example, the following commands can be used to dump tracing logs
+from MinIO.  ALIAS can be any string, and URL would be like
+"http://lens3.example.com:9012".  URL (host+port), ACCESSKEY, and
+SECRETKEY are taken from the output from "show-minio".
 
 ```
 lens3$ mc alias set ALIAS URL ACCESSKEY SECRETKEY

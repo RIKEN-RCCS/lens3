@@ -33,6 +33,8 @@ an administrator.
 We assume RedHat/Rocky 8.8 and Python 3.9 at this writing (in June
 2023).
 
+It is highly recommended the server host is not open for users.
+
 * Services and thier ports
   * HTTP Proxy (port=433)
   * Redis (port=6378)
@@ -116,15 +118,26 @@ Download MinIO binaries "minio" and "mc" from min.io, then fix the
 permission.  The home, ~/bin, ~/bin/minio, and ~/bin/mc are set to be
 accessible as permission=755 so that anyone can run minio and mc.
 
+NOTE: Use old "minio" that is earlier than
+RELEASE.2022-06-02T02-11-04Z.  "mc" is old, too, correspondingly.  It
+is because versions from that release use an erasure-coding backend,
+which stores files in chunks and does not work on exporting existing
+files.
+
+See [Deploy MinIO: Single-Node Single-Drive](https://min.io/docs/minio/linux/operations/install-deploy-manage/deploy-minio-single-node-single-drive.html)
+
 ```
 # su - lens3
 lens3$ cd ~
 lens3$ mkdir bin
 lens3$ chmod 755 ~ ~/bin
-lens3$ curl https://dl.min.io/server/minio/release/linux-amd64/minio -o /tmp/minio
-lens3$ install -m 755 -c /tmp/minio ~/bin/minio
-lens3$ curl https://dl.min.io/client/mc/release/linux-amd64/mc -o /tmp/mc
-lens3$ install -m 755 -c /tmp/mc ~/bin/mc
+lens3$ cd /tmp
+lens3$ wget https://dl.min.io/server/minio/release/linux-amd64/archive/minio-20220526054841.0.0.x86_64.rpm
+lens3$ rpm2cpio minio-20220526054841.0.0.x86_64.rpm | cpio -id --no-absolute-filenames usr/local/bin/minio
+lens3$ install -m 755 -c ./usr/local/bin/minio ~/bin/minio
+lens3$ rm -r usr
+lens3$ wget https://dl.min.io/client/mc/release/linux-amd64/archive/mc.RELEASE.2022-06-10T22-29-12Z
+lens3$ install -m 755 -c ./mc.RELEASE.2022-06-10T22-29-12Z ~/bin/mc
 ```
 
 Install Lens3 and Python packages.  Installation should be run in the
@@ -613,7 +626,9 @@ SECRETKEY.  Running "access-mux" periodically keeps the MinIO instance
 alive, otherwise it will stop after a while.
 
 As an example, the following commands can be used to dump tracing logs
-from MinIO.
+from MinIO.  ALIAS can be any string and URL would be like
+"http://lens3.example.com:9012".  URL, ACCESSKEY, and SECRETKEY are
+taken from the output "show-minio".
 
 ```
 lens3$ mc alias set ALIAS URL ACCESSKEY SECRETKEY

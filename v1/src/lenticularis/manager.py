@@ -52,7 +52,12 @@ class Termination(Exception):
 
 # Messages from a MinIO process at its start-up.
 
-_minio_expected_response = "S3-API:"
+#   Note: The "expected_response" is changed.  It is for retrofitting
+#   to MinIO earlier than RELEASE.2022-10-29, to use the obsoleted
+#   "Gateway" or "Filesystem Mode".
+
+# _minio_expected_response = "S3-API:"
+_minio_expected_response = "API:"
 _minio_error_response__ = "ERROR"
 _minio_response_port_in_use = "Specified port is already in use"
 _minio_response_nonwritable_storage = "Unable to write to the backend"
@@ -95,8 +100,8 @@ def _json_loads_no_errors(s):
 
 
 def _diagnose_minio_message(s):
-    """Diagnoses messages returned at a MinIO start.  It returns 0 for a
-    successful run, EAGAIN for no expected messages, EADDRINUSE for
+    """Diagnoses messages returned at a MinIO start.  It returns 0 on a
+    successful run, EAGAIN on lacking expected messages, EADDRINUSE on
     port-in-use, (EACCES for non-writable storage), or EIO or ENOENT
     on unknown errors.  It judges only level=FATAL as an error but
     level=ERROR not an error.
@@ -450,13 +455,13 @@ class Manager():
             # CONTINUE THE WORK IF THE PROCESS IS RUNNING.
             if p_status1 is not None:
                 logger.error(f"Manager (pool={pool_id}) Starting MinIO failed:"
-                             f"exit={p_status1} outs=({outs1}) errs=({errs1})")
+                             f" exit={p_status1} outs=({outs1}) errs=({errs1})")
                 set_pool_state(tables, pool_id, Pool_State.INOPERABLE, message)
                 return (False, False)
             else:
                 logger.error(f"Manager (pool={pool_id}) starting MinIO"
                              f" gets in a dubious state (work continues):"
-                             f"exit={p_status1} outs=({outs1}) errs=({errs1})")
+                             f" exit={p_status1} outs=({outs1}) errs=({errs1})")
                 return (True, True)
         else:
             # Terminate the process after extra time to collect messages.

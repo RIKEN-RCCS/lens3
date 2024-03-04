@@ -251,13 +251,21 @@ class Mc():
                                ["admin", "user", "list", self._alias])
         return vv
 
+    def _mc_admin_policy_set(self, access_key, policy):
+        vv = self._execute_cmd("admin_policy_set",
+                               ["admin", "policy", "set", self._alias,
+                                policy, f"user={access_key}"])
+        return vv
+
     def _mc_admin_policy_attach_user(self, access_key, policy):
+        assert False
         vv = self._execute_cmd("admin_policy_attach",
                                ["admin", "policy", "attach", self._alias,
                                 policy, "--user", f"{access_key}"])
         return vv
 
     def _mc_admin_policy_detach_user(self, access_key, policy):
+        assert False
         vv = self._execute_cmd("admin_policy_detach",
                                ["admin", "policy", "detach", self._alias,
                                 policy, "--user", f"{access_key}"])
@@ -392,12 +400,17 @@ class Mc():
         """Makes an access key in MinIO.  Note it does not rollback on a
         failure in the middle.
         """
+        # Retrofitting to MinIO earlier than RELEASE.2022-10-29, to
+        # use the obsoleted "Gateway" or "Filesystem Mode".  Old
+        # versions needs enabling keys.
         vv = self._mc_admin_user_add(key, secret)
         _assert_mc_success(vv, "mc.mc_admin_user_add")
-        vv = self._mc_admin_policy_attach_user(key, policy)
-        _assert_mc_success(vv, "mc.mc_admin_policy_attach")
-        # vv = self._mc_admin_user_enable(key)
-        # _assert_mc_success(vv, "mc.mc_admin_user_enable")
+        # vv = self._mc_admin_policy_attach_user(key, policy)
+        # _assert_mc_success(vv, "mc.mc_admin_policy_attach")
+        vv = self._mc_admin_policy_set(key, policy)
+        _assert_mc_success(vv, "mc.mc_admin_policy_set")
+        vv = self._mc_admin_user_enable(key)
+        _assert_mc_success(vv, "mc.mc_admin_user_enable")
         pass
 
     def delete_secret(self, key):

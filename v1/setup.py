@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name="lenticularis",
-    version="1.2.1",
+    version="1.3.1",
     author="",
     author_email="",
     description="",

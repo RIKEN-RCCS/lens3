@@ -118,11 +118,12 @@ Download MinIO binaries "minio" and "mc" from min.io, then fix the
 permission.  The home, ~/bin, ~/bin/minio, and ~/bin/mc are set to be
 accessible as permission=755 so that anyone can run minio and mc.
 
-NOTE: Use old "minio" that is earlier than
-RELEASE.2022-06-02T02-11-04Z.  "mc" is old, too, correspondingly.  It
-is because versions from that release use an erasure-coding backend,
-which stores files in chunks and does not work for exporting existing
-files.
+NOTE: The binaries are taken from the archive, to use "minio" that is
+released earlier than RELEASE.2022-06-02T02-11-04Z.  "mc", too,
+correspondingly.  It is because versions from that release use an
+erasure-coding backend, which stores files in chunks and is not
+appropriate for exporting existing files.  The document of MinIO
+recommends to use "mc" released after "minio" but as close as "minio".
 
 See [Deploy MinIO: Single-Node Single-Drive](https://min.io/docs/minio/linux/operations/install-deploy-manage/deploy-minio-single-node-single-drive.html)
 
@@ -630,7 +631,7 @@ lens3$ lens3-admin -c conf.json access-mux POOLID
 
 For example, the following commands can be used to dump tracing logs
 from MinIO.  ALIAS can be any string, and URL would be something like
-"http://lens3.example.com:9012".
+`http://lens3.example.com:9012`.
 
 ```
 lens3$ mc alias set ALIAS URL ACCESSKEY SECRETKEY

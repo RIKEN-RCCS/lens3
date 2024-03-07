@@ -10,7 +10,7 @@ This document describes setting for Lenticularis-S3 (Lens3).
 
 The steps are:
 * Prepare prerequisite software and install Lens3
-* Set up a proxy (Apache HTTPD)
+* Set up a proxy (Apache httpd)
 * Start Redis
 * Start Lens3-Mux (a Multiplexer service)
 * Start Lens3-Api (a Web-API service)
@@ -70,6 +70,7 @@ Install "Python", "Redis", and "Development-Tools" onto the host.
 # dnf groupinstall "Development Tools"
 # dnf install python39
 # dnf install redis
+# dnf install rpm-devel
 ```
 
 Ensure using Python3.9, if necessary.

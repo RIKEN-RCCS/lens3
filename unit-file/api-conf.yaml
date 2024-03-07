@@ -28,8 +28,8 @@ ui:
     footer_banner: This site is operated by example.com
 
 minio:
-    minio: /home/lens3/bin/minio
-    mc: /home/lens3/bin/mc
+    minio: /usr/local/bin/minio
+    mc: /usr/local/bin/mc
 
 log_file: "/var/log/lenticularis/lens3-api-log"
 log_syslog:

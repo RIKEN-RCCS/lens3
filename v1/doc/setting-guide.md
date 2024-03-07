@@ -114,31 +114,31 @@ appropriately such as by `umask 022`.
 # useradd -K UID_MIN=301 -K UID_MAX=499 -K GID_MIN=301 -K GID_MAX=499 -U -d /home/lens3 lens3
 ```
 
-Download MinIO binaries "minio" and "mc" from min.io, then fix the
-permission.  The home, ~/bin, ~/bin/minio, and ~/bin/mc are set to be
-accessible as permission=755 so that anyone can run minio and mc.
+Download MinIO binaries "minio" and "mc" from min.io and install them.
+"minio" and "mc" are to be accessible by anyone as permission=755.
 
 NOTE: The binaries are taken from the archive, to use "minio" that is
 released earlier than RELEASE.2022-06-02T02-11-04Z.  "mc", too,
 correspondingly.  It is because versions from that release use an
 erasure-coding backend, which stores files in chunks and is not
-appropriate for exporting existing files.  The document of MinIO
-recommends to use "mc" released after "minio" but as close as "minio".
+appropriate for exporting existing files.  The version of "mc" is one
+released after "minio" but as close as it.
 
 See [Deploy MinIO: Single-Node Single-Drive](https://min.io/docs/minio/linux/operations/install-deploy-manage/deploy-minio-single-node-single-drive.html)
 
 ```
 # su - lens3
-lens3$ cd ~
-lens3$ mkdir bin
-lens3$ chmod 755 ~ ~/bin
 lens3$ cd /tmp
 lens3$ wget https://dl.min.io/server/minio/release/linux-amd64/archive/minio-20220526054841.0.0.x86_64.rpm
 lens3$ rpm2cpio minio-20220526054841.0.0.x86_64.rpm | cpio -id --no-absolute-filenames usr/local/bin/minio
-lens3$ install -m 755 -c ./usr/local/bin/minio ~/bin/minio
-lens3$ rm -r usr
+lens3$ mv ./usr/local/bin/minio ./minio
+lens3$ rm -r ./usr
+lens3$ rm ./minio-20220526054841.0.0.x86_64.rpm
 lens3$ wget https://dl.min.io/client/mc/release/linux-amd64/archive/mc.RELEASE.2022-06-10T22-29-12Z
-lens3$ install -m 755 -c ./mc.RELEASE.2022-06-10T22-29-12Z ~/bin/mc
+lens3$ mv ./mc.RELEASE.2022-06-10T22-29-12Z ./mc
+lens3$ exit
+# install -m 755 -c /tmp/minio /usr/local/bin/minio
+# install -m 755 -c /tmp/mc /usr/local/bin/mc
 ```
 
 Install Lens3 and Python packages.  Installation should be run in the
@@ -276,7 +276,6 @@ be increased by setting "LogLevel" to "debug" in the "<Location
 /lens3.sts>" section.  The "LoadModule" line in the sample file
 "lens3proxy-oidc.conf" may be redundant, and it generates a warning
 message.
-
 
 Or, prepare passwords for basic authentication.
 
@@ -453,11 +452,14 @@ lens3$ lens3-admin -c conf.json load-conf mux-conf.yaml
 lens3$ lens3-admin -c conf.json show-conf
 ```
 
+Restarting of services, lenticularis-mux and lenticularis-api, is
+needed after setting configurations.  Run `systemctl restart` on them.
+
 ## Set up sudoers for Lens3-Mux
 
 Lens3 runs MinIO as a non-root process, and thus, it uses sudo to
 start MinIO.  The provided example setting is that the user "lens3" is
-only allowed to run "/home/lens3/bin/minio".  Copy and edit an entry
+only allowed to run "/usr/local/bin/minio".  Copy and edit an entry
 in "/etc/sudoers.d/lenticularis-sudoers".
 
 ```
@@ -499,8 +501,7 @@ Lens3-Api and Lens3-Mux.
 # systemctl start lenticularis-mux
 # systemctl enable lenticularis-api
 # systemctl start lenticularis-api
-# systemctl status lenticularis-mux
-# systemctl status lenticularis-api
+# systemctl status lenticularis-mux lenticularis-api
 
 ```
 
@@ -653,6 +654,13 @@ lens3$ redis-cli -p 6378 --scan --pattern '*'
 ```
 lens3$ minio --json --anonymous server --address :9001 /home/UUU/pool-directory
 ```
+
+### OIDC Redirect Failure
+
+OIDC may err with "Invalid parameter: redirect_uri" and fail to return
+to lens3, when using an example configuration "lens3proxy-oidc.conf".
+It would happen in an https only site.  It may be fixed by modifying a
+"OIDCRedirectURI" line to a full URL starting with "https:".
 
 ### No Support for Multiple Hosts
 

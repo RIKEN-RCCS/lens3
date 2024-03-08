@@ -25,6 +25,16 @@ changed to use dnf in place of yum:
 # dnf install nodejs --setopt=nodesource-nodejs.module_hotfixes=1
 ```
 
+## Building Vuetify Application
+
+Running "make build" runs Vuetify's build procedure and a post-build
+procedure.
+
+```
+$ cd $TOP/v1/ui
+$ make build
+```
+
 ## Vuetify Application Build Procedure
 
 The "ui" directory contains a Vuetify application.  It is derived from
@@ -79,20 +89,34 @@ The BASE-PATH value is taken from the configuration setting.  This
 replacement is performed in "api.py".  Modifying the base-path at
 runtime is necessary to make the UI code deployable.
 
-## Note on the Date Picker
+## Updating Vuetify
 
-This build uses a specific version of Vuetify 3.3.x that is 3.3.4 and
-later.  It is because it uses an early-release, the "labs", version of
-"v-date-picker" component.  It is explicitly specified as "3.3.15" in
-"package.json".
+Updating Vuetify can be done by the following.  It works even if the
+version is fixed to one explicitly specified.
+
+```
+$ npm install vuetify@latest --save
+$ npm outdated
+$ npm update --save
+```
+
+## ~~Note on the Date Picker~~
+
+_ The following description does not apply any more.  "v-date-picker"
+is generally available since Vuetify 3.4.0. _
+
+A build for Lens3-v1.2.1 uses a specific version of Vuetify 3.3.15,
+that should be 3.3.4 and later.  It is because it uses an
+early-release, the "labs", version of "v-date-picker" component.  It
+is explicitly fixed in "package.json".
 
 ```
   "dependencies": {... "vuetify": "3.3.15", ...}
 ```
 
-If "v-date-picker" is generally available as a production-ready
-component in the future, it is necessary to remove a import statement
-from the source code.  The code should look like below.
+When "v-date-picker" will be generally available as a production-ready
+component in the future, it is necessary to remove the import
+statement from the source code.  The code should look like below.
 
 ```
 <script lang="ts" setup>

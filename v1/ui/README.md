@@ -102,8 +102,8 @@ $ npm update --save
 
 ## ~~Note on the Date Picker~~
 
-_ The following description does not apply any more.  "v-date-picker"
-is generally available since Vuetify 3.4.0. _
+_The following description does not apply any more.  "v-date-picker"
+is generally available since Vuetify 3.4.0._
 
 A build for Lens3-v1.2.1 uses a specific version of Vuetify 3.3.15,
 that should be 3.3.4 and later.  It is because it uses an

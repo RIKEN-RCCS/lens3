@@ -5,6 +5,6 @@
   "home": "/home/some-user",
   "cred": {"mod_auth_openidc_session": "some-uuid"},
   "ssl_verify": true,
-  "clients": 35,
+  "pools_count": 35,
   "minio_awake_duration": 900
 }

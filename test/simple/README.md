@@ -1,25 +1,37 @@
 # Simple Tests
 
-## A Test by AWS S3 CLI
+## Copy Test by AWS CLI
 
 ### copy-file.sh
 
-[copy-file.sh](copy-file.sh) runs a simple copying test using AWS S3
-CLI.  It runs commands: __cp__, __ls__, __mv__, __rm__, __presign__,
-__website__.  It generates a file of 32MB randoms, and uploads and
-downloads it.  The file is large enough to start a multipart upload
-(8MB is the default threshold to use a multipart upload).
+[copy-file.sh](copy-file.sh) runs simple tests using AWS CLI.  It runs
+commands: __cp__, __ls__, __mv__, __rm__.  It generates a file of 32MB
+randoms, and uploads and downloads it.  The file is large enough to
+start a multipart upload (8MB is the default threshold to use a
+multipart upload).
 
-An S3 secret should be prepared in ".aws/credentials".  A bucket needs
-to be created in advance, too.  The shell variables "EP" and "BKT" are
-the target, "EP" as an endpoint and "BKT" as a bucket.  It reads
-(sources by ".") a file "copy-file-conf.sh" if it exists.
+First prepare the files for AWS CLI.  An S3 secret should be created
+and set in ".aws/credentials".  The S3 signature version may be needed
+in the configuration file ".aws/config" as:
 
-Note it leaves garbage files.
+```
+[default]
+s3 =
+    signature_version = s3v4
+```
 
-__presign__ is useless.  Lens3 does not understand a secret in URL.
+The shell variables "EP" and "BKT" specify the target -- "EP" for an
+endpoint and "BKT" for a bucket.  A bucket needs to be created in
+advance.  It reads (sources by ".") a file "copy-file-conf.sh" if
+exists.  First, copy "copy-file-conf-example.sh" as
+"copy-file-conf.sh" and modify it.  It may include variables "SIZ" for
+the file size, and "DBG" for the options to AWS CLI.
 
-__website__ will fail in Lens3.
+Running "copy-file.sh" leaves garbage files in the current directory.
+
+Note that it does not test the commands __presign__ and __website__.
+__presign__ is useless because Lens3 does not understand a secret in
+URL.  __website__ will fail in Lens3.
 
 ## Basic Tests
 

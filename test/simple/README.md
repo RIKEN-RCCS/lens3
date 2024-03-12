@@ -35,9 +35,11 @@ URL.  __website__ will fail in Lens3.
 
 ## Basic Tests
 
-The "test_api.py" and "test_access.py" run tests on basic functions.
+"test_api.py" and "test_access.py" run tests on basic functions.
 "test_api.py" tests Lens3-Api.  "test_access.py" tests Lens3-Mux for
-bucket accesses.  Tests require Python3.9 and later.
+bucket accesses.  Tests require Python3.9 and later.  Run
+"test_access.py" after testing with "test_api.py", because
+"test_access.py" uses Lens3-Api operations.
 
 ### Client Setting
 
@@ -58,15 +60,18 @@ The entries of "client.json" are:
 __pools_count__ and __minio_awake_duration__ are used in the test
 "busy_server_prepare.py"
 
-"client.json" includes a credential to access Lens3-Api.  __cred__
-specifies a credential by a key-value pair, and it may be one of the
-following.  {"mod_auth_openidc_session": cookie-value} for Apache OIDC
+"client.json" has a credential to access Lens3-Api.  __cred__
+specifies a credential by a key-value pair and it has three choices:
+{"mod_auth_openidc_session": cookie-value} for Apache OIDC
 authentication, {"x-remote-user": user-id} for bypassing
 authentication, or {user-id: password} for a basic-authentication,
-otherwise.  The secret for Apache OIDC authentication is stored in a
-"mod_auth_openidc_session" cookie.  Web browser's js-console can be
-used to obtain the cookie value.  To use bypassing authentication, the
-test needs to access Lens3-Api directly from the host that runs Lens3
+otherwise.
+
+The secret for Apache OIDC authentication is stored in a
+"mod_auth_openidc_session" cookie.  The cookie is recorded in a
+web-brower after authentication.  Web-browser's js-console can be used
+to obtain the cookie value.  To use bypassing authentication, the test
+needs to access Lens3-Api directly from the host that runs Lens3
 services (thus, skipping the proxy).
 
 ### test_api.py
@@ -81,8 +86,7 @@ as "home".
 
 [test_access.py](test_access.py) runs S3 access test.  It uses "boto3"
 library.  It tests various combinations of key policies and bucket
-policies, and also tests with expired keys.  It uses Lens3-Api
-operations, and thus it is better to run after "test_api.py".
+policies, along with key's expiration states.
 
 ## Busy Server Test
 

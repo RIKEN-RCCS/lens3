@@ -1,7 +1,7 @@
-#!/bin/sh
+#!/bin/ksh
 
 # This makes a CSV user-list to add users in a group.  It takes a
-# group as an argument.  It generates entries like:
+# group name as an argument.  It generates entries like:
 # "ADD,username,,group1,group2,..."  It drops the system groups listed
 # in /etc/group.  Add group names in $sysgrp to increase the drop list
 # by: sysgrp+=("wheel" "admins").

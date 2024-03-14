@@ -118,12 +118,13 @@ appropriately such as by `umask 022`.
 Download MinIO binaries "minio" and "mc" from min.io and install them.
 "minio" and "mc" are to be accessible by anyone as permission=755.
 
-NOTE: The binaries are taken from the archive, to use "minio" that is
-released earlier than RELEASE.2022-06-02T02-11-04Z.  "mc", too,
-correspondingly.  It is because versions from that release use an
-erasure-coding backend, which stores files in chunks and is not
-appropriate for exporting existing files.  The version of "mc" is one
-released after "minio" but as close as it.
+NOTE: The binaries are taken from the archive to use specific versions
+of MinIO and MC -- MinIO RELEASE.2022-05-26T05-48-41Z and
+correspondingly MC RELEASE.2022-06-10T22-29-12Z.  Newer versions of
+MinIO starting from RELEASE.2022-06-02T02-11-04Z use an erasure-coding
+backend, and they store files in chunks and are not suitable for
+exporting existing files.  The version of MC is the one released after
+MinIO but as close as to it.
 
 See [Deploy MinIO: Single-Node Single-Drive](https://min.io/docs/minio/linux/operations/install-deploy-manage/deploy-minio-single-node-single-drive.html)
 

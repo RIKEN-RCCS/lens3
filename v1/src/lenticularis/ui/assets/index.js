@@ -12421,7 +12421,7 @@ const VCard = genericComponent()({
 const _hoisted_1$4 = /* @__PURE__ */ createBaseVNode("p", null, " Lens3 is an S3 service using 3rd-party server program MinIO. Lens3 runs multiple MinIO instances at a single access point, and forwards S3 requests with regard to the registered buckets. ", -1);
 const _hoisted_2$2 = /* @__PURE__ */ createBaseVNode("p", null, [
   /* @__PURE__ */ createTextVNode(" For the usage, see the Lens3 user-guide.md in: "),
-  /* @__PURE__ */ createBaseVNode("a", { href: "https://github.com/riken-rccs/lens3/" }, "github.com")
+  /* @__PURE__ */ createBaseVNode("a", { href: "https://github.com/RIKEN-RCCS/lens3/blob/main/v1/doc/user-guide.md" }, "github.com")
 ], -1);
 const _hoisted_3$2 = /* @__PURE__ */ createBaseVNode("p", null, ' A simpler UI is available at "ui2/index.html". ', -1);
 function _sfc_render$6(_ctx, _cache, $props, $setup, $data, $options) {

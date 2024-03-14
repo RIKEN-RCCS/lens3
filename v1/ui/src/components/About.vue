@@ -9,7 +9,7 @@
         buckets.
       </p><p>
         For the usage, see the Lens3 user-guide.md in:
-        <a href="https://github.com/riken-rccs/lens3/">github.com</a>
+        <a href="https://github.com/RIKEN-RCCS/lens3/blob/main/v1/doc/user-guide.md">github.com</a>
       </p><p>
         Lens3's S3 end-point is: {{pool_data.s3_url}}
         <v-btn variant="text" v-on:click="kick_copy_url_to_clipboard">

@@ -1,14 +1,16 @@
 #!/bin/ksh -x
 
-# Test by AWS S3 CLI.  Tested commands are: {cp, ls, mv, rm, presign}.
+# Test by AWS CLI.  Tested commands are: {cp, ls, mv, rm, presign}.
 # It needs shell variables "EP" (an endpoint URL) and "BKT" (a bucket
-# name).  The bucket should be set accessible in advance.  It leaves
-# garbage files in the directory and in the bucket.
+# name).  The bucket should be created and set accessible in advance.
+# It leaves some garbage files in the current directory and in the
+# bucket.
 
-# It reads "copy-file-conf.sh" if it exists.  It assumed it defines EP
-# and BKT.  It may include other variables SIZ and DBG.  The file size
-# SIZ should be larger than 8MB for a multipart-upload.  Set these
-# shell variables like: EP=https://lens3.example.com/; BKT=bkt0
+# It reads "copy-file-conf.sh" if it exists.  It assumes it defines
+# variables EP and BKT, but it may include variables SIZ and DBG.  The
+# file size SIZ should be larger than 8MB for testing a
+# multipart-upload.  Set these shell variables like:
+# EP=https://lens3.example.com; BKT=bkt0
 
 if [ -f ./copy-file-conf.sh ]; then
     . ./copy-file-conf.sh

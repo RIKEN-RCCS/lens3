@@ -10,7 +10,7 @@ This document describes setting for Lenticularis-S3 (Lens3).
 
 The steps are:
 * Prepare prerequisite software and install Lens3
-* Set up a proxy (Apache HTTPD)
+* Set up a proxy (Apache httpd)
 * Start Redis
 * Start Lens3-Mux (a Multiplexer service)
 * Start Lens3-Api (a Web-API service)
@@ -32,6 +32,8 @@ an administrator.
 
 We assume RedHat/Rocky 8.8 and Python 3.9 at this writing (in June
 2023).
+
+It is highly recommended the server host is not open for users.
 
 * Services and thier ports
   * HTTP Proxy (port=433)
@@ -68,6 +70,7 @@ Install "Python", "Redis", and "Development-Tools" onto the host.
 # dnf groupinstall "Development Tools"
 # dnf install python39
 # dnf install redis
+# dnf install rpm-devel
 ```
 
 Ensure using Python3.9, if necessary.
@@ -112,19 +115,32 @@ appropriately such as by `umask 022`.
 # useradd -K UID_MIN=301 -K UID_MAX=499 -K GID_MIN=301 -K GID_MAX=499 -U -d /home/lens3 lens3
 ```
 
-Download MinIO binaries "minio" and "mc" from min.io, then fix the
-permission.  The home, ~/bin, ~/bin/minio, and ~/bin/mc are set to be
-accessible as permission=755 so that anyone can run minio and mc.
+Download MinIO binaries "minio" and "mc" from min.io and install them.
+"minio" and "mc" are to be accessible by anyone as permission=755.
+
+NOTE: The binaries are taken from the archive to use specific versions
+of MinIO and MC -- MinIO RELEASE.2022-05-26T05-48-41Z and
+correspondingly MC RELEASE.2022-06-10T22-29-12Z.  Newer versions of
+MinIO starting from RELEASE.2022-06-02T02-11-04Z use an erasure-coding
+backend, and they store files in chunks and are not suitable for
+exporting existing files.  The version of MC is the one released after
+MinIO but as close as to it.
+
+See [Deploy MinIO: Single-Node Single-Drive](https://min.io/docs/minio/linux/operations/install-deploy-manage/deploy-minio-single-node-single-drive.html)
 
 ```
 # su - lens3
-lens3$ cd ~
-lens3$ mkdir bin
-lens3$ chmod 755 ~ ~/bin
-lens3$ curl https://dl.min.io/server/minio/release/linux-amd64/minio -o /tmp/minio
-lens3$ install -m 755 -c /tmp/minio ~/bin/minio
-lens3$ curl https://dl.min.io/client/mc/release/linux-amd64/mc -o /tmp/mc
-lens3$ install -m 755 -c /tmp/mc ~/bin/mc
+lens3$ cd /tmp
+lens3$ wget https://dl.min.io/server/minio/release/linux-amd64/archive/minio-20220526054841.0.0.x86_64.rpm
+lens3$ rpm2cpio minio-20220526054841.0.0.x86_64.rpm | cpio -id --no-absolute-filenames usr/local/bin/minio
+lens3$ mv ./usr/local/bin/minio ./minio
+lens3$ rm -r ./usr
+lens3$ rm ./minio-20220526054841.0.0.x86_64.rpm
+lens3$ wget https://dl.min.io/client/mc/release/linux-amd64/archive/mc.RELEASE.2022-06-10T22-29-12Z
+lens3$ mv ./mc.RELEASE.2022-06-10T22-29-12Z ./mc
+lens3$ exit
+# install -m 755 -c /tmp/minio /usr/local/bin/minio
+# install -m 755 -c /tmp/mc /usr/local/bin/mc
 ```
 
 Install Lens3 and Python packages.  Installation should be run in the
@@ -262,7 +278,6 @@ be increased by setting "LogLevel" to "debug" in the "<Location
 /lens3.sts>" section.  The "LoadModule" line in the sample file
 "lens3proxy-oidc.conf" may be redundant, and it generates a warning
 message.
-
 
 Or, prepare passwords for basic authentication.
 
@@ -439,11 +454,14 @@ lens3$ lens3-admin -c conf.json load-conf mux-conf.yaml
 lens3$ lens3-admin -c conf.json show-conf
 ```
 
+Restarting of services, lenticularis-mux and lenticularis-api, is
+needed after setting configurations.  Run `systemctl restart` on them.
+
 ## Set up sudoers for Lens3-Mux
 
 Lens3 runs MinIO as a non-root process, and thus, it uses sudo to
 start MinIO.  The provided example setting is that the user "lens3" is
-only allowed to run "/home/lens3/bin/minio".  Copy and edit an entry
+only allowed to run "/usr/local/bin/minio".  Copy and edit an entry
 in "/etc/sudoers.d/lenticularis-sudoers".
 
 ```
@@ -485,8 +503,7 @@ Lens3-Api and Lens3-Mux.
 # systemctl start lenticularis-mux
 # systemctl enable lenticularis-api
 # systemctl start lenticularis-api
-# systemctl status lenticularis-mux
-# systemctl status lenticularis-api
+# systemctl status lenticularis-mux lenticularis-api
 
 ```
 
@@ -597,23 +614,27 @@ logs of Gunicorn.
 ### Examining MinIO Behavior
 
 It is a bit tricky when MinIO does not behave as expected.  In that
-case, it will help to connect to MinIO with "mc" command.  The
-necessary information to use "mc" command, especially ACCESSKEY and
-SECRETKEY, can be taken by "show-minio" command of "lens3-admin".  The
-command is only useful when a MinIO instance is running.
+case, it will help to connect to MinIO with "mc" command.
+
+The necessary information to use "mc" command, URL, ACCESSKEY and
+SECRETKEY, can be taken by "show-minio" command of "lens3-admin".
+First, run "show-pool" to list all the pools.  Then, run "show-minio"
+with a pool-id to display the information.  It displays URL
+(host+port) of MinIO as "minio_ep".  It also displays admin's
+ACCESSKEY under the key "admin" and SECRETKEY under "password".  Note
+that the "show-minio" command is only useful while a MinIO instance is
+running.  To keep a MinIO instance running, call the "access-mux"
+command periodically.  Otherwise, it will stop after a while.
 
 ```
+lens3$ lens3-admin -c conf.json show-pool
 lens3$ lens3-admin -c conf.json show-minio POOLID
 lens3$ lens3-admin -c conf.json access-mux POOLID
 ```
 
-Running "show-minio" displays the information under the keys "admin"
-and "password", where admin corresponds to ACCESSKEY and password to
-SECRETKEY.  Running "access-mux" periodically keeps the MinIO instance
-alive, otherwise it will stop after a while.
-
-As an example, the following commands can be used to dump tracing logs
-from MinIO.
+For example, the following commands can be used to dump tracing logs
+from MinIO.  ALIAS can be any string, and URL would be something like
+`http://lens3.example.com:9012`.
 
 ```
 lens3$ mc alias set ALIAS URL ACCESSKEY SECRETKEY
@@ -635,6 +656,13 @@ lens3$ redis-cli -p 6378 --scan --pattern '*'
 ```
 lens3$ minio --json --anonymous server --address :9001 /home/UUU/pool-directory
 ```
+
+### OIDC Redirect Failure
+
+OIDC may err with "Invalid parameter: redirect_uri" and fail to return
+to lens3, when using an example configuration "lens3proxy-oidc.conf".
+It would happen in an https only site.  It may be fixed by modifying a
+"OIDCRedirectURI" line to a full URL starting with "https:".
 
 ### No Support for Multiple Hosts
 

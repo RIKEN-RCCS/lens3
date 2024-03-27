@@ -127,8 +127,8 @@ minio_manager:
 
 ```
 minio:
-    minio: /home/lens3/bin/minio
-    mc: /home/lens3/bin/mc
+    minio: /usr/local/bin/minio
+    mc: /usr/local/bin/mc
 ```
 
 These specify commands of MinIO.

@@ -1,5 +1,6 @@
 /var/log/lenticularis/lens3-mux-log /var/log/lenticularis/lens3-api-log {
     weekly 1
+    rotate 30
     copytruncate
     dateext
     delaycompress
@@ -11,6 +12,7 @@
 
 /var/log/lenticularis/lens3-gunicorn-*-log {
     weekly 1
+    rotate 30
     copytruncate
     dateext
     delaycompress

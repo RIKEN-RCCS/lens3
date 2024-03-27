@@ -143,7 +143,7 @@ class Api_Client():
         context.verify_mode = ssl.CERT_NONE
         try:
             # print(f"urlopen(url={url})...")
-            res = urlopen(req, context=context, timeout=30)
+            res = urlopen(req, context=context, timeout=90)
             s = res.read().decode()
             v = json.loads(s)
             assert v["status"] == "success"

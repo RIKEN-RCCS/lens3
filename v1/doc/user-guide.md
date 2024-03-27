@@ -219,6 +219,13 @@ by request by filtering server logs.
   access.  A probe access is dropped at Lens3-Mux and not forwarded to
   a MinIO instance.
 
+## Changes from v1.2 to v1.3
+
+* MinIO version is fixed to use the legacy "fs"-mode (it is quite
+  old).  In a recent development of erasure-coding, MinIO uses chunked
+  files in storage, which would not be suitable for
+  importing/exporting existing files.
+
 ## Changes from v1.1 to v1.2
 
 * Host-style naming of buckets is dropped.

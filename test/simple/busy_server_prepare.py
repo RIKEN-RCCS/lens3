@@ -53,7 +53,7 @@ def _index_of_test_pool(pool):
 class Busy_Test_Prepare():
     def __init__(self, client):
         self.client = client
-        self.n_pools = int(client.conf["clients"])
+        self.n_pools = int(client.conf["pools_count"])
         self.duration = (int(client.conf["minio_awake_duration"]) / 3)
         self.pools = None
         self.buckets = None

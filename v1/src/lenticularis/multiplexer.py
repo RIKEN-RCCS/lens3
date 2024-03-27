@@ -478,10 +478,12 @@ class Multiplexer():
             start_response("200", [])
             return []
 
-        # Copy request headers.
+        # Copy request headers.  Set "HOST" in case it is missing.
 
         q_headers = {h[5:].replace("_", "-"): environ.get(h)
                      for h in environ if h.startswith("HTTP_")}
+        q_headers["HOST"] = self._front_host
+
         content_type = environ.get("CONTENT_TYPE")
         if content_type:
             q_headers["CONTENT-TYPE"] = content_type
@@ -494,6 +496,8 @@ class Multiplexer():
         url = f"http://{minio_ep}{path_and_query}"
 
         rinput = self._request_input(environ)
+
+        # logger.error(f"AHO q_headers=({q_headers})")
 
         req = Request(url, data=rinput, headers=q_headers,
                       method=request_method)

@@ -93,7 +93,7 @@
           Create writeonly key
         </v-btn>
         <v-spacer />
-        <v-row>
+        <v-row justify="center">
           <v-date-picker
             title="Expiration (00:00:00 UTC)"
             header=""
@@ -162,7 +162,7 @@
 </template>
 
 <script lang="ts">
-import {VDatePicker} from 'vuetify/labs/VDatePicker';
+//import {VDatePicker} from 'vuetify/labs/VDatePicker';
 export default {
   props: {
     pool_data: {
@@ -175,7 +175,7 @@ export default {
     return {};
   },
   components: {
-    VDatePicker,
+    //VDatePicker,
   },
   methods: {
     kick_make_bucket() {

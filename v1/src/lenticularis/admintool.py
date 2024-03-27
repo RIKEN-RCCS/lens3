@@ -282,8 +282,7 @@ class Command():
         pass
 
     def op_load_conf(self, yamlfile):
-        """Loads a yaml conf file in Redis.  (There is no command to delete a
-        conf, currenly).
+        """Loads a yaml conf file in Redis.
         """
         conf = read_yaml_conf(yamlfile)
         set_conf(conf, self._redis)

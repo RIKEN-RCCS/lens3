@@ -107,7 +107,7 @@ class Access_Test(Test_Base):
         # Make an S3 client for each access-key.
         #
         for policy in self.client.key_policy_set:
-            print(f"Making an access-key with policy={policy}")
+            print(f"Making an access-key with policy={policy} expired={expired}")
             self.client.make_secret(self.working_pool, policy, expiration)
             pass
         desc2 = self.client.get_pool(self.working_pool)
@@ -159,7 +159,7 @@ class Access_Test(Test_Base):
             endpoint_url=self.client.s3_ep,
             verify=self.client.ssl_verify)
         self.s3_clients[expired]["other"] = client3
-        print(f"s3clients={self.s3_clients[expired]}")
+        print(f"s3clients[expired={expired}]={self.s3_clients[expired]}")
         pass
 
     def put_file_in_buckets(self):
@@ -186,8 +186,8 @@ class Access_Test(Test_Base):
         ("w", "none", "nokey",     Respn("401")),
         ("w", "none", "other",     Respn("403")),
         ("w", "none", "readwrite", Respn.OK),
-        #("w", "none", "readonly",  Respn("AccessDenied")),
-        ("w", "none", "readonly",  Respn("503")),
+        ("w", "none", "readonly",  Respn("AccessDenied")),
+        #("w", "none", "readonly",  Respn("503")),
         ("w", "none", "writeonly", Respn.OK),
         ("r", "none", "nokey",     Respn("401")),
         ("r", "none", "other",     Respn("403")),
@@ -198,8 +198,8 @@ class Access_Test(Test_Base):
         ("w", "upload", "nokey",     Respn.OK),
         ("w", "upload", "other",     Respn("403")),
         ("w", "upload", "readwrite", Respn.OK),
-        #("w", "upload", "readonly",  Respn("AccessDenied")),
-        ("w", "upload", "readonly",  Respn("503")),
+        ("w", "upload", "readonly",  Respn("AccessDenied")),
+        #("w", "upload", "readonly",  Respn("503")),
         ("w", "upload", "writeonly", Respn.OK),
         ("r", "upload", "nokey",     Respn("AccessDenied")),
         ("r", "upload", "other",     Respn("403")),
@@ -207,12 +207,12 @@ class Access_Test(Test_Base):
         ("r", "upload", "readonly",  Respn.OK),
         ("r", "upload", "writeonly", Respn("AccessDenied")),
 
-        #("w", "download", "nokey",     Respn("AccessDenied")),
-        ("w", "download", "nokey",     Respn("503")),
+        ("w", "download", "nokey",     Respn("AccessDenied")),
+        #("w", "download", "nokey",     Respn("503")),
         ("w", "download", "other",     Respn("403")),
         ("w", "download", "readwrite", Respn.OK),
-        #("w", "download", "readonly",  Respn("AccessDenied")),
-        ("w", "download", "readonly",  Respn("503")),
+        ("w", "download", "readonly",  Respn("AccessDenied")),
+        #("w", "download", "readonly",  Respn("503")),
         ("w", "download", "writeonly", Respn.OK),
         ("r", "download", "nokey",     Respn.OK),
         ("r", "download", "other",     Respn("403")),
@@ -223,8 +223,8 @@ class Access_Test(Test_Base):
         ("w", "public", "nokey",     Respn.OK),
         ("w", "public", "other",     Respn("403")),
         ("w", "public", "readwrite", Respn.OK),
-        #("w", "public", "readonly",  Respn("AccessDenied")),
-        ("w", "public", "readonly",  Respn("503")),
+        ("w", "public", "readonly",  Respn("AccessDenied")),
+        #("w", "public", "readonly",  Respn("503")),
         ("w", "public", "writeonly", Respn.OK),
         ("r", "public", "nokey",     Respn.OK),
         ("r", "public", "other",     Respn("403")),

@@ -9,6 +9,11 @@ output from MinIO, although MinIO usually does not output anything but
 start and end messages.
 """
 
+# Note: The code is retrofitted to MinIO RELEASE.2022-05-26T05-48-41Z,
+# to use the obsoleted Filesystem-Mode.  Especially, expected
+# messages, which are used to detect errors from MinIO, are taken from
+# the particular version.
+
 import argparse
 import os
 import errno
@@ -52,12 +57,14 @@ class Termination(Exception):
 
 # Messages from a MinIO process at its start-up.
 
-_minio_expected_response = "S3-API:"
-_minio_error_response__ = "ERROR"
+# _minio_expected_response = "S3-API:"
+_minio_expected_response = "API:"
+_minio_error_response = "ERROR"
 _minio_response_port_in_use = "Specified port is already in use"
 _minio_response_nonwritable_storage = "Unable to write to the backend"
 _minio_response_failure = "Unable to initialize backend"
 _minio_response_port_capability = "Insufficient permissions to use specified port"
+# _minio_response_X1 = "mkdir /XXX/.minio.sys: permission denied"
 
 def _read_stream(s):
     """Reads a stream while some is available.  It returns a pair of the
@@ -95,11 +102,11 @@ def _json_loads_no_errors(s):
 
 
 def _diagnose_minio_message(s):
-    """Diagnoses messages returned at a MinIO start.  It returns 0 for a
-    successful run, EAGAIN for no expected messages, EADDRINUSE for
+    """Diagnoses messages returned at a MinIO start.  It returns 0 on a
+    successful run, EAGAIN on lacking expected messages, EADDRINUSE on
     port-in-use, (EACCES for non-writable storage), or EIO or ENOENT
-    on unknown errors.  It judges only level=FATAL as an error but
-    level=ERROR not an error.
+    on unknown errors.  It judges level=FATAL only as an error, but
+    not level=ERROR.
     """
     # if not in_json:
     #     m = s
@@ -420,12 +427,13 @@ class Manager():
 
     def _wait_for_minio_to_come_up(self, p):
         """Checks a MinIO start by messages it outputs.  It looks for a
-        message with "S3-API:" or one with level=FATAL.  Or, it
-        detects a closure of stdout (a process exit) or a timeout.
-        "S3-API:" is an expected message at a successful start:
-        "S3-API: http://xx.xx.xx.xx:9000 http://127.0.0.1:9000".  Note
-        it does not try to terminate a process on an error since it is
-        under sudo.  So, it may leave a process.
+        message with "API:" or a message with level=FATAL.  Or, it
+        detects a closure of stdout (a process exit) or a timeout.  An
+        expected message at a successful start is: "API:
+        http://xxx.xxx.xxx.xxx:9000 http://xxx.xxx.xxx.xxx:9000
+        http://127.0.0.1:9000".  Note it does not try to terminate a
+        process on an error since it is under sudo.  So, it may leave
+        a process.
         """
         pool_id = self._pool_id
         tables = self._tables
@@ -450,13 +458,13 @@ class Manager():
             # CONTINUE THE WORK IF THE PROCESS IS RUNNING.
             if p_status1 is not None:
                 logger.error(f"Manager (pool={pool_id}) Starting MinIO failed:"
-                             f"exit={p_status1} outs=({outs1}) errs=({errs1})")
+                             f" exit={p_status1} outs=({outs1}) errs=({errs1})")
                 set_pool_state(tables, pool_id, Pool_State.INOPERABLE, message)
                 return (False, False)
             else:
                 logger.error(f"Manager (pool={pool_id}) starting MinIO"
                              f" gets in a dubious state (work continues):"
-                             f"exit={p_status1} outs=({outs1}) errs=({errs1})")
+                             f" exit={p_status1} outs=({outs1}) errs=({errs1})")
                 return (True, True)
         else:
             # Terminate the process after extra time to collect messages.

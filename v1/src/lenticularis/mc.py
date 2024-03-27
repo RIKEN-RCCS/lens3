@@ -5,10 +5,10 @@
 
 # NOTES. (1) It depends on the versions of MinIO and MC.  It is
 # necessary to rewrite this code when updating MinIO and MC.  This is
-# tested on MINIO RELEASE.2023-06-09T07-32-12Z and MC
-# RELEASE.2023-06-06T13-48-56Z.  (2) The error-cause code
-# "BucketAlreadyOwnedByYou" returned by an MC command should be
-# treated as not an error.
+# tested on MINIO RELEASE.2022-05-26T05-48-41Z and MC
+# RELEASE.2022-06-10T22-29-12Z.  (2) An MC command error with a
+# cause-code "BucketAlreadyOwnedByYou" is treated as non-error -- See
+# the comment on make_bucket().
 
 # Listing commands (such as of buckets or secrets) return records that
 # are separated by newlines.  Each record includes a status=success.
@@ -104,16 +104,17 @@ def _make_mc_error(message):
 
 def _simplify_mc_message(ee):
     """Extracts a message part from an MC error.  It returns a 3-tuple
-    {True, [value,...], "") on success, or {False, [], message) on
+    {True, [value,...], "") on success, or {False, [], cause-code) on
     failure.  It packs the values to a single record.  Note that MC
     returns multiple values as separate json records.  Each record is
     {"status": "success", ...}, containing a value.  A listing command
     returns nothing for an empty list.  Thus, empty list is considered
-    as a success.  An error record is {"status": "error", ...},
-    containing a message.  It may include useful information in the
-    "Code" slot if it exists.  An error record looks like: {"status":
-    "error", "error": {"message", "...", "cause": {"error": {"Code":
-    "...", ...}}}}.
+    as a success.  An error record looks like: {"status": "error",
+    "error": {"message":, ..., "cause": {"error": {"Code": ...,
+    ...}}}}.  The "error/cause/error/Code" slot (deeply nested!) will
+    be a keyword of useful information if it exists.  A returned
+    3-tuple has a whole message instead of a cause-code if it is
+    missing.
     """
     for s in ee:
         if s.get("status") == "success":
@@ -251,13 +252,21 @@ class Mc():
                                ["admin", "user", "list", self._alias])
         return vv
 
+    def _mc_admin_policy_set(self, access_key, policy):
+        vv = self._execute_cmd("admin_policy_set",
+                               ["admin", "policy", "set", self._alias,
+                                policy, f"user={access_key}"])
+        return vv
+
     def _mc_admin_policy_attach_user(self, access_key, policy):
+        assert False
         vv = self._execute_cmd("admin_policy_attach",
                                ["admin", "policy", "attach", self._alias,
                                 policy, "--user", f"{access_key}"])
         return vv
 
     def _mc_admin_policy_detach_user(self, access_key, policy):
+        assert False
         vv = self._execute_cmd("admin_policy_detach",
                                ["admin", "policy", "detach", self._alias,
                                 policy, "--user", f"{access_key}"])
@@ -355,15 +364,18 @@ class Mc():
         pass
 
     def make_bucket(self, bucket, policy):
-        """Makes a bucket in MinIO.  Making a bucket may cause an error.  It
-        is because Lens3 never removes buckets but makes it
-        inaccessible.  Note that it does not delete a bucket on an
-        exception in policy-set, because the bucket policy should be
-        none.
+        """Makes a bucket in MinIO.  A particular error in making a bucket
+        will be ignored.  It is because Lens3 never removes buckets
+        but only makes them inaccessible.  Note that it leaves a
+        bucket intact on an exception, assuming such a bucket is
+        already inaccessible.
         """
         assert self._alias is not None
         vv = self._mc_make_bucket(bucket)
-        _assert_mc_success(vv, "mc.mc_make_bucket")
+        (ok, values, message) = vv
+        if not (ok == True or message == "BucketAlreadyOwnedByYou"):
+            _assert_mc_success(vv, "mc.mc_make_bucket")
+            pass
         vv = self._mc_anonymous_set(bucket, policy)
         _assert_mc_success(vv, "mc.mc_policy_set")
         pass
@@ -392,12 +404,17 @@ class Mc():
         """Makes an access key in MinIO.  Note it does not rollback on a
         failure in the middle.
         """
+        # Retrofitting to MinIO earlier than RELEASE.2022-10-29, to
+        # use the obsoleted "Gateway" or "Filesystem Mode".  Old
+        # versions needs enabling keys.
         vv = self._mc_admin_user_add(key, secret)
         _assert_mc_success(vv, "mc.mc_admin_user_add")
-        vv = self._mc_admin_policy_attach_user(key, policy)
-        _assert_mc_success(vv, "mc.mc_admin_policy_attach")
-        # vv = self._mc_admin_user_enable(key)
-        # _assert_mc_success(vv, "mc.mc_admin_user_enable")
+        # vv = self._mc_admin_policy_attach_user(key, policy)
+        # _assert_mc_success(vv, "mc.mc_admin_policy_attach")
+        vv = self._mc_admin_policy_set(key, policy)
+        _assert_mc_success(vv, "mc.mc_admin_policy_set")
+        vv = self._mc_admin_user_enable(key)
+        _assert_mc_success(vv, "mc.mc_admin_user_enable")
         pass
 
     def delete_secret(self, key):

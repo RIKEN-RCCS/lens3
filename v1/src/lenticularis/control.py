@@ -177,7 +177,7 @@ class Control_Api():
     def __init__(self, api_conf, redis):
         self._api_conf = api_conf
         assert api_conf["version"] == "v1.2"
-        self._lens3_version = "v1.2.1"
+        self._lens3_version = "v1.3.1"
         self._api_version = "v1.2"
 
         self.pkg_dir = os.path.dirname(inspect.getfile(lenticularis))

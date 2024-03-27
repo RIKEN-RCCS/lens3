@@ -3,8 +3,6 @@
 Lenticularis-S3 is a multiplexer to MinIO to service multiple MinIO
 instances at a single access point.
 
-__Lenticularis-S3 comes with ABSOLUTELY NO WARRANTY.__
-
 ## Overview
 
 Lenticularis-S3 (Lens3) provides an S3 service by running multiple
@@ -29,17 +27,16 @@ service, called "Lens3-Api", is started as a systemd serivce, too.
 
 ## Guides
 
-For users,
-see [v1/doc/user-guide.md](v1/doc/user-guide.md).
+[user-guide.md](v1/doc/user-guide.md) for users.
 
-For administrators,
-see [v1/doc/admin-guide.md](v1/doc/admin-guide.md).
+[admin-guide.md](v1/doc/admin-guide.md) for administrators to maintain
+lens3 services.
 
-For site managers,
-see [v1/doc/setting-guide.md](v1/doc/setting-guide.md).
+[setting-guide.md](v1/doc/setting-guide.md) for site managers to install
+lens3 services.
 
-For programmers,
-see [v1/doc/design.md](v1/doc/design.md).
+[design.md](v1/doc/design.md) for programmers to debug.
+
 
 ## ACKNOWLEDGEMENT
 
@@ -72,3 +69,5 @@ nginx                example settings of a proxy
 apache               example settings of a proxy
 test                 test code
 ```
+
+__Lenticularis-S3 comes with ABSOLUTELY NO WARRANTY.__

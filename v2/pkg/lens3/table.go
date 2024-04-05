@@ -111,13 +111,13 @@ type Mux_record struct {
 }
 
 type Pair_name_timestamp struct {
-	Name string
+	Name      string
 	Timestamp int64
 }
 
 type routing_bucket_desc_keys__ struct {
-	pool string
-	bkt_policy string
+	pool              string
+	bkt_policy        string
 	modification_time int64
 }
 
@@ -128,15 +128,15 @@ func (Pid_record) xid_union() {}
 func (Key_record) xid_union() {}
 
 type Pid_record struct {
-    Owner string
+	Owner             string
 	Modification_time int64
 }
 
 type Key_record struct {
-	Owner string
-	Secret_key string
-	Key_policy string
-	Expiration_time int64
+	Owner             string
+	Secret_key        string
+	Key_policy        string
+	Expiration_time   int64
 	Modification_time int64
 }
 
@@ -182,6 +182,8 @@ func assert_table_prefix_match(t *Table, r *redis.Client, prefix string) {
 		panic("intenal: assert_table_prefix_match")
 	}
 	if !string_search(prefix, v) {
+		fmt.Println("setting_prefixes=", setting_prefixes)
+		fmt.Println("prefix=", prefix, "v=", v)
 		panic("intenal: assert_table_prefix_match")
 	}
 }
@@ -863,9 +865,9 @@ func (t *Table) Set_ex_bucket(bucket string, desc Bucket_record) (bool, *string)
 	if w.Err() == nil {
 		return true, nil
 	} else {
-        // Race, returns failure.
-        var o = t.Get_bucket(bucket)
-        return false, &o.Pool_name
+		// Race, returns failure.
+		var o = t.Get_bucket(bucket)
+		return false, &o.Pool_name
 	}
 }
 
@@ -1027,7 +1029,7 @@ func (t *Table) Delete_user_timestamp(uid string) {
 }
 
 // LIST_USER_TIMESTAMPS returns a list of (uid, ts) pairs.
-func (t *Table) List_user_timestamps() []Pair_name_timestamp{
+func (t *Table) List_user_timestamps() []Pair_name_timestamp {
 	var db = t.routing
 	var ki = t.scan_table(db, routing_user_timestamp_prefix, "*")
 	var descs []Pair_name_timestamp
@@ -1052,7 +1054,7 @@ var monokey_prefixes = string_sort([]string{
 	monokey_key_prefix,
 })
 
-func choose_prefix_by_usage(usage Key_usage) (string, *Xid_record) {
+func choose_prefix_by_usage(usage Key_usage) (string, Xid_record) {
 	switch usage {
 	case Key_POOL:
 		var desc Pid_record
@@ -1067,7 +1069,7 @@ func choose_prefix_by_usage(usage Key_usage) (string, *Xid_record) {
 
 // MAKE_UNIQUE_XID makes a random unique id for a pool-id (with
 // usage="pool") or an access-key (with usage="akey").
-func (t *Table) Make_unique_xid(usage Key_usage, owner string, info Xid_record) string{
+func (t *Table) Make_unique_xid(usage Key_usage, owner string, info Xid_record) string {
 	var db = t.monokey
 	var prefix, _ = choose_prefix_by_usage(usage)
 	var now int64 = time.Now().Unix()
@@ -1129,14 +1131,14 @@ func (t *Table) Set_ex_xid(xid string, usage Key_usage, desc Xid_record) bool {
 	}
 }
 
-func (t *Table) Get_xid(usage Key_usage, xid string) *Xid_record {
+func (t *Table) Get_xid(usage Key_usage, xid string) Xid_record {
 	var db = t.monokey
 	var prefix, desc = choose_prefix_by_usage(usage)
 	var k = (prefix + xid)
 	var w = db.Get(t.ctx, k)
-	var ok = load_data(w, &desc)
+	var ok = load_data(w, desc)
 	if ok {
-		return &desc
+		return desc
 	} else {
 		return nil
 	}
@@ -1153,7 +1155,7 @@ func (t *Table) Delete_xid_unconditionally(usage Key_usage, xid string) {
 // LIST_SECRETS_OF_POOL lists secrets (access-keys) of a pool.  It
 // includes an probe-key.  A probe-key is an access-key but has no
 // corresponding secret-key.
-func (t *Table) List_secrets_of_pool(pool string) []*Key_pair{
+func (t *Table) List_secrets_of_pool(pool string) []Key_pair {
 	var db = t.monokey
 	var ki = t.scan_table(db, monokey_key_prefix, "*")
 	var descs []Key_pair
@@ -1164,7 +1166,7 @@ func (t *Table) List_secrets_of_pool(pool string) []*Key_pair{
 			// Race.
 			panic("intenal: List_secrets_of_pool")
 		}
-		var x = Key_pair{Access_key: key, Key_record: (*d).(Key_record)}
+		var x = Key_pair{Access_key: key, Key_record: d.(Key_record)}
 		descs = append(descs, x)
 	}
 	return descs
@@ -1224,8 +1226,8 @@ func (t *Table) print_all() {
 }
 
 func print_db(t *Table, db *redis.Client, title string) {
-    fmt.Println("---")
-    fmt.Println(title)
+	fmt.Println("---")
+	fmt.Println(title)
 	var pattern = ("*")
 	var ki = db.Scan(t.ctx, 0, pattern, 0).Iterator()
 	for ki.Next(t.ctx) {
@@ -1235,15 +1237,14 @@ func print_db(t *Table, db *redis.Client, title string) {
 }
 
 func Table_main() {
-	fmt.Println(redis.Version())
-	t := Get_table()
+	// Check utility functions.
 
-	v1, err1 := t.setting.Get(t.ctx, "uu:m-matsuda").Result()
-	if err1 != nil {
-		panic(err1)
-	}
-	fmt.Println("key", v1)
+	fmt.Println("Check sorting strings...")
+	var x1 = string_sort([]string{"jkl", "ghi", "def", "abc"})
+	fmt.Println("sorted strings=", x1)
 
+	fmt.Println("")
+	fmt.Println("Check string-set equal...")
 	var s1 = []string{
 		"uid", "modification_time", "groups", "enabled", "claim",
 	}
@@ -1255,15 +1256,32 @@ func Table_main() {
 
 	// Check JSON Marshal/Unmarshal on integer and strings.
 
+	fmt.Println("")
+	fmt.Println("Check marshal/unmarshal string...")
 	var b3, err3 = json.Marshal("helo")
 	fmt.Println("Marshal(helo)=", string(b3), err3)
 	var s4 string
 	var err4 = json.Unmarshal(b3, &s4)
 	fmt.Println("Unmarshal(helo)=", s4, err4)
 
+	fmt.Println("")
+	fmt.Println("Check marshal/unmarshal integer...")
 	var b5, err5 = json.Marshal(12345)
-	fmt.Println("Marshal(helo)=", string(b5), err5)
-	var s6 string
+	fmt.Println("Marshal(12345)=", string(b5), err5)
+	var s6 int
 	var err6 = json.Unmarshal(b5, &s6)
-	fmt.Println("Unmarshal(helo)=", s6, err6)
+	fmt.Println("Unmarshal(12345)=", s6, err6)
+
+	// Check Redis connection.
+
+	fmt.Println("")
+	fmt.Println("Check Redis connection...")
+	fmt.Println(redis.Version())
+	t := Get_table()
+
+	v1, err1 := t.setting.Get(t.ctx, "uu:m-matsuda").Result()
+	if err1 != nil {
+		panic(err1)
+	}
+	fmt.Println("key", v1)
 }

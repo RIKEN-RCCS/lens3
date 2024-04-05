@@ -37,7 +37,6 @@ lens3 services.
 
 [design.md](./doc/design.md) for programmers to debug.
 
-
 ## ACKNOWLEDGEMENT
 
 Lens3 is copyrighted by RIKEN R-CCS.  Part of the results is
@@ -57,17 +56,5 @@ Lens3 UI is created with vuejs+vuetify.  Please refer to
 
 Lens3 is developed by R-CSS and the [authors](AUTHORS.txt).  But, the
 code was reviewed by zzmatu and remaining bugs are his responsibility.
-
-## Directories
-
-```
-v1/doc               documents
-v1/src/lenticularis  source code
-v1/ui                UI source code (Vuetify)
-unit-file            configuration and systemd templates
-nginx                example settings of a proxy
-apache               example settings of a proxy
-test                 test code
-```
 
 __Lenticularis-S3 comes with ABSOLUTELY NO WARRANTY.__

@@ -390,6 +390,8 @@ MESSAGES from older versions
   needs explicit enabling users currently); Disallow public access
   buckets at all.
 
+* Add confirmation at the first use: terms-of-use.
+
 ## RANDOM MEMO
 
 __Load balancing__: The "scheduler.py" file is not used in v1.2, which

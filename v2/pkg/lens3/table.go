@@ -9,7 +9,7 @@ package lens3
 // by a couple of databases inside.
 //
 // CONSISTENCY OF ENTRIES. uid <-> claim is one-to-one if a user-info
-// contains a claim.  Recovery removes orphaned claims.
+// contains a claim.  Recovery should remove orphaned claims.
 
 // This is by "go-redis/v8".  Use "go-redis/v8" for Redis-6, or
 // "go-redis/v9" for Redis-7.

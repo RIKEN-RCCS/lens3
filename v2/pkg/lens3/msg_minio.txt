@@ -1,0 +1,32 @@
+;; -*-Coding: utf-8; Mode: Fundamental;-*-
+
+Examples of MinIO start-up messages.
+
+% /usr/local/bin/minio --version
+
+minio version RELEASE.2022-05-26T05-48-41Z
+
+% /usr/local/bin/minio --json --anonymous server --address localhost:9001 .
+
+{"level":"INFO","errKind":"","time":"2024-04-20T12:17:26.48824049Z","message":"API: http://localhost:9001 "}
+{"level":"INFO","errKind":"","time":"2024-04-20T12:17:26.488716386Z","message":"\nConsole: http://10.128.8.30:46747 http://127.0.0.1:46747   "}
+{"level":"INFO","errKind":"","time":"2024-04-20T12:17:26.488740022Z","message":"\nDocumentation: https://docs.min.io"}
+{"level":"INFO","errKind":"","time":"2024-04-20T12:17:26.488764709Z","message":"\nWARNING: Console endpoint is listening on a dynamic port (46747), please use --console-address \":PORT\" to choose a static port."}
+{"level":"INFO","errKind":"","time":"2024-04-20T12:17:26.499414521Z","message":"Finished loading IAM sub-system (took 0.0s of 0.0s to load data)."}
+{"level":"INFO","errKind":"","time":"2024-04-20T12:17:26.830507556Z","message":"You are running an older version of MinIO released 2 years ago, update: Run `mc admin update`"}
+
+% /usr/local/bin/minio --json --anonymous server --address localhost:80 .
+
+{"level":"FATAL","errKind":"","time":"2024-04-20T12:33:34.861565145Z","message":"Insufficient permissions to use specified port: listen tcp 127.0.0.1:80: bind: permission denied","error":{"message":"Insufficient permissions to use specified port: listen tcp 127.0.0.1:80: bind: permission denied","source":["cmd/server-main.go:415:cmd.serverMain()"]}}
+
+% /usr/local/bin/minio --json --anonymous server --address localhost:6378 .
+
+{"level":"FATAL","errKind":"","time":"2024-04-20T12:25:09.799265255Z","message":"Specified port is already in use: listen tcp 127.0.0.1:6378: bind: address already in use","error":{"message":"Specified port is already in use: listen tcp 127.0.0.1:6378: bind: address already in use","source":["cmd/server-main.go:415:cmd.serverMain()"]}}
+
+% /usr/local/bin/minio --json --anonymous server --address localhost:9001 /
+
+{"level":"FATAL","errKind":"","time":"2024-04-20T12:27:22.853861404Z","message":"empty or root endpoint is not supported","error":{"message":"empty or root endpoint is not supported","source":["cmd/server-main.go:415:cmd.serverMain()"]}}
+
+% /usr/local/bin/minio --json --anonymous server --address localhost:9001 /var/empty/sshd
+
+{"level":"FATAL","errKind":"","time":"2024-04-20T12:30:11.712862601Z","message":"mkdir /var/empty/sshd/.minio.sys: permission denied","error":{"message":"mkdir /var/empty/sshd/.minio.sys: permission denied","source":["cmd/server-main.go:507:cmd.serverMain()"]}}

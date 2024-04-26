@@ -390,7 +390,10 @@ MESSAGES from older versions
   needs explicit enabling users currently); Disallow public access
   buckets at all.
 
-* Add confirmation at the first use: terms-of-use.
+* Add options
+  - confirmation at the first use: terms-of-use.
+  - description field (just memo) to keys.
+  - disable public buckets.
 
 ## RANDOM MEMO
 

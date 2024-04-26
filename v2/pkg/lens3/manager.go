@@ -5,25 +5,44 @@
 
 package lens3
 
-// A manager is responsible for watching the process state and the
-// output from an S3-server, although an S3-server usually does not
-// output anything but start and end messages.
+// Golang prefers "x/sys/unix" over "syscall".  "SysProcAttr" is the
+// same in x.sys.unix and syscall.
 
 import (
+	"bufio"
 	"context"
 	//"encoding/json"
 	"fmt"
-	//"log"
+	"log"
 	//"time"
 	//"reflect"
 	//"os"
 	"os/exec"
+	"os/user"
+	"sync"
 	//"os/signal"
-	//"syscall"
 	"bytes"
-	"time"
+	//"syscall"
+	"golang.org/x/sys/unix"
+	//"strconv"
+	//"time"
 	//"testing"
 )
+
+// A manager watches the backend server state and records
+// its outputs in the logs.  The first few lines from a server is used
+// to check its start.  A server usually does not output anything
+// later except on errors.
+//
+// MEMO: When a shutdown fails, a manager tries to kill a server by
+// sudo's signal forwarding.  It works because sudo runs with the same
+// RUID.  PDEATHSIG to exec.Command nor prctl(PR_SET_PDEATHSIG) does
+// not work because of sudo.
+
+type backend_s3i interface {
+	check_startup()
+	shutdown()
+}
 
 type backend_s3 struct {
 	exec.Cmd
@@ -34,84 +53,7 @@ type backend_s3 struct {
 	// It looks for a specific message.  Also, it detects a closure of
 	// stdout (a process exit) or a timeout.
 	//     func wait_to_come_up(cmd exec.Cmd) (bool, bool)
-}
 
-func try_start_server(port int, user int, group int, directory string) {
-	//pool_id = self._pool_id
-	//tables = self._tables
-	//address = f":{port}"
-
-	var server_start_timeout = 1000 * time.Millisecond
-
-	//var bin_sudo = "/usr/bin/sudo"
-	//var bin_minio = "/home/users/m-matsuda/bin/doit.sh"
-	//var argv = []string{
-	//	bin_sudo,
-	//	"-n",
-	//	"-u", user,
-	//	"-g", group,
-	//	bin_minio,
-	//	"--json", "--anonymous", "server",
-	//	"--address", address, directory}
-
-	{
-		fmt.Println("Manager (pool={pool_id}) starting MinIO: {cmd}")
-
-		//	var attr = syscall.ProcAttr{
-		//        Dir:   "/tmp",
-		//        Env:   []string{},
-		//        Files: []uintptr{fstdin.Fd(), fstdout.Fd(), fstderr.Fd()},
-		//        Sys: &syscall.SysProcAttr{
-		//			Foreground: false,
-		//		},
-		//	}
-
-		//self._set_alarm(self._minio_start_timeout, "start-minio")
-		var ctx, cancel = context.WithTimeout(context.Background(),
-			server_start_timeout)
-		defer cancel()
-		var cmd = exec.CommandContext(ctx, "sleep", "5")
-		var err = cmd.Run()
-		if err != nil {
-			fmt.Println("cmd.Run() errs")
-		}
-		var _, _ = wait_for_server_to_come_up(cmd)
-
-		//self._set_alarm(0, None)
-		select {
-		case <-ctx.Done():
-			fmt.Println("ctx.Done()")
-			fmt.Println(ctx.Err())
-		}
-
-		//	if ok {
-		//		fmt.Println("Manager (pool={pool_id}) MinIO started.")
-		//		//self._minio_ep = host_port(self._mux_host, port)
-		//		//return (p, True)
-		//	} else {
-		//		//self._minio_ep = None
-		//		//return (None, continuable)
-		//	}
-	}
-
-	//defer func() {
-	//	// (e is SubprocessError, OSError, ValueError, usually).
-	//	m = rephrase_exception_message(e)
-	//	logger.error(f"Manager (pool={pool_id}) Starting MinIO failed:"
-	//		f" command=({cmd}); exception=({m})",
-	//		exc_info=True)
-	//	reason = Pool_Reason.EXEC_FAILED + f"{m}"
-	//	set_pool_state(tables, pool_id, Pool_State.INOPERABLE, reason)
-	//	self._minio_ep = None
-	//	return (None, False)
-	//}
-	//defer func() {
-	//	self._set_alarm(0, None)
-	//	pass
-	//}()
-	//assert p is None
-	//self._minio_ep = None
-	//return (None, True)
 }
 
 type backend_minio struct{}
@@ -121,7 +63,105 @@ func (*backend_minio) wait_to_come_up(cmd *exec.Cmd) (bool, bool) {
 }
 
 func wait_for_server_to_come_up(cmd *exec.Cmd) (bool, bool) {
-	var server = new(backend_minio)
-	var ok, continuable = server.wait_to_come_up(cmd)
+	var srv = new(backend_minio)
+	var ok, continuable = srv.wait_to_come_up(cmd)
 	return ok, continuable
+}
+
+// TRY_START_SERVER starts a process and waits for a message or a
+// timeout.  A message from the server is one that indicates a
+// success/failure.
+func try_start_server(port int) {
+	var u, err4 = user.Current()
+	assert_fatal(err4 == nil)
+
+	var ch1 = make(chan struct {
+		int
+		string
+	})
+
+	var bin_sudo = "/usr/bin/sudo"
+	var bin_minio = "/usr/local/bin/minio"
+	var address = "localhost:8080"
+	var user = "#" + u.Uid
+	var group = "#" + u.Gid
+	var directory = u.HomeDir + "/pool-x"
+	var argv = []string{
+		"-n",
+		"-u", user,
+		"-g", group,
+		bin_minio,
+		"--json", "--anonymous", "server",
+		"--address", address, directory}
+	var ctx = context.Background()
+	var cmd = exec.CommandContext(ctx, bin_sudo, argv...)
+	if cmd == nil {
+		panic("cmd=nil")
+	}
+	assert_fatal(cmd.SysProcAttr == nil)
+	cmd.SysProcAttr = &unix.SysProcAttr{
+		Setsid:     true,
+		Setctty:    false,
+		Noctty:     false,
+		Foreground: false,
+		Pdeathsig:  unix.SIGTERM,
+	}
+	cmd.Stdin = nil
+	var o1, err1 = cmd.StdoutPipe()
+	if err1 != nil {
+		log.Fatal(err1)
+	}
+	var e2, err2 = cmd.StderrPipe()
+	if err2 != nil {
+		log.Fatal(err2)
+	}
+	var err3 = cmd.Start()
+	if err3 != nil {
+		fmt.Println("cmd.Start() err=", err3)
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		var sc1 = bufio.NewScanner(o1)
+		for sc1.Scan() {
+			var s2 = sc1.Text()
+			ch1 <- struct {
+				int
+				string
+			}{1, s2}
+		}
+		fmt.Println("close(out)")
+		//close(ch1)
+	}()
+	go func() {
+		defer wg.Done()
+		var sc2 = bufio.NewScanner(e2)
+		for sc2.Scan() {
+			var s3 = sc2.Text()
+			ch1 <- struct {
+				int
+				string
+			}{2, s3}
+		}
+		fmt.Println("close(err)")
+		//close(ch1)
+	}()
+	go func() {
+		wg.Wait()
+		close(ch1)
+	}()
+
+	//go func() {
+	for {
+		var x1, ok1 = <-ch1
+		if !ok1 {
+			fmt.Println("CLOSED")
+			break
+		}
+		fmt.Println("LINE: ", x1.int, x1.string)
+	}
+	fmt.Println("DONE")
+	//} ()
 }

@@ -21,7 +21,7 @@ install::
 	go install .
 
 clean::
-	go clean -i -r -x
+	go clean -i -r -x -cache -testcache -modcache -fuzzcache
 
 fix::
 	go fix
@@ -30,3 +30,6 @@ get::
 	go get -u golang.org/x/sys
 	go get -u github.com/go-redis/redis/v8
 	go get -u gopkg.in/yaml.v3
+
+mod::
+	go mod graph

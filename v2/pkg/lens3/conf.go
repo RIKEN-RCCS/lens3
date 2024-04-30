@@ -3,19 +3,14 @@
 // Copyright 2022-2024 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
 
+// Conf files are read and checked against structures.  It accepts
+// extra fields.
+
 package lens3
-
-// Conf files are in yaml, and they are read
-// and checked against json schema.
-
-// https://pkg.go.dev/gopkg.in/yaml.v3@v3.0.1
-// == https://gopkg.in/yaml.v3
-// https://pkg.go.dev/sigs.k8s.io/yaml
 
 import (
 	"encoding/json"
 	"fmt"
-	"gopkg.in/yaml.v3"
 	"io/ioutil"
 	//"reflect"
 )
@@ -135,15 +130,16 @@ type Gunicorn_conf struct {
 	Log_syslog_facility string
 }
 
-// Read_yaml_conf reads a configuration file and checks a structure is
+// Read_conf reads a configuration file and checks a structure is
 // properly filled.
-func Read_yaml_conf(file_ string) interface{} {
-	var b1, err1 = ioutil.ReadFile("conf.yaml")
+func Read_conf(file_ string) interface{} {
+	var _, err1 = ioutil.ReadFile("conf.yaml")
 	if err1 != nil {
 		panic(err1)
 	}
 	var yaml2 = make(map[string]interface{})
-	var err2 = yaml.Unmarshal(b1, &yaml2)
+	//var err2 = yaml.Unmarshal(b1, &yaml2)
+	var err2 error = nil
 	if err2 != nil {
 		panic(err2)
 	}

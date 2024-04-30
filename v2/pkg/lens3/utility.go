@@ -5,21 +5,28 @@
 
 package lens3
 
-// GOLANG VERSION: "slices" is not used, because Golang is v1.21 in
-// Linux Rocky8, as of 2023-04-01.  "slices" is from v1.22.
+// GOLANG VERSIONS: "slices" is from v1.22.  Note Golang is v1.21 in
+// Linux Rocky8/9 as of 2023-04-01.
 
 import (
 	//"context"
 	//"encoding/json"
 	//"fmt"
 	//"github.com/go-redis/redis/v8"
-	//"log"
+	"log/slog"
 	"sort"
 	"time"
 	//"slices"
 	"math/rand"
 	"reflect"
+	"runtime"
 )
+
+// FATAL_ERROR is a panic argument to stop the service as recover()
+// does not handle this.  Usage:panic(&fatal_error{"message string"}).
+type fatal_error struct {
+	msg string
+}
 
 // STRING_SORT sorts strings non-destructively.  It currently uses
 // sort.Strings().  It will use slices.Sort in Go-1.22 and later.
@@ -47,6 +54,8 @@ func assert_fatal(c bool) {
 		panic("assert fail")
 	}
 }
+
+var logger = slog.Default()
 
 const access_key_length = 20
 const secret_key_length = 48
@@ -78,4 +87,13 @@ func generate_secret_key() string {
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
+}
+
+// get_function_name returns a printable name of a function.
+//
+//	var n = get_function_name(cmd.Cancel)
+//	fmt.Println("cmd.Cancel=", n)
+//	"cmd.Cancel= os/exec.CommandContext.func1"
+func get_function_name(f any) string {
+	return runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name()
 }

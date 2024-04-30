@@ -18,6 +18,14 @@ import (
 	//"reflect"
 )
 
+type backend_minio struct {
+	backend_process
+}
+
+func (svr *backend_minio) get_generic_part() *backend_process {
+	return &(svr.backend_process)
+}
+
 type keyval = map[string]interface{}
 
 // Messages from MinIO at its start-up.
@@ -88,7 +96,7 @@ func get_string(m map[string]interface{}, k string) string {
 func (svr *backend_minio) check_startup(int, []string) start_result {
 	fmt.Println("minio.check_startup()")
 	return start_result{
-		start_state: start_started,
+		start_state: start_ongoing,
 		message:     "OK",
 	}
 }

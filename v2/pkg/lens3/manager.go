@@ -49,7 +49,14 @@ import (
 
 type backend interface {
 	get_generic_part() *backend_process
+
+	// CHECK_STARTUP checks a start of a server. It is called each
+	// time a server outputs a part of a message.  It looks for a
+	// specific message.  The first argument indicates stdout=1 or
+	// stderr=2.  The strings are all accumulated from the start.
 	check_startup(int, []string) start_result
+
+	// SHUTDOWN stops a server by its specific way.
 	shutdown()
 }
 
@@ -59,19 +66,6 @@ type backend_process struct {
 
 	//stdout_buffer bytes.Buffer
 	//stderr_buffer bytes.Buffer
-
-	// wait_to_come_up checks a server start by messages it outputs.
-	// It looks for a specific message.  Also, it detects a closure of
-	// stdout (a process exit) or a timeout.
-	//     func wait_to_come_up(cmd exec.Cmd) (bool, bool)
-}
-
-type backend_minio struct {
-	backend_process
-}
-
-func (svr *backend_minio) get_generic_part() *backend_process {
-	return &(svr.backend_process)
 }
 
 // TRY_START_SERVER starts a process and waits for a message or a
@@ -135,10 +129,7 @@ func try_start_server(port int) {
 		var sc1 = bufio.NewScanner(o1)
 		for sc1.Scan() {
 			var s2 = sc1.Text()
-			ch1 <- struct {
-				int
-				string
-			}{1, s2}
+			ch1 <- stdio_message{on_out, s2}
 		}
 		fmt.Println("close(out)")
 		//close(ch1)
@@ -148,10 +139,7 @@ func try_start_server(port int) {
 		var sc2 = bufio.NewScanner(e2)
 		for sc2.Scan() {
 			var s3 = sc2.Text()
-			ch1 <- struct {
-				int
-				string
-			}{2, s3}
+			ch1 <- stdio_message{on_err, s3}
 		}
 		fmt.Println("close(err)")
 		//close(ch1)
@@ -198,15 +186,14 @@ func kill_server__(pid int) {
 	fmt.Println("unix.Kill()", err1)
 }
 
-func (*backend_minio) wait_to_come_up(cmd *exec.Cmd) (bool, bool) {
-	return true, true
-}
-
 const (
 	on_out int = iota + 1
 	on_err
 )
 
+// STDIO_MESSAGE is a message passed through a channel.  Each is one
+// line of a message.  ON_OUT or ON_ERR indicates a message is from
+// stdout or stderr.
 type stdio_message struct {
 	int
 	string
@@ -238,27 +225,38 @@ func wait_for_server_come_up(svr backend) start_result {
 	var msg_out []string
 	var msg_err []string
 
-	defer drain_messages_to_log(msg_out, msg_err)
+	defer func() {
+		// Let defer call a closure to refer to finally collected
+		// msg_out and msg_err.
+		drain_messages_to_log(msg_out, msg_err)
+	}()
 
 	var to = time.After(60 * time.Second)
 	for {
 		select {
 		case msg, ok1 := <-cmd.ch_stdio:
 			if !ok1 {
-				var r1 = start_result{
+				return start_result{
 					start_state: start_failed,
 					message:     "pipe closed",
 				}
-				return r1
 			}
+			//fmt.Println("MSG:", msg)
 			switch msg.int {
 			case on_out:
 				msg_out = append(msg_out, msg.string)
 				var st1 = svr.check_startup(on_out, msg_out)
 				switch st1.start_state {
 				case start_ongoing:
+					if len(msg_out) > 500 {
+						return start_result{
+							start_state: start_failed,
+							message:     "stdout flooding",
+						}
+					}
 					continue
 				case start_started:
+					fmt.Println("*SERVER COME UP*")
 					return st1
 				case start_to_retry:
 					return st1
@@ -267,6 +265,13 @@ func wait_for_server_come_up(svr backend) start_result {
 				}
 			case on_err:
 				msg_err = append(msg_err, msg.string)
+				if len(msg_err) > 500 {
+					return start_result{
+						start_state: start_failed,
+						message:     "stderr flooding",
+					}
+				}
+				continue
 			default:
 				panic(&fatal_error{"never"})
 			}
@@ -281,10 +286,14 @@ func wait_for_server_come_up(svr backend) start_result {
 }
 
 func drain_messages_to_log(outs []string, errs []string) {
-	for _, _ = range outs {
+	fmt.Println("drain_messages_to_log")
+	var s string
+	for _, s = range outs {
+		fmt.Println("LINE:", s)
 		//log.Info(m)
 	}
-	for _, _ = range errs {
+	for _, s = range errs {
+		fmt.Println("LINE:", s)
 		//log.Info(m)
 	}
 }

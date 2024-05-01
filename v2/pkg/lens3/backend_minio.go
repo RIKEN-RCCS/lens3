@@ -22,7 +22,7 @@ type backend_minio struct {
 	backend_process
 }
 
-func (svr *backend_minio) get_generic_part() *backend_process {
+func (svr *backend_minio) get_super_part() *backend_process {
 	return &(svr.backend_process)
 }
 
@@ -60,41 +60,78 @@ func find_one(mm []map[string]interface{}, f func(map[string]interface{}) bool) 
 	return nil, false
 }
 
-func check_no_fatal(mm []map[string]interface{}) bool {
-	var _, any = find_one(mm, has_level_fatal)
-	return any
+func check_fatal_exists(mm []map[string]interface{}) (map[string]interface{}, bool) {
+	return find_one(mm, has_level_fatal)
 }
 
+// Note It works with a missing key, because fetching a missing key
+// from a map returns a zero-value.
 func has_level_fatal(m map[string]interface{}) bool {
 	return (m["level"] == "FATAL")
 }
 
-func has_expected_response(m map[string]interface{}) bool {
-	var s1, ok = m["message"]
-	if ok {
-		switch s := s1.(type) {
-		case string:
-			return strings.HasPrefix(s, minio_expected_response)
-		default:
-			panic("backend bad message")
-		}
-	} else {
-		return false
-	}
+func check_expected_exists(mm []map[string]interface{}) (map[string]interface{}, bool) {
+	return find_one(mm, has_expected_response)
 }
 
-// get_string returns a string field at the key k in the map m.  A
-// field missing or a non-string invokes a panic.
-func get_string(m map[string]interface{}, k string) string {
-	var m1, ok1 = m["message"]
-	assert_fatal(ok1)
+func has_expected_response(m map[string]interface{}) bool {
+	var s = get_string(m, "message")
+	return strings.HasPrefix(s, minio_expected_response)
+}
+
+// GET_STRING returns a string field at the key in the map m.  It
+// returns "", if a field is missing or non-string.
+func get_string(m map[string]interface{}, key string) string {
+	var m1, ok1 = m[key]
+	if !ok1 {
+		// assert_fatal(ok1)
+		return ""
+	}
 	var m2, ok2 = m1.(string)
-	assert_fatal(ok2)
+	if !ok2 {
+		// assert_fatal(ok2)
+		return ""
+	}
 	return m2
 }
 
-func (svr *backend_minio) check_startup(int, []string) start_result {
+func (svr *backend_minio) check_startup(outerr int, ss []string) start_result {
 	fmt.Println("minio.check_startup()")
+	var mm = decode_json(ss)
+	//fmt.Printf("mm=%T\n", mm)
+	if len(mm) == 0 {
+		return start_result{
+			start_state: start_ongoing,
+			message:     "OK",
+		}
+	}
+	var m1, fatal1 = check_fatal_exists(mm)
+	if fatal1 {
+		assert_fatal(m1 != nil)
+		var msg = get_string(m1, "message")
+		switch {
+		case strings.HasPrefix(msg, minio_response_port_in_use):
+			return start_result{
+				start_state: start_to_retry,
+				message:     msg,
+			}
+		default:
+			return start_result{
+				start_state: start_failed,
+				message:     msg,
+			}
+		}
+	}
+	var m2, expected1 = check_expected_exists(mm)
+	if expected1 {
+		assert_fatal(m2 != nil)
+		var msg = get_string(m2, "message")
+		fmt.Println("EXPECTED=", msg)
+		return start_result{
+			start_state: start_started,
+			message:     msg,
+		}
+	}
 	return start_result{
 		start_state: start_ongoing,
 		message:     "OK",

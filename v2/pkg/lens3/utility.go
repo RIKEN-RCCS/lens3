@@ -10,9 +10,10 @@ package lens3
 
 import (
 	//"context"
-	//"encoding/json"
-	//"fmt"
+	"encoding/json"
+	"fmt"
 	//"github.com/go-redis/redis/v8"
+	"io"
 	"log/slog"
 	"sort"
 	"time"
@@ -96,4 +97,53 @@ func init() {
 //	"cmd.Cancel= os/exec.CommandContext.func1"
 func get_function_name(f any) string {
 	return runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name()
+}
+
+func dump_threads() {
+	var buf = make([]byte, 1<<16)
+	var len = runtime.Stack(buf, true)
+	fmt.Println("runtime.Stack()")
+	fmt.Printf("%s", buf[:len])
+}
+
+// STRINGS_READER is strings.Reader but for multiple strings.  It
+// skips empty strings.  It implements an io.Reader interface.
+type strings_reader struct {
+	ss       []string
+	pos, ind int
+}
+
+func (r *strings_reader) Read(b []byte) (n int, err error) {
+	for r.pos < len(r.ss) && len(r.ss[r.pos]) == 0 {
+		r.pos++
+	}
+	if r.pos == len(r.ss) {
+		return 0, io.EOF
+	}
+	n = copy(b, r.ss[r.pos][r.ind:])
+	r.ind += n
+	if r.ind == len(r.ss[r.pos]) {
+		r.ind = 0
+		r.pos++
+	}
+	return n, nil
+}
+
+// DECODE_JSON reads records from a concatenation of strings, and
+// returns as many as possible.  Decoder error just stops decoding.
+func decode_json(ss []string) []map[string]interface{} {
+	var r = &strings_reader{ss, 0, 0}
+	var dec = json.NewDecoder(r)
+
+	var mm []map[string]interface{}
+	for dec.More() {
+		var m map[string]interface{}
+		var err1 = dec.Decode(&m)
+		if err1 != nil {
+			break
+		}
+		// fmt.Printf("json.Decode()=%v\n", m)
+		mm = append(mm, m)
+	}
+	return mm
 }

@@ -3,18 +3,21 @@
 // Copyright 2022-2024 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
 
-// A manager watches the backend server state and records
-// its outputs in the logs.  The first few lines from a server is used
-// to check its start.  A server usually does not output anything
-// later except on errors.
+// A manager watches the backend server state and records its outputs
+// in logs.  The first few lines from a server is used to check its
+// start.  A server usually does not output anything later except on
+// errors.
 //
 // MEMO: A manager tries to kill a server by sudo's signal forwarding,
 // when a shutdown fails.  Signal forwarding works because sudo runs
 // with the same RUID.  PDEATHSIG in exec/Command nor
-// prctl(PR_SET_PDEATHSIG) does not work because of sudo.  Also, a
-// default in exec/Command.Cancel kills with SIGKILL, and it does not
-// work with sudo.  See "src/os/exec/exec.go".  A cancel function is
-// replaced by one with SIGTERM.
+// prctl(PR_SET_PDEATHSIG) does not work because of sudo.  The default
+// in exec/Command.Cancel kills with SIGKILL, and it does not work
+// with sudo.  See "src/os/exec/exec.go".  A cancel function is
+// replaced by one with SIGTERM, (though it won't be used).
+
+// os.Signal is an interface, unix.Signal, syscall.Signal are
+// identical and concrete.
 
 package lens3
 
@@ -32,11 +35,12 @@ import (
 	//"log/slog"
 	"time"
 	//"reflect"
-	//"os"
+	//"io"
+	"os"
 	"os/exec"
+	"os/signal"
 	"os/user"
 	"sync"
-	//"os/signal"
 	//"bytes"
 	//"syscall"
 	"golang.org/x/sys/unix"
@@ -48,12 +52,14 @@ import (
 )
 
 type backend interface {
-	get_generic_part() *backend_process
+	// GET_SUPER_PART returns a generic part or a superclass.
+	get_super_part() *backend_process
 
 	// CHECK_STARTUP checks a start of a server. It is called each
 	// time a server outputs a part of a message.  It looks for a
-	// specific message.  The first argument indicates stdout=1 or
-	// stderr=2.  The strings are all accumulated from the start.
+	// specific message.  The first argument indicates stdout=on_out
+	// or stderr=on_err.  The strings are all accumulated from the
+	// start.
 	check_startup(int, []string) start_result
 
 	// SHUTDOWN stops a server by its specific way.
@@ -63,9 +69,22 @@ type backend interface {
 type backend_process struct {
 	*exec.Cmd
 	ch_stdio chan stdio_message
+}
 
-	//stdout_buffer bytes.Buffer
-	//stderr_buffer bytes.Buffer
+type backend_manager struct {
+	// PROC maps a PID to a process record.  PID is int in "os".
+	proc map[int]backend_process
+
+	// CH_SIG is a channel to receive SIGCHLD.
+	ch_sig chan os.Signal
+}
+
+// (A single manager instance).
+var manager = backend_manager{}
+
+func start_manager(manager *backend_manager) {
+	manager.ch_sig = set_signal_handling()
+	go reap_child(manager)
 }
 
 // TRY_START_SERVER starts a process and waits for a message or a
@@ -104,50 +123,27 @@ func try_start_server(port int) {
 		Foreground: false,
 		Pdeathsig:  unix.SIGTERM,
 	}
-	cmd.Stdin = nil
-	var o1, err1 = cmd.StdoutPipe()
-	if err1 != nil {
-		log.Fatal(err1)
-	}
-	var e2, err2 = cmd.StderrPipe()
-	if err2 != nil {
-		log.Fatal(err2)
-	}
-	var err3 = cmd.Start()
-	if err3 != nil {
-		fmt.Println("cmd.Start() err=", err3)
-	}
 
 	cmd.Cancel = func() error {
 		return cmd.Process.Signal(unix.SIGTERM)
 	}
 
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		var sc1 = bufio.NewScanner(o1)
-		for sc1.Scan() {
-			var s2 = sc1.Text()
-			ch1 <- stdio_message{on_out, s2}
-		}
-		fmt.Println("close(out)")
-		//close(ch1)
-	}()
-	go func() {
-		defer wg.Done()
-		var sc2 = bufio.NewScanner(e2)
-		for sc2.Scan() {
-			var s3 = sc2.Text()
-			ch1 <- stdio_message{on_err, s3}
-		}
-		fmt.Println("close(err)")
-		//close(ch1)
-	}()
-	go func() {
-		wg.Wait()
-		close(ch1)
-	}()
+	cmd.Stdin = nil
+
+	var proc = backend_process{
+		cmd,
+		ch1,
+	}
+	var svr = backend_minio{
+		proc,
+	}
+
+	drain_stdio(&proc)
+
+	var err3 = cmd.Start()
+	if err3 != nil {
+		fmt.Println("cmd.Start() err=", err3)
+	}
 
 	go func() {
 		time.Sleep(10 * time.Second)
@@ -157,13 +153,6 @@ func try_start_server(port int) {
 			fmt.Println("cmd.Cancel()=", err5)
 		}
 	}()
-
-	var svr = backend_minio{
-		backend_process{
-			cmd,
-			ch1,
-		},
-	}
 
 	var r1 = wait_for_server_come_up(&svr)
 	fmt.Println("DONE state=", r1.start_state, r1.message)
@@ -178,7 +167,55 @@ func try_start_server(port int) {
 		fmt.Println("LINE: ", x1.int, x1.string)
 	}
 	fmt.Println("DONE")
+
+	/*dump_threads()*/
 	//} ()
+}
+
+// DRAIN_STDIO spawns threads for draining stdout+stderr to a channel
+// until closed.  It returns immediately.  It drains one line at a
+// time.  It closes the channel when both are closed.
+func drain_stdio(proc *backend_process) {
+	var cmd *exec.Cmd = proc.Cmd
+	var ch1 chan stdio_message = proc.ch_stdio
+	// var o1, e1 io.ReadCloser
+
+	var o1, err1 = cmd.StdoutPipe()
+	if err1 != nil {
+		log.Fatal(err1)
+	}
+	var e1, err2 = cmd.StderrPipe()
+	if err2 != nil {
+		log.Fatal(err2)
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		var sc1 = bufio.NewScanner(o1)
+		for sc1.Scan() {
+			var s1 = sc1.Text()
+			ch1 <- stdio_message{on_out, s1}
+		}
+		fmt.Println("close(out)")
+	}()
+
+	go func() {
+		defer wg.Done()
+		var sc2 = bufio.NewScanner(e1)
+		for sc2.Scan() {
+			var s2 = sc2.Text()
+			ch1 <- stdio_message{on_err, s2}
+		}
+		fmt.Println("close(err)")
+	}()
+
+	go func() {
+		wg.Wait()
+		close(ch1)
+	}()
 }
 
 func kill_server__(pid int) {
@@ -218,7 +255,7 @@ const (
 // many messages, (4) reaches a timeout, (5) closes both
 // stdout+stderr.  It returns STARTED/TO_RETRY/FAILED.
 func wait_for_server_come_up(svr backend) start_result {
-	var cmd *backend_process = svr.get_generic_part()
+	var cmd *backend_process = svr.get_super_part()
 
 	fmt.Printf("WAIT_FOR_SERVER_COME_UP() svr=%T cmd=%T\n", svr, cmd)
 
@@ -226,7 +263,7 @@ func wait_for_server_come_up(svr backend) start_result {
 	var msg_err []string
 
 	defer func() {
-		// Let defer call a closure to refer to finally collected
+		// It defers calling a closure to refer to finally collected
 		// msg_out and msg_err.
 		drain_messages_to_log(msg_out, msg_err)
 	}()
@@ -296,4 +333,48 @@ func drain_messages_to_log(outs []string, errs []string) {
 		fmt.Println("LINE:", s)
 		//log.Info(m)
 	}
+}
+
+func set_signal_handling() chan os.Signal {
+	fmt.Println("set_signal_handling()")
+	var ch = make(chan os.Signal, 1)
+	signal.Notify(ch, unix.SIGCHLD, unix.SIGHUP)
+	return ch
+}
+
+func reap_child(manager *backend_manager) {
+	fmt.Println("reap_child() start")
+	//proc map[int]backend_process
+	//ch_sig chan sycall.Signal
+	for sig := range manager.ch_sig {
+		switch sig {
+		case unix.SIGCHLD:
+			fmt.Println("Got SIGCHLD")
+			var wstatus unix.WaitStatus
+			var options int = unix.WNOHANG
+			var rusage unix.Rusage
+			var wpid, err1 = unix.Wait4(-1, &wstatus, options, &rusage)
+			fmt.Println("wait4 wpid=", wpid, "err1=", err1)
+			if err1 != nil {
+				var err, ok = err1.(unix.Errno)
+				if !ok {
+					fmt.Println("bad error from wait")
+				} else {
+					if err == unix.ECHILD {
+						fmt.Println("wait but no children")
+					} else {
+						fmt.Println("errno=", err)
+					}
+				}
+			} else {
+				fmt.Println("wait pid=", wpid, "status=", wstatus, "rusage=", rusage)
+			}
+		case unix.SIGHUP:
+			fmt.Println("SIGHUP")
+		default:
+			// unix.SignalName(sig)
+			fmt.Println("unhandled signal SIG=", sig)
+		}
+	}
+	fmt.Println("reap_child() channel closed")
 }

@@ -51,47 +51,163 @@ import (
 	//"testing"
 )
 
+// BACKEND specific part.  A backend never start its own threads.
 type backend interface {
 	// GET_SUPER_PART returns a generic part or a superclass.
-	get_super_part() *backend_process
+	get_super_part() *backend_generic
 
 	// CHECK_STARTUP checks a start of a server. It is called each
-	// time a server outputs a part of a message.  It looks for a
-	// specific message.  The first argument indicates stdout=on_out
-	// or stderr=on_err.  The strings are all accumulated from the
-	// start.
+	// time a server outputs a line of a message.  It looks for a
+	// specific message.  The first argument indicates stdout or
+	// stderr by values on_out and on_err.  The passed strings are
+	// accumulated all from the start.
 	check_startup(int, []string) start_result
 
 	// SHUTDOWN stops a server by its specific way.
 	shutdown()
+
+	// HEARTBEAT pings a server and returns an http status.
+	heartbeat() int
 }
 
-type backend_process struct {
-	*exec.Cmd
+type backend_generic struct {
+	pool_id string
+
+	// CH_QUIT is to inform stopping the server by closing.  Every
+	// thread for this server shall quit.
+	ch_quit chan struct{}
+
+	cmd      *exec.Cmd
 	ch_stdio chan stdio_message
+
+	ep string
+
+	heartbeat_misses int
+
+	heartbeat_timeout int
+
+	verbose bool
+
+	/* **************** */
+
+	//mux_host int
+	//mux_port int
+	//mux_ep int
+	//port_min int
+	//port_max int
+	//manager_pid int
 }
 
 type backend_manager struct {
 	// PROC maps a PID to a process record.  PID is int in "os".
-	proc map[int]backend_process
+	proc map[int]backend
 
 	// CH_SIG is a channel to receive SIGCHLD.
 	ch_sig chan os.Signal
+
+	//ctl_param map[string]any
+
+	bin_sudo string
+
+	server_setup_at_start        bool
+	server_awake_duration        int
+	heartbeat_interval           int
+	heartbeat_tolerance          int
+	heartbeat_timeout            int
+	server_start_timeout         int
+	server_setup_timeout         int
+	server_stop_timeout          int
+	server_setup_control_timeout int
+	watch_gap_minimal            int
+	manager_expiry               int
 }
 
 // (A single manager instance).
-var manager = backend_manager{}
+var manager = backend_manager{
+	proc: make(map[int]backend),
 
-func start_manager(manager *backend_manager) {
-	manager.ch_sig = set_signal_handling()
-	go reap_child(manager)
+	heartbeat_tolerance: 3,
+}
+
+func start_manager(m *backend_manager) {
+	m.ch_sig = set_signal_handling()
+	go reap_gone_child(m)
+
+	{
+		var svr = start_server(m)
+		logger.Info(fmt.Sprint("start_server()=", svr))
+		var proc = svr.get_super_part()
+
+		go ping_server(m, svr)
+
+		fmt.Println("CANCEL IN 10 SEC")
+		time.Sleep(10 * time.Second)
+		fmt.Println("cmd.Cancel()")
+		var err5 = proc.cmd.Cancel()
+		if err5 != nil {
+			fmt.Println("cmd.Cancel()=", err5)
+		}
+
+		fmt.Println("MORE 5 SEC")
+		time.Sleep(5 * time.Second)
+	}
+}
+
+func ping_server(m *backend_manager, svr backend) {
+	var proc = svr.get_super_part()
+	proc.heartbeat_misses = 0
+	for {
+		time.Sleep(1 * time.Second)
+		fmt.Println("svr.heartbeat()", proc.heartbeat_misses)
+		var status = svr.heartbeat()
+		if status == 200 {
+			proc.heartbeat_misses = 0
+		} else {
+			proc.heartbeat_misses += 1
+		}
+		if proc.heartbeat_misses > m.heartbeat_tolerance {
+			logger.Info("Manager (pool={pool_id})" +
+				" Heartbeating server failed:" +
+				" misses={self._heartbeat_misses}")
+			raise(termination("MinIO heartbeat failure"))
+		}
+	}
+}
+
+func start_server(m *backend_manager) backend {
+	var svr, _ = try_start_server(8001)
+	fmt.Println("try_start_server()=", svr)
+	var proc = svr.get_super_part()
+	var pid = proc.cmd.Process.Pid
+	m.proc[pid] = svr
+
+	go barf_stdio_to_log(proc)
+
+	return svr
+}
+
+func stop_server(m *backend_manager, svr backend) {
+	var proc = svr.get_super_part()
+	close(proc.ch_quit)
+}
+
+func barf_stdio_to_log(proc *backend_generic) {
+	var ch1 = proc.ch_stdio
+	for {
+		var x1, ok1 = <-ch1
+		if !ok1 {
+			fmt.Println("CLOSED")
+			break
+		}
+		fmt.Println("LINE: ", x1.int, x1.string)
+	}
 }
 
 // TRY_START_SERVER starts a process and waits for a message or a
 // timeout.  A message from the server is one that indicates a
 // success/failure.  Note that it changes a cancel function from
 // SIGKILL to SIGTERM to make it work with sudo.
-func try_start_server(port int) {
+func try_start_server(port int) (backend, start_result) {
 	var u, err4 = user.Current()
 	assert_fatal(err4 == nil)
 
@@ -130,12 +246,17 @@ func try_start_server(port int) {
 
 	cmd.Stdin = nil
 
-	var proc = backend_process{
-		cmd,
-		ch1,
+	var proc = backend_generic{
+		cmd:      cmd,
+		ch_stdio: ch1,
+
+		pool_id:           "",
+		ep:                "localhost:8080",
+		heartbeat_timeout: 60,
+		verbose:           true,
 	}
 	var svr = backend_minio{
-		proc,
+		backend_generic: proc,
 	}
 
 	drain_stdio(&proc)
@@ -145,38 +266,20 @@ func try_start_server(port int) {
 		fmt.Println("cmd.Start() err=", err3)
 	}
 
-	go func() {
-		time.Sleep(10 * time.Second)
-		fmt.Println("cmd.Cancel()")
-		var err5 = cmd.Cancel()
-		if err5 != nil {
-			fmt.Println("cmd.Cancel()=", err5)
-		}
-	}()
-
 	var r1 = wait_for_server_come_up(&svr)
+	fmt.Println("DONE DONE DONE DONE")
 	fmt.Println("DONE state=", r1.start_state, r1.message)
-
-	//go func() {
-	for {
-		var x1, ok1 = <-ch1
-		if !ok1 {
-			fmt.Println("CLOSED")
-			break
-		}
-		fmt.Println("LINE: ", x1.int, x1.string)
-	}
-	fmt.Println("DONE")
 
 	/*dump_threads()*/
 	//} ()
+	return &svr, r1
 }
 
 // DRAIN_STDIO spawns threads for draining stdout+stderr to a channel
 // until closed.  It returns immediately.  It drains one line at a
 // time.  It closes the channel when both are closed.
-func drain_stdio(proc *backend_process) {
-	var cmd *exec.Cmd = proc.Cmd
+func drain_stdio(proc *backend_generic) {
+	var cmd *exec.Cmd = proc.cmd
 	var ch1 chan stdio_message = proc.ch_stdio
 	// var o1, e1 io.ReadCloser
 
@@ -255,9 +358,9 @@ const (
 // many messages, (4) reaches a timeout, (5) closes both
 // stdout+stderr.  It returns STARTED/TO_RETRY/FAILED.
 func wait_for_server_come_up(svr backend) start_result {
-	var cmd *backend_process = svr.get_super_part()
+	var cmd *backend_generic = svr.get_super_part()
 
-	fmt.Printf("WAIT_FOR_SERVER_COME_UP() svr=%T cmd=%T\n", svr, cmd)
+	// fmt.Printf("WAIT_FOR_SERVER_COME_UP() svr=%T cmd=%T\n", svr, cmd)
 
 	var msg_out []string
 	var msg_err []string
@@ -342,11 +445,11 @@ func set_signal_handling() chan os.Signal {
 	return ch
 }
 
-func reap_child(manager *backend_manager) {
-	fmt.Println("reap_child() start")
-	//proc map[int]backend_process
+func reap_gone_child(m *backend_manager) {
+	fmt.Println("reap_gone_child() start")
+	//proc map[int]backend_generic
 	//ch_sig chan sycall.Signal
-	for sig := range manager.ch_sig {
+	for sig := range m.ch_sig {
 		switch sig {
 		case unix.SIGCHLD:
 			fmt.Println("Got SIGCHLD")
@@ -376,5 +479,5 @@ func reap_child(manager *backend_manager) {
 			fmt.Println("unhandled signal SIG=", sig)
 		}
 	}
-	fmt.Println("reap_child() channel closed")
+	fmt.Println("reap_gone_child() channel closed")
 }

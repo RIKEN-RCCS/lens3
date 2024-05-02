@@ -14,7 +14,8 @@ import (
 	"fmt"
 	//"github.com/go-redis/redis/v8"
 	"io"
-	"log/slog"
+	//"log"
+	//"log/syslog"
 	"sort"
 	"time"
 	//"slices"
@@ -27,6 +28,18 @@ import (
 // does not handle this.  Usage:panic(&fatal_error{"message string"}).
 type fatal_error struct {
 	msg string
+}
+
+func raise(m any) {
+	panic(m)
+}
+
+type termination_exc struct {
+	s string
+}
+
+func termination(s string) *termination_exc {
+	return &termination_exc{s}
 }
 
 // STRING_SORT sorts strings non-destructively.  It currently uses
@@ -56,7 +69,9 @@ func assert_fatal(c bool) {
 	}
 }
 
-var logger = slog.Default()
+// var logger = slog.Default()
+// var logger = syslog.New()
+var logger = logger_default()
 
 const access_key_length = 20
 const secret_key_length = 48
@@ -100,7 +115,7 @@ func get_function_name(f any) string {
 }
 
 func dump_threads() {
-	var buf = make([]byte, 1<<16)
+	var buf = make([]byte, (64 * 1024))
 	var len = runtime.Stack(buf, true)
 	fmt.Println("runtime.Stack()")
 	fmt.Printf("%s", buf[:len])

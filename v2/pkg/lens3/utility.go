@@ -14,6 +14,7 @@ import (
 	"fmt"
 	//"github.com/go-redis/redis/v8"
 	"io"
+	"os"
 	//"log"
 	//"log/syslog"
 	"sort"
@@ -22,24 +23,48 @@ import (
 	"math/rand"
 	"reflect"
 	"runtime"
+	"strings"
 )
+
+func assert_fatal(c bool) {
+	if !c {
+		panic("assert fail")
+	}
+}
+
+// ASSERT_NEVER just panics.
+func assert_never(m string) {
+	panic(m)
+}
 
 // FATAL_ERROR is a panic argument to stop the service as recover()
 // does not handle this.  Usage:panic(&fatal_error{"message string"}).
 type fatal_error struct {
-	msg string
+	m string
 }
 
-func raise(m any) {
-	panic(m)
+func (e *fatal_error) Error() string {
+	return "fatal_error:" + e.m
 }
 
 type termination_exc struct {
-	s string
+	m string
 }
 
-func termination(s string) *termination_exc {
-	return &termination_exc{s}
+func (e *termination_exc) Error() string {
+	return "termination_exc:" + e.m
+}
+
+func termination(m string) *termination_exc {
+	return &termination_exc{m}
+}
+
+func handle() any {
+	return recover()
+}
+
+func raise(e error) {
+	panic(e)
 }
 
 // STRING_SORT sorts strings non-destructively.  It currently uses
@@ -63,16 +88,6 @@ func string_search(s string, v []string) bool {
 	return i < len(v) && v[i] == s
 }
 
-func assert_fatal(c bool) {
-	if !c {
-		panic("assert fail")
-	}
-}
-
-// var logger = slog.Default()
-// var logger = syslog.New()
-var logger = logger_default()
-
 const access_key_length = 20
 const secret_key_length = 48
 
@@ -80,7 +95,7 @@ const ascii_letters_lc = "abcdefghijklmnopqrstuvwxyz"
 const ascii_letters_uc = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 const ascii_digits = "0123456789"
 
-func random_str(n int) string {
+func random_string(n int) string {
 	const astr = (ascii_letters_lc + ascii_letters_uc)
 	const bstr = (ascii_digits + ascii_letters_lc + ascii_letters_uc)
 	const alen = len(astr)
@@ -94,11 +109,11 @@ func random_str(n int) string {
 }
 
 func generate_access_key() string {
-	return random_str(access_key_length)
+	return random_string(access_key_length)
 }
 
 func generate_secret_key() string {
-	return random_str(secret_key_length)
+	return random_string(secret_key_length)
 }
 
 func init() {
@@ -145,8 +160,9 @@ func (r *strings_reader) Read(b []byte) (n int, err error) {
 }
 
 // DECODE_JSON reads records from a concatenation of strings, and
-// returns as many as possible.  Decoder error just stops decoding.
-func decode_json(ss []string) []map[string]interface{} {
+// returns as many as possible.  A decoder error just stops decoding.
+// It returns false in the secondon a decoder error.
+func decode_json(ss []string) ([]map[string]any, bool) {
 	var r = &strings_reader{ss, 0, 0}
 	var dec = json.NewDecoder(r)
 
@@ -155,10 +171,76 @@ func decode_json(ss []string) []map[string]interface{} {
 		var m map[string]interface{}
 		var err1 = dec.Decode(&m)
 		if err1 != nil {
-			break
+			return mm, false
 		}
 		// fmt.Printf("json.Decode()=%v\n", m)
 		mm = append(mm, m)
 	}
-	return mm
+	return mm, true
+}
+
+// GET_STRING returns a string field at the key in the map.  It
+// returns "", if a field is missing or non-string.
+func get_string(m map[string]any, keys ...string) string {
+	var v any
+	v = m
+	for _, key := range keys {
+		switch x1 := v.(type) {
+		case map[string]any:
+			var x2, ok1 = x1[key]
+			if !ok1 {
+				return ""
+			}
+			v = x2
+		default:
+			return ""
+		}
+	}
+	switch x3 := v.(type) {
+	case string:
+		return x3
+	default:
+		return ""
+	}
+}
+
+func get_string1(m map[string]any, key string) string {
+	var m1, ok1 = m[key]
+	if !ok1 {
+		return ""
+	}
+	var m2, ok2 = m1.(string)
+	if !ok2 {
+		return ""
+	}
+	return m2
+}
+
+// MINIMAL_ENVIRON returns a copy of environment variables that is
+// minimal to run services.
+func minimal_environ() []string {
+	var envs = []string(os.Environ())
+	var keys = string_sort([]string{
+		"HOME",
+		"LANG",
+		"LC_CTYPE",
+		"LOGNAME",
+		"PATH",
+		"SHELL",
+		"USER",
+		//"USERNAME",
+		"LENS3_CONF",
+		"LENS3_MUX_NAME",
+	})
+	var filtered []string
+	for _, e := range envs {
+		var i = strings.IndexByte(e, '=')
+		if i != -1 {
+			var k = e[:i]
+			if string_search(k, keys) {
+				filtered = append(filtered, e)
+			}
+		}
+	}
+	return filtered
 }

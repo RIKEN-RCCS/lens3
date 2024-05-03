@@ -27,6 +27,25 @@ func Test_misc(t *testing.T) {
 	//test_pipe_timeout()
 	//test_get_lines()
 	test_try_start_server()
+	//test_type_switch_on_nil()
+	//test_minimal_environ()
+}
+
+func test_minimal_environ() {
+	fmt.Println("test_type_switch_on_nil")
+	fmt.Println("minimal_environ()=", minimal_environ())
+}
+
+func test_type_switch_on_nil() {
+	fmt.Println("test_type_switch_on_nil")
+	var x error
+	x = nil
+	switch e := x.(type) {
+	case *exec.ExitError:
+		fmt.Print("e=", e)
+	case nil:
+		fmt.Print("e=", e)
+	}
 }
 
 func test_signal_handling() {

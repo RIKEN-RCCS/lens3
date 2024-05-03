@@ -38,7 +38,7 @@ import (
 	//"io"
 	"os"
 	"os/exec"
-	"os/signal"
+	//"os/signal"
 	"os/user"
 	"sync"
 	//"bytes"
@@ -51,31 +51,38 @@ import (
 	//"testing"
 )
 
-// BACKEND specific part.  A backend never start its own threads.
+type vacuous_ = struct{}
+
+// BACKEND specific part.  A backend shall not start its long-running
+// threads.  Or, it lets them enter a wait-group.
 type backend interface {
 	// GET_SUPER_PART returns a generic part or a superclass.
-	get_super_part() *backend_generic
+	get_super_part() *backend_process
 
-	// CHECK_STARTUP checks a start of a server. It is called each
+	// SETUP does a server specific initialization.
+	setup()
+
+	// CHECK_STARTUP checks a start of a server.  It is called each
 	// time a server outputs a line of a message.  It looks for a
 	// specific message.  The first argument indicates stdout or
 	// stderr by values on_out and on_err.  The passed strings are
-	// accumulated all from the start.
+	// accumulated ones all from the start.
 	check_startup(int, []string) start_result
 
-	// SHUTDOWN stops a server by its specific way.
+	// SHUTDOWN stops a server in its specific way.
 	shutdown()
 
-	// HEARTBEAT pings a server and returns an http status.
+	// HEARTBEAT pings a server and returns an http status.  It is an
+	// error but status=200.
 	heartbeat() int
 }
 
-type backend_generic struct {
+type backend_process struct {
 	pool_id string
 
 	// CH_QUIT is to inform stopping the server by closing.  Every
 	// thread for this server shall quit.
-	ch_quit chan struct{}
+	ch_quit chan vacuous_
 
 	cmd      *exec.Cmd
 	ch_stdio chan stdio_message
@@ -98,6 +105,8 @@ type backend_generic struct {
 	//manager_pid int
 }
 
+// BACKEND_MANAGER is a single object with threads of a child process
+// reaper.
 type backend_manager struct {
 	// PROC maps a PID to a process record.  PID is int in "os".
 	proc map[int]backend
@@ -105,7 +114,7 @@ type backend_manager struct {
 	// CH_SIG is a channel to receive SIGCHLD.
 	ch_sig chan os.Signal
 
-	//ctl_param map[string]any
+	// -- ctl_param map[string]any
 
 	bin_sudo string
 
@@ -131,11 +140,11 @@ var manager = backend_manager{
 
 func start_manager(m *backend_manager) {
 	m.ch_sig = set_signal_handling()
-	go reap_gone_child(m)
+	go reap_child_process(m)
 
 	{
 		var svr = start_server(m)
-		logger.Info(fmt.Sprint("start_server()=", svr))
+		logger.info(fmt.Sprint("start_server()=", svr))
 		var proc = svr.get_super_part()
 
 		go ping_server(m, svr)
@@ -166,9 +175,10 @@ func ping_server(m *backend_manager, svr backend) {
 			proc.heartbeat_misses += 1
 		}
 		if proc.heartbeat_misses > m.heartbeat_tolerance {
-			logger.Info("Manager (pool={pool_id})" +
+			logger.infof(("Manager (pool=%s)" +
 				" Heartbeating server failed:" +
-				" misses={self._heartbeat_misses}")
+				" misses=%v"),
+				proc.pool_id, proc.heartbeat_misses)
 			raise(termination("MinIO heartbeat failure"))
 		}
 	}
@@ -191,7 +201,7 @@ func stop_server(m *backend_manager, svr backend) {
 	close(proc.ch_quit)
 }
 
-func barf_stdio_to_log(proc *backend_generic) {
+func barf_stdio_to_log(proc *backend_process) {
 	var ch1 = proc.ch_stdio
 	for {
 		var x1, ok1 = <-ch1
@@ -246,7 +256,7 @@ func try_start_server(port int) (backend, start_result) {
 
 	cmd.Stdin = nil
 
-	var proc = backend_generic{
+	var proc = backend_process{
 		cmd:      cmd,
 		ch_stdio: ch1,
 
@@ -256,7 +266,7 @@ func try_start_server(port int) (backend, start_result) {
 		verbose:           true,
 	}
 	var svr = backend_minio{
-		backend_generic: proc,
+		backend_process: proc,
 	}
 
 	drain_stdio(&proc)
@@ -278,7 +288,7 @@ func try_start_server(port int) (backend, start_result) {
 // DRAIN_STDIO spawns threads for draining stdout+stderr to a channel
 // until closed.  It returns immediately.  It drains one line at a
 // time.  It closes the channel when both are closed.
-func drain_stdio(proc *backend_generic) {
+func drain_stdio(proc *backend_process) {
 	var cmd *exec.Cmd = proc.cmd
 	var ch1 chan stdio_message = proc.ch_stdio
 	// var o1, e1 io.ReadCloser
@@ -358,7 +368,7 @@ const (
 // many messages, (4) reaches a timeout, (5) closes both
 // stdout+stderr.  It returns STARTED/TO_RETRY/FAILED.
 func wait_for_server_come_up(svr backend) start_result {
-	var cmd *backend_generic = svr.get_super_part()
+	var cmd *backend_process = svr.get_super_part()
 
 	// fmt.Printf("WAIT_FOR_SERVER_COME_UP() svr=%T cmd=%T\n", svr, cmd)
 
@@ -441,43 +451,42 @@ func drain_messages_to_log(outs []string, errs []string) {
 func set_signal_handling() chan os.Signal {
 	fmt.Println("set_signal_handling()")
 	var ch = make(chan os.Signal, 1)
-	signal.Notify(ch, unix.SIGCHLD, unix.SIGHUP)
+	//signal.Notify(ch, unix.SIGCHLD, unix.SIGHUP)
 	return ch
 }
 
-func reap_gone_child(m *backend_manager) {
-	fmt.Println("reap_gone_child() start")
-	//proc map[int]backend_generic
+func reap_child_process(m *backend_manager) {
+	fmt.Println("reap_child_process() start")
+	//proc map[int]backend_process
 	//ch_sig chan sycall.Signal
 	for sig := range m.ch_sig {
 		switch sig {
 		case unix.SIGCHLD:
 			fmt.Println("Got SIGCHLD")
-			var wstatus unix.WaitStatus
 			var options int = unix.WNOHANG
+			var wstatus unix.WaitStatus
 			var rusage unix.Rusage
 			var wpid, err1 = unix.Wait4(-1, &wstatus, options, &rusage)
-			fmt.Println("wait4 wpid=", wpid, "err1=", err1)
 			if err1 != nil {
-				var err, ok = err1.(unix.Errno)
-				if !ok {
-					fmt.Println("bad error from wait")
-				} else {
-					if err == unix.ECHILD {
-						fmt.Println("wait but no children")
-					} else {
-						fmt.Println("errno=", err)
-					}
-				}
-			} else {
-				fmt.Println("wait pid=", wpid, "status=", wstatus, "rusage=", rusage)
+				var err, ok1 = err1.(unix.Errno)
+				assert_fatal(ok1)
+				logger.warn(fmt.Sprintf("wait4 failed=%s", unix.ErrnoName(err)))
+				continue
 			}
+			if wpid == 0 {
+				logger.warn(fmt.Sprintf("wait4 failed=%s", unix.ErrnoName(unix.ECHILD)))
+				continue
+			}
+			assert_fatal(wpid != -1)
+			fmt.Println("wait pid=", wpid, "status=", wstatus,
+				"rusage=", rusage)
 		case unix.SIGHUP:
 			fmt.Println("SIGHUP")
 		default:
-			// unix.SignalName(sig)
-			fmt.Println("unhandled signal SIG=", sig)
+			var usig, ok2 = sig.(unix.Signal)
+			assert_fatal(ok2)
+			logger.warn(fmt.Sprintf("unhandled signal=%s", unix.SignalName(usig)))
 		}
 	}
-	fmt.Println("reap_gone_child() channel closed")
+	fmt.Println("reap_child_process() channel closed")
 }

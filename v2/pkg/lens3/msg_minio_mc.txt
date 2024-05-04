@@ -1,0 +1,7 @@
+;; -*-Coding: utf-8; Mode: Fundamental;-*-
+
+Samples of MinIO MC-Command messages.
+
+% /usr/local/bin/mc --version
+
+mc version RELEASE.2022-06-10T22-29-12Z

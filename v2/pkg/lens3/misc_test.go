@@ -26,7 +26,7 @@ func Test_misc(t *testing.T) {
 	//test_collect_process_output()
 	//test_pipe_timeout()
 	//test_get_lines()
-	test_try_start_server()
+	test_start_server()
 	//test_type_switch_on_nil()
 	//test_minimal_environ()
 }
@@ -220,7 +220,7 @@ func test_get_lines() {
 	close(ch1)
 }
 
-func test_try_start_server() {
+func test_start_server() {
 	fmt.Println("test_try_start_server")
-	start_manager(&manager)
+	start_manager(&the_manager)
 }

@@ -53,11 +53,16 @@ import (
 
 type vacuous_ = struct{}
 
-// BACKEND specific part.  A backend shall not start its long-running
-// threads.  Or, it lets them enter a wait-group.
+// BACKEND is a backend server with a server specific part.  A backend
+// shall not start its long-running threads.  Or, it lets them enter a
+// wait-group.
 type backend interface {
 	// GET_SUPER_PART returns a generic part or a superclass.
 	get_super_part() *backend_process
+
+	// MAKE_COMMAND_LINE returns a command and environment of a
+	// backend instance.
+	make_command_line(string, string) backend_command
 
 	// SETUP does a server specific initialization.
 	setup()
@@ -70,15 +75,28 @@ type backend interface {
 	check_startup(int, []string) start_result
 
 	// SHUTDOWN stops a server in its specific way.
-	shutdown()
+	shutdown() error
 
 	// HEARTBEAT pings a server and returns an http status.  It is an
 	// error but status=200.
 	heartbeat() int
 }
 
+// BACKEND_PROCESS is a generic part of a server.
 type backend_process struct {
-	pool_id string
+	backend_common
+
+	pool                 string
+	owner_uid, owner_gid string
+	directory            string
+
+	port int
+	ep   string
+
+	// ROOT_USER and ROOT_PASSWORD are credential for accessing a server.
+	root_user, root_password string
+
+	verbose bool
 
 	// CH_QUIT is to inform stopping the server by closing.  Every
 	// thread for this server shall quit.
@@ -87,15 +105,13 @@ type backend_process struct {
 	cmd      *exec.Cmd
 	ch_stdio chan stdio_message
 
-	ep string
-
 	heartbeat_misses int
+}
 
+// BACKEND_COMMON is a static and common part of a server.  It is read
+// from a configuration.  It is embedded and not directly used.
+type backend_common struct {
 	heartbeat_timeout int
-
-	verbose bool
-
-	/* **************** */
 
 	//mux_host int
 	//mux_port int
@@ -105,14 +121,30 @@ type backend_process struct {
 	//manager_pid int
 }
 
+// BACKEND_TEMPLATE is to make a backend instance.
+type backend_template interface {
+	make_backend(string, string) backend
+}
+
+type backend_command struct {
+	argv []string
+	envs []string
+}
+
 // BACKEND_MANAGER is a single object with threads of a child process
 // reaper.
 type backend_manager struct {
+
+	// BE is a template to make a backend.
+	be backend_template
+
 	// PROC maps a PID to a process record.  PID is int in "os".
 	proc map[int]backend
 
 	// CH_SIG is a channel to receive SIGCHLD.
 	ch_sig chan os.Signal
+
+	environ []string
 
 	// -- ctl_param map[string]any
 
@@ -132,29 +164,32 @@ type backend_manager struct {
 }
 
 // (A single manager instance).
-var manager = backend_manager{
+var the_manager = backend_manager{
 	proc: make(map[int]backend),
 
 	heartbeat_tolerance: 3,
 }
 
 func start_manager(m *backend_manager) {
+	m.bin_sudo = "/usr/bin/sudo"
+	m.environ = minimal_environ()
+	//m.be = &backend_minio_template{}
 	m.ch_sig = set_signal_handling()
 	go reap_child_process(m)
 
+	var svr = start_server(m)
+	logger.info(fmt.Sprint("start_server()=", svr))
+	var _ = svr.get_super_part()
+
+	go ping_server(m, svr)
+
 	{
-		var svr = start_server(m)
-		logger.info(fmt.Sprint("start_server()=", svr))
-		var proc = svr.get_super_part()
+		if false {
+			cancel_process_for_test(m, svr)
+		}
 
-		go ping_server(m, svr)
-
-		fmt.Println("CANCEL IN 10 SEC")
-		time.Sleep(10 * time.Second)
-		fmt.Println("cmd.Cancel()")
-		var err5 = proc.cmd.Cancel()
-		if err5 != nil {
-			fmt.Println("cmd.Cancel()=", err5)
+		if true {
+			shutdown_process_for_test(m, svr)
 		}
 
 		fmt.Println("MORE 5 SEC")
@@ -175,114 +210,125 @@ func ping_server(m *backend_manager, svr backend) {
 			proc.heartbeat_misses += 1
 		}
 		if proc.heartbeat_misses > m.heartbeat_tolerance {
-			logger.infof(("Manager (pool=%s)" +
+			logger.infof(("Mux(pool=%s)" +
 				" Heartbeating server failed:" +
 				" misses=%v"),
-				proc.pool_id, proc.heartbeat_misses)
+				proc.pool, proc.heartbeat_misses)
 			raise(termination("MinIO heartbeat failure"))
 		}
 	}
 }
 
 func start_server(m *backend_manager) backend {
-	var svr, _ = try_start_server(8001)
-	fmt.Println("try_start_server()=", svr)
+	fmt.Println("start_server()")
+	m.be = &backend_minio_template{}
+	var svr = m.be.make_backend("", "")
 	var proc = svr.get_super_part()
+
+	var u, err4 = user.Current()
+	assert_fatal(err4 == nil)
+	proc.owner_uid = "#" + u.Uid
+	proc.owner_gid = "#" + u.Gid
+	proc.ep = "localhost:8080"
+	proc.port = 8080
+	proc.directory = u.HomeDir + "/pool-x"
+	proc.verbose = true
+
+	var _ = try_start_server(m, svr)
+	assert_fatal(proc.cmd.Process != nil)
 	var pid = proc.cmd.Process.Pid
 	m.proc[pid] = svr
 
 	go barf_stdio_to_log(proc)
 
+	fmt.Println("start_server() server=", svr)
 	return svr
 }
 
 func stop_server(m *backend_manager, svr backend) {
+	fmt.Println("stop_server()")
 	var proc = svr.get_super_part()
-	close(proc.ch_quit)
-}
 
-func barf_stdio_to_log(proc *backend_process) {
-	var ch1 = proc.ch_stdio
-	for {
-		var x1, ok1 = <-ch1
-		if !ok1 {
-			fmt.Println("CLOSED")
-			break
-		}
-		fmt.Println("LINE: ", x1.int, x1.string)
-	}
+	var _ = svr.shutdown()
+
+	close(proc.ch_quit)
 }
 
 // TRY_START_SERVER starts a process and waits for a message or a
 // timeout.  A message from the server is one that indicates a
 // success/failure.  Note that it changes a cancel function from
 // SIGKILL to SIGTERM to make it work with sudo.
-func try_start_server(port int) (backend, start_result) {
-	var u, err4 = user.Current()
-	assert_fatal(err4 == nil)
+func try_start_server(m *backend_manager, svr backend) start_result {
+	var proc = svr.get_super_part()
 
-	var ch1 = make(chan stdio_message)
-
-	var bin_sudo = "/usr/bin/sudo"
-	var bin_minio = "/usr/local/bin/minio"
-	var address = "localhost:8080"
-	var user = "#" + u.Uid
-	var group = "#" + u.Gid
-	var directory = u.HomeDir + "/pool-x"
-	var argv = []string{
+	var user = proc.owner_uid
+	var group = proc.owner_gid
+	var address = proc.ep
+	var directory = proc.directory
+	var command = svr.make_command_line(address, directory)
+	var sudo_argv = []string{
 		"-n",
 		"-u", user,
-		"-g", group,
-		bin_minio,
-		"--json", "--anonymous", "server",
-		"--address", address, directory}
+		"-g", group}
+	var argv = append(sudo_argv, command.argv...)
+	var envs = append(m.environ, command.envs...)
+
+	var lst = append([]string{m.bin_sudo}, argv...)
+	logger.debugf("Mux(pool=%s) Try to run a server: %v.", proc.pool, lst)
+
 	var ctx = context.Background()
-	var cmd = exec.CommandContext(ctx, bin_sudo, argv...)
+	var cmd = exec.CommandContext(ctx, m.bin_sudo, argv...)
 	if cmd == nil {
 		panic("cmd=nil")
 	}
 	assert_fatal(cmd.SysProcAttr == nil)
+	proc.cmd = cmd
+
+	cmd.Env = envs
 	cmd.SysProcAttr = &unix.SysProcAttr{
+		// Note (?) it fails with: Noctty=true
 		Setsid:     true,
 		Setctty:    false,
 		Noctty:     false,
 		Foreground: false,
 		Pdeathsig:  unix.SIGTERM,
 	}
-
 	cmd.Cancel = func() error {
 		return cmd.Process.Signal(unix.SIGTERM)
 	}
-
 	cmd.Stdin = nil
 
-	var proc = backend_process{
-		cmd:      cmd,
-		ch_stdio: ch1,
+	/*
+		var proc = backend_process{
+			cmd:      cmd,
+			ch_stdio: ch1,
 
-		pool_id:           "",
-		ep:                "localhost:8080",
-		heartbeat_timeout: 60,
-		verbose:           true,
-	}
-	var svr = backend_minio{
-		backend_process: proc,
-	}
+			pool:           "",
+			ep:                "localhost:8080",
+			heartbeat_timeout: 60,
+			verbose:           true,
+		}
+		var svr = backend_minio{
+			backend_process: proc,
+		}
+	*/
 
-	drain_stdio(&proc)
+	var ch1 = make(chan stdio_message)
+	proc.ch_stdio = ch1
+	drain_stdio(proc)
 
 	var err3 = cmd.Start()
 	if err3 != nil {
 		fmt.Println("cmd.Start() err=", err3)
 	}
 
-	var r1 = wait_for_server_come_up(&svr)
+	var r1 = wait_for_server_come_up(svr)
 	fmt.Println("DONE DONE DONE DONE")
 	fmt.Println("DONE state=", r1.start_state, r1.message)
 
 	/*dump_threads()*/
 	//} ()
-	return &svr, r1
+	return r1
 }
 
 // DRAIN_STDIO spawns threads for draining stdout+stderr to a channel
@@ -368,9 +414,9 @@ const (
 // many messages, (4) reaches a timeout, (5) closes both
 // stdout+stderr.  It returns STARTED/TO_RETRY/FAILED.
 func wait_for_server_come_up(svr backend) start_result {
-	var cmd *backend_process = svr.get_super_part()
+	var proc *backend_process = svr.get_super_part()
 
-	// fmt.Printf("WAIT_FOR_SERVER_COME_UP() svr=%T cmd=%T\n", svr, cmd)
+	// fmt.Printf("WAIT_FOR_SERVER_COME_UP() svr=%T proc=%T\n", svr, proc)
 
 	var msg_out []string
 	var msg_err []string
@@ -378,13 +424,13 @@ func wait_for_server_come_up(svr backend) start_result {
 	defer func() {
 		// It defers calling a closure to refer to finally collected
 		// msg_out and msg_err.
-		drain_messages_to_log(msg_out, msg_err)
+		drain_start_messages_to_log(msg_out, msg_err)
 	}()
 
 	var to = time.After(60 * time.Second)
 	for {
 		select {
-		case msg, ok1 := <-cmd.ch_stdio:
+		case msg, ok1 := <-proc.ch_stdio:
 			if !ok1 {
 				return start_result{
 					start_state: start_failed,
@@ -435,8 +481,8 @@ func wait_for_server_come_up(svr backend) start_result {
 	}
 }
 
-func drain_messages_to_log(outs []string, errs []string) {
-	fmt.Println("drain_messages_to_log")
+func drain_start_messages_to_log(outs []string, errs []string) {
+	fmt.Println("drain_start_messages_to_log()")
 	var s string
 	for _, s = range outs {
 		fmt.Println("LINE:", s)
@@ -489,4 +535,41 @@ func reap_child_process(m *backend_manager) {
 		}
 	}
 	fmt.Println("reap_child_process() channel closed")
+}
+
+func barf_stdio_to_log(proc *backend_process) {
+	var ch1 = proc.ch_stdio
+	for {
+		var x1, ok1 = <-ch1
+		if !ok1 {
+			fmt.Println("CLOSED")
+			break
+		}
+		fmt.Println("LINE: ", x1.int, x1.string)
+	}
+}
+
+// *** TEST CODE ***
+
+func cancel_process_for_test(m *backend_manager, svr backend) {
+	fmt.Println("CANCEL IN 10 SEC")
+	time.Sleep(10 * time.Second)
+	var proc = svr.get_super_part()
+	fmt.Println("cmd.Cancel()")
+	var err5 = proc.cmd.Cancel()
+	if err5 != nil {
+		fmt.Println("cmd.Cancel()=", err5)
+	}
+}
+
+func shutdown_process_for_test(m *backend_manager, svr backend) {
+	fmt.Println("SHUTDOWN IN 10 SEC")
+	time.Sleep(10 * time.Second)
+	var proc = svr.get_super_part()
+	fmt.Println("stop_server()")
+	stop_server(m, svr)
+	var err5 = proc.cmd.Cancel()
+	if err5 != nil {
+		fmt.Println("cmd.Cancel()=", err5)
+	}
 }

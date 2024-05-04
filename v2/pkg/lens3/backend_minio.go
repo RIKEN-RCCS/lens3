@@ -36,6 +36,12 @@ var (
 	// minio_response_failure_ = "Unable to initialize backend"
 )
 
+// BACKEND_MINIO_TEMPLATE is a dummy manager to make a command line
+// arguments.
+type backend_minio_template struct {
+	backend_minio_common
+}
+
 // BACKEND_MINIO is a manager for MinIO.
 type backend_minio struct {
 	backend_process
@@ -45,8 +51,6 @@ type backend_minio struct {
 	heartbeat_url    string
 	failure_message  string
 
-	root_user     string
-	root_password string
 	mc_alias      string
 	mc_config_dir string
 
@@ -54,6 +58,8 @@ type backend_minio struct {
 	//svr.env_mc map[string]string
 }
 
+// BACKEND_MINIO_COMMON is a static and common part of a manager.  It
+// is embedded.
 type backend_minio_common struct {
 	mc_command string
 
@@ -68,10 +74,6 @@ type backend_minio_common struct {
 	minio_watch_gap_minimal int
 }
 
-func (svr *backend_minio) get_super_part() *backend_process {
-	return &(svr.backend_process)
-}
-
 type keyval = map[string]interface{}
 
 type minio_message_ struct {
@@ -82,29 +84,29 @@ type minio_message_ struct {
 	//"error": {"message":, "source":}
 }
 
-// FIND_ONE searches in a list for one satisfies f.  It returns a
-// boolean and the first satisfying one if it exists.
-func find_one(mm []map[string]interface{}, f func(map[string]interface{}) bool) (map[string]interface{}, bool) {
-	for _, m := range mm {
-		//var m, ok = x.(map[string]interface{})
-		//if ok {
-		if f(m) {
-			return m, true
-		}
-		//}
+func (be *backend_minio_template) make_backend(string, string) backend {
+	return &backend_minio{}
+}
+
+func (svr *backend_minio) get_super_part() *backend_process {
+	return &(svr.backend_process)
+}
+
+func (svr *backend_minio) make_command_line(address string, directory string) backend_command {
+	var bin_minio = "/usr/local/bin/minio"
+	var argv = []string{
+		bin_minio,
+		"--json", "--anonymous", "server",
+		"--address", address, directory}
+	//svr.env_minio["MINIO_ROOT_USER"] = svr.minio_root_user
+	//svr.env_minio["MINIO_ROOT_PASSWORD"] = svr.minio_root_password
+	//svr.env_minio["MINIO_BROWSER"] = "off"
+	var envs = []string{
+		fmt.Sprintf("MINIO_ROOT_USER=%s", svr.root_user),
+		fmt.Sprintf("MINIO_ROOT_PASSWORD=%s", svr.root_password),
+		fmt.Sprintf("MINIO_BROWSER=%s", "off"),
 	}
-	return nil, false
-}
-
-// Note It works with a missing key, because fetching a missing key
-// from a map returns a zero-value.
-func has_level_fatal(m map[string]interface{}) bool {
-	return (m["level"] == "FATAL")
-}
-
-func has_expected_response(m map[string]interface{}) bool {
-	var s = get_string(m, "message")
-	return strings.HasPrefix(s, minio_expected_response)
+	return backend_command{argv, envs}
 }
 
 func (svr *backend_minio) setup() {
@@ -168,17 +170,18 @@ func (svr *backend_minio) check_startup(outerr int, ss []string) start_result {
 
 // SHUTDOWN stops a server.  It first tries MC admin-service-stop,
 // then tries ...
-func (svr *backend_minio) shutdown() {
+func (svr *backend_minio) shutdown() error {
 	fmt.Println("minio.shutdown()")
 	var proc = svr.get_super_part()
 
-	logger.debugf("Manager (pool=%s) stopping MinIO: %v.",
-		proc.pool_id, proc)
+	logger.debugf("Mux(pool=%s) stopping MinIO: %v.",
+		proc.pool, proc)
 	//assert_fatal(svr.mc_alias != nil)
 	defer mc_alias_remove(svr)
 	var v1 = mc_admin_service_stop(svr)
 	if v1.values != nil {
 	}
+	return nil
 }
 
 // HEARTBEAT http-gets the path "/minio/health/live" and returns an
@@ -193,16 +196,16 @@ func (svr *backend_minio) heartbeat() int {
 			Timeout: timeout,
 		}
 		svr.heartbeat_url = fmt.Sprintf("http://%s/minio/health/live", proc.ep)
-		svr.failure_message = fmt.Sprintf("Manager (pool=%s)"+
+		svr.failure_message = fmt.Sprintf("Mux(pool=%s)"+
 			" Heartbeating MinIO failed: urlopen error,"+
-			" url=(%s);", proc.pool_id, svr.heartbeat_url)
+			" url=(%s);", proc.pool, svr.heartbeat_url)
 	}
 
 	var c = svr.heartbeat_client
 	var rsp, err1 = c.Get(svr.heartbeat_url)
 	if err1 != nil {
 		logger.debug(fmt.Sprintf("Heartbeat MinIO failed (pool=%s): %s.\n",
-			proc.pool_id, err1))
+			proc.pool, err1))
 		return 500
 	}
 	defer rsp.Body.Close()
@@ -213,9 +216,34 @@ func (svr *backend_minio) heartbeat() int {
 	fmt.Println("heartbeat code=", rsp.StatusCode)
 	//fmt.Println("heartbeat msg=", m)
 	if proc.verbose {
-		logger.debugf("Manager (pool=%s) Heartbeat MinIO.", proc.pool_id)
+		logger.debugf("Mux(pool=%s) Heartbeat MinIO.", proc.pool)
 	}
 	return rsp.StatusCode
+}
+
+// FIND_ONE searches in a list for one satisfies f.  It returns a
+// boolean and the first satisfying one if it exists.
+func find_one(mm []map[string]interface{}, f func(map[string]interface{}) bool) (map[string]interface{}, bool) {
+	for _, m := range mm {
+		//var m, ok = x.(map[string]interface{})
+		//if ok {
+		if f(m) {
+			return m, true
+		}
+		//}
+	}
+	return nil, false
+}
+
+// Note It works with a missing key, because fetching a missing key
+// from a map returns a zero-value.
+func has_level_fatal(m map[string]interface{}) bool {
+	return (m["level"] == "FATAL")
+}
+
+func has_expected_response(m map[string]interface{}) bool {
+	var s = get_string(m, "message")
+	return strings.HasPrefix(s, minio_expected_response)
 }
 
 // *** MC-COMMANDS ***
@@ -341,7 +369,7 @@ func mc_alias_set(svr *backend_minio) {
 		return
 	}
 	svr.mc_config_dir = dir
-	svr.mc_alias = fmt.Sprintf("%s-%s", svr.pool_id, rnd)
+	svr.mc_alias = fmt.Sprintf("%s-%s", svr.pool, rnd)
 	var v1 = execute_mc_cmd(svr, "alias_set",
 		[]string{"alias", "set", svr.mc_alias, url,
 			svr.root_user, svr.root_password,

@@ -1,6 +1,6 @@
 ;; -*-Coding: utf-8; Mode: Fundamental;-*-
 
-Examples of MinIO start-up messages.
+Samples of MinIO start-up messages.
 
 % /usr/local/bin/minio --version
 

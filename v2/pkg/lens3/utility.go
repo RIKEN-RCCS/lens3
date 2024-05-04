@@ -100,7 +100,7 @@ func random_string(n int) string {
 	const bstr = (ascii_digits + ascii_letters_lc + ascii_letters_uc)
 	const alen = len(astr)
 	const blen = len(bstr)
-	var s = make([]byte, 0, n)
+	var s = make([]byte, n, n)
 	s[0] = astr[rand.Intn(alen)]
 	for i := 1; i < n; i++ {
 		s[i] = bstr[rand.Intn(blen)]

@@ -5,3 +5,7 @@ Samples of MinIO MC-Command messages.
 % /usr/local/bin/mc --version
 
 mc version RELEASE.2022-06-10T22-29-12Z
+
+% /usr/local/bin/mc alias set pool--txcwbs05i1uw http://localhost:8080 Umo5h8STmaL8NeNqqezi hjvQTCWbram9pvy71RkhTWymV1vUnN9HIS9V3crqWUuF1IbU --api S3v4
+
+Added `pool--txcwbs05i1uw` successfully.

@@ -222,5 +222,5 @@ func test_get_lines() {
 
 func test_start_server() {
 	fmt.Println("test_try_start_server")
-	start_manager(&the_manager)
+	start_manager(&the_backend_manager)
 }

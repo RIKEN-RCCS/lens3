@@ -53,8 +53,8 @@ import (
 
 type vacuous_ = struct{}
 
-// BACKEND_MANAGER is a single object with threads of a child process
-// reaper.
+// BACKEND_MANAGER is a single object -- "the_backend_manager".  It is
+// with threads of a child process reaper.
 type backend_manager struct {
 
 	// BE is a source to make a backend.
@@ -70,24 +70,13 @@ type backend_manager struct {
 
 	// -- ctl_param map[string]any
 
-	bin_sudo string
-
-	server_setup_at_start        bool
-	server_awake_duration        int
-	heartbeat_interval           int
-	heartbeat_tolerance          int
-	heartbeat_timeout            int
-	server_start_timeout         int
-	server_setup_timeout         int
-	server_stop_timeout          int
-	server_setup_control_timeout int
-	watch_gap_minimal            int
-	manager_expiry               int
+	backend_common
 }
 
 // BACKEND_FACTORY is to make a backend instance.
 type backend_factory interface {
 	configure()
+	clean_at_exit()
 	make_backend(string, string) backend
 }
 
@@ -109,8 +98,8 @@ type backend interface {
 	// accumulated ones all from the start.
 	check_startup(int, []string) start_result
 
-	// SETUP does a server specific initialization at its start.
-	setup()
+	// ESTABLISH does a server specific initialization at its start.
+	establish()
 
 	// SHUTDOWN stops a server in its specific way.
 	shutdown() error
@@ -121,7 +110,8 @@ type backend interface {
 }
 
 // BACKEND_PROCESS is a generic part of a server.  It is embedded in a
-// backend.
+// backend and initialized by it.  A backend is resposible to set
+// "backend_common" with the part of "backend_manager".
 type backend_process struct {
 	pool string
 
@@ -131,12 +121,12 @@ type backend_process struct {
 	owner_uid, owner_gid string
 	directory            string
 
-	// ROOT_USER and ROOT_PASSWORD are credential for accessing a server.
-	root_user, root_password string
+	// ROOT_ACCESS and ROOT_SECRET are credential for accessing a server.
+	root_access, root_secret string
 
 	verbose bool
 
-	// environ is the same one in the_manager.
+	// environ is the same one in the_backend_manager.
 	environ []string
 
 	// CH_QUIT is to inform stopping the server by closing.  Every
@@ -154,7 +144,18 @@ type backend_process struct {
 // BACKEND_COMMON is a static and common part of a server.  It is read
 // from a configuration.  It is embedded and not directly used.
 type backend_common struct {
-	heartbeat_timeout int
+	bin_sudo string
+
+	awake_duration time.Duration
+
+	heartbeat_tolerance int
+	heartbeat_interval  time.Duration
+	heartbeat_timeout   time.Duration
+	watch_gap_minimal   time.Duration
+
+	stabilize_wait_ms time.Duration
+
+	manager_expiry int
 
 	//mux_host int
 	//mux_port int
@@ -169,16 +170,23 @@ type backend_command struct {
 	envs []string
 }
 
-// (A single manager instance).
-var the_manager = backend_manager{
+// The single backend_manager instance.
+var the_backend_manager = backend_manager{
 	proc: make(map[int]backend),
+}
 
-	heartbeat_tolerance: 3,
+var the_backend_common = &the_backend_manager.backend_common
+
+func manager_main() {
+	defer the_backend_manager.be.clean_at_exit()
 }
 
 func start_manager(m *backend_manager) {
 	m.bin_sudo = "/usr/bin/sudo"
 	m.environ = minimal_environ()
+	m.stabilize_wait_ms = 1000
+	m.heartbeat_tolerance = 3
+
 	m.be = the_backend_minio_factory
 	m.be.configure()
 	m.ch_sig = set_signal_handling()
@@ -240,8 +248,8 @@ func start_server(m *backend_manager) backend {
 	proc.port = 8080
 	proc.directory = u.HomeDir + "/pool-x"
 
-	proc.root_user = generate_access_key()
-	proc.root_password = generate_secret_key()
+	proc.root_access = generate_access_key()
+	proc.root_secret = generate_secret_key()
 
 	proc.verbose = true
 	proc.environ = m.environ
@@ -253,7 +261,10 @@ func start_server(m *backend_manager) backend {
 
 	go barf_stdio_to_log(proc)
 
-	svr.setup()
+	// Sleep for a while for a server to be stable.
+	time.Sleep(proc.stabilize_wait_ms * time.Millisecond)
+
+	svr.establish()
 	fmt.Println("start_server() server=", svr)
 	return svr
 }
@@ -264,7 +275,10 @@ func stop_server(m *backend_manager, svr backend) {
 
 	var _ = svr.shutdown()
 
-	close(proc.ch_quit)
+	if proc.ch_quit != nil {
+		close(proc.ch_quit)
+		proc.ch_quit = nil
+	}
 }
 
 // TRY_START_SERVER starts a process and waits for a message or a
@@ -444,6 +458,8 @@ func wait_for_server_come_up(svr backend) start_result {
 			case on_err:
 				msg_err = append(msg_err, msg1.string)
 			}
+			// Sleep for a short time for stdio messages.
+			// (* time.Sleep(10 * time.Millisecond) *)
 			for len(msg_out) < 500 && len(msg_err) < 500 {
 				select {
 				case msg2, ok2 := <-proc.ch_stdio:

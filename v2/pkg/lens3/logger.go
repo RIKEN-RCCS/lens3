@@ -71,3 +71,7 @@ func (w *log_writer) debug(m string) error {
 	w.o.Printf("DEBUG %s", m)
 	return nil
 }
+
+func log_access(code string, _ string) {
+	logger.infof("access code=%s", code)
+}

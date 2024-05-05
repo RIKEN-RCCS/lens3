@@ -37,37 +37,25 @@ lens3 services.
 
 [design.md](v1/doc/design.md) for programmers to debug.
 
-
 ## ACKNOWLEDGEMENT
 
 Lens3 is copyrighted by RIKEN R-CCS.  Part of the results is
 obtained by using Fugaku at RIKEN R-CCS.
 
+Lens3 is developed by R-CSS and the authors S. Nishioka and
+T. Ishibashi.  But, the code was reviewed by zzmatu and remaining bugs
+are his responsibility.
+
 Lens3 uses MinIO as a backend S3 server.  Lens3 lacks a way to display
 a credit to MinIO, because it blocks accesses to MinIO's user
 interfaces.  Please refer to [https://min.io](https://min.io).
-
-Lens3 utilizes third-party open source software, which is listed in
-[acknowledgement](v1/ACKNOWLEDGEMENT.txt).  It may fail to include
-software transitively used.
 
 Lens3 UI is created with vuejs+vuetify.  Please refer to
 [https://vuejs.org](https://vuejs.org/) and
 [https://vuetifyjs.com](https://vuetifyjs.com/en/).
 
-Lens3 is developed by R-CSS and the [authors](AUTHORS.txt).  But, the
-code was reviewed by zzmatu and remaining bugs are his responsibility.
+(README for v1)[v1/README.md#ACKNOWLEDGEMENT]
 
-## Directories
-
-```
-v1/doc               documents
-v1/src/lenticularis  source code
-v1/ui                UI source code (Vuetify)
-unit-file            configuration and systemd templates
-nginx                example settings of a proxy
-apache               example settings of a proxy
-test                 test code
-```
+(README for v2)[v2/README.md#ACKNOWLEDGEMENT]
 
 __Lenticularis-S3 comes with ABSOLUTELY NO WARRANTY.__

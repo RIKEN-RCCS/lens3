@@ -21,23 +21,26 @@ import (
 )
 
 func Test_misc(t *testing.T) {
-	//test_signal_handling()
+	// check_signal_handling()
 	//test_start_process_with_timeout()
 	//test_collect_process_output()
 	//test_pipe_timeout()
 	//test_get_lines()
-	test_start_server()
-	//test_type_switch_on_nil()
-	//test_minimal_environ()
+	//test_start_server()
+	test_start_mux()
+	// check_type_switch_on_nil()
+	// test_minimal_environ()
 }
 
 func test_minimal_environ() {
-	fmt.Println("test_type_switch_on_nil")
+	// runtime.GOMAXPROCS(runtime.NumCPU())
+
+	fmt.Println("test_minimal_environ")
 	fmt.Println("minimal_environ()=", minimal_environ())
 }
 
-func test_type_switch_on_nil() {
-	fmt.Println("test_type_switch_on_nil")
+func check_type_switch_on_nil() {
+	fmt.Println("check_type_switch_on_nil")
 	var x error
 	x = nil
 	switch e := x.(type) {
@@ -48,16 +51,16 @@ func test_type_switch_on_nil() {
 	}
 }
 
-func test_signal_handling() {
-	fmt.Println("test_signal_handling")
-	fmt.Println("Do INT/TERM; Stop by QUIT")
+func check_signal_handling() {
+	fmt.Println("check_signal_handling")
+	fmt.Println("Catch INT/TERM; Stop by QUIT")
 
-	sig := make(chan bool)
-	loop := make(chan error)
+	var sig = make(chan bool)
+	var loop = make(chan error)
 
 	go signal_handler(sig)
 
-	var quit bool
+	var int_or_term bool
 	for {
 		go func() {
 			time.Sleep(3000 * time.Millisecond)
@@ -65,33 +68,32 @@ func test_signal_handling() {
 		}()
 
 		select {
-		case quit = <-sig:
-			fmt.Println("manger quit=", quit)
+		case int_or_term = <-sig:
+			fmt.Println("signal int_or_term=", int_or_term)
 		case <-loop:
-			fmt.Println("manger loop=", quit)
+			fmt.Println("timer")
 		}
 	}
-	fmt.Println("manger done")
+	fmt.Println("done unexpectedly")
 }
 
-func signal_handler(q chan bool) {
+func signal_handler(chq chan bool) {
 	fmt.Println("signal_handler start")
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
+	var ch1 = make(chan os.Signal, 1)
+	signal.Notify(ch1, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 
 	//var quit bool
-	for signal := range c {
+	for signal := range ch1 {
 		switch signal {
 		case syscall.SIGINT:
 			fmt.Println("SIGINT")
-			q <- true
+			chq <- true
 		case syscall.SIGTERM:
 			fmt.Println("SIGTERM")
-			q <- false
+			chq <- false
 		case syscall.SIGHUP:
 			fmt.Println("SIGHUP")
-			fmt.Println("signal_handler exitting")
 			os.Exit(0)
 		}
 	}
@@ -175,6 +177,7 @@ func test_pipe_timeout() {
 	}
 }
 
+// Do exec.Command(), cmd.StdoutPipe(), bufio.NewScanner().
 func test_get_lines() {
 	fmt.Println("test_get_lines")
 
@@ -221,6 +224,18 @@ func test_get_lines() {
 }
 
 func test_start_server() {
-	fmt.Println("test_try_start_server")
-	start_manager(&the_backend_manager)
+	fmt.Println("test_start_server")
+	var m = &the_multiplexer
+	start_manager(m)
+	start_server_for_test(m)
+}
+
+func test_start_mux() {
+	fmt.Println("test_start_mux")
+	var m = &the_multiplexer
+	start_manager(m)
+	go start_server_for_test(m)
+	//time.Sleep(30 * time.Second)
+	start_multiplexer(m)
+	//start_dummy_proxy(m)
 }

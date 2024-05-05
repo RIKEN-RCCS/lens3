@@ -51,12 +51,16 @@ type termination_exc struct {
 	m string
 }
 
+type api_error_exc struct {
+	m string
+}
+
 func (e *termination_exc) Error() string {
 	return "termination_exc:" + e.m
 }
 
-func termination(m string) *termination_exc {
-	return &termination_exc{m}
+func (e *api_error_exc) Error() string {
+	return "api_error_exc:" + e.m
 }
 
 func handle() any {
@@ -65,6 +69,14 @@ func handle() any {
 
 func raise(e error) {
 	panic(e)
+}
+
+func termination(m string) *termination_exc {
+	return &termination_exc{m}
+}
+
+func api_error(code int, _ string) error {
+	return &api_error_exc{fmt.Sprintf("api_error code=%d", code)}
 }
 
 // STRING_SORT sorts strings non-destructively.  It currently uses

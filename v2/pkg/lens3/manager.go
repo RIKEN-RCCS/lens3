@@ -53,26 +53,6 @@ import (
 
 type vacuous_ = struct{}
 
-// BACKEND_MANAGER is a single object -- "the_backend_manager".  It is
-// with threads of a child process reaper.
-type backend_manager struct {
-
-	// BE is a source to make a backend.
-	be backend_factory
-
-	// PROC maps a PID to a process record.  PID is int in "os".
-	proc map[int]backend
-
-	// CH_SIG is a channel to receive SIGCHLD.
-	ch_sig chan os.Signal
-
-	environ []string
-
-	// -- ctl_param map[string]any
-
-	backend_common
-}
-
 // BACKEND_FACTORY is to make a backend instance.
 type backend_factory interface {
 	configure()
@@ -110,8 +90,8 @@ type backend interface {
 }
 
 // BACKEND_PROCESS is a generic part of a server.  It is embedded in a
-// backend and initialized by it.  A backend is resposible to set
-// "backend_common" with the part of "backend_manager".
+// backend and initialized by it.  A backend is responsible for setting
+// "backend_common" to share it with the "multiplexer".
 type backend_process struct {
 	pool string
 
@@ -126,7 +106,7 @@ type backend_process struct {
 
 	verbose bool
 
-	// environ is the same one in the_backend_manager.
+	// environ is the same one in the_multiplexer.
 	environ []string
 
 	// CH_QUIT is to inform stopping the server by closing.  Every
@@ -170,53 +150,56 @@ type backend_command struct {
 	envs []string
 }
 
-// The single backend_manager instance.
-var the_backend_manager = backend_manager{
-	proc: make(map[int]backend),
-}
-
-var the_backend_common = &the_backend_manager.backend_common
+var the_backend_common = &the_multiplexer.backend_common
 
 func manager_main() {
-	defer the_backend_manager.be.clean_at_exit()
+	defer the_multiplexer.be.clean_at_exit()
 }
 
-func start_manager(m *backend_manager) {
+func start_manager(m *multiplexer) {
 	m.bin_sudo = "/usr/bin/sudo"
 	m.environ = minimal_environ()
 	m.stabilize_wait_ms = 1000
 	m.heartbeat_tolerance = 3
+	m.heartbeat_interval = 60
 
 	m.be = the_backend_minio_factory
 	m.be.configure()
 	m.ch_sig = set_signal_handling()
 	go reap_child_process(m)
+}
 
+func start_server_for_test(m *multiplexer) {
+	fmt.Println("start_server_for_test()")
 	var svr = start_server(m)
-	logger.info(fmt.Sprint("start_server()=", svr))
 	var _ = svr.get_super_part()
-
-	go ping_server(m, svr)
 
 	{
 		if false {
 			cancel_process_for_test(m, svr)
+			fmt.Println("MORE 5 SEC")
+			time.Sleep(5 * time.Second)
 		}
 
-		if true {
+		if false {
 			shutdown_process_for_test(m, svr)
+			fmt.Println("MORE 5 SEC")
+			time.Sleep(5 * time.Second)
 		}
+	}
 
-		fmt.Println("MORE 5 SEC")
-		time.Sleep(5 * time.Second)
+	if true {
+		fmt.Println("RUN MANAGER 5 MINUTES")
+		time.Sleep(5 * 60 * time.Second)
+		shutdown_process_for_test(m, svr)
 	}
 }
 
-func ping_server(m *backend_manager, svr backend) {
+func ping_server(m *multiplexer, svr backend) {
 	var proc = svr.get_super_part()
 	proc.heartbeat_misses = 0
 	for {
-		time.Sleep(1 * time.Second)
+		time.Sleep(proc.heartbeat_interval * time.Second)
 		fmt.Println("svr.heartbeat()", proc.heartbeat_misses)
 		var status = svr.heartbeat()
 		if status == 200 {
@@ -234,7 +217,7 @@ func ping_server(m *backend_manager, svr backend) {
 	}
 }
 
-func start_server(m *backend_manager) backend {
+func start_server(m *multiplexer) backend {
 	fmt.Println("start_server()")
 	//m.be = &backend_minio_template{}
 	var svr = m.be.make_backend("", "")
@@ -244,8 +227,8 @@ func start_server(m *backend_manager) backend {
 	assert_fatal(err4 == nil)
 	proc.owner_uid = "#" + u.Uid
 	proc.owner_gid = "#" + u.Gid
-	proc.ep = "localhost:8080"
-	proc.port = 8080
+	proc.ep = "localhost:9001"
+	proc.port = 9001
 	proc.directory = u.HomeDir + "/pool-x"
 
 	proc.root_access = generate_access_key()
@@ -265,11 +248,13 @@ func start_server(m *backend_manager) backend {
 	time.Sleep(proc.stabilize_wait_ms * time.Millisecond)
 
 	svr.establish()
+	go ping_server(m, svr)
+
 	fmt.Println("start_server() server=", svr)
 	return svr
 }
 
-func stop_server(m *backend_manager, svr backend) {
+func stop_server(m *multiplexer, svr backend) {
 	fmt.Println("stop_server()")
 	var proc = svr.get_super_part()
 
@@ -285,7 +270,7 @@ func stop_server(m *backend_manager, svr backend) {
 // timeout.  A message from the server is one that indicates a
 // success/failure.  Note that it changes a cancel function from
 // SIGKILL to SIGTERM to make it work with sudo.
-func try_start_server(m *backend_manager, svr backend) start_result {
+func try_start_server(m *multiplexer, svr backend) start_result {
 	var proc = svr.get_super_part()
 
 	var user = proc.owner_uid
@@ -527,7 +512,7 @@ func set_signal_handling() chan os.Signal {
 	return ch
 }
 
-func reap_child_process(m *backend_manager) {
+func reap_child_process(m *multiplexer) {
 	fmt.Println("reap_child_process() start")
 	//proc map[int]backend_process
 	//ch_sig chan sycall.Signal
@@ -577,7 +562,7 @@ func barf_stdio_to_log(proc *backend_process) {
 
 // *** TEST CODE ***
 
-func cancel_process_for_test(m *backend_manager, svr backend) {
+func cancel_process_for_test(m *multiplexer, svr backend) {
 	fmt.Println("CANCEL IN 10 SEC")
 	time.Sleep(10 * time.Second)
 	var proc = svr.get_super_part()
@@ -588,7 +573,7 @@ func cancel_process_for_test(m *backend_manager, svr backend) {
 	}
 }
 
-func shutdown_process_for_test(m *backend_manager, svr backend) {
+func shutdown_process_for_test(m *multiplexer, svr backend) {
 	fmt.Println("SHUTDOWN IN 10 SEC")
 	time.Sleep(10 * time.Second)
 	var proc = svr.get_super_part()

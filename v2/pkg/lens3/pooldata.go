@@ -6,19 +6,19 @@
 package lens3
 
 import (
-//"fmt"
-//"flag"
-//"context"
-//"io"
-//"log"
-//"os"
-//"net"
-//"net/http"
-//"net/http/httputil"
-//"net/url"
-//"strings"
-//"time"
-//"runtime"
+// "fmt"
+// "flag"
+// "context"
+// "io"
+// "log"
+// "os"
+// "net"
+// "net/http"
+// "net/http/httputil"
+// "net/url"
+// "strings"
+// "time"
+// "runtime"
 )
 
 // Key_Policy is a policy to an access-key.
@@ -49,4 +49,33 @@ const (
 	Pool_State_SUSPENDED  Pool_State = "suspended"
 	Pool_State_DISABLED   Pool_State = "disabled"
 	Pool_State_INOPERABLE Pool_State = "inoperable"
+)
+
+// POOL_REASON is a set of constant strings of the reasons of state
+// transitions.  It may include other messages from a backend server.
+// POOL_REMOVED is not stored in the state of a pool.  EXEC_FAILED and
+// SETUP_FAILED will be appended to another reason.
+type Pool_Reason string
+
+const (
+	// Pool_State.INITIAL or Pool_State.READY.
+	Pool_Reason_NORMAL Pool_Reason = "-"
+
+	// Pool_State.SUSPENDED.
+	Pool_Reason_BACKEND_BUSY Pool_Reason = "backend busy"
+
+	// Pool_State.DISABLED.
+	Pool_Reason_POOL_EXPIRED  Pool_Reason = "pool expired"
+	Pool_Reason_USER_DISABLED Pool_Reason = "user disabled"
+	Pool_Reason_POOL_OFFLINE  Pool_Reason = "pool offline"
+
+	// Pool_State.INOPERABLE.
+	Pool_Reason_POOL_REMOVED Pool_Reason = "pool removed"
+	Pool_Reason_USER_REMOVED Pool_Reason = "user removed"
+	Pool_Reason_EXEC_FAILED  Pool_Reason = "start failed: "
+	Pool_Reason_SETUP_FAILED Pool_Reason = "initialization failed: "
+
+	// Other reasons are exceptions and messages from a backend.
+
+	Pool_Reason_POOL_DISABLED_INITIALLY_ Pool_Reason = "pool disabled initially"
 )

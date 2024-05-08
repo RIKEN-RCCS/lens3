@@ -149,71 +149,71 @@ func ensure_forwarding_host_trusted(m *multiplexer, r *http.Request) bool {
 // or an access has an access-key.
 func ensure_bucket_policy(m *multiplexer, r *http.Request) bool {
 	/*
-	    pool_id = desc["pool"]
-	    policy = desc["bkt_policy"]
-	    if policy in {"public", "download", "upload"} {
-	        # ANY PUBLIC ACCESS ARE PASSED.
-	        return
-		} elif access_key is not None {
-	        # JUST CHECK AN ACEESS IS WITH A KEY.
-	        return
-			}
-	    raise Api_Error(401, f"Access-key missing")
+		    pool_id = desc["pool"]
+		    policy = desc["bkt_policy"]
+		    if policy in {"public", "download", "upload"} {
+		        # ANY PUBLIC ACCESS ARE PASSED.
+		        return
+			} elif access_key is not None {
+		        # JUST CHECK AN ACEESS IS WITH A KEY.
+		        return
+				}
+		    raise Api_Error(401, f"Access-key missing")
 	*/
 	return true
 }
 
 func ensure_user_is_authorized(m *multiplexer, r *http.Request) bool {
 	/*
-	    u = tables.get_user(user_id)
-	    assert u is not None
-	    if not u.get("enabled") {
-			raise Api_Error(403, (f"User disabled: {user_id}"))
-		}
+		    u = tables.get_user(user_id)
+		    assert u is not None
+		    if not u.get("enabled") {
+				raise Api_Error(403, (f"User disabled: {user_id}"))
+			}
 	*/
 	return true
 }
 
 func ensure_secret_owner(m *multiplexer, r *http.Request) bool {
 	/*
-	    u = tables.get_user(user_id)
-	    assert u is not None
-	    if not u.get("enabled") {
-	        raise Api_Error(403, (f"User disabled: {user_id}"))
-		}
+		    u = tables.get_user(user_id)
+		    assert u is not None
+		    if not u.get("enabled") {
+		        raise Api_Error(403, (f"User disabled: {user_id}"))
+			}
 	*/
 	return true
 }
 
 func ensure_mux_is_running(m *multiplexer, r *http.Request) bool {
 	/*
-	    muxs = tables.list_mux_eps()
-	    if len(muxs) == 0 {
-	        raise Api_Error(500, (f"No Mux services in Lens3"))
-		}
+		    muxs = tables.list_mux_eps()
+		    if len(muxs) == 0 {
+		        raise Api_Error(500, (f"No Mux services in Lens3"))
+			}
 	*/
 	return true
 }
 
 func ensure_pool_state(m *multiplexer, r *http.Request) bool {
 	/*
-	    (state, reason) = update_pool_state(tables, pool_id)
-	    if state == Pool_State.INITIAL {
-	        if reject_initial_state {
-	            logger.error(f"Manager (pool={pool_id}) is in initial state.")
-	            raise Api_Error(403, f"Pool is in initial state")
+		    (state, reason) = update_pool_state(tables, pool_id)
+		    if state == Pool_State.INITIAL {
+		        if reject_initial_state {
+		            logger.error(f"Manager (pool={pool_id}) is in initial state.")
+		            raise Api_Error(403, f"Pool is in initial state")
+				}
+		    } elif state == Pool_State.READY {
+		        pass
+		    } elif state == Pool_State.SUSPENDED {
+		        raise Api_Error(503, f"Pool suspended")
+		    } elif state == Pool_State.DISABLED {
+		        raise Api_Error(403, f"Pool disabled")
+		    } elif state == Pool_State.INOPERABLE {
+		        raise Api_Error(403, f"Pool inoperable")
+		    } else {
+		        assert False
 			}
-	    } elif state == Pool_State.READY {
-	        pass
-	    } elif state == Pool_State.SUSPENDED {
-	        raise Api_Error(503, f"Pool suspended")
-	    } elif state == Pool_State.DISABLED {
-	        raise Api_Error(403, f"Pool disabled")
-	    } elif state == Pool_State.INOPERABLE {
-	        raise Api_Error(403, f"Pool inoperable")
-	    } else {
-	        assert False
-		}
 	*/
 	return true
 }

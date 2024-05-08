@@ -14,6 +14,7 @@ import (
 	"fmt"
 	//"github.com/go-redis/redis/v8"
 	"io"
+	"net"
 	"os"
 	//"log"
 	//"log/syslog"
@@ -255,4 +256,26 @@ func minimal_environ() []string {
 		}
 	}
 	return filtered
+}
+
+// MAKE_TYPICAL_IP_ADDRESS makes IP address strings comparable.  It
+// drops the hex part.  (Returned strings do not conform RFC-5952).
+func make_typical_ip_address(ip string) string {
+	if strings.HasPrefix(ip, "::ffff:") {
+		return ip[7:]
+	} else {
+		return ip
+	}
+}
+
+// GET_IP_ADDRESSES returns a list of addresses for the host name,
+// which are formatted for equality comparison.
+func get_ip_addresses(hostname string) []string {
+	var ips1, err1 = net.LookupHost(hostname)
+	assert_fatal(err1 == nil)
+	var ips2 []string
+	for _, ip := range ips1 {
+		ips2 = append(ips2, make_typical_ip_address(ip))
+	}
+	return string_sort(ips2)
 }

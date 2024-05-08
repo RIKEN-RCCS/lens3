@@ -189,8 +189,8 @@ func start_server_for_test(m *multiplexer) {
 	}
 
 	if true {
-		fmt.Println("RUN MANAGER 5 MINUTES")
-		time.Sleep(5 * 60 * time.Second)
+		fmt.Println("RUN MANAGER 15 MINUTES")
+		time.Sleep(15 * 60 * time.Second)
 		shutdown_process_for_test(m, svr)
 	}
 }

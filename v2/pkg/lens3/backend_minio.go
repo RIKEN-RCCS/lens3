@@ -123,8 +123,8 @@ func (proc *backend_minio) make_command_line(address string, directory string) b
 		"--json", "--anonymous", "server",
 		"--address", address, directory}
 	var envs = []string{
-		fmt.Sprintf("MINIO_ROOT_USER=%s", proc.root_access),
-		fmt.Sprintf("MINIO_ROOT_PASSWORD=%s", proc.root_secret),
+		fmt.Sprintf("MINIO_ROOT_USER=%s", proc.root_access_key),
+		fmt.Sprintf("MINIO_ROOT_PASSWORD=%s", proc.root_secret_key),
 		fmt.Sprintf("MINIO_BROWSER=%s", "off"),
 	}
 	return backend_command{argv, envs}
@@ -412,7 +412,7 @@ func mc_alias_set(svr *backend_minio) mc_result {
 	svr.mc_alias = fmt.Sprintf("pool-%s-%s", svr.pool, rnd)
 	var v1 = execute_mc_cmd(svr, "alias_set",
 		[]string{"alias", "set", svr.mc_alias, url,
-			svr.root_access, svr.root_secret,
+			svr.root_access_key, svr.root_secret_key,
 			"--api", "S3v4"})
 	if v1.values == nil {
 		svr.mc_alias = ""

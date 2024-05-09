@@ -101,8 +101,9 @@ type backend_process struct {
 	owner_uid, owner_gid string
 	directory            string
 
-	// ROOT_ACCESS and ROOT_SECRET are credential for accessing a server.
-	root_access, root_secret string
+	// ROOT_ACCESS_KEY and ROOT_SECRET_KEY are credential for
+	// accessing a server.
+	root_access_key, root_secret_key string
 
 	verbose bool
 
@@ -230,8 +231,8 @@ func start_server(m *multiplexer) backend {
 	proc.port = 9001
 	proc.directory = u.HomeDir + "/pool-x"
 
-	proc.root_access = generate_access_key()
-	proc.root_secret = generate_secret_key()
+	proc.root_access_key = generate_access_key()
+	proc.root_secret_key = generate_secret_key()
 
 	proc.verbose = true
 	proc.environ = m.environ

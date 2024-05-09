@@ -101,7 +101,7 @@ func start_multiplexer(m *multiplexer, g backend) {
 	m.front_host = "localhost"
 
 	var proxy1 = make_proxy_2(m)
-	var proxy2 = filter_forwarding(m, g, proxy1)
+	var proxy2 = make_blocker_proxy(m, g, proxy1)
 	var err2 = http.ListenAndServe(":8005", proxy2)
 	log.Fatal(err2)
 }
@@ -117,48 +117,9 @@ func list_mux_ip_addresses(m *multiplexer) []string {
 	return ips
 }
 
-func filter_forwarding(m *multiplexer, g backend, following http.Handler) http.Handler {
+func make_blocker_proxy(m *multiplexer, g backend, following http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("r.Host(1)=", r.Host)
-		fmt.Println("r.Header(1)=", r.Header)
-		var a1 = r.Header.Get("Authorization")
-		fmt.Println("Authorization(1)=", a1)
-		var a2 = r.Header.Get("x-amz-content-sha256")
-		fmt.Println("x-amz-content-sha256(1)=", a2)
-
-		r.Header.Del("Accept-Encoding")
-		r.Host = "localhost:9001"
-
 		var proc = g.get_super_part()
-		var credentials = aws.Credentials{
-			AccessKeyID:     proc.root_access,
-			SecretAccessKey: proc.root_secret,
-			//SessionToken string
-			//Source string
-			//CanExpire bool
-			//Expires time.Time
-		}
-		var hash = empty_payload_hash_sha256
-		var service = "s3"
-		var region = "us-east-1"
-		var date = time.Now()
-		var s = signer.NewSigner(func(s *signer.SignerOptions) {
-			// Skip.
-		})
-		var timeout = time.Duration(10 * time.Second)
-		var ctx, cancel = context.WithTimeout(context.Background(), timeout)
-		defer cancel()
-		var err1 = s.SignHTTP(ctx, credentials, r,
-			hash, service, region, date)
-		assert_fatal(err1 == nil)
-
-		fmt.Println("date(2)=", date)
-		fmt.Println("r.Host(2)=", r.Host)
-		fmt.Println("r.Header(2)=", r.Header)
-		var a3 = r.Header.Get("Authorization")
-		fmt.Println("Authorization(2)=", a3)
-		var a4 = r.Header.Get("x-amz-content-sha256")
-		fmt.Println("x-amz-content-sha256(2)=", a4)
 
 		ensure_forwarding_host_trusted(m, r)
 		//http.Error(w, "ERROR!", http.StatusMethodNotAllowed)
@@ -169,6 +130,56 @@ func filter_forwarding(m *multiplexer, g backend, following http.Handler) http.H
 		//logger.error(("Mux ({m._mux_host}) Got a request from" +
 		//	" untrusted proxy or unknonwn Mux: {peer_addr};" +
 		//	" Check configuration"))
+
+		/* Replace an authorization header. */
+
+		{
+			fmt.Println("r.Host(1)=", r.Host)
+			fmt.Println("r.Header(1)=", r.Header)
+			var a1 = r.Header.Get("Authorization")
+			fmt.Println("Authorization(1)=", a1)
+			var a2 = r.Header.Get("x-amz-content-sha256")
+			fmt.Println("x-amz-content-sha256(1)=", a2)
+		}
+
+		//r.Header.Del("Accept-Encoding")
+		r.Host = "localhost:9001"
+		var credentials = aws.Credentials{
+			AccessKeyID:     proc.root_access_key,
+			SecretAccessKey: proc.root_secret_key,
+			//SessionToken string
+			//Source string
+			//CanExpire bool
+			//Expires time.Time
+		}
+		var hash = r.Header.Get("X-Amz-Content-Sha256")
+		if hash == "" {
+			// It is a bad idea to use a hash for an empty payload.
+			hash = empty_payload_hash_sha256
+		}
+		var service = "s3"
+		var region = "us-east-1"
+		var date = time.Now()
+		var s = signer.NewSigner(func(s *signer.SignerOptions) {
+			// No options.
+		})
+		var timeout = time.Duration(10 * time.Second)
+		var ctx, cancel = context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		var err1 = s.SignHTTP(ctx, credentials, r,
+			hash, service, region, date)
+		assert_fatal(err1 == nil)
+
+		{
+			fmt.Println("date(2)=", date)
+			fmt.Println("r.Host(2)=", r.Host)
+			fmt.Println("r.Header(2)=", r.Header)
+			var a3 = r.Header.Get("Authorization")
+			fmt.Println("Authorization(2)=", a3)
+			var a4 = r.Header.Get("x-amz-content-sha256")
+			fmt.Println("x-amz-content-sha256(2)=", a4)
+		}
+
 		following.ServeHTTP(w, r)
 	})
 }

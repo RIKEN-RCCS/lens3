@@ -3,9 +3,9 @@
 // Copyright 2022-2024 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
 
-// Logger wrapper like syslog but outputs to stdout.
-
 package lens3
+
+// Logger wrapper like syslog but outputs to stdout.
 
 import (
 	"fmt"

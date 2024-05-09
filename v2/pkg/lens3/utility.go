@@ -5,10 +5,10 @@
 
 package lens3
 
-// GOLANG VERSIONS: "slices" is from v1.22.  Note Golang is v1.21 in
-// Linux Rocky8/9 as of 2023-04-01.
-
 import (
+	// GOLANG VERSIONS: "slices" is from v1.22.  Note Golang is v1.21
+	// in Linux Rocky8/9 as of 2023-04-01.
+
 	//"context"
 	"encoding/json"
 	"fmt"

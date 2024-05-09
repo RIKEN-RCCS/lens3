@@ -234,8 +234,8 @@ func test_start_mux() {
 	fmt.Println("test_start_mux")
 	var m = &the_multiplexer
 	start_manager(m)
-	go start_server_for_test(m)
+	var g = start_server_for_test(m)
 	//time.Sleep(30 * time.Second)
-	start_multiplexer(m)
+	start_multiplexer(m, g)
 	//start_dummy_proxy(m)
 }

@@ -3,6 +3,8 @@
 // Copyright 2022-2024 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
 
+package lens3
+
 // A manager watches the backend server state and records its outputs
 // in logs.  The first few lines from a server is used to check its
 // start.  A server usually does not output anything later except on
@@ -19,14 +21,12 @@
 // os.Signal is an interface, unix.Signal, syscall.Signal are
 // identical and concrete.
 
-package lens3
-
-// Golang prefers "x/sys/unix" over "syscall".  "SysProcAttr" are the
-// same in "x/sys/unix" and "syscall".
-
-// "log/slog" is in Go1.21.
-
 import (
+	// Golang prefers "x/sys/unix" over "syscall".  "SysProcAttr" are
+	// the same in "x/sys/unix" and "syscall".
+
+	// "log/slog" is in Go1.21.
+
 	"bufio"
 	"context"
 	//"encoding/json"
@@ -169,30 +169,29 @@ func start_manager(m *multiplexer) {
 	go reap_child_process(m)
 }
 
-func start_server_for_test(m *multiplexer) {
+func start_server_for_test(m *multiplexer) backend {
 	fmt.Println("start_server_for_test()")
 	var svr = start_server(m)
 	var _ = svr.get_super_part()
 
-	{
+	go func() {
+
 		if false {
 			cancel_process_for_test(m, svr)
 			fmt.Println("MORE 5 SEC")
 			time.Sleep(5 * time.Second)
-		}
-
-		if false {
+		} else if false {
 			shutdown_process_for_test(m, svr)
 			fmt.Println("MORE 5 SEC")
 			time.Sleep(5 * time.Second)
+		} else if true {
+			fmt.Println("RUN MANAGER 15 MINUTES")
+			time.Sleep(15 * 60 * time.Second)
+			shutdown_process_for_test(m, svr)
 		}
-	}
+	}()
 
-	if true {
-		fmt.Println("RUN MANAGER 15 MINUTES")
-		time.Sleep(15 * 60 * time.Second)
-		shutdown_process_for_test(m, svr)
-	}
+	return svr
 }
 
 func ping_server(m *multiplexer, svr backend) {

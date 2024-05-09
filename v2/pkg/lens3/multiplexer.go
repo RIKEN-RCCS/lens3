@@ -3,6 +3,8 @@
 // Copyright 2022-2024 RIKEN R-CCS.
 // SPDX-License-Identifier: BSD-2-Clause
 
+package lens3
+
 // Multiplexer is a proxy to a backend S3 server.  Lens3 main part.
 
 // MEMO:
@@ -13,12 +15,10 @@
 // http.HandlerFunc is a function type.  It is
 // (ResponseWriter,*Request) -> unit
 
-package lens3
-
 import (
 	"fmt"
 	//"flag"
-	//"context"
+	"context"
 	//"io"
 	"log"
 	"os"
@@ -29,6 +29,8 @@ import (
 	//"strings"
 	"time"
 	//"runtime"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	signer "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 )
 
 // MULTIPLEXER is a single object, "the_multiplexer".  It is
@@ -87,7 +89,11 @@ var the_multiplexer = multiplexer{
 	proc: make(map[int]backend),
 }
 
-func start_multiplexer(m *multiplexer) {
+const (
+	empty_payload_hash_sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+)
+
+func start_multiplexer(m *multiplexer, g backend) {
 	fmt.Println("start_proxy() 8005->9001")
 	m.forwarding_timeout = 60
 	//m.client = &http.Client{}
@@ -95,7 +101,7 @@ func start_multiplexer(m *multiplexer) {
 	m.front_host = "localhost"
 
 	var proxy1 = make_proxy_2(m)
-	var proxy2 = filter_forwarding(m, proxy1)
+	var proxy2 = filter_forwarding(m, g, proxy1)
 	var err2 = http.ListenAndServe(":8005", proxy2)
 	log.Fatal(err2)
 }
@@ -111,17 +117,58 @@ func list_mux_ip_addresses(m *multiplexer) []string {
 	return ips
 }
 
-func filter_forwarding(m *multiplexer, following http.Handler) http.Handler {
+func filter_forwarding(m *multiplexer, g backend, following http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println("r.Host(1)=", r.Host)
+		fmt.Println("r.Header(1)=", r.Header)
+		var a1 = r.Header.Get("Authorization")
+		fmt.Println("Authorization(1)=", a1)
+		var a2 = r.Header.Get("x-amz-content-sha256")
+		fmt.Println("x-amz-content-sha256(1)=", a2)
+
+		r.Header.Del("Accept-Encoding")
+		r.Host = "localhost:9001"
+
+		var proc = g.get_super_part()
+		var credentials = aws.Credentials{
+			AccessKeyID:     proc.root_access,
+			SecretAccessKey: proc.root_secret,
+			//SessionToken string
+			//Source string
+			//CanExpire bool
+			//Expires time.Time
+		}
+		var hash = empty_payload_hash_sha256
+		var service = "s3"
+		var region = "us-east-1"
+		var date = time.Now()
+		var s = signer.NewSigner(func(s *signer.SignerOptions) {
+			// Skip.
+		})
+		var timeout = time.Duration(10 * time.Second)
+		var ctx, cancel = context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		var err1 = s.SignHTTP(ctx, credentials, r,
+			hash, service, region, date)
+		assert_fatal(err1 == nil)
+
+		fmt.Println("date(2)=", date)
+		fmt.Println("r.Host(2)=", r.Host)
+		fmt.Println("r.Header(2)=", r.Header)
+		var a3 = r.Header.Get("Authorization")
+		fmt.Println("Authorization(2)=", a3)
+		var a4 = r.Header.Get("x-amz-content-sha256")
+		fmt.Println("x-amz-content-sha256(2)=", a4)
+
 		ensure_forwarding_host_trusted(m, r)
 		//http.Error(w, "ERROR!", http.StatusMethodNotAllowed)
 		ensure_pool_state(m, r)
 		ensure_user_is_authorized(m, r)
 		ensure_secret_owner(m, r)
 		ensure_bucket_policy(m, r)
-		logger.error(("Mux ({m._mux_host}) Got a request from" +
-			" untrusted proxy or unknonwn Mux: {peer_addr};" +
-			" Check configuration"))
+		//logger.error(("Mux ({m._mux_host}) Got a request from" +
+		//	" untrusted proxy or unknonwn Mux: {peer_addr};" +
+		//	" Check configuration"))
 		following.ServeHTTP(w, r)
 	})
 }

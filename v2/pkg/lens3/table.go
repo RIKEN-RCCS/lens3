@@ -3,14 +3,14 @@
 // Copyright 2022-2024 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
 
+package lens3
+
 // A table is accessed like a single database, while it is implemented
 // by a couple of databases inside.  Disallowing extra fields is done
 // by setting "DisallowUnknownFields()" in "encoding/json/Decoder".
 //
 // CONSISTENCY OF ENTRIES. uid <-> claim is one-to-one if a user-info
 // contains a claim.  Recovery should remove orphaned claims.
-
-package lens3
 
 // This is by "go-redis/v8".  Use "go-redis/v8" for Redis-6, or
 // "go-redis/v9" for Redis-7.

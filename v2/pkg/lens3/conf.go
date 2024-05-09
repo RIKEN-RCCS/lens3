@@ -3,10 +3,10 @@
 // Copyright 2022-2024 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
 
+package lens3
+
 // Conf files are read and checked against structures.  It accepts
 // extra fields.
-
-package lens3
 
 import (
 	"encoding/json"

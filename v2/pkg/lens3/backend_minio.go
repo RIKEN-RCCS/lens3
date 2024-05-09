@@ -82,8 +82,9 @@ type minio_message_ struct {
 var the_backend_minio_factory = _the_backend_minio_common
 var _the_backend_minio_common = &backend_minio_common{}
 
-func (be *backend_minio_common) make_backend(string, string) backend {
+func (be *backend_minio_common) make_backend(pool string) backend {
 	var svr = &backend_minio{}
+	svr.pool = pool
 	svr.backend_common = the_backend_common
 	svr.backend_minio_common = _the_backend_minio_common
 	runtime.SetFinalizer(svr, finalize_backend_minio)

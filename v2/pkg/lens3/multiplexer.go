@@ -40,6 +40,9 @@ type multiplexer struct {
 	// BE factory is to make a backend.
 	be backend_factory
 
+	// POOL maps a POOL-ID to a process record.
+	pool map[string]backend
+
 	// PROC maps a PID to a process record.  PID is int in "os".
 	proc map[int]backend
 
@@ -86,6 +89,7 @@ type backend_proxy struct {
 
 // THE_MULTIPLEXER is the single multiplexer instance.
 var the_multiplexer = multiplexer{
+	pool: make(map[string]backend),
 	proc: make(map[int]backend),
 }
 
@@ -93,15 +97,18 @@ const (
 	empty_payload_hash_sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 )
 
-func start_multiplexer(m *multiplexer, g backend) {
-	fmt.Println("start_proxy() 8005->9001")
+func start_multiplexer(m *multiplexer) {
+	fmt.Println("start_multiplexer()")
 	m.forwarding_timeout = 60
 	//m.client = &http.Client{}
 	//m.proxy = m.client
 	m.front_host = "localhost"
 
-	var proxy1 = make_proxy_2(m)
-	var proxy2 = make_blocker_proxy(m, g, proxy1)
+	// MEMO: ReverseProxy <: Handler as it implements ServeHTTP().
+	var proxy1 = httputil.ReverseProxy{
+		Rewrite: proxy_request_rewriter(m),
+	}
+	var proxy2 = make_forwarding_proxy(m, &proxy1)
 	var err2 = http.ListenAndServe(":8005", proxy2)
 	log.Fatal(err2)
 }
@@ -117,8 +124,32 @@ func list_mux_ip_addresses(m *multiplexer) []string {
 	return ips
 }
 
-func make_blocker_proxy(m *multiplexer, g backend, following http.Handler) http.Handler {
+// PROXY_REQUEST_REWRITER is a function set in ReverseProxy.Rewriter.
+// It receives forwarding information from a forwarding-proxy via a
+// http header field "lens3-pool".
+func proxy_request_rewriter(m *multiplexer) func(r *httputil.ProxyRequest) {
+	return func(r *httputil.ProxyRequest) {
+		var x = r.In.Header["lens3-pool"]
+		assert_fatal(len(x) == 1)
+		var pool = x[0]
+		delete(r.In.Header, "lens3-pool")
+		delete(r.Out.Header, "lens3-pool")
+		fmt.Println("*** POOL=", pool)
+		var g = m.pool[pool]
+		var proc = g.get_super_part()
+		var url1, err1 = url.Parse("http://" + proc.ep)
+		assert_fatal(err1 == nil)
+		fmt.Println("*** URL=", url1)
+		r.SetURL(url1)
+		r.SetXForwarded()
+	}
+}
+
+// It passes forwarding information to ReverseProxy.Rewriter via a
+// http header field "lens3-pool".  See proxy_request_rewriter.
+func make_forwarding_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var g = m.pool["mMwfyMzLwOlb8QLYANRM"]
 		var proc = g.get_super_part()
 
 		ensure_forwarding_host_trusted(m, r)
@@ -180,7 +211,8 @@ func make_blocker_proxy(m *multiplexer, g backend, following http.Handler) http.
 			fmt.Println("x-amz-content-sha256(2)=", a4)
 		}
 
-		following.ServeHTTP(w, r)
+		r.Header["lens3-pool"] = []string{"mMwfyMzLwOlb8QLYANRM"}
+		proxy.ServeHTTP(w, r)
 	})
 }
 
@@ -327,16 +359,6 @@ func (m *backend_proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 */
 
-// MEMO: net.http.httputil.ReverseProxy implements ServeHTTP().
-
-func make_proxy_1(m *multiplexer) http.Handler {
-	fmt.Println("make_proxy_1() 8005->9001")
-	var url1, err1 = url.Parse("http://localhost:9001")
-	assert_fatal(err1 == nil)
-	var proxy = httputil.NewSingleHostReverseProxy(url1)
-	return proxy
-}
-
 func make_proxy_2(m *multiplexer) http.Handler {
 	fmt.Println("make_proxy_2() 8005->9001")
 	var proxy = httputil.ReverseProxy{
@@ -348,6 +370,14 @@ func make_proxy_2(m *multiplexer) http.Handler {
 		},
 	}
 	return &proxy
+}
+
+func make_proxy_1(m *multiplexer) http.Handler {
+	fmt.Println("make_proxy_1() 8005->9001")
+	var url1, err1 = url.Parse("http://localhost:9001")
+	assert_fatal(err1 == nil)
+	var proxy = httputil.NewSingleHostReverseProxy(url1)
+	return proxy
 }
 
 func start_example_proxy_() {

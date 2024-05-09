@@ -57,7 +57,7 @@ type vacuous_ = struct{}
 type backend_factory interface {
 	configure()
 	clean_at_exit()
-	make_backend(string, string) backend
+	make_backend(string) backend
 }
 
 // BACKEND is a backend server with a server specific part.  A backend
@@ -172,7 +172,24 @@ func start_manager(m *multiplexer) {
 
 func start_server_for_test(m *multiplexer) backend {
 	fmt.Println("start_server_for_test()")
-	var svr = start_server(m)
+	var svr = m.be.make_backend("mMwfyMzLwOlb8QLYANRM")
+	var proc = svr.get_super_part()
+
+	var u, err4 = user.Current()
+	assert_fatal(err4 == nil)
+	proc.owner_uid = "#" + u.Uid
+	proc.owner_gid = "#" + u.Gid
+	proc.ep = "localhost:9001"
+	proc.port = 9001
+	proc.directory = u.HomeDir + "/pool-x"
+
+	proc.root_access_key = generate_access_key()
+	proc.root_secret_key = generate_secret_key()
+
+	proc.verbose = true
+	proc.environ = m.environ
+
+	start_server(m, svr)
 	var _ = svr.get_super_part()
 
 	go func() {
@@ -217,41 +234,43 @@ func ping_server(m *multiplexer, svr backend) {
 	}
 }
 
-func start_server(m *multiplexer) backend {
+func start_server(m *multiplexer, g backend) {
 	fmt.Println("start_server()")
 	//m.be = &backend_minio_template{}
-	var svr = m.be.make_backend("", "")
-	var proc = svr.get_super_part()
+	/*
+		var svr = m.be.make_backend("mMwfyMzLwOlb8QLYANRM")
+		var proc = svr.get_super_part()
 
-	var u, err4 = user.Current()
-	assert_fatal(err4 == nil)
-	proc.owner_uid = "#" + u.Uid
-	proc.owner_gid = "#" + u.Gid
-	proc.ep = "localhost:9001"
-	proc.port = 9001
-	proc.directory = u.HomeDir + "/pool-x"
+		var u, err4 = user.Current()
+		assert_fatal(err4 == nil)
+		proc.owner_uid = "#" + u.Uid
+		proc.owner_gid = "#" + u.Gid
+		proc.ep = "localhost:9001"
+		proc.port = 9001
+		proc.directory = u.HomeDir + "/pool-x"
 
-	proc.root_access_key = generate_access_key()
-	proc.root_secret_key = generate_secret_key()
+		proc.root_access_key = generate_access_key()
+		proc.root_secret_key = generate_secret_key()
 
-	proc.verbose = true
-	proc.environ = m.environ
+		proc.verbose = true
+		proc.environ = m.environ
+	*/
+	var proc = g.get_super_part()
 
-	var _ = try_start_server(m, svr)
+	var _ = try_start_server(m, g)
 	assert_fatal(proc.cmd.Process != nil)
 	var pid = proc.cmd.Process.Pid
-	m.proc[pid] = svr
+	m.proc[pid] = g
 
 	go barf_stdio_to_log(proc)
 
 	// Sleep for a while for a server to be stable.
 	time.Sleep(proc.stabilize_wait_ms * time.Millisecond)
 
-	svr.establish()
-	go ping_server(m, svr)
+	g.establish()
+	go ping_server(m, g)
 
-	fmt.Println("start_server() server=", svr)
-	return svr
+	fmt.Println("start_server() server=", g)
 }
 
 func stop_server(m *multiplexer, svr backend) {

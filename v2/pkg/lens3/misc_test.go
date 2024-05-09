@@ -235,7 +235,9 @@ func test_start_mux() {
 	var m = &the_multiplexer
 	start_manager(m)
 	var g = start_server_for_test(m)
+	var proc = g.get_super_part()
+	m.pool[proc.pool] = g
 	//time.Sleep(30 * time.Second)
-	start_multiplexer(m, g)
+	start_multiplexer(m)
 	//start_dummy_proxy(m)
 }

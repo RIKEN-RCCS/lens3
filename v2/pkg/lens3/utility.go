@@ -27,6 +27,8 @@ import (
 	"strings"
 )
 
+type vacuous = struct{}
+
 func assert_fatal(c bool) {
 	if !c {
 		panic("assert fail")
@@ -56,12 +58,28 @@ type api_error_exc struct {
 	m string
 }
 
+type proxy_exc struct {
+	code int
+	m    string
+}
+
 func (e *termination_exc) Error() string {
 	return "termination_exc:" + e.m
 }
 
 func (e *api_error_exc) Error() string {
 	return "api_error_exc:" + e.m
+}
+
+func (e *proxy_exc) Error() string {
+	return "proxy_exc:" + e.m
+}
+
+func proxy_error(code int, s string) error {
+	return &proxy_exc{
+		code: code,
+		m:    s,
+	}
 }
 
 func handle() any {
@@ -79,6 +97,18 @@ func termination(m string) *termination_exc {
 func api_error(code int, _ string) error {
 	return &api_error_exc{fmt.Sprintf("api_error code=%d", code)}
 }
+
+const (
+	http_status_400_bad_request  int = 400
+	http_status_401_unauthorized int = 401
+	http_status_403_forbidden    int = 403
+	http_status_404_not_found    int = 404
+
+	http_status_500_internal_server_error int = 500
+	http_status_503_service_unavailable   int = 503
+
+	http_status_601_unanalyzable int = 601
+)
 
 // STRING_SORT sorts strings non-destructively.  It currently uses
 // sort.Strings().  It will use slices.Sort in Go-1.22 and later.

@@ -21,7 +21,7 @@ import (
 	"context"
 	//"io"
 	"log"
-	"os"
+	//"os"
 	//"net"
 	"net/http"
 	"net/http/httputil"
@@ -36,20 +36,19 @@ import (
 // MULTIPLEXER is a single object, "the_multiplexer".  It is
 // with threads of a child process reaper.
 type multiplexer struct {
+	table keyval_table
 
 	// BE factory is to make a backend.
-	be backend_factory
+	//be backend_factory
 
 	// POOL maps a POOL-ID to a process record.
-	pool map[string]backend
+	//pool map[string]backend
 
 	// PROC maps a PID to a process record.  PID is int in "os".
-	proc map[int]backend
+	//proc map[int]backend
 
 	// CH_SIG is a channel to receive SIGCHLD.
-	ch_sig chan os.Signal
-
-	environ []string
+	//ch_sig chan os.Signal
 
 	// CLIENT accesses backend servers.
 	client http.Client
@@ -61,7 +60,7 @@ type multiplexer struct {
 
 	multiplexer_conf
 
-	backend_common
+	//backend_conf
 }
 
 type multiplexer_conf struct {
@@ -89,8 +88,8 @@ type backend_proxy struct {
 
 // THE_MULTIPLEXER is the single multiplexer instance.
 var the_multiplexer = multiplexer{
-	pool: make(map[string]backend),
-	proc: make(map[int]backend),
+	//pool: make(map[string]backend),
+	//proc: make(map[int]backend),
 }
 
 const (
@@ -135,9 +134,14 @@ func proxy_request_rewriter(m *multiplexer) func(r *httputil.ProxyRequest) {
 		delete(r.In.Header, "lens3-pool")
 		delete(r.Out.Header, "lens3-pool")
 		fmt.Println("*** POOL=", pool)
-		var g = m.pool[pool]
-		var proc = g.get_super_part()
-		var url1, err1 = url.Parse("http://" + proc.ep)
+		var ep = get_backend_ep(m.table, pool)
+		if ep == "" {
+			logger.debug("Mux({pool}).")
+			raise(&proxy_exc{http_status_404_not_found, "pool non-exist"})
+		}
+		//var g = m.pool[pool]
+		//var proc = g.get_super_part()
+		var url1, err1 = url.Parse("http://" + ep)
 		assert_fatal(err1 == nil)
 		fmt.Println("*** URL=", url1)
 		r.SetURL(url1)
@@ -149,8 +153,18 @@ func proxy_request_rewriter(m *multiplexer) func(r *httputil.ProxyRequest) {
 // http header field "lens3-pool".  See proxy_request_rewriter.
 func make_forwarding_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var g = m.pool["mMwfyMzLwOlb8QLYANRM"]
-		var proc = g.get_super_part()
+		//var g = m.pool["mMwfyMzLwOlb8QLYANRM"]
+		//var proc = g.get_super_part()
+		//var proc = get_backend_proc(m.table, "mMwfyMzLwOlb8QLYANRM")
+		//fmt.Println("*** POOL=", pool)
+
+		var pool = "mMwfyMzLwOlb8QLYANRM"
+		var desc = get_backend_proc(m.table, pool)
+		if desc == nil {
+			http.Error(w, "BAD", http_status_500_internal_server_error)
+			raise(&proxy_exc{http_status_500_internal_server_error,
+				"backend not running"})
+		}
 
 		ensure_forwarding_host_trusted(m, r)
 		//http.Error(w, "ERROR!", http.StatusMethodNotAllowed)
@@ -163,57 +177,62 @@ func make_forwarding_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 		//	" Check configuration"))
 
 		/* Replace an authorization header. */
+		sign_by_backend_authorization(r, *desc)
 
-		{
-			fmt.Println("r.Host(1)=", r.Host)
-			fmt.Println("r.Header(1)=", r.Header)
-			var a1 = r.Header.Get("Authorization")
-			fmt.Println("Authorization(1)=", a1)
-			var a2 = r.Header.Get("x-amz-content-sha256")
-			fmt.Println("x-amz-content-sha256(1)=", a2)
-		}
-
-		//r.Header.Del("Accept-Encoding")
-		r.Host = "localhost:9001"
-		var credentials = aws.Credentials{
-			AccessKeyID:     proc.root_access_key,
-			SecretAccessKey: proc.root_secret_key,
-			//SessionToken string
-			//Source string
-			//CanExpire bool
-			//Expires time.Time
-		}
-		var hash = r.Header.Get("X-Amz-Content-Sha256")
-		if hash == "" {
-			// It is a bad idea to use a hash for an empty payload.
-			hash = empty_payload_hash_sha256
-		}
-		var service = "s3"
-		var region = "us-east-1"
-		var date = time.Now()
-		var s = signer.NewSigner(func(s *signer.SignerOptions) {
-			// No options.
-		})
-		var timeout = time.Duration(10 * time.Second)
-		var ctx, cancel = context.WithTimeout(context.Background(), timeout)
-		defer cancel()
-		var err1 = s.SignHTTP(ctx, credentials, r,
-			hash, service, region, date)
-		assert_fatal(err1 == nil)
-
-		{
-			fmt.Println("date(2)=", date)
-			fmt.Println("r.Host(2)=", r.Host)
-			fmt.Println("r.Header(2)=", r.Header)
-			var a3 = r.Header.Get("Authorization")
-			fmt.Println("Authorization(2)=", a3)
-			var a4 = r.Header.Get("x-amz-content-sha256")
-			fmt.Println("x-amz-content-sha256(2)=", a4)
-		}
-
-		r.Header["lens3-pool"] = []string{"mMwfyMzLwOlb8QLYANRM"}
+		r.Header["lens3-pool"] = []string{pool}
 		proxy.ServeHTTP(w, r)
 	})
+}
+
+// SIGN_BY_BACKEND_AUTHORIZATION replaces an authorization header for
+// the backend.
+func sign_by_backend_authorization(r *http.Request, proc Process_record) {
+	{
+		fmt.Println("r.Host(1)=", r.Host)
+		fmt.Println("r.Header(1)=", r.Header)
+		var a1 = r.Header.Get("Authorization")
+		fmt.Println("Authorization(1)=", a1)
+		var a2 = r.Header.Get("x-amz-content-sha256")
+		fmt.Println("x-amz-content-sha256(1)=", a2)
+	}
+
+	//r.Header.Del("Accept-Encoding")
+	r.Host = "localhost:9001"
+	var credentials = aws.Credentials{
+		AccessKeyID:     proc.Root_access,
+		SecretAccessKey: proc.Root_secret,
+		//SessionToken string
+		//Source string
+		//CanExpire bool
+		//Expires time.Time
+	}
+	var hash = r.Header.Get("X-Amz-Content-Sha256")
+	if hash == "" {
+		// It is a bad idea to use a hash for an empty payload.
+		hash = empty_payload_hash_sha256
+	}
+	var service = "s3"
+	var region = "us-east-1"
+	var date = time.Now()
+	var s = signer.NewSigner(func(s *signer.SignerOptions) {
+		// No options.
+	})
+	var timeout = time.Duration(10 * time.Second)
+	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	var err1 = s.SignHTTP(ctx, credentials, r,
+		hash, service, region, date)
+	assert_fatal(err1 == nil)
+
+	{
+		fmt.Println("date(2)=", date)
+		fmt.Println("r.Host(2)=", r.Host)
+		fmt.Println("r.Header(2)=", r.Header)
+		var a3 = r.Header.Get("Authorization")
+		fmt.Println("Authorization(2)=", a3)
+		var a4 = r.Header.Get("x-amz-content-sha256")
+		fmt.Println("x-amz-content-sha256(2)=", a4)
+	}
 }
 
 // It double checks m.mux_addrs, because mux_addrs is updated only

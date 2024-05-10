@@ -26,8 +26,7 @@ func Test_misc(t *testing.T) {
 	//test_collect_process_output()
 	//test_pipe_timeout()
 	//test_get_lines()
-	//test_start_server()
-	test_start_mux()
+	test_start_service()
 	// check_type_switch_on_nil()
 	// test_minimal_environ()
 }
@@ -223,21 +222,7 @@ func test_get_lines() {
 	close(ch1)
 }
 
-func test_start_server() {
-	fmt.Println("test_start_server")
-	var m = &the_multiplexer
-	start_manager(m)
-	start_server_for_test(m)
-}
-
-func test_start_mux() {
-	fmt.Println("test_start_mux")
-	var m = &the_multiplexer
-	start_manager(m)
-	var g = start_server_for_test(m)
-	var proc = g.get_super_part()
-	m.pool[proc.pool] = g
-	//time.Sleep(30 * time.Second)
-	start_multiplexer(m)
-	//start_dummy_proxy(m)
+func test_start_service() {
+	fmt.Println("test_start_service")
+	start_service_for_test()
 }

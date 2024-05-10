@@ -52,12 +52,12 @@ type backend_minio struct {
 	//svr.env_minio map[string]string
 	//svr.env_mc map[string]string
 
-	*backend_minio_common
+	*backend_minio_conf
 }
 
-// BACKEND_MINIO_COMMON is a static and common part of a manager.  It
+// BACKEND_MINIO_CONF is a static and common part of a manager.  It
 // is embedded.  It also doubles as a factory.
-type backend_minio_common struct {
+type backend_minio_conf struct {
 	bin_minio string
 	bin_mc    string
 
@@ -79,19 +79,18 @@ type minio_message_ struct {
 	//"error": {"message":, "source":}
 }
 
-var the_backend_minio_factory = _the_backend_minio_common
-var _the_backend_minio_common = &backend_minio_common{}
+var the_backend_minio_factory = &backend_minio_conf{}
 
-func (be *backend_minio_common) make_backend(pool string) backend {
-	var svr = &backend_minio{}
-	svr.pool = pool
-	svr.backend_common = the_backend_common
-	svr.backend_minio_common = _the_backend_minio_common
-	runtime.SetFinalizer(svr, finalize_backend_minio)
-	return svr
+func (be *backend_minio_conf) make_backend(pool string) backend {
+	var g = &backend_minio{}
+	g.Pool = pool
+	g.backend_conf = the_backend_conf
+	g.backend_minio_conf = the_backend_minio_factory
+	runtime.SetFinalizer(g, finalize_backend_minio)
+	return g
 }
 
-func (be *backend_minio_common) configure() {
+func (be *backend_minio_conf) configure() {
 	be.bin_minio = "/usr/local/bin/minio"
 	be.bin_mc = "/usr/local/bin/mc"
 
@@ -103,7 +102,7 @@ func (be *backend_minio_common) configure() {
 	//be.minio_watch_gap_minimal = 30
 }
 
-func (be *backend_minio_common) clean_at_exit() {
+func (be *backend_minio_conf) clean_at_exit() {
 	clean_tmp()
 }
 
@@ -124,8 +123,8 @@ func (proc *backend_minio) make_command_line(address string, directory string) b
 		"--json", "--anonymous", "server",
 		"--address", address, directory}
 	var envs = []string{
-		fmt.Sprintf("MINIO_ROOT_USER=%s", proc.root_access_key),
-		fmt.Sprintf("MINIO_ROOT_PASSWORD=%s", proc.root_secret_key),
+		fmt.Sprintf("MINIO_ROOT_USER=%s", proc.Root_access),
+		fmt.Sprintf("MINIO_ROOT_PASSWORD=%s", proc.Root_secret),
 		fmt.Sprintf("MINIO_BROWSER=%s", "off"),
 	}
 	return backend_command{argv, envs}
@@ -193,7 +192,7 @@ func (svr *backend_minio) shutdown() error {
 	var proc = svr.get_super_part()
 
 	logger.debugf("Mux(pool=%s) stopping MinIO: %v.",
-		proc.pool, proc)
+		proc.Pool, proc)
 	//assert_fatal(svr.mc_alias != nil)
 	//defer mc_alias_remove(svr)
 	var v1 = mc_admin_service_stop(svr)
@@ -205,27 +204,27 @@ func (svr *backend_minio) shutdown() error {
 // HEARTBEAT http-gets the path "/minio/health/live" and returns an
 // http status code.  It returns 500 on a connection failure.
 func (svr *backend_minio) heartbeat() int {
-	fmt.Println("minio.heartbeat()")
+	//fmt.Println("minio.heartbeat()")
 	var proc = svr.get_super_part()
 
 	if svr.heartbeat_client == nil {
-		fmt.Println("minio.heartbeat(1) proc=", proc)
+		//fmt.Println("minio.heartbeat(1) proc=", proc)
 		var timeout = (proc.heartbeat_timeout * time.Second)
-		fmt.Println("minio.heartbeat(2) proc=", proc)
+		//fmt.Println("minio.heartbeat(2) proc=", proc)
 		svr.heartbeat_client = &http.Client{
 			Timeout: timeout,
 		}
-		svr.heartbeat_url = fmt.Sprintf("http://%s/minio/health/live", proc.ep)
+		svr.heartbeat_url = fmt.Sprintf("http://%s/minio/health/live", proc.Backend_ep)
 		svr.failure_message = fmt.Sprintf("Mux(pool=%s)"+
 			" Heartbeating MinIO failed: urlopen error,"+
-			" url=(%s);", proc.pool, svr.heartbeat_url)
+			" url=(%s);", proc.Pool, svr.heartbeat_url)
 	}
 
 	var c = svr.heartbeat_client
 	var rsp, err1 = c.Get(svr.heartbeat_url)
 	if err1 != nil {
 		logger.debug(fmt.Sprintf("Mux(pool=) Heartbeat MinIO failed (pool=%s): %s.\n",
-			proc.pool, err1))
+			proc.Pool, err1))
 		return 500
 	}
 	defer rsp.Body.Close()
@@ -233,10 +232,11 @@ func (svr *backend_minio) heartbeat() int {
 	if err2 != nil {
 		panic(err2)
 	}
-	fmt.Println("heartbeat code=", rsp.StatusCode)
+	//fmt.Println("heartbeat code=", rsp.StatusCode)
 	//fmt.Println("heartbeat msg=", m)
 	if proc.verbose {
-		logger.debugf("Mux(pool=%s) Heartbeat MinIO.", proc.pool)
+		logger.debugf("Mux(pool=%s) Heartbeat MinIO: code=%d.",
+			proc.Pool, rsp.StatusCode)
 	}
 	return rsp.StatusCode
 }
@@ -353,7 +353,7 @@ func execute_mc_cmd(svr *backend_minio, name string, command []string) mc_result
 	cmd.Stdin = nil
 	cmd.Stdout = &outb
 	cmd.Stderr = &errb
-	cmd.Env = svr.environ
+	cmd.Env = *svr.environ
 	var err1 = cmd.Run()
 	fmt.Println("cmd.Run()=", err1)
 	switch err := err1.(type) {
@@ -402,7 +402,7 @@ func execute_mc_cmd(svr *backend_minio, name string, command []string) mc_result
 func mc_alias_set(svr *backend_minio) mc_result {
 	assert_fatal(svr.mc_alias == "" && svr.mc_config_dir == "")
 	var rnd = strings.ToLower(random_string(12))
-	var url = fmt.Sprintf("http://%s", svr.ep)
+	var url = fmt.Sprintf("http://%s", svr.Backend_ep)
 	//svr.mc_config_dir = tempfile.TemporaryDirectory()
 	var dir, err1 = os.MkdirTemp("", "lens3-mc-")
 	if err1 != nil {
@@ -410,10 +410,10 @@ func mc_alias_set(svr *backend_minio) mc_result {
 		return mc_result{nil, err1.Error()}
 	}
 	svr.mc_config_dir = dir
-	svr.mc_alias = fmt.Sprintf("pool-%s-%s", svr.pool, rnd)
+	svr.mc_alias = fmt.Sprintf("pool-%s-%s", svr.Pool, rnd)
 	var v1 = execute_mc_cmd(svr, "alias_set",
 		[]string{"alias", "set", svr.mc_alias, url,
-			svr.root_access_key, svr.root_secret_key,
+			svr.Root_access, svr.Root_secret,
 			"--api", "S3v4"})
 	if v1.values == nil {
 		svr.mc_alias = ""

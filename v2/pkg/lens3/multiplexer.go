@@ -23,6 +23,7 @@ import (
 	"log"
 	//"os"
 	//"net"
+	"maps"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -149,14 +150,24 @@ func proxy_request_rewriter(m *multiplexer) func(r *httputil.ProxyRequest) {
 	}
 }
 
-// It passes forwarding information to ReverseProxy.Rewriter via a
-// http header field "lens3-pool".  See proxy_request_rewriter.
+// MAKE_FORWARDING_PROXY makes a filter that checks an access is
+// granted.  Also, the filter signs the request by a credential for
+// the backend.  It passes forwarding information to
+// ReverseProxy.Rewriter via a http header field "lens3-pool".  See
+// proxy_request_rewriter.
 func make_forwarding_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		//var g = m.pool["mMwfyMzLwOlb8QLYANRM"]
 		//var proc = g.get_super_part()
 		//var proc = get_backend_proc(m.table, "mMwfyMzLwOlb8QLYANRM")
 		//fmt.Println("*** POOL=", pool)
+
+		var goodsign = check_credential_in_request(r)
+		if !goodsign {
+			http.Error(w, "BAD", http_status_401_unauthorized)
+			raise(&proxy_exc{http_status_401_unauthorized,
+				"bad sign"})
+		}
 
 		var pool = "mMwfyMzLwOlb8QLYANRM"
 		var desc = get_backend_proc(m.table, pool)
@@ -177,17 +188,76 @@ func make_forwarding_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 		//	" Check configuration"))
 
 		/* Replace an authorization header. */
-		sign_by_backend_authorization(r, *desc)
+		sign_by_backend_credential(r, *desc)
 
 		r.Header["lens3-pool"] = []string{pool}
 		proxy.ServeHTTP(w, r)
 	})
 }
 
-// SIGN_BY_BACKEND_AUTHORIZATION replaces an authorization header for
+// Date format is "X-Amz-Date=20240509T081007Z".
+func check_credential_in_request(q *http.Request) bool {
+	var a1 = q.Header.Get("Authorization")
+
+	var service = "s3"
+	var region = "us-east-1"
+	var d = q.Header.Get("X-Amz-Date")
+	var datestring = (d[0:4] + "-" +
+		d[4:6] + "-" +
+		d[6:11] + ":" +
+		d[11:13] + ":" +
+		d[13:])
+	fmt.Println("*** old X-Amz-Date=", d)
+	fmt.Println("*** old date=", datestring)
+	var date, errx = time.Parse(time.RFC3339, datestring)
+	assert_fatal(errx == nil)
+	fmt.Println("*** DATE=", date, "for date=", datestring)
+
+	var r = *q
+	r.Header = maps.Clone(q.Header)
+
+	fmt.Println("*** r.Host=", r.Host)
+
+	// Approprite filtering needed.
+	r.Header.Del("Accept-Encoding")
+
+	var credentials = aws.Credentials{
+		AccessKeyID:     "yDRzcPdqHkwupPqryAvO",
+		SecretAccessKey: "ZNDov7ZJ5ecAksaJHaUxmoWwNOb52ZYj3lAdTq1lmkJGqaMx",
+		//SessionToken string
+		//Source string
+		//CanExpire bool
+		//Expires time.Time
+	}
+	var hash = r.Header.Get("X-Amz-Content-Sha256")
+	fmt.Println("*** X-Amz-Content-Sha256=", hash)
+	if hash == "" {
+		// It is a bad idea to use a hash for an empty payload.
+		hash = empty_payload_hash_sha256
+	}
+	var s = signer.NewSigner(func(s *signer.SignerOptions) {
+		// No options.
+	})
+	var timeout = time.Duration(10 * time.Second)
+	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	var err1 = s.SignHTTP(ctx, credentials, &r,
+		hash, service, region, date)
+	assert_fatal(err1 == nil)
+
+	var a2 = r.Header.Get("Authorization")
+
+	fmt.Println("*** Authorization(1)=", a1)
+	fmt.Println("*** Authorization(2)=", a2)
+	fmt.Println("*** header=", r.Header)
+
+	return a1 == a2
+}
+
+// SIGN_BY_BACKEND_CREDENTIAL replaces an authorization header for
 // the backend.
-func sign_by_backend_authorization(r *http.Request, proc Process_record) {
-	{
+func sign_by_backend_credential(r *http.Request, proc Process_record) {
+	if false {
 		fmt.Println("r.Host(1)=", r.Host)
 		fmt.Println("r.Header(1)=", r.Header)
 		var a1 = r.Header.Get("Authorization")
@@ -196,8 +266,10 @@ func sign_by_backend_authorization(r *http.Request, proc Process_record) {
 		fmt.Println("x-amz-content-sha256(1)=", a2)
 	}
 
+	fmt.Println("*** proc.Backend_ep=", proc.Backend_ep)
+
 	//r.Header.Del("Accept-Encoding")
-	r.Host = "localhost:9001"
+	r.Host = proc.Backend_ep
 	var credentials = aws.Credentials{
 		AccessKeyID:     proc.Root_access,
 		SecretAccessKey: proc.Root_secret,
@@ -224,7 +296,7 @@ func sign_by_backend_authorization(r *http.Request, proc Process_record) {
 		hash, service, region, date)
 	assert_fatal(err1 == nil)
 
-	{
+	if false {
 		fmt.Println("date(2)=", date)
 		fmt.Println("r.Host(2)=", r.Host)
 		fmt.Println("r.Header(2)=", r.Header)

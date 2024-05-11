@@ -242,3 +242,8 @@ by request by filtering server logs.
 * MC commands are directly invoked from Lens3-Api to change the
   setting of a MinIO instance.  MC commands were invoked at Lens3-Mux
   in v1.1.
+
+## Changes from v1.2 to v2.1
+
+* Checking authentication is done by Lens3.  Lens3-v1.2 passed
+  requests to a backend unchecked.

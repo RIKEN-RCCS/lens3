@@ -192,33 +192,32 @@ func assert_table_prefix_match(t keyval_table, r *redis.Client, prefix string) {
 }
 
 // Makes a key-value DB client.
-func make_table() keyval_table {
-	// redis_conf = mux_conf["redis"]
-	var addr = "localhost:6378"
-	var pw = "fX9LarpFa1P78ukjgaq6PktV2JY94ubFxGq52v5t"
+func make_table(conf Db_conf) keyval_table {
+	var ep = conf.Ep
+	var pw = conf.Password
 
 	var setting = redis.NewClient(&redis.Options{
-		Addr:     addr,
+		Addr:     ep,
 		Password: pw,
 		DB:       setting_db,
 	})
 	var storage = redis.NewClient(&redis.Options{
-		Addr:     addr,
+		Addr:     ep,
 		Password: pw,
 		DB:       storage_db,
 	})
 	var process = redis.NewClient(&redis.Options{
-		Addr:     addr,
+		Addr:     ep,
 		Password: pw,
 		DB:       process_db,
 	})
 	var routing = redis.NewClient(&redis.Options{
-		Addr:     addr,
+		Addr:     ep,
 		Password: pw,
 		DB:       routing_db,
 	})
 	var monokey = redis.NewClient(&redis.Options{
-		Addr:     addr,
+		Addr:     ep,
 		Password: pw,
 		DB:       monokey_db,
 	})
@@ -1287,7 +1286,9 @@ func Table_main() {
 	fmt.Println("")
 	fmt.Println("Check Redis connection...")
 	fmt.Println(redis.Version())
-	var t = make_table()
+
+	var dbconf = read_db_conf("conf.json")
+	var t = make_table(dbconf)
 
 	v1, err1 := t.setting.Get(t.ctx, "uu:m-matsuda").Result()
 	if err1 != nil {

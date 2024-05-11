@@ -9,9 +9,12 @@ package lens3
 // extra fields.
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	//"io"
+	"log"
+	"os"
 	//"reflect"
 )
 
@@ -30,9 +33,8 @@ type Conf_header struct {
 	Aws_signature string
 }
 
-type Redis_conf struct {
-	Host     string
-	Port     Number
+type Db_conf struct {
+	Ep       string
 	Password string
 }
 
@@ -92,15 +94,15 @@ type Manager_conf struct {
 	Sudo                     string
 	Port_min                 Number
 	Port_max                 Number
-	Minio_awake_duration     Number
-	Minio_setup_at_start     bool
+	Backend_awake_duration   Number // Minio_awake_duration
+	Backend_setup_at_start   bool   // Minio_setup_at_start
+	Backend_start_timeout    Number // Minio_start_timeout
+	Backend_setup_timeout    Number // Minio_setup_timeout
+	Backend_stop_timeout     Number // Minio_stop_timeout
+	Backend_command_timeout  Number // Minio_mc_timeout
 	Heartbeat_interval       Number
 	Heartbeat_miss_tolerance Number
 	Heartbeat_timeout        Number
-	Minio_start_timeout      Number
-	Minio_setup_timeout      Number
-	Minio_stop_timeout       Number
-	Minio_mc_timeout         Number
 }
 
 type Minio_conf struct {
@@ -130,10 +132,32 @@ type Gunicorn_conf struct {
 	Log_syslog_facility string
 }
 
+// READ_DB_CONF reads a conf-file for the keyval table.
+func read_db_conf(file string) Db_conf {
+	file = "conf.json"
+	var b1, err1 = os.ReadFile(file)
+	if err1 != nil {
+		log.Panicf("Reading a conf-file failed: file=%s, error=%v", file, err1)
+	}
+	var b2 = bytes.NewReader(b1)
+	var d = json.NewDecoder(b2)
+	d.DisallowUnknownFields()
+	var conf Db_conf
+	var err2 = d.Decode(&conf)
+	if err2 != nil {
+		log.Panic(err2)
+	}
+	if conf.Ep == "" || conf.Password == "" {
+		log.Panic("conf.redis.ep or conf.redis.password missing")
+	}
+	check_redis_entry(conf)
+	return conf
+}
+
 // Read_conf reads a configuration file and checks a structure is
 // properly filled.
 func Read_conf(file_ string) interface{} {
-	var _, err1 = ioutil.ReadFile("conf.yaml")
+	var _, err1 = os.ReadFile("conf.yaml")
 	if err1 != nil {
 		panic(err1)
 	}
@@ -261,23 +285,21 @@ func check_manager_entry(e Manager_conf) {
 	assert_slot(len(e.Sudo) > 0)
 	assert_slot(e.Port_min > 0)
 	assert_slot(e.Port_max > 0)
-	assert_slot(e.Minio_awake_duration > 0)
-	//assert_slot(Minio_setup_at_start : bool
+	assert_slot(e.Backend_awake_duration > 0)
+	//assert_slot(Backend_setup_at_start : bool
+	assert_slot(e.Backend_start_timeout > 0)
+	assert_slot(e.Backend_setup_timeout > 0)
+	assert_slot(e.Backend_stop_timeout > 0)
+	assert_slot(e.Backend_command_timeout > 0)
 	assert_slot(e.Heartbeat_interval > 0)
 	assert_slot(e.Heartbeat_miss_tolerance > 0)
 	assert_slot(e.Heartbeat_timeout > 0)
-	assert_slot(e.Minio_start_timeout > 0)
-	assert_slot(e.Minio_setup_timeout > 0)
-	assert_slot(e.Minio_stop_timeout > 0)
-	assert_slot(e.Minio_mc_timeout > 0)
 }
 
-func check_redis_entry(e Redis_conf) {
-	if len(e.Host) > 0 &&
-		e.Port > 0 &&
-		len(e.Password) > 0 {
+func check_redis_entry(e Db_conf) {
+	if len(e.Ep) > 0 && len(e.Password) > 0 {
 	} else {
-		panic(fmt.Errorf("Bad .yaml conf file."))
+		log.Panic(fmt.Errorf("Bad conf.json conf-file."))
 	}
 }
 

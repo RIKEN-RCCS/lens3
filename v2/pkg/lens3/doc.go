@@ -5,9 +5,10 @@
 
 // Lens3 implementation.  Lens3 service consists of three
 // sub-services, Multiplexer (Mux), Manager, and Registrar (Api).
-// Multiplexer is a proxy, Manager is a sentinel of backend servers,
-// and Registrar is a web-service to setup buckets and access-keys by
-// users.  They could be three programs, but they are by threads.  In
-// the implementaion, they share nothing but communicate via a
-// key-value store.
+// Lens3 also has Admintool command.  Multiplexer is a proxy, Manager
+// is a sentinel of backend servers, and Registrar is a web-service to
+// setup buckets and access-keys by users.  Manager is a supporting
+// service for Multiplexer.  They could be three programs, but they
+// are by threads.  In the implementaion, they share nothing but
+// communicate via a key-value store.
 package lens3

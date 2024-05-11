@@ -49,8 +49,8 @@ type backend_minio struct {
 	mc_alias      string
 	mc_config_dir string
 
-	//svr.env_minio map[string]string
-	//svr.env_mc map[string]string
+	//g.env_minio map[string]string
+	//g.env_mc map[string]string
 
 	*backend_minio_conf
 }
@@ -106,15 +106,15 @@ func (be *backend_minio_conf) clean_at_exit() {
 	clean_tmp()
 }
 
-func finalize_backend_minio(svr *backend_minio) {
-	if svr.mc_config_dir != "" {
-		os.RemoveAll(svr.mc_config_dir)
-		svr.mc_config_dir = ""
+func finalize_backend_minio(g *backend_minio) {
+	if g.mc_config_dir != "" {
+		os.RemoveAll(g.mc_config_dir)
+		g.mc_config_dir = ""
 	}
 }
 
-func (svr *backend_minio) get_super_part() *backend_process {
-	return &(svr.backend_process)
+func (g *backend_minio) get_super_part() *backend_process {
+	return &(g.backend_process)
 }
 
 func (proc *backend_minio) make_command_line(address string, directory string) backend_command {
@@ -135,7 +135,7 @@ func (proc *backend_minio) make_command_line(address string, directory string) b
 // of an error with messages "level=FATAL", it diagnoses the cause of
 // the error by the first fatal message.  It returns a retry response
 // only on the port-in-use error.
-func (svr *backend_minio) check_startup(outerr int, ss []string) start_result {
+func (g *backend_minio) check_startup(outerr int, ss []string) start_result {
 	fmt.Println("minio.check_startup()")
 	var mm, _ = decode_json(ss)
 	//fmt.Printf("mm=%T\n", mm)
@@ -180,22 +180,22 @@ func (svr *backend_minio) check_startup(outerr int, ss []string) start_result {
 	}
 }
 
-func (svr *backend_minio) establish() {
+func (g *backend_minio) establish() {
 	fmt.Println("minio.establish()")
-	var _ = mc_alias_set(svr)
+	var _ = mc_alias_set(g)
 }
 
 // SHUTDOWN stops a server.  It first tries MC admin-service-stop,
 // then tries ...
-func (svr *backend_minio) shutdown() error {
+func (g *backend_minio) shutdown() error {
 	fmt.Println("minio.shutdown()")
-	var proc = svr.get_super_part()
+	var proc = g.get_super_part()
 
 	logger.debugf("Mux(pool=%s) stopping MinIO: %v.",
 		proc.Pool, proc)
-	//assert_fatal(svr.mc_alias != nil)
+	//assert_fatal(g.mc_alias != nil)
 	//defer mc_alias_remove(svr)
-	var v1 = mc_admin_service_stop(svr)
+	var v1 = mc_admin_service_stop(g)
 	if v1.values != nil {
 	}
 	return nil
@@ -203,28 +203,28 @@ func (svr *backend_minio) shutdown() error {
 
 // HEARTBEAT http-gets the path "/minio/health/live" and returns an
 // http status code.  It returns 500 on a connection failure.
-func (svr *backend_minio) heartbeat() int {
+func (g *backend_minio) heartbeat() int {
 	//fmt.Println("minio.heartbeat()")
-	var proc = svr.get_super_part()
+	var proc = g.get_super_part()
 
-	if svr.heartbeat_client == nil {
+	if g.heartbeat_client == nil {
 		//fmt.Println("minio.heartbeat(1) proc=", proc)
 		var timeout = (proc.heartbeat_timeout * time.Second)
 		//fmt.Println("minio.heartbeat(2) proc=", proc)
-		svr.heartbeat_client = &http.Client{
+		g.heartbeat_client = &http.Client{
 			Timeout: timeout,
 		}
-		svr.heartbeat_url = fmt.Sprintf("http://%s/minio/health/live", proc.Backend_ep)
-		svr.failure_message = fmt.Sprintf("Mux(pool=%s)"+
+		g.heartbeat_url = fmt.Sprintf("http://%s/minio/health/live", proc.Backend_ep)
+		g.failure_message = fmt.Sprintf("Mux(pool=%s)"+
 			" Heartbeating MinIO failed: urlopen error,"+
-			" url=(%s);", proc.Pool, svr.heartbeat_url)
+			" url=(%s);", proc.Pool, g.heartbeat_url)
 	}
 
-	var c = svr.heartbeat_client
-	var rsp, err1 = c.Get(svr.heartbeat_url)
+	var c = g.heartbeat_client
+	var rsp, err1 = c.Get(g.heartbeat_url)
 	if err1 != nil {
-		logger.debug(fmt.Sprintf("Mux(pool=) Heartbeat MinIO failed (pool=%s): %s.\n",
-			proc.Pool, err1))
+		logger.debugf("Mux(pool=%s) Heartbeat MinIO failed: %s.\n",
+			proc.Pool, err1)
 		return 500
 	}
 	defer rsp.Body.Close()
@@ -235,8 +235,8 @@ func (svr *backend_minio) heartbeat() int {
 	//fmt.Println("heartbeat code=", rsp.StatusCode)
 	//fmt.Println("heartbeat msg=", m)
 	if proc.verbose {
-		logger.debugf("Mux(pool=%s) Heartbeat MinIO: code=%d.",
-			proc.Pool, rsp.StatusCode)
+		logger.debugf("Mux(pool=%s) Heartbeat MinIO: count=%d code=%d.",
+			proc.Pool, proc.heartbeat_misses, rsp.StatusCode)
 	}
 	return rsp.StatusCode
 }
@@ -337,15 +337,15 @@ func simplify_mc_message(s []byte) mc_result {
 // EXECUTE_MC_CMD runs an MC-command command and checks its output.
 // Note that a timeout kills the process by SIGKILL.  MEMO: Timeout of
 // context returns "context.deadlineExceededError".
-func execute_mc_cmd(svr *backend_minio, name string, command []string) mc_result {
-	//var proc = svr.get_super_part()
-	assert_fatal(svr.mc_alias != "" && svr.mc_config_dir != "")
+func execute_mc_cmd(g *backend_minio, name string, command []string) mc_result {
+	//var proc = g.get_super_part()
+	assert_fatal(g.mc_alias != "" && g.mc_config_dir != "")
 	var argv = append([]string{
-		svr.bin_mc,
+		g.bin_mc,
 		"--json",
-		fmt.Sprintf("--config-dir=%s", svr.mc_config_dir)},
+		fmt.Sprintf("--config-dir=%s", g.mc_config_dir)},
 		command...)
-	var timeout = (svr.minio_mc_timeout * time.Second)
+	var timeout = (g.minio_mc_timeout * time.Second)
 	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	var cmd = exec.CommandContext(ctx, argv[0], argv[1:]...)
@@ -353,7 +353,7 @@ func execute_mc_cmd(svr *backend_minio, name string, command []string) mc_result
 	cmd.Stdin = nil
 	cmd.Stdout = &outb
 	cmd.Stderr = &errb
-	cmd.Env = *svr.environ
+	cmd.Env = *g.environ
 	var err1 = cmd.Run()
 	fmt.Println("cmd.Run()=", err1)
 	switch err := err1.(type) {
@@ -372,7 +372,7 @@ func execute_mc_cmd(svr *backend_minio, name string, command []string) mc_result
 			argv, err, outb.String(), errb.String())
 	}
 	var wstatus = cmd.ProcessState.ExitCode()
-	if svr.verbose {
+	if g.verbose {
 		logger.debugf(("Mux(pool=) MC-command done:" +
 			" cmd=%v; status=%v stdout=(%s) stderr=(%s)"),
 			argv, wstatus, outb.String(), errb.String())
@@ -386,7 +386,7 @@ func execute_mc_cmd(svr *backend_minio, name string, command []string) mc_result
 	}
 	var v1 = simplify_mc_message(outb.Bytes())
 	if v1.values != nil {
-		if svr.verbose {
+		if g.verbose {
 			logger.debugf("Mux(pool=) MC-command OK: cmd=%v", command)
 		} else {
 			logger.debugf("Mux(pool=) MC-command OK: cmd=%s", name)
@@ -399,42 +399,42 @@ func execute_mc_cmd(svr *backend_minio, name string, command []string) mc_result
 	return v1
 }
 
-func mc_alias_set(svr *backend_minio) mc_result {
-	assert_fatal(svr.mc_alias == "" && svr.mc_config_dir == "")
+func mc_alias_set(g *backend_minio) mc_result {
+	assert_fatal(g.mc_alias == "" && g.mc_config_dir == "")
 	var rnd = strings.ToLower(random_string(12))
-	var url = fmt.Sprintf("http://%s", svr.Backend_ep)
-	//svr.mc_config_dir = tempfile.TemporaryDirectory()
+	var url = fmt.Sprintf("http://%s", g.Backend_ep)
+	//g.mc_config_dir = tempfile.TemporaryDirectory()
 	var dir, err1 = os.MkdirTemp("", "lens3-mc-")
 	if err1 != nil {
 		logger.errorf("Mux(pool=) %s", err1)
 		return mc_result{nil, err1.Error()}
 	}
-	svr.mc_config_dir = dir
-	svr.mc_alias = fmt.Sprintf("pool-%s-%s", svr.Pool, rnd)
-	var v1 = execute_mc_cmd(svr, "alias_set",
-		[]string{"alias", "set", svr.mc_alias, url,
-			svr.Root_access, svr.Root_secret,
+	g.mc_config_dir = dir
+	g.mc_alias = fmt.Sprintf("pool-%s-%s", g.Pool, rnd)
+	var v1 = execute_mc_cmd(g, "alias_set",
+		[]string{"alias", "set", g.mc_alias, url,
+			g.Root_access, g.Root_secret,
 			"--api", "S3v4"})
 	if v1.values == nil {
-		svr.mc_alias = ""
-		svr.mc_config_dir = ""
+		g.mc_alias = ""
+		g.mc_config_dir = ""
 	}
 	return v1
 }
 
-func mc_alias_remove(svr *backend_minio) mc_result {
-	assert_fatal(svr.mc_alias != "" && svr.mc_config_dir != "")
-	var v1 = execute_mc_cmd(svr, "alias_remove",
-		[]string{"alias", "remove", svr.mc_alias})
+func mc_alias_remove(g *backend_minio) mc_result {
+	assert_fatal(g.mc_alias != "" && g.mc_config_dir != "")
+	var v1 = execute_mc_cmd(g, "alias_remove",
+		[]string{"alias", "remove", g.mc_alias})
 	if v1.values == nil {
-		svr.mc_alias = ""
-		svr.mc_config_dir = ""
+		g.mc_alias = ""
+		g.mc_config_dir = ""
 	}
 	return v1
 }
 
-func mc_admin_service_stop(svr *backend_minio) mc_result {
-	var v1 = execute_mc_cmd(svr, "admin_service_stop",
-		[]string{"admin", "service", "stop", svr.mc_alias})
+func mc_admin_service_stop(g *backend_minio) mc_result {
+	var v1 = execute_mc_cmd(g, "admin_service_stop",
+		[]string{"admin", "service", "stop", g.mc_alias})
 	return v1
 }

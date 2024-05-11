@@ -26,7 +26,7 @@ func Test_misc(t *testing.T) {
 	//test_collect_process_output()
 	//test_pipe_timeout()
 	//test_get_lines()
-	test_start_service()
+	start_service_for_test()
 	// check_type_switch_on_nil()
 	// test_minimal_environ()
 }
@@ -220,9 +220,4 @@ func test_get_lines() {
 		ch1 <- s2
 	}
 	close(ch1)
-}
-
-func test_start_service() {
-	fmt.Println("test_start_service")
-	start_service_for_test()
 }

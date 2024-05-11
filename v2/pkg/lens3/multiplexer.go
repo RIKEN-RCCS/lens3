@@ -18,25 +18,25 @@ package lens3
 import (
 	"fmt"
 	//"flag"
-	"context"
+	//"context"
 	//"io"
 	"log"
 	//"os"
 	//"net"
-	"maps"
+	//"maps"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	//"strings"
 	"time"
 	//"runtime"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	signer "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 )
 
 // MULTIPLEXER is a single object, "the_multiplexer".  It is
 // with threads of a child process reaper.
 type multiplexer struct {
+	verbose bool
+
 	table keyval_table
 
 	// BE factory is to make a backend.
@@ -162,11 +162,16 @@ func make_forwarding_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 		//var proc = get_backend_proc(m.table, "mMwfyMzLwOlb8QLYANRM")
 		//fmt.Println("*** POOL=", pool)
 
-		var goodsign = check_credential_in_request(r)
+		var keypair = [2]string{
+			"yDRzcPdqHkwupPqryAvO",
+			"ZNDov7ZJ5ecAksaJHaUxmoWwNOb52ZYj3lAdTq1lmkJGqaMx",
+		}
+
+		var goodsign = check_credential_in_request(m.verbose, r, keypair)
 		if !goodsign {
 			http.Error(w, "BAD", http_status_401_unauthorized)
 			raise(&proxy_exc{http_status_401_unauthorized,
-				"bad sign"})
+				"bad signature"})
 		}
 
 		var pool = "mMwfyMzLwOlb8QLYANRM"
@@ -193,118 +198,6 @@ func make_forwarding_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 		r.Header["lens3-pool"] = []string{pool}
 		proxy.ServeHTTP(w, r)
 	})
-}
-
-// Date format is "X-Amz-Date=20240509T081007Z".
-func check_credential_in_request(q *http.Request) bool {
-	var a1 = q.Header.Get("Authorization")
-
-	var service = "s3"
-	var region = "us-east-1"
-	var d = q.Header.Get("X-Amz-Date")
-	var datestring = (d[0:4] + "-" +
-		d[4:6] + "-" +
-		d[6:11] + ":" +
-		d[11:13] + ":" +
-		d[13:])
-	fmt.Println("*** old X-Amz-Date=", d)
-	fmt.Println("*** old date=", datestring)
-	var date, errx = time.Parse(time.RFC3339, datestring)
-	assert_fatal(errx == nil)
-	fmt.Println("*** DATE=", date, "for date=", datestring)
-
-	var r = *q
-	r.Header = maps.Clone(q.Header)
-
-	fmt.Println("*** r.Host=", r.Host)
-
-	// Approprite filtering needed.
-	r.Header.Del("Accept-Encoding")
-
-	var credentials = aws.Credentials{
-		AccessKeyID:     "yDRzcPdqHkwupPqryAvO",
-		SecretAccessKey: "ZNDov7ZJ5ecAksaJHaUxmoWwNOb52ZYj3lAdTq1lmkJGqaMx",
-		//SessionToken string
-		//Source string
-		//CanExpire bool
-		//Expires time.Time
-	}
-	var hash = r.Header.Get("X-Amz-Content-Sha256")
-	fmt.Println("*** X-Amz-Content-Sha256=", hash)
-	if hash == "" {
-		// It is a bad idea to use a hash for an empty payload.
-		hash = empty_payload_hash_sha256
-	}
-	var s = signer.NewSigner(func(s *signer.SignerOptions) {
-		// No options.
-	})
-	var timeout = time.Duration(10 * time.Second)
-	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	var err1 = s.SignHTTP(ctx, credentials, &r,
-		hash, service, region, date)
-	assert_fatal(err1 == nil)
-
-	var a2 = r.Header.Get("Authorization")
-
-	fmt.Println("*** Authorization(1)=", a1)
-	fmt.Println("*** Authorization(2)=", a2)
-	fmt.Println("*** header=", r.Header)
-
-	return a1 == a2
-}
-
-// SIGN_BY_BACKEND_CREDENTIAL replaces an authorization header for
-// the backend.
-func sign_by_backend_credential(r *http.Request, proc Process_record) {
-	if false {
-		fmt.Println("r.Host(1)=", r.Host)
-		fmt.Println("r.Header(1)=", r.Header)
-		var a1 = r.Header.Get("Authorization")
-		fmt.Println("Authorization(1)=", a1)
-		var a2 = r.Header.Get("x-amz-content-sha256")
-		fmt.Println("x-amz-content-sha256(1)=", a2)
-	}
-
-	fmt.Println("*** proc.Backend_ep=", proc.Backend_ep)
-
-	//r.Header.Del("Accept-Encoding")
-	r.Host = proc.Backend_ep
-	var credentials = aws.Credentials{
-		AccessKeyID:     proc.Root_access,
-		SecretAccessKey: proc.Root_secret,
-		//SessionToken string
-		//Source string
-		//CanExpire bool
-		//Expires time.Time
-	}
-	var hash = r.Header.Get("X-Amz-Content-Sha256")
-	if hash == "" {
-		// It is a bad idea to use a hash for an empty payload.
-		hash = empty_payload_hash_sha256
-	}
-	var service = "s3"
-	var region = "us-east-1"
-	var date = time.Now()
-	var s = signer.NewSigner(func(s *signer.SignerOptions) {
-		// No options.
-	})
-	var timeout = time.Duration(10 * time.Second)
-	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	var err1 = s.SignHTTP(ctx, credentials, r,
-		hash, service, region, date)
-	assert_fatal(err1 == nil)
-
-	if false {
-		fmt.Println("date(2)=", date)
-		fmt.Println("r.Host(2)=", r.Host)
-		fmt.Println("r.Header(2)=", r.Header)
-		var a3 = r.Header.Get("Authorization")
-		fmt.Println("Authorization(2)=", a3)
-		var a4 = r.Header.Get("x-amz-content-sha256")
-		fmt.Println("x-amz-content-sha256(2)=", a4)
-	}
 }
 
 // It double checks m.mux_addrs, because mux_addrs is updated only

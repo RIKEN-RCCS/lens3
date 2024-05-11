@@ -27,6 +27,15 @@ func logger_default() *log_writer {
 	}
 }
 
+func (w *log_writer) critf(f string, a ...any) error {
+	return w.error(fmt.Sprintf(f, a...))
+}
+
+func (w *log_writer) crit(m string) error {
+	w.o.Printf("ERR %s", m)
+	return nil
+}
+
 func (w *log_writer) errorf(f string, a ...any) error {
 	return w.error(fmt.Sprintf(f, a...))
 }

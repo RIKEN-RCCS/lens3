@@ -77,32 +77,33 @@ A __bd:directory__ is a bucket-directory entry.  The entry is
 atomically assigned.  Scanning of these entries is necessary to find a
 list of pool-directories, because Lens3 does not keep a list.
 
-Lens3 forbids running multiple MinIO instances in the same directory.
-Note, however, directory links can fool the detection of the same
-directory.  In addition, MinIO instances may run in the same directory
-transiently in a race in starting/stopping instances.
+Lens3 forbids running multiple backend instances in the same
+directory.  Note, however, directory links can fool the detection of
+the same directory.  In addition, backend instances may run in the
+same directory transiently in a race in starting/stopping instances.
 
 ### Process-Table (DB=2)
 
 | Key             | Value           | Notes   |
 | ----            | ----            | ---- |
-| ma:pool-id      | MinIO-manager   | \*1, \*2 |
-| mn:pool-id      | MinIO-process   | |
+| ma:pool-id      | backend-manager   | \*1, \*2 |
+| mn:pool-id      | backend-process   | |
 | mx:mux-endpoint | Mux-description | \*2 |
 
-An __ma:pool-id__ entry records a MinIO-manager under which a MinIO
-process runs.  It is a record: {"mux_host", "mux_port", "start_time"}.
-It is atomically set to ensure uniqueness of a running Manager (a
-loser will quit).  A start-time makes the chosen entry distinguishable
-(but not strictly distinguishable).
+An __ma:pool-id__ entry records a backend-manager under which a
+backend process runs.  It is a record: {"mux_ep", "start_time"}.  It
+is atomically set to ensure uniqueness of a running Manager (a loser
+will quit).  A start-time makes the chosen entry distinguishable (but
+not strictly distinguishable).
 
-An __mn:pool-id__ entry is a MinIO-process description: {"minio_ep",
-"minio_pid", "admin", "password", "mux_host", "mux_port",
-"manager_pid", "modification_time"}.  A admin/password pair specifies
-an administrator of a MinIO instance.
+An __mn:pool-id__ entry is a backend-process description:
+{"backend_ep", "backend_pid", "root_access", "root_secret", "mux_ep",
+"manager_pid", "modification_time"}.  A root_access/root_secret pair
+specifies an administrator access for a backend instance.
+"manager_pid" is unused.
 
 An __mx:mux-endpoint__ entry is a Lens3-Mux description that is a
-record: {"host", "port", "start_time", "modification_time"}.  A key is
+record: {"mux_ep", "start_time", "modification_time"}.  A key is
 an endpoint of a Lens3-Mux (a host:port string).  The content has no
 particular use.  A start-time is a time Lens3-Mux started.  A
 modification-time is a time the record is refreshed.
@@ -111,21 +112,21 @@ modification-time is a time the record is refreshed.
 
 | Key            | Value              | Notes   |
 | ----           | ----               | ---- |
-| ep:pool-id     | MinIO-endpoint     | |
+| ep:pool-id     | backend-endpoint   | |
 | bk:bucket-name | bucket-description | A mapping by a bucket-name \*1 |
 | ts:pool-id     | timestamp          | Timestamp on an access (string) |
 | us:uid         | timestamp          | Timestamp on a user access (string) |
 
 
-An __ep:pool-id__ entry is a MinIO-endpoint (a host:port string).
+An __ep:pool-id__ entry is a backend-endpoint (a host:port string).
 
 A __bk:bucket-name__ entry is a record of a bucket-description:
 {"pool", "bkt_policy", "modification_time"}.  A bkt-policy indicates
 public R/W status of a bucket: {"none", "upload", "download",
-"public"}, whose names are borrowed from MinIO.
+"public"}, whose names are borrowed from backend.
 
 A __ts:pool-id__ entry is a last access timestamp of a pool.  It is
-used to decide whether to stop a MinIO instance.
+used to decide whether to stop a backend instance.
 
 A __us:uid__ is an access timestamp of a user.  It is just a record.
 It is used to find out inactive users (no tools are provided).
@@ -146,7 +147,7 @@ A __pi:random__ entry is a pool-id and it is a record: {"owner",
 A __ky:random__ entry is an access-key and it is a record: {"owner",
 "secret_key", "key_policy", "expiration_time", "modification_time"},
 where an owner is a pool-id.  A key-policy is one of {"readwrite",
-"readonly", "writeonly"}, whose names are borrowed from MinIO.
+"readonly", "writeonly"}, whose names are borrowed from backend.
 
 ## Bucket policy
 
@@ -161,7 +162,7 @@ mc policy set none alias/bucket
 ```
 
 Accesses to deleted buckets in Lens3 are refused at Lens3-Mux, but
-they remain potentially accessible in MinIO, which have access policy
+they remain potentially accessible in backend, which have access policy
 "none" and are accessible using access-keys.
 
 ## Redis Database Operations

@@ -18,109 +18,112 @@ import (
 	//"reflect"
 )
 
-// Number representation in the configuration structure is integer.
-type Number int
-
-// Lens3_conf is a union of Mux_conf|Api_conf.
-type Lens3_conf interface{ lens3_conf_union() }
-
-func (Mux_conf) lens3_conf_union() {}
-func (Api_conf) lens3_conf_union() {}
-
-type Conf_header struct {
-	Subject       string
-	Version       string
-	Aws_signature string
-}
-
+// DB_CONF is a pair of an endpoint and password to access a
+// keyval-DB, and it is usually stored in a file in "etc".
 type Db_conf struct {
 	Ep       string
 	Password string
 }
 
+// Number representation in the configuration structure is integer.
+type Number int
+
+// LENS3_CONF is a union of Mux_conf|Api_conf.
+type lens3_conf interface{ lens3_conf_union() }
+
+func (Mux_conf) lens3_conf_union() {}
+func (Api_conf) lens3_conf_union() {}
+
 // Mux_conf is a configuration of Mux.  mux_node_name and log_file are
 // optional.
 type Mux_conf struct {
 	Conf_header
-	//Subject       string
-	//Version       string
-	//Aws_signature string
-	Gunicorn      Gunicorn_conf
-	Multiplexer   Multiplexer_conf
-	Minio_Manager Manager_conf
-	Minio         Minio_conf
-	Log_file      string
-	Log_syslog    Syslog_conf
+	//Gunicorn      Gunicorn_conf
+	Multiplexer Multiplexer_conf `json:"multiplexer"`
+	Manager     Manager_conf     `json:"manager"`
+	Minio       Minio_conf       `json:"minio"`
+	Log_file    string           `json:"log_file"`
+	Log_syslog  Syslog_conf      `json:"log_syslog"`
 }
 
 // Api_conf is a configuration of Api.  log_file is optional.
 type Api_conf struct {
 	Conf_header
-	//Subject       string
-	//Version       string
-	//Aws_signature string
-	Gunicorn   Gunicorn_conf
-	Controller Controller_conf
-	UI         UI_conf
-	Minio      Minio_conf
-	Log_file   string
-	Log_syslog Syslog_conf
+	//Gunicorn   Gunicorn_conf
+	Registrar  Registrar_conf `json:"registrar"`
+	UI         UI_conf        `json:"ui"`
+	Minio      Minio_conf     `json:"minio"`
+	Log_file   string         `json:"log_file"`
+	Log_syslog Syslog_conf    `json:"log_syslog"`
+}
+
+type Conf_header struct {
+	Subject       string `json:"subject"`
+	Version       string `json:"version"`
+	Aws_signature string `json:"aws_signature"`
 }
 
 type Multiplexer_conf struct {
-	Front_host             string
-	Trusted_proxies        []string
-	Mux_ep_update_interval Number
-	Forwarding_timeout     Number
-	Probe_access_timeout   Number
-	Bad_response_delay     Number
-	Busy_suspension_time   Number
-	Mux_node_name          string
+	Port                    Number   `json:"port"`
+	Front_host              string   `json:"front_host"`
+	Trusted_proxies         []string `json:"trusted_proxies"`
+	Mux_ep_update_interval  Number   `json:"mux_ep_update_interval"`
+	Forwarding_timeout      Number   `json:"forwarding_timeout"`
+	Probe_access_timeout    Number   `json:"probe_access_timeout"`
+	Bad_response_delay      Number   `json:"bad_response_delay"`
+	Busy_suspension_time    Number   `json:"busy_suspension_time"`
+	Mux_node_name           string   `json:"mux_node_name"`
+	Backend                 string   `json:"backend"`
+	Backend_command_timeout Number   `json:"backend_command_timeout"`
+	Mux_access_log_file     string   `json:"mux_access_log_file"`
 }
 
-type Controller_conf struct {
-	Front_host      string
-	Trusted_proxies []string
-	Base_path       string
-	Claim_uid_map   string
+type Registrar_conf struct {
+	Port            Number   `json:"port"`
+	Front_host      string   `json:"front_host"`
+	Trusted_proxies []string `json:"trusted_proxies"`
+	Base_path       string   `json:"base_path"`
+	Claim_uid_map   string   `json:"claim_uid_map"`
 	// {"id", "email-name", "map"}
-	Probe_access_timeout Number
-	Minio_mc_timeout     Number
-	Max_pool_expiry      Number
-	Csrf_secret_seed     string
+	Probe_access_timeout    Number `json:"probe_access_timeout"`
+	Max_pool_expiry         Number `json:"max_pool_expiry"`
+	Csrf_secret_seed        string `json:"csrf_secret_seed"`
+	Backend                 string `json:"backend"`
+	Backend_command_timeout Number `json:"backend_command_timeout"`
+	Api_access_log_file     string `json:"api_access_log_file"`
 }
 
 type Manager_conf struct {
-	Sudo                     string
-	Port_min                 Number
-	Port_max                 Number
-	Backend_awake_duration   Number // Minio_awake_duration
-	Backend_setup_at_start   bool   // Minio_setup_at_start
-	Backend_start_timeout    Number // Minio_start_timeout
-	Backend_setup_timeout    Number // Minio_setup_timeout
-	Backend_stop_timeout     Number // Minio_stop_timeout
-	Backend_command_timeout  Number // Minio_mc_timeout
-	Heartbeat_interval       Number
-	Heartbeat_miss_tolerance Number
-	Heartbeat_timeout        Number
+	Sudo                     string `json:"sudo"`
+	Port_min                 Number `json:"port_min"`
+	Port_max                 Number `json:"port_max"`
+	Backend_awake_duration   Number `json:"backend_awake_duration"`  // Minio_awake_duration
+	Backend_setup_at_start   bool   `json:"backend_setup_at_start"`  // Minio_setup_at_start
+	Backend_start_timeout    Number `json:"backend_start_timeout"`   // Minio_start_timeout
+	Backend_setup_timeout    Number `json:"backend_setup_timeout"`   // Minio_setup_timeout
+	Backend_stop_timeout     Number `json:"backend_stop_timeout"`    // Minio_stop_timeout
+	Backend_command_timeout  Number `json:"backend_command_timeout"` // Minio_mc_timeout
+	Heartbeat_interval       Number `json:"heartbeat_interval"`
+	Heartbeat_miss_tolerance Number `json:"heartbeat_miss_tolerance"`
+	Heartbeat_timeout        Number `json:"heartbeat_timeout"`
 }
 
 type Minio_conf struct {
-	Minio string
-	Mc    string
+	Minio string `json:"minio"`
+	Mc    string `json:"mc"`
 }
 
 type UI_conf struct {
-	S3_url        string
-	Footer_banner string
+	S3_url        string `json:"s3_url"`
+	Footer_banner string `json:"footer_banner"`
 }
 
 type Syslog_conf struct {
-	Facility string
-	Priority string
+	Facility string `json:"facility"`
+	Priority string `json:"priority"`
 }
 
-type Gunicorn_conf struct {
+type Gunicorn_conf__ struct {
 	Port                Number
 	Workers             Number
 	Threads             Number
@@ -202,7 +205,7 @@ func Read_conf(file_ string) interface{} {
 			panic(fmt.Sprint("Bad .yaml conf file:", err5))
 		}
 		fmt.Println("MUX CONF is", muxconf)
-		check_mux_conf(muxconf)
+		//check_mux_conf(muxconf)
 		return muxconf
 	case "api":
 		var apiconf Api_conf
@@ -211,7 +214,7 @@ func Read_conf(file_ string) interface{} {
 			panic(fmt.Sprint("Bad .yaml conf file:", err6))
 		}
 		fmt.Println("API CONF is", apiconf)
-		check_api_conf(apiconf)
+		//check_api_conf(apiconf)
 		return apiconf
 	default:
 		panic(fmt.Sprint("Bad .yaml conf file: Bad subject field."))
@@ -219,16 +222,16 @@ func Read_conf(file_ string) interface{} {
 }
 
 func check_mux_conf(conf Mux_conf) {
-	check_gunicorn_entry(conf.Gunicorn)
+	//check_gunicorn_entry(conf.Gunicorn)
 	check_multiplexer_entry(conf.Multiplexer)
-	check_manager_entry(conf.Minio_Manager)
+	check_manager_entry(conf.Manager)
 	check_minio_entry(conf.Minio)
 	check_syslog_entry(conf.Log_syslog)
 }
 
 func check_api_conf(conf Api_conf) {
-	check_gunicorn_entry(conf.Gunicorn)
-	check_controller_entry(conf.Controller)
+	//check_gunicorn_entry(conf.Gunicorn)
+	check_registrar_entry(conf.Registrar)
 	check_minio_entry(conf.Minio)
 	check_ui_entry(conf.UI)
 	check_syslog_entry(conf.Log_syslog)
@@ -236,11 +239,11 @@ func check_api_conf(conf Api_conf) {
 
 func assert_slot(c bool) {
 	if !c {
-		panic(fmt.Errorf("Bad .yaml conf file."))
+		panic(fmt.Errorf("Bad conf file."))
 	}
 }
 
-func check_gunicorn_entry(e Gunicorn_conf) {
+func check_gunicorn_entry(e Gunicorn_conf__) {
 	assert_slot(e.Port > 0)
 	assert_slot(e.Workers > 0)
 	//assert_slot(e.Threads >= 0)
@@ -252,14 +255,14 @@ func check_gunicorn_entry(e Gunicorn_conf) {
 	assert_slot(len(e.Log_syslog_facility) >= 0)
 }
 
-func check_controller_entry(e Controller_conf) {
+func check_registrar_entry(e Registrar_conf) {
 	if len(e.Front_host) > 0 &&
 		//e.Trusted_proxies : []string
 		len(e.Base_path) > 0 &&
 		len(e.Claim_uid_map) > 0 &&
 		// {"id", "email-name", "map"}
 		e.Probe_access_timeout > 0 &&
-		e.Minio_mc_timeout > 0 &&
+		e.Backend_command_timeout > 0 &&
 		e.Max_pool_expiry > 0 &&
 		len(e.Csrf_secret_seed) > 0 {
 	} else {

@@ -37,7 +37,7 @@ import (
 type multiplexer struct {
 	verbose bool
 
-	table keyval_table
+	table *keyval_table
 
 	// BE factory is to make a backend.
 	//be backend_factory

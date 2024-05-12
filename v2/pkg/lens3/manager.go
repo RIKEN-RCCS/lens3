@@ -66,7 +66,7 @@ type manager struct {
 	// CH_SIG is a channel to receive SIGCHLD.
 	ch_sig chan os.Signal
 
-	table keyval_table
+	table *keyval_table
 
 	backend_conf
 }

@@ -1,21 +1,21 @@
-/* Accessors to Key Value DB (Valkey/Redis). */
+/* Accessors to a Keyval-DB (Valkey/Redis). */
 
 // Copyright 2022-2024 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
 
 package lens3
 
-// A table is accessed like a single database, while it is implemented
-// by a couple of databases inside.  Disallowing extra fields is done
-// by setting "DisallowUnknownFields()" in "encoding/json/Decoder".
+// A table is accessed like a single database, while consists of a set
+// of five databases to easy manual inspection in the keyval-DB.
 //
 // CONSISTENCY OF ENTRIES. uid <-> claim is one-to-one if a user-info
 // contains a claim.  Recovery should remove orphaned claims.
 
-// This is by "go-redis/v8".  Use "go-redis/v8" for Redis-6, or
-// "go-redis/v9" for Redis-7.
-
 import (
+	// This is by "go-redis/v8".  Use "go-redis/v8" for Redis-6, or
+	// "go-redis/v9" for Redis-7.
+
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -57,71 +57,110 @@ func panic_non_nil(w any) {
 	}
 }
 
-type User_info struct {
-	User_uid          string
-	Claim             string
-	Groups            []string
-	Enabled           bool
-	Modification_time int64
+/* SETTING-TABLE */
+
+// Configuration entries "cf:api", "cf:mux", and "cf:mux":mux-name are
+// definedin "conf.go".
+
+// "uu":uid entry.
+type User_record struct {
+	Uid                     string   `json:"uid"`
+	Claim                   string   `json:"claim"`
+	Groups                  []string `json:"groups"`
+	Enabled                 bool     `json:"enabled"`
+	Blocked                 bool     `json:"blocked"`
+	Ok_terms_and_conditions bool     `json:"ok_terms_and_conditions"`
+	Modification_time       int64    `json:"modification_time"`
 }
 
+// "um":claim entry is a string.
+type user_claim_record string
+
+/* STORAGE-TABLE */
+
+// "po":pool-name entry.
 type Pool_record struct {
-	Pool              string
-	Owner_uid         string
-	Owner_gid         string
-	Buckets_directory string
-	Probe_key         string
-	Online_status     bool
-	Expiration_time   int64
-	Modification_time int64
+	Pool              string `json:"pool_name"`
+	Owner_uid         string `json:"owner_uid"`
+	Owner_gid         string `json:"owner_gid"`
+	Buckets_directory string `json:"buckets_directory"`
+	Probe_key         string `json:"probe_key"`
+	Online_status     bool   `json:"online_status"`
+	Expiration_time   int64  `json:"expiration_time"`
+	Modification_time int64  `json:"modification_time"`
 }
 
-// PROCESS_RECORD is about a backend.  A pair of ROOT_ACCESS_KEY and
-// ROOT_SECRET_KEY is a credential for accessing a backend.
-type Process_record struct {
-	Backend_ep        string //Minio_ep
-	Backend_pid       int    //Minio_pid
-	Root_access       string //Admin
-	Root_secret       string //Password
-	Mux_ep            string // Mux_host+Mux_port
-	Manager_pid       int
-	Modification_time int64
-}
-
-type Bucket_record struct {
-	Pool              string
-	Bkt_policy        string
-	Modification_time int64
-}
-
+// "ps":pool-name entry.
 type Pool_state_record struct {
-	State             Pool_state
-	Reason            string
-	Modification_time int64
+	State             Pool_state `json:"state"`
+	Reason            string     `json:"reason"`
+	Modification_time int64      `json:"modification_time"`
 }
 
+// "bd":directory entry is a string.
+type directory_owner_record string
+
+/* PROCESS-TABLE */
+
+// "ma":pool-name entry.
 type Manager_record struct {
-	Mux_host   string
-	Mux_port   int64
-	Start_time int64
+	Mux_ep     string `json:"mux_ep"` // mux_host:mux_port
+	Start_time int64  `json:"start_time"`
 }
 
+// "mn":pool-name entry.  PROCESS_RECORD is about a backend.  A pair
+// of root_access and root_secret is a credential for accessing a
+// backend.  manager_pid is unused.
+type Process_record struct {
+	Backend_ep        string `json:"backend_ep"`  // Minio_ep
+	Backend_pid       int    `json:"backend_pid"` // Minio_pid
+	Root_access       string `json:"root_access"` // Admin
+	Root_secret       string `json:"root_secret"` // Password
+	Mux_ep            string `json:"mux_ep"`      // Mux_host+Mux_port
+	Manager_pid       int    `json:"manager_pid"`
+	Modification_time int64  `json:"modification_time"`
+}
+
+// "mx":mux-endpoint entry.
 type Mux_record struct {
-	Host              string
-	Port              int
-	Start_time        int64
-	Modification_time int64
+	Mux_ep            string `json:"mux_ep"` // Host+Port
+	Start_time        int64  `json:"start_time"`
+	Modification_time int64  `json:"modification_time"`
 }
 
-type Pair_name_timestamp struct {
-	Name      string
-	Timestamp int64
+/* ROUTING-TABLE */
+
+// "ep":pool-name entry is a string.
+type backend_ep_record string
+
+// "bk":bucket-name entry.
+type Bucket_record struct {
+	Pool              string `json:"pool"`
+	Bkt_policy        string `json:"bkt_policy"`
+	Modification_time int64  `json:"modification_time"`
 }
 
-type routing_bucket_desc_keys__ struct {
-	pool              string
-	bkt_policy        string
-	modification_time int64
+// "ts":pool-name entry is an int64
+type pool_access_timestamp_record int64
+
+// "us":uid entry is an int64
+type user_access_timestamp_record int64
+
+/* MONOKEY-TABLE */
+
+// "pi":pool-name entry.
+type Pid_record struct {
+	Owner_uid         string `json:"owner"`
+	Modification_time int64  `json:"modification_time"`
+}
+
+// "ky":random entry.
+type Key_record struct {
+	Owner             string `json:"owner"`
+	Secret_key        string `json:"secret_key"`
+	Key_policy        string `json:"key_policy"`
+	Expiration_time   int64  `json:"expiration_time"`
+	Modification_time int64  `json:"modification_time"`
 }
 
 // Xid_record is a union of Pid_record|Key_record.
@@ -129,25 +168,6 @@ type Xid_record interface{ xid_union() }
 
 func (Pid_record) xid_union() {}
 func (Key_record) xid_union() {}
-
-type Pid_record struct {
-	Owner             string
-	Modification_time int64
-}
-
-type Key_record struct {
-	Owner             string
-	Secret_key        string
-	Key_policy        string
-	Expiration_time   int64
-	Modification_time int64
-}
-
-// Key_pair is a access-key and a secret-key.
-type Key_pair struct {
-	Access_key string
-	Key_record
-}
 
 // Enum of states of a pool.
 type Pool_state string
@@ -160,15 +180,32 @@ const (
 	Pool_INOPERABLE Pool_state = "inoperable"
 )
 
+type name_timestamp_pair struct {
+	Name      string
+	Timestamp int64
+}
+
+type routing_bucket_desc_keys__ struct {
+	pool              string
+	bkt_policy        string
+	modification_time int64
+}
+
+// KEY_PAIR is a access-key and a secret-key.
+type key_pair struct {
+	Access_key string
+	Key_record
+}
+
 // Enum of random-key usage.
-type Key_usage string
+type key_usage string
 
 const (
-	Key_POOL Key_usage = "pool"
-	Key_AKEY Key_usage = "akey"
+	Key_POOL key_usage = "pool"
+	Key_AKEY key_usage = "akey"
 )
 
-func assert_table_prefix_match(t keyval_table, r *redis.Client, prefix string) {
+func assert_table_prefix_match(t *keyval_table, r *redis.Client, prefix string) {
 	var v []string
 	switch r {
 	case t.setting:
@@ -192,7 +229,7 @@ func assert_table_prefix_match(t keyval_table, r *redis.Client, prefix string) {
 }
 
 // Makes a key-value DB client.
-func make_table(conf Db_conf) keyval_table {
+func make_table(conf Db_conf) *keyval_table {
 	var ep = conf.Ep
 	var pw = conf.Password
 
@@ -221,7 +258,7 @@ func make_table(conf Db_conf) keyval_table {
 		Password: pw,
 		DB:       monokey_db,
 	})
-	var t = keyval_table{
+	var t = &keyval_table{
 		ctx:     context.Background(),
 		setting: setting,
 		storage: storage,
@@ -230,15 +267,15 @@ func make_table(conf Db_conf) keyval_table {
 		monokey: monokey,
 	}
 
-	// Wait for Redis.
+	// Wait for a keyval-DB.
 
 	for {
 		var s = t.setting.Ping(t.ctx)
 		if s.Err() == nil {
-			log.Print("Connected to Redis.")
+			log.Print("Connected to a keyval-DB.")
 			return t
 		} else {
-			log.Print("Connection to Redis failed (sleeping).")
+			log.Print("Connection to a keyval-DB failed (sleeping).")
 			time.Sleep(30 * time.Second)
 		}
 	}
@@ -270,7 +307,7 @@ func (ki *key_iterator) Key() string {
 // returned keys.  Note a null-ness check is always necessary when
 // getting a value, because a deletion can intervene scanning keys and
 // getting values.
-func (t keyval_table) scan_table(db *redis.Client, prefix string, target string) *key_iterator {
+func (t *keyval_table) scan_table(db *redis.Client, prefix string, target string) *key_iterator {
 	assert_table_prefix_match(t, db, prefix)
 	var pattern = prefix + target
 	var prefix_length = len(prefix)
@@ -280,7 +317,7 @@ func (t keyval_table) scan_table(db *redis.Client, prefix string, target string)
 	return &ki
 }
 
-// LOAD_DATA fills a structure by decoding json data in Redis.  It
+// LOAD_DATA fills a structure by json data in a keyval-DB.  It
 // returns true or false if no entry is found.
 func load_data(v *redis.StringCmd, data any) bool {
 	var b, err1 = v.Bytes()
@@ -291,14 +328,33 @@ func load_data(v *redis.StringCmd, data any) bool {
 			panic(err1)
 		}
 	}
-	var err2 = json.Unmarshal(b, data)
+	var r = bytes.NewReader(b)
+	var d = json.NewDecoder(r)
+	var err2 = d.Decode(data)
+	d.DisallowUnknownFields()
 	if err2 != nil {
-		panic(fmt.Sprint("Bad json data in Redis", err1))
+		log.Panic("Bad json data in a keyval-DB", err2)
 	}
 	return true
 }
 
-// SETTING-TABLE.
+func load_data__(v *redis.StringCmd, data any) bool {
+	var b, err1 = v.Bytes()
+	if err1 != nil {
+		if err1 == redis.Nil {
+			return false
+		} else {
+			panic(err1)
+		}
+	}
+	var err2 = json.Unmarshal(b, data)
+	if err2 != nil {
+		panic(fmt.Sprint("Bad json data in a keyval-DB", err1))
+	}
+	return true
+}
+
+/* SETTING-TABLE */
 
 const setting_conf_prefix = "cf:"
 const setting_user_info_prefix = "uu:"
@@ -312,7 +368,7 @@ var setting_prefixes = string_sort([]string{
 // SETTING_CLEAN_CLAIM deletes a claim associated to a uid.  It scans
 // all the claims to find an entry associated to a uid.  (This is
 // paranoiac because it is called after deleting a claim entry).
-func (t keyval_table) setting_clean_claim(uid string) {
+func (t *keyval_table) setting_clean_claim(uid string) {
 	var db = t.setting
 	var keyi = t.scan_table(db, setting_user_claim_prefix, "*")
 	for keyi.Next(t.ctx) {
@@ -326,7 +382,7 @@ func (t keyval_table) setting_clean_claim(uid string) {
 	}
 }
 
-func (t keyval_table) Set_conf(conf interface{}) {
+func (t *keyval_table) Set_conf(conf interface{}) {
 	//var ctx = context.Background()
 	var db = t.setting
 	switch conf1 := conf.(type) {
@@ -361,7 +417,7 @@ func (t keyval_table) Set_conf(conf interface{}) {
 	}
 }
 
-func (t keyval_table) Delete_conf(sub string) {
+func (t *keyval_table) Delete_conf(sub string) {
 	var db = t.setting
 	var k = (setting_conf_prefix + sub)
 	var w = db.Del(t.ctx, k)
@@ -370,14 +426,14 @@ func (t keyval_table) Delete_conf(sub string) {
 
 // LIST_CONFS returns a list of confs.  It contains both Mux_conf and
 // Api_conf.
-func (t keyval_table) List_confs() []Lens3_conf {
+func list_confs(t *keyval_table) []lens3_conf {
 	var db = t.setting
 	var keyi = t.scan_table(db, setting_conf_prefix, "*")
-	var confs []Lens3_conf
+	var confs []lens3_conf
 	for keyi.Next(t.ctx) {
 		fmt.Println("")
 		var sub = keyi.Key()
-		var v Lens3_conf
+		var v lens3_conf
 		switch {
 		case sub == "mux" || (len(sub) >= 5 && sub[:4] == "mux:"):
 			v = t.get_mux_conf(sub)
@@ -393,7 +449,7 @@ func (t keyval_table) List_confs() []Lens3_conf {
 	return confs
 }
 
-func (t keyval_table) get_mux_conf(sub string) *Mux_conf {
+func (t *keyval_table) get_mux_conf(sub string) *Mux_conf {
 	var db = t.setting
 	assert_fatal(sub == "mux" || (len(sub) >= 5 && sub[:4] == "mux:"))
 	var k = (setting_conf_prefix + sub)
@@ -402,14 +458,14 @@ func (t keyval_table) get_mux_conf(sub string) *Mux_conf {
 	var ok = load_data(w, &conf)
 	if ok {
 		fmt.Println("MUX CONF is", conf)
-		check_mux_conf(conf)
+		//check_mux_conf(conf)
 		return &conf
 	} else {
 		return nil
 	}
 }
 
-func (t keyval_table) get_api_conf(sub string) *Api_conf {
+func (t *keyval_table) get_api_conf(sub string) *Api_conf {
 	assert_fatal(sub == "api")
 	var db = t.setting
 	var k = (setting_conf_prefix + sub)
@@ -418,7 +474,7 @@ func (t keyval_table) get_api_conf(sub string) *Api_conf {
 	var ok = load_data(w, &conf)
 	if ok {
 		fmt.Println("API CONF is", conf)
-		check_api_conf(conf)
+		//check_api_conf(conf)
 		return &conf
 	} else {
 		return nil
@@ -427,9 +483,9 @@ func (t keyval_table) get_api_conf(sub string) *Api_conf {
 
 // ADD_USER adds a user and its claim entry.  A duplicate claim is an
 // error.  It deletes an old entry first if exits.
-func (t keyval_table) add_user(ui User_info) {
+func (t *keyval_table) add_user(ui User_record) {
 	var db = t.setting
-	var uid = ui.User_uid
+	var uid = ui.Uid
 	var claim = ui.Claim
 	assert_fatal(uid != "")
 	assert_fatal(len(ui.Groups) > 0)
@@ -454,9 +510,9 @@ func (t keyval_table) add_user(ui User_info) {
 }
 
 // (Use add_user() instead).
-func (t keyval_table) set_user_force(ui User_info) {
+func (t *keyval_table) set_user_force(ui User_record) {
 	var db = t.setting
-	var uid = ui.User_uid
+	var uid = ui.Uid
 	assert_fatal(uid != "")
 	var v, err1 = json.Marshal(&ui)
 	if err1 != nil {
@@ -474,11 +530,11 @@ func (t keyval_table) set_user_force(ui User_info) {
 }
 
 // GET_USER gets a user by a uid.  It may return nil.
-func (t keyval_table) Get_user(uid string) *User_info {
+func (t *keyval_table) Get_user(uid string) *User_record {
 	var db = t.setting
 	var k = (setting_user_info_prefix + uid)
 	var w = db.Get(t.ctx, k)
-	var ui User_info
+	var ui User_record
 	var ok = load_data(w, &ui)
 	if ok {
 		return &ui
@@ -488,7 +544,7 @@ func (t keyval_table) Get_user(uid string) *User_info {
 }
 
 // SETTING_GET_CLAIM_USER maps a claim to a uid, or returns il.
-func (t keyval_table) Setting_get_claim_user(claim string) *string {
+func (t *keyval_table) Setting_get_claim_user(claim string) *string {
 	assert_fatal(claim != "")
 	var db = t.setting
 	var k = (setting_user_claim_prefix + claim)
@@ -503,7 +559,7 @@ func (t keyval_table) Setting_get_claim_user(claim string) *string {
 }
 
 // DELETE_USER deletes a user and its associated claim entry.
-func (t keyval_table) Delete_user(uid string) {
+func (t *keyval_table) Delete_user(uid string) {
 	var ui = t.Get_user(uid)
 	if ui == nil {
 		return
@@ -525,7 +581,7 @@ func (t keyval_table) Delete_user(uid string) {
 }
 
 // LIST_USERS lists all uid's.
-func (t keyval_table) List_users() []string {
+func (t *keyval_table) List_users() []string {
 	var db = t.setting
 	var keyi = t.scan_table(db, setting_user_info_prefix, "*")
 	var uu []string
@@ -535,7 +591,7 @@ func (t keyval_table) List_users() []string {
 	return uu
 }
 
-// STORAGE-TABLE.
+/* STORAGE-TABLE */
 
 const storage_pool_desc_prefix = "po:"
 const storage_pool_state_prefix = "ps:"
@@ -546,7 +602,7 @@ var storage_prefixes = string_sort([]string{
 	storage_pool_state_prefix,
 	storage_buckets_directory_prefix})
 
-func (t keyval_table) Set_pool(pool string, desc *Pool_record) {
+func (t *keyval_table) Set_pool(pool string, desc *Pool_record) {
 	var db = t.storage
 	var k = (storage_pool_desc_prefix + pool)
 	var v, err = json.Marshal(desc)
@@ -555,7 +611,7 @@ func (t keyval_table) Set_pool(pool string, desc *Pool_record) {
 	panic_non_nil(w.Err())
 }
 
-func (t keyval_table) Get_pool(pool string) *Pool_record {
+func (t *keyval_table) Get_pool(pool string) *Pool_record {
 	var db = t.storage
 	var k = (storage_pool_desc_prefix + pool)
 	var w = db.Get(t.ctx, k)
@@ -568,7 +624,7 @@ func (t keyval_table) Get_pool(pool string) *Pool_record {
 	}
 }
 
-func (t keyval_table) Delete_pool(pool string) {
+func (t *keyval_table) Delete_pool(pool string) {
 	var db = t.storage
 	var k = (storage_pool_desc_prefix + pool)
 	var w = db.Del(t.ctx, k)
@@ -577,7 +633,7 @@ func (t keyval_table) Delete_pool(pool string) {
 
 // LIST_POOLS returns a list of all pool-ID's when the argument is
 // "*".  Or, it checks the existence of a pool.
-func (t keyval_table) List_pools(pool string) []string {
+func (t *keyval_table) List_pools(pool string) []string {
 	var db = t.storage
 	var ki = t.scan_table(db, storage_pool_desc_prefix, pool)
 	var pools []string
@@ -590,7 +646,7 @@ func (t keyval_table) List_pools(pool string) []string {
 // SET_EX_BUCKETS_DIRECTORY atomically registers a directory for
 // buckets.  At a failure, it returns a current owner, that is,
 // (false,owner-uid).  A returned owner could be nil due to a race.
-func (t keyval_table) Set_ex_buckets_directory(path string, pool string) (bool, *string) {
+func (t *keyval_table) Set_ex_buckets_directory(path string, pool string) (bool, *string) {
 	var k = (storage_buckets_directory_prefix + path)
 	var w = t.storage.SetNX(t.ctx, k, pool, 0)
 	if w.Err() == nil {
@@ -601,7 +657,7 @@ func (t keyval_table) Set_ex_buckets_directory(path string, pool string) (bool, 
 	return false, o
 }
 
-func (t keyval_table) Get_buckets_directory(path string) *string {
+func (t *keyval_table) Get_buckets_directory(path string) *string {
 	var db = t.storage
 	var k = (storage_buckets_directory_prefix + path)
 	var w = db.Get(t.ctx, k)
@@ -617,7 +673,7 @@ func (t keyval_table) Get_buckets_directory(path string) *string {
 	}
 }
 
-func (t keyval_table) Get_buckets_directory_of_pool(pool string) *string {
+func (t *keyval_table) Get_buckets_directory_of_pool(pool string) *string {
 	var db = t.storage
 	var ki = t.scan_table(db, storage_buckets_directory_prefix, "*")
 	for ki.Next(t.ctx) {
@@ -630,7 +686,7 @@ func (t keyval_table) Get_buckets_directory_of_pool(pool string) *string {
 	return nil
 }
 
-func (t keyval_table) Delete_buckets_directory(path string) {
+func (t *keyval_table) Delete_buckets_directory(path string) {
 	var db = t.storage
 	var k = (storage_buckets_directory_prefix + path)
 	var w = db.Del(t.ctx, k)
@@ -643,7 +699,7 @@ type pool_directory struct {
 }
 
 // LIST_BUCKETS_DIRECTORIES returns a list of all buckets-directories.
-func list_buckets_directories(t keyval_table) []pool_directory {
+func list_buckets_directories(t *keyval_table) []pool_directory {
 	var db = t.storage
 	var ki = t.scan_table(db, storage_buckets_directory_prefix, "*")
 	var bkts []pool_directory
@@ -660,7 +716,7 @@ func list_buckets_directories(t keyval_table) []pool_directory {
 	return bkts
 }
 
-func (t keyval_table) Set_pool_state(pool string, state Pool_state, reason string) {
+func (t *keyval_table) Set_pool_state(pool string, state Pool_state, reason string) {
 	var db = t.storage
 	var now int64 = time.Now().Unix()
 	var record = Pool_state_record{
@@ -675,7 +731,7 @@ func (t keyval_table) Set_pool_state(pool string, state Pool_state, reason strin
 	panic_non_nil(w.Err())
 }
 
-func (t keyval_table) Get_pool_state(pool string) *Pool_state_record {
+func (t *keyval_table) Get_pool_state(pool string) *Pool_state_record {
 	var db = t.storage
 	var k = (storage_pool_state_prefix + pool)
 	var w = db.Get(t.ctx, k)
@@ -688,14 +744,14 @@ func (t keyval_table) Get_pool_state(pool string) *Pool_state_record {
 	}
 }
 
-func (t keyval_table) Delete_pool_state(pool string) {
+func (t *keyval_table) Delete_pool_state(pool string) {
 	var db = t.storage
 	var k = (storage_pool_state_prefix + pool)
 	var w = db.Del(t.ctx, k)
 	panic_non_nil(w.Err())
 }
 
-// PROCESS-TABLE.
+/* PROCESS-TABLE */
 
 const process_minio_manager_prefix = "ma:"
 const process_minio_process_prefix = "mn:"
@@ -710,7 +766,7 @@ var process_prefixes = string_sort([]string{
 // with a manager that took the role earlier when it fails.  At a
 // failure, a returned current owner information can be None due to a
 // race (but practically never).
-func (t keyval_table) Set_ex_manager(pool string, desc *Pool_record) (bool, *Manager_record) {
+func (t *keyval_table) Set_ex_manager(pool string, desc *Pool_record) (bool, *Manager_record) {
 	var db = t.process
 	var k = (process_minio_manager_prefix + pool)
 	var v, err = json.Marshal(desc)
@@ -725,14 +781,14 @@ func (t keyval_table) Set_ex_manager(pool string, desc *Pool_record) (bool, *Man
 	}
 }
 
-func (t keyval_table) Set_manager_expiry(pool string, timeout int64) {
+func (t *keyval_table) Set_manager_expiry(pool string, timeout int64) {
 	var db = t.process
 	var k = (process_minio_manager_prefix + pool)
 	var w = db.Expire(t.ctx, k, time.Duration(timeout))
 	panic_non_nil(w.Err())
 }
 
-func (t keyval_table) Get_manager(pool string) *Manager_record {
+func (t *keyval_table) Get_manager(pool string) *Manager_record {
 	var db = t.process
 	var k = (process_minio_manager_prefix + pool)
 	var w = db.Get(t.ctx, k)
@@ -745,14 +801,14 @@ func (t keyval_table) Get_manager(pool string) *Manager_record {
 	}
 }
 
-func (t keyval_table) Delete_manager(pool string) {
+func (t *keyval_table) Delete_manager(pool string) {
 	var db = t.process
 	var k = (process_minio_manager_prefix + pool)
 	var w = db.Del(t.ctx, k)
 	panic_non_nil(w.Err())
 }
 
-func set_backend_proc(t keyval_table, pool string, desc Process_record) {
+func set_backend_proc(t *keyval_table, pool string, desc Process_record) {
 	var db = t.process
 	var k = (process_minio_process_prefix + pool)
 	var v, err = json.Marshal(desc)
@@ -761,7 +817,7 @@ func set_backend_proc(t keyval_table, pool string, desc Process_record) {
 	panic_non_nil(w.Err())
 }
 
-func get_backend_proc(t keyval_table, pool string) *Process_record {
+func get_backend_proc(t *keyval_table, pool string) *Process_record {
 	var db = t.process
 	var k = (process_minio_process_prefix + pool)
 	var w = db.Get(t.ctx, k)
@@ -774,7 +830,7 @@ func get_backend_proc(t keyval_table, pool string) *Process_record {
 	}
 }
 
-func (t keyval_table) Delete_minio_proc(pool string) {
+func (t *keyval_table) Delete_minio_proc(pool string) {
 	var db = t.process
 	var k = (process_minio_process_prefix + pool)
 	var w = db.Del(t.ctx, k)
@@ -782,7 +838,7 @@ func (t keyval_table) Delete_minio_proc(pool string) {
 }
 
 // LIST_MINIO_PROCS returns a list of all currently running servers.
-func (t keyval_table) List_minio_procs(pool string) []*Process_record {
+func (t *keyval_table) List_minio_procs(pool string) []*Process_record {
 	var db = t.process
 	var ki = t.scan_table(db, process_minio_process_prefix, pool)
 	var procs []*Process_record
@@ -796,7 +852,7 @@ func (t keyval_table) List_minio_procs(pool string) []*Process_record {
 	return procs
 }
 
-func (t keyval_table) Set_mux(mux_ep string, desc *Mux_record) {
+func (t *keyval_table) Set_mux(mux_ep string, desc *Mux_record) {
 	var db = t.process
 	var k = (process_mux_desc_prefix + mux_ep)
 	var v, err = json.Marshal(desc)
@@ -805,14 +861,14 @@ func (t keyval_table) Set_mux(mux_ep string, desc *Mux_record) {
 	panic_non_nil(w.Err())
 }
 
-func (t keyval_table) Set_mux_expiry(mux_ep string, timeout int64) {
+func (t *keyval_table) Set_mux_expiry(mux_ep string, timeout int64) {
 	var db = t.process
 	var k = (process_mux_desc_prefix + mux_ep)
 	var w = db.Expire(t.ctx, k, time.Duration(timeout))
 	panic_non_nil(w.Err())
 }
 
-func (t keyval_table) Get_mux(mux_ep string) *Mux_record {
+func (t *keyval_table) Get_mux(mux_ep string) *Mux_record {
 	var db = t.process
 	var k = (process_mux_desc_prefix + mux_ep)
 	var w = db.Get(t.ctx, k)
@@ -825,7 +881,7 @@ func (t keyval_table) Get_mux(mux_ep string) *Mux_record {
 	}
 }
 
-func (t keyval_table) Delete_mux(mux_ep string) {
+func (t *keyval_table) Delete_mux(mux_ep string) {
 	var db = t.process
 	var k = (process_mux_desc_prefix + mux_ep)
 	var w = db.Del(t.ctx, k)
@@ -833,7 +889,7 @@ func (t keyval_table) Delete_mux(mux_ep string) {
 }
 
 // LIST_MUX_EPS returns a list of Mux-record.
-func (t keyval_table) List_muxs() []*Mux_record {
+func (t *keyval_table) List_muxs() []*Mux_record {
 	var db = t.process
 	var ki = t.scan_table(db, process_mux_desc_prefix, "*")
 	var descs []*Mux_record
@@ -847,7 +903,7 @@ func (t keyval_table) List_muxs() []*Mux_record {
 	return descs
 }
 
-// ROUTING-TABLE.
+/* ROUTING-TABLE */
 
 const routing_minio_ep_prefix = "ep:"
 const routing_bucket_prefix = "bk:"
@@ -865,7 +921,7 @@ var routing_prefixes = string_sort([]string{
 // paired with a pool-id that took the bucket name earlier when it
 // fails.  At a failure, a returned current owner information can be
 // None due to a race (but practically never).
-func (t keyval_table) Set_ex_bucket(bucket string, desc Bucket_record) (bool, *string) {
+func (t *keyval_table) Set_ex_bucket(bucket string, desc Bucket_record) (bool, *string) {
 	var db = t.routing
 	var k = (routing_bucket_prefix + bucket)
 	var v, err = json.Marshal(desc)
@@ -880,7 +936,7 @@ func (t keyval_table) Set_ex_bucket(bucket string, desc Bucket_record) (bool, *s
 	}
 }
 
-func (t keyval_table) Get_bucket(bucket string) *Bucket_record {
+func (t *keyval_table) Get_bucket(bucket string) *Bucket_record {
 	var db = t.routing
 	var k = (routing_bucket_prefix + bucket)
 	var w = db.Get(t.ctx, k)
@@ -893,14 +949,14 @@ func (t keyval_table) Get_bucket(bucket string) *Bucket_record {
 	}
 }
 
-func (t keyval_table) Delete_bucket(bucket string) {
+func (t *keyval_table) Delete_bucket(bucket string) {
 	var db = t.routing
 	var k = (routing_bucket_prefix + bucket)
 	var w = db.Del(t.ctx, k)
 	panic_non_nil(w.Err())
 }
 
-func (t keyval_table) List_buckets(pool string) []*Bucket_record {
+func (t *keyval_table) List_buckets(pool string) []*Bucket_record {
 	var db = t.routing
 	var ki = t.scan_table(db, routing_bucket_prefix, "*")
 	var descs []*Bucket_record
@@ -914,7 +970,7 @@ func (t keyval_table) List_buckets(pool string) []*Bucket_record {
 	return descs
 }
 
-func set_backend_ep(t keyval_table, pool string, ep string) {
+func set_backend_ep(t *keyval_table, pool string, ep string) {
 	var db = t.routing
 	var k = (routing_minio_ep_prefix + pool)
 	//var w = db.Set(t.ctx, k, ep, 0)
@@ -924,7 +980,7 @@ func set_backend_ep(t keyval_table, pool string, ep string) {
 	panic_non_nil(w.Err())
 }
 
-func get_backend_ep(t keyval_table, pool string) string {
+func get_backend_ep(t *keyval_table, pool string) string {
 	var db = t.routing
 	var k = (routing_minio_ep_prefix + pool)
 	var w = db.Get(t.ctx, k)
@@ -938,14 +994,14 @@ func get_backend_ep(t keyval_table, pool string) string {
 	}
 }
 
-func (t keyval_table) Delete_minio_ep(pool string) {
+func (t *keyval_table) Delete_minio_ep(pool string) {
 	var db = t.routing
 	var k = (routing_minio_ep_prefix + pool)
 	var w = db.Del(t.ctx, k)
 	panic_non_nil(w.Err())
 }
 
-func (t keyval_table) List_minio_eps() []string {
+func (t *keyval_table) List_minio_eps() []string {
 	var db = t.routing
 	var ki = t.scan_table(db, routing_minio_ep_prefix, "*")
 	var descs []string
@@ -959,7 +1015,7 @@ func (t keyval_table) List_minio_eps() []string {
 	return descs
 }
 
-func (t keyval_table) Set_access_timestamp(pool string) {
+func (t *keyval_table) Set_access_timestamp(pool string) {
 	var db = t.routing
 	var k = (routing_access_timestamp_prefix + pool)
 	var now int64 = time.Now().Unix()
@@ -969,7 +1025,7 @@ func (t keyval_table) Set_access_timestamp(pool string) {
 	panic_non_nil(w.Err())
 }
 
-func (t keyval_table) Get_access_timestamp(pool string) int64 {
+func (t *keyval_table) Get_access_timestamp(pool string) int64 {
 	var db = t.routing
 	var k = (routing_access_timestamp_prefix + pool)
 	var w = db.Get(t.ctx, k)
@@ -982,7 +1038,7 @@ func (t keyval_table) Get_access_timestamp(pool string) int64 {
 	}
 }
 
-func (t keyval_table) Delete_access_timestamp(pool string) {
+func (t *keyval_table) Delete_access_timestamp(pool string) {
 	var db = t.routing
 	var k = (routing_access_timestamp_prefix + pool)
 	var w = db.Del(t.ctx, k)
@@ -990,23 +1046,23 @@ func (t keyval_table) Delete_access_timestamp(pool string) {
 }
 
 // LIST_ACCESS_TIMESTAMPS returns a list of (pool-id, ts) pairs.
-func (t keyval_table) List_access_timestamps() []Pair_name_timestamp {
+func (t *keyval_table) List_access_timestamps() []name_timestamp_pair {
 	//return self._routing_table.list_access_timestamps()
 	var db = t.routing
 	var ki = t.scan_table(db, routing_access_timestamp_prefix, "*")
-	var descs []Pair_name_timestamp
+	var descs []name_timestamp_pair
 	for ki.Next(t.ctx) {
 		var pool = ki.Key()
 		var ts = t.Get_access_timestamp(pool)
 		if ts == 0 {
 			panic("intenal: List_access_timestamps")
 		}
-		descs = append(descs, Pair_name_timestamp{pool, ts})
+		descs = append(descs, name_timestamp_pair{pool, ts})
 	}
 	return descs
 }
 
-func (t keyval_table) Set_user_timestamp(uid string) {
+func (t *keyval_table) Set_user_timestamp(uid string) {
 	var db = t.routing
 	var k = (routing_user_timestamp_prefix + uid)
 	var now int64 = time.Now().Unix()
@@ -1017,7 +1073,7 @@ func (t keyval_table) Set_user_timestamp(uid string) {
 }
 
 // It returns 0 on an internal db-access error.
-func (t keyval_table) Get_user_timestamp(uid string) int64 {
+func (t *keyval_table) Get_user_timestamp(uid string) int64 {
 	var db = t.routing
 	var k = (routing_user_timestamp_prefix + uid)
 	var w = db.Get(t.ctx, k)
@@ -1030,7 +1086,7 @@ func (t keyval_table) Get_user_timestamp(uid string) int64 {
 	}
 }
 
-func (t keyval_table) Delete_user_timestamp(uid string) {
+func (t *keyval_table) Delete_user_timestamp(uid string) {
 	var db = t.routing
 	var k = (routing_user_timestamp_prefix + uid)
 	var w = db.Del(t.ctx, k)
@@ -1038,22 +1094,22 @@ func (t keyval_table) Delete_user_timestamp(uid string) {
 }
 
 // LIST_USER_TIMESTAMPS returns a list of (uid, ts) pairs.
-func (t keyval_table) List_user_timestamps() []Pair_name_timestamp {
+func (t *keyval_table) List_user_timestamps() []name_timestamp_pair {
 	var db = t.routing
 	var ki = t.scan_table(db, routing_user_timestamp_prefix, "*")
-	var descs []Pair_name_timestamp
+	var descs []name_timestamp_pair
 	for ki.Next(t.ctx) {
 		var uid = ki.Key()
 		var ts = t.Get_user_timestamp(uid)
 		if ts == 0 {
 			panic("intenal: List_user_timestamps")
 		}
-		descs = append(descs, Pair_name_timestamp{uid, ts})
+		descs = append(descs, name_timestamp_pair{uid, ts})
 	}
 	return descs
 }
 
-// MONOKEY-TABLE.
+/* MONOKEY-TABLE */
 
 const monokey_pid_prefix = "pi:"
 const monokey_key_prefix = "ky:"
@@ -1063,7 +1119,7 @@ var monokey_prefixes = string_sort([]string{
 	monokey_key_prefix,
 })
 
-func choose_prefix_by_usage(usage Key_usage) (string, Xid_record) {
+func choose_prefix_by_usage(usage key_usage) (string, Xid_record) {
 	switch usage {
 	case Key_POOL:
 		var desc Pid_record
@@ -1078,7 +1134,7 @@ func choose_prefix_by_usage(usage Key_usage) (string, Xid_record) {
 
 // MAKE_UNIQUE_XID makes a random unique id for a pool-id (with
 // usage="pool") or an access-key (with usage="akey").
-func (t keyval_table) Make_unique_xid(usage Key_usage, owner string, info Xid_record) string {
+func (t *keyval_table) Make_unique_xid(usage key_usage, owner string, info Xid_record) string {
 	var db = t.monokey
 	var prefix, _ = choose_prefix_by_usage(usage)
 	var now int64 = time.Now().Unix()
@@ -1087,7 +1143,7 @@ func (t keyval_table) Make_unique_xid(usage Key_usage, owner string, info Xid_re
 	switch desc := info.(type) {
 	case Pid_record:
 		assert_fatal(usage == Key_POOL)
-		desc.Owner = owner
+		desc.Owner_uid = owner
 		desc.Modification_time = now
 		v, err = json.Marshal(desc)
 		panic_non_nil(err)
@@ -1118,7 +1174,7 @@ func (t keyval_table) Make_unique_xid(usage Key_usage, owner string, info Xid_re
 
 // SET_EX_XID atomically inserts an id.  It is used at restoring
 // database.
-func (t keyval_table) Set_ex_xid(xid string, usage Key_usage, desc Xid_record) bool {
+func (t *keyval_table) Set_ex_xid(xid string, usage key_usage, desc Xid_record) bool {
 	switch desc.(type) {
 	case Pid_record:
 		assert_fatal(usage == Key_POOL)
@@ -1140,7 +1196,7 @@ func (t keyval_table) Set_ex_xid(xid string, usage Key_usage, desc Xid_record) b
 	}
 }
 
-func (t keyval_table) Get_xid(usage Key_usage, xid string) Xid_record {
+func (t *keyval_table) Get_xid(usage key_usage, xid string) Xid_record {
 	var db = t.monokey
 	var prefix, desc = choose_prefix_by_usage(usage)
 	var k = (prefix + xid)
@@ -1153,7 +1209,7 @@ func (t keyval_table) Get_xid(usage Key_usage, xid string) Xid_record {
 	}
 }
 
-func (t keyval_table) Delete_xid_unconditionally(usage Key_usage, xid string) {
+func (t *keyval_table) Delete_xid_unconditionally(usage key_usage, xid string) {
 	var db = t.monokey
 	var prefix, _ = choose_prefix_by_usage(usage)
 	var k = (prefix + xid)
@@ -1164,10 +1220,10 @@ func (t keyval_table) Delete_xid_unconditionally(usage Key_usage, xid string) {
 // LIST_SECRETS_OF_POOL lists secrets (access-keys) of a pool.  It
 // includes an probe-key.  A probe-key is an access-key but has no
 // corresponding secret-key.
-func (t keyval_table) List_secrets_of_pool(pool string) []Key_pair {
+func (t *keyval_table) List_secrets_of_pool(pool string) []key_pair {
 	var db = t.monokey
 	var ki = t.scan_table(db, monokey_key_prefix, "*")
-	var descs []Key_pair
+	var descs []key_pair
 	for ki.Next(t.ctx) {
 		var key = ki.Key()
 		var d = t.Get_xid(Key_AKEY, key)
@@ -1175,7 +1231,7 @@ func (t keyval_table) List_secrets_of_pool(pool string) []Key_pair {
 			// Race.
 			panic("intenal: List_secrets_of_pool")
 		}
-		var x = Key_pair{Access_key: key, Key_record: d.(Key_record)}
+		var x = key_pair{Access_key: key, Key_record: d.(Key_record)}
 		descs = append(descs, x)
 	}
 	return descs
@@ -1183,9 +1239,9 @@ func (t keyval_table) List_secrets_of_pool(pool string) []Key_pair {
 
 // CLEAR-TABLES.
 
-// CLEAR_ALL clears Redis DB.  It leaves entires for multiplexers unless
+// CLEAR_ALL clears a keyva-DB.  It leaves entires for multiplexers unless
 // everything.
-func (t keyval_table) Clear_all(everything bool) {
+func (t *keyval_table) Clear_all(everything bool) {
 	var db *redis.Client
 	db = t.setting
 	for _, prefix := range setting_prefixes {
@@ -1209,7 +1265,7 @@ func (t keyval_table) Clear_all(everything bool) {
 	}
 }
 
-func clear_db(t keyval_table, db *redis.Client, prefix string) {
+func clear_db(t *keyval_table, db *redis.Client, prefix string) {
 	assert_fatal(len(prefix) == 3)
 	var pattern = (prefix + "*")
 	var ki = db.Scan(t.ctx, 0, pattern, 0).Iterator()
@@ -1220,7 +1276,7 @@ func clear_db(t keyval_table, db *redis.Client, prefix string) {
 	}
 }
 
-func (t keyval_table) print_all() {
+func (t *keyval_table) print_all() {
 	var db *redis.Client
 	db = t.setting
 	print_db(t, db, "Setting")
@@ -1234,7 +1290,7 @@ func (t keyval_table) print_all() {
 	print_db(t, db, "Monokey")
 }
 
-func print_db(t keyval_table, db *redis.Client, title string) {
+func print_db(t *keyval_table, db *redis.Client, title string) {
 	fmt.Println("---")
 	fmt.Println(title)
 	var pattern = ("*")
@@ -1281,10 +1337,10 @@ func Table_main() {
 	var err6 = json.Unmarshal(b5, &s6)
 	fmt.Println("Unmarshal(12345)=", s6, err6)
 
-	// Check Redis connection.
+	// Check a keyval-DB connection.
 
 	fmt.Println("")
-	fmt.Println("Check Redis connection...")
+	fmt.Println("Check a keyval-DB connection...")
 	fmt.Println(redis.Version())
 
 	var dbconf = read_db_conf("conf.json")

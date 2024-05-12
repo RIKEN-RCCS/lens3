@@ -435,9 +435,9 @@ func list_confs(t *keyval_table) []lens3_conf {
 		var v lens3_conf
 		switch {
 		case sub == "mux" || (len(sub) >= 5 && sub[:4] == "mux:"):
-			v = t.get_mux_conf(sub)
+			v = get_mux_conf(t, sub)
 		case sub == "api":
-			v = t.get_api_conf(sub)
+			v = get_api_conf(t, sub)
 		default:
 			panic(fmt.Sprint("Bad subject name"))
 		}
@@ -448,7 +448,7 @@ func list_confs(t *keyval_table) []lens3_conf {
 	return confs
 }
 
-func (t *keyval_table) get_mux_conf(sub string) *Mux_conf {
+func get_mux_conf(t *keyval_table, sub string) *Mux_conf {
 	var db = t.setting
 	assert_fatal(sub == "mux" || (len(sub) >= 5 && sub[:4] == "mux:"))
 	var k = (setting_conf_prefix + sub)
@@ -456,15 +456,15 @@ func (t *keyval_table) get_mux_conf(sub string) *Mux_conf {
 	var conf Mux_conf
 	var ok = load_data(w, &conf)
 	if ok {
-		fmt.Println("MUX CONF is", conf)
-		//check_mux_conf(conf)
+		//fmt.Println("MUX CONF is", conf)
+		check_mux_conf(conf)
 		return &conf
 	} else {
 		return nil
 	}
 }
 
-func (t *keyval_table) get_api_conf(sub string) *Api_conf {
+func get_api_conf(t *keyval_table, sub string) *Api_conf {
 	assert_fatal(sub == "api")
 	var db = t.setting
 	var k = (setting_conf_prefix + sub)
@@ -472,8 +472,8 @@ func (t *keyval_table) get_api_conf(sub string) *Api_conf {
 	var conf Api_conf
 	var ok = load_data(w, &conf)
 	if ok {
-		fmt.Println("API CONF is", conf)
-		//check_api_conf(conf)
+		//fmt.Println("API CONF is", conf)
+		check_api_conf(conf)
 		return &conf
 	} else {
 		return nil
@@ -1157,7 +1157,15 @@ func (t *keyval_table) Make_unique_xid(usage key_usage, owner string, info Xid_r
 	}
 	var xid_generation_loops = 0
 	for {
-		var xid = generate_access_key()
+		var xid string
+		switch info.(type) {
+		case Pid_record:
+			xid = generate_pool_name()
+		case Key_record:
+			xid = generate_access_key()
+		default:
+			panic("internal")
+		}
 		var k = (prefix + xid)
 		var w = db.SetNX(t.ctx, k, v, 0)
 		if w.Err() == nil {

@@ -24,6 +24,7 @@ import (
 	"math/rand"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 )
 
@@ -157,6 +158,12 @@ func generate_access_key() string {
 
 func generate_secret_key() string {
 	return random_string(secret_key_length)
+}
+
+func generate_pool_name() string {
+	var v1 = strconv.FormatUint(rand.Uint64(), 16)
+	var v2 = "0000000000000000" + v1
+	return v2[len(v2)-16:]
 }
 
 func init() {

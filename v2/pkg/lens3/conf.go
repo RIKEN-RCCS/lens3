@@ -17,6 +17,7 @@ import (
 	"os"
 	"reflect"
 	"slices"
+	"time"
 )
 
 // DB_CONF is a pair of an endpoint and password to access a
@@ -25,9 +26,6 @@ type Db_conf struct {
 	Ep       string
 	Password string
 }
-
-// Number representation in the configuration structure is integer.
-type Number int
 
 // LENS3_CONF is a union of Mux_conf|Api_conf.
 type lens3_conf interface{ lens3_conf_union() }
@@ -65,48 +63,48 @@ type Conf_header struct {
 }
 
 type Multiplexer_conf struct {
-	Port                    Number   `json:"port"`
-	Front_host              string   `json:"front_host"`
-	Trusted_proxies         []string `json:"trusted_proxies"`
-	Mux_ep_update_interval  Number   `json:"mux_ep_update_interval"`
-	Forwarding_timeout      Number   `json:"forwarding_timeout"`
-	Probe_access_timeout    Number   `json:"probe_access_timeout"`
-	Bad_response_delay      Number   `json:"bad_response_delay"`
-	Busy_suspension_time    Number   `json:"busy_suspension_time"`
-	Mux_node_name           string   `json:"mux_node_name"`
-	Backend                 string   `json:"backend"`
-	Backend_command_timeout Number   `json:"backend_command_timeout"`
-	Mux_access_log_file     string   `json:"mux_access_log_file"`
+	Port                    int           `json:"port"`
+	Front_host              string        `json:"front_host"`
+	Trusted_proxies         []string      `json:"trusted_proxies"`
+	Mux_ep_update_interval  time.Duration `json:"mux_ep_update_interval"`
+	Forwarding_timeout      time.Duration `json:"forwarding_timeout"`
+	Probe_access_timeout    time.Duration `json:"probe_access_timeout"`
+	Bad_response_delay      time.Duration `json:"bad_response_delay"`
+	Busy_suspension_time    time.Duration `json:"busy_suspension_time"`
+	Mux_node_name           string        `json:"mux_node_name"`
+	Backend                 string        `json:"backend"`
+	Backend_command_timeout time.Duration `json:"backend_command_timeout"`
+	Mux_access_log_file     string        `json:"mux_access_log_file"`
 }
 
 // claim_uid_map is one of {"id", "email-name", "map"}.
 type Registrar_conf struct {
-	Port                    Number   `json:"port"`
-	Front_host              string   `json:"front_host"`
-	Trusted_proxies         []string `json:"trusted_proxies"`
-	Base_path               string   `json:"base_path"`
-	Claim_uid_map           string   `json:"claim_uid_map"`
-	Probe_access_timeout    Number   `json:"probe_access_timeout"`
-	Max_pool_expiry         Number   `json:"max_pool_expiry"`
-	Csrf_secret_seed        string   `json:"csrf_secret_seed"`
-	Backend                 string   `json:"backend"`
-	Backend_command_timeout Number   `json:"backend_command_timeout"`
-	Api_access_log_file     string   `json:"api_access_log_file"`
+	Port                    int           `json:"port"`
+	Front_host              string        `json:"front_host"`
+	Trusted_proxies         []string      `json:"trusted_proxies"`
+	Base_path               string        `json:"base_path"`
+	Claim_uid_map           string        `json:"claim_uid_map"`
+	Probe_access_timeout    time.Duration `json:"probe_access_timeout"`
+	Max_pool_expiry         time.Duration `json:"max_pool_expiry"`
+	Csrf_secret_seed        string        `json:"csrf_secret_seed"`
+	Backend                 string        `json:"backend"`
+	Backend_command_timeout time.Duration `json:"backend_command_timeout"`
+	Api_access_log_file     string        `json:"api_access_log_file"`
 }
 
 type Manager_conf struct {
-	Sudo                     string `json:"sudo"`
-	Port_min                 Number `json:"port_min"`
-	Port_max                 Number `json:"port_max"`
-	Backend_awake_duration   Number `json:"backend_awake_duration"`  // Minio_awake_duration
-	Backend_setup_at_start   bool   `json:"backend_setup_at_start"`  // Minio_setup_at_start
-	Backend_start_timeout    Number `json:"backend_start_timeout"`   // Minio_start_timeout
-	Backend_setup_timeout    Number `json:"backend_setup_timeout"`   // Minio_setup_timeout
-	Backend_stop_timeout     Number `json:"backend_stop_timeout"`    // Minio_stop_timeout
-	Backend_command_timeout  Number `json:"backend_command_timeout"` // Minio_mc_timeout
-	Heartbeat_interval       Number `json:"heartbeat_interval"`
-	Heartbeat_miss_tolerance Number `json:"heartbeat_miss_tolerance"`
-	Heartbeat_timeout        Number `json:"heartbeat_timeout"`
+	Sudo                     string        `json:"sudo"`
+	Port_min                 int           `json:"port_min"`
+	Port_max                 int           `json:"port_max"`
+	Backend_awake_duration   time.Duration `json:"backend_awake_duration"`
+	Backend_setup_at_start   bool          `json:"backend_setup_at_start"`
+	Backend_start_timeout    time.Duration `json:"backend_start_timeout"`
+	Backend_setup_timeout    time.Duration `json:"backend_setup_timeout"`
+	Backend_stop_timeout     time.Duration `json:"backend_stop_timeout"`
+	Backend_command_timeout  time.Duration `json:"backend_command_timeout"`
+	Heartbeat_interval       time.Duration `json:"heartbeat_interval"`
+	Heartbeat_miss_tolerance int           `json:"heartbeat_miss_tolerance"`
+	Heartbeat_timeout        time.Duration `json:"heartbeat_timeout"`
 }
 
 type Minio_conf struct {
@@ -125,6 +123,9 @@ type Syslog_conf struct {
 }
 
 var claim_conversions = []string{"id", "email-name", "map"}
+var backend_list = []string{"minio", "rclone"}
+
+const bad_message = "Bad json conf file."
 
 // READ_DB_CONF reads a conf-file for the keyval table.
 func read_db_conf(file string) Db_conf {
@@ -190,13 +191,19 @@ func read_conf(filename string) lens3_conf {
 func check_mux_conf(conf Mux_conf) {
 	check_multiplexer_entry(conf.Multiplexer)
 	check_manager_entry(conf.Manager)
-	check_minio_entry(conf.Minio)
+	switch conf.Multiplexer.Backend {
+	case "minio":
+		check_minio_entry(conf.Minio)
+	}
 	check_syslog_entry(conf.Log_syslog)
 }
 
 func check_api_conf(conf Api_conf) {
 	check_registrar_entry(conf.Registrar)
-	check_minio_entry(conf.Minio)
+	switch conf.Registrar.Backend {
+	case "minio":
+		check_minio_entry(conf.Minio)
+	}
 	check_ui_entry(conf.UI)
 	check_syslog_entry(conf.Log_syslog)
 }
@@ -213,8 +220,6 @@ func check_db_entry(e Db_conf) {
 		log.Panic(fmt.Errorf(bad_message))
 	}
 }
-
-const bad_message = "Bad json conf file."
 
 func check_field_required_and_positive(t any, slot string) {
 	var t1 = reflect.ValueOf(t)
@@ -259,6 +264,9 @@ func check_multiplexer_entry(e Multiplexer_conf) {
 	} {
 		check_field_required_and_positive(e, slot)
 	}
+	if !slices.Contains(backend_list, e.Backend) {
+		panic(fmt.Errorf(bad_message))
+	}
 }
 
 func check_registrar_entry(e Registrar_conf) {
@@ -278,6 +286,9 @@ func check_registrar_entry(e Registrar_conf) {
 		check_field_required_and_positive(e, slot)
 	}
 	if !slices.Contains(claim_conversions, e.Claim_uid_map) {
+		panic(fmt.Errorf(bad_message))
+	}
+	if !slices.Contains(backend_list, e.Backend) {
 		panic(fmt.Errorf(bad_message))
 	}
 }
@@ -325,53 +336,53 @@ func check_syslog_entry(e Syslog_conf) {
 	}
 }
 
-func check_registrar_entry_2(e Registrar_conf) {
-	if e.Port > 0 &&
-		e.Front_host != "" &&
-		// e.Trusted_proxies
-		// e.Base_path != "" &&
-		slices.Contains(claim_conversions, e.Claim_uid_map) &&
-		e.Probe_access_timeout > 0 &&
-		e.Backend_command_timeout > 0 &&
-		e.Max_pool_expiry > 0 &&
-		e.Csrf_secret_seed != "" &&
-		e.Backend != "" &&
-		e.Backend_command_timeout > 0 &&
-		e.Api_access_log_file != "" {
-	} else {
-		panic(fmt.Errorf(bad_message))
-	}
-}
+// func check_registrar_entry_2(e Registrar_conf) {
+// 	if e.Port > 0 &&
+// 		e.Front_host != "" &&
+// 		// e.Trusted_proxies
+// 		// e.Base_path != "" &&
+// 		slices.Contains(claim_conversions, e.Claim_uid_map) &&
+// 		e.Probe_access_timeout > 0 &&
+// 		e.Backend_command_timeout > 0 &&
+// 		e.Max_pool_expiry > 0 &&
+// 		e.Csrf_secret_seed != "" &&
+// 		e.Backend != "" &&
+// 		e.Backend_command_timeout > 0 &&
+// 		e.Api_access_log_file != "" {
+// 	} else {
+// 		panic(fmt.Errorf(bad_message))
+// 	}
+// }
 
-func check_multiplexer_entry_2(e Multiplexer_conf) {
-	if e.Port > 0 &&
-		e.Front_host != "" &&
-		// e.Trusted_proxies
-		e.Mux_ep_update_interval > 0 &&
-		e.Forwarding_timeout > 0 &&
-		e.Probe_access_timeout > 0 &&
-		e.Bad_response_delay > 0 &&
-		e.Busy_suspension_time > 0 &&
-		//e.Mux_node_name
-		e.Backend != "" &&
-		e.Backend_command_timeout > 0 &&
-		e.Mux_access_log_file != "" {
-	} else {
-		panic(fmt.Errorf(bad_message))
-	}
-}
+// func check_multiplexer_entry_2(e Multiplexer_conf) {
+// 	if e.Port > 0 &&
+// 		e.Front_host != "" &&
+// 		// e.Trusted_proxies
+// 		e.Mux_ep_update_interval > 0 &&
+// 		e.Forwarding_timeout > 0 &&
+// 		e.Probe_access_timeout > 0 &&
+// 		e.Bad_response_delay > 0 &&
+// 		e.Busy_suspension_time > 0 &&
+// 		//e.Mux_node_name
+// 		e.Backend != "" &&
+// 		e.Backend_command_timeout > 0 &&
+// 		e.Mux_access_log_file != "" {
+// 	} else {
+// 		panic(fmt.Errorf(bad_message))
+// 	}
+// }
 
-func check_manager_entry_2(e Manager_conf) {
-	assert_slot(len(e.Sudo) > 0)
-	assert_slot(e.Port_min > 0)
-	assert_slot(e.Port_max > 0)
-	assert_slot(e.Backend_awake_duration > 0)
-	//assert_slot(Backend_setup_at_start : bool
-	assert_slot(e.Backend_start_timeout > 0)
-	assert_slot(e.Backend_setup_timeout > 0)
-	assert_slot(e.Backend_stop_timeout > 0)
-	assert_slot(e.Backend_command_timeout > 0)
-	assert_slot(e.Heartbeat_interval > 0)
-	assert_slot(e.Heartbeat_miss_tolerance > 0)
-	assert_slot(e.Heartbeat_timeout > 0)
-}
+// func check_manager_entry_2(e Manager_conf) {
+// 	assert_slot(len(e.Sudo) > 0)
+// 	assert_slot(e.Port_min > 0)
+// 	assert_slot(e.Port_max > 0)
+// 	assert_slot(e.Backend_awake_duration > 0)
+// 	//assert_slot(Backend_setup_at_start : bool
+// 	assert_slot(e.Backend_start_timeout > 0)
+// 	assert_slot(e.Backend_setup_timeout > 0)
+// 	assert_slot(e.Backend_stop_timeout > 0)
+// 	assert_slot(e.Backend_command_timeout > 0)
+// 	assert_slot(e.Heartbeat_interval > 0)
+// 	assert_slot(e.Heartbeat_miss_tolerance > 0)
+// 	assert_slot(e.Heartbeat_timeout > 0)
+// }

@@ -209,7 +209,7 @@ func (g *backend_minio) heartbeat() int {
 
 	if g.heartbeat_client == nil {
 		//fmt.Println("minio.heartbeat(1) proc=", proc)
-		var timeout = (proc.heartbeat_timeout * time.Second)
+		var timeout = (proc.Heartbeat_timeout * time.Second)
 		//fmt.Println("minio.heartbeat(2) proc=", proc)
 		g.heartbeat_client = &http.Client{
 			Timeout: timeout,

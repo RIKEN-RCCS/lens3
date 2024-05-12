@@ -134,26 +134,34 @@ type backend_process struct {
 // BACKEND_CONF is a static and common part of a server.  It is read
 // from a configuration.  It is embedded and not directly used.
 type backend_conf struct {
-	bin_sudo string
-
-	awake_duration time.Duration
-
-	heartbeat_tolerance int
-	heartbeat_interval  time.Duration
-	heartbeat_timeout   time.Duration
-	watch_gap_minimal   time.Duration
-
+	watch_gap_minimal time.Duration
 	stabilize_wait_ms time.Duration
+	manager_expiry    int64
 
-	manager_expiry int
-
-	//mux_host int
-	//mux_port int
-	//mux_ep int
-	//port_min int
-	//port_max int
-	//manager_pid int
+	Manager_conf
 }
+
+// type backend_conf struct {
+// 	bin_sudo string
+//
+// 	awake_duration time.Duration
+//
+// 	heartbeat_tolerance int
+// 	heartbeat_interval  time.Duration
+// 	heartbeat_timeout   time.Duration
+// 	watch_gap_minimal   time.Duration
+//
+// 	stabilize_wait_ms time.Duration
+//
+// 	manager_expiry int
+//
+// 	//mux_host int
+// 	//mux_port int
+// 	//mux_ep int
+// 	//port_min int
+// 	//port_max int
+// 	//manager_pid int
+// }
 
 type backend_command struct {
 	argv []string
@@ -168,15 +176,20 @@ var the_manager = manager{
 
 var the_backend_conf = &the_manager.backend_conf
 
+func init_manager(w *manager, t *keyval_table, conf *Manager_conf) {
+	w.table = t
+	w.Manager_conf = *conf
+}
+
 func manager_main() {
 	defer the_manager.factory.clean_at_exit()
 }
 
 func start_manager(w *manager) {
-	w.bin_sudo = "/usr/bin/sudo"
+	w.Sudo = "/usr/bin/sudo"
 	w.stabilize_wait_ms = 1000
-	w.heartbeat_tolerance = 3
-	w.heartbeat_interval = 60
+	w.Heartbeat_miss_tolerance = 3
+	w.Heartbeat_interval = 60
 
 	w.factory = the_backend_minio_factory
 	w.factory.configure()
@@ -187,37 +200,10 @@ func start_manager(w *manager) {
 	reap_child_process(w)
 }
 
-func Start() {
-	start_service_for_test()
-}
-
-func start_service_for_test() {
-	var dbconf = read_db_conf("conf.json")
-	var t = make_table(dbconf)
-	var m = &the_multiplexer
-	m.table = t
-	var w = &the_manager
-	w.table = t
-	go start_manager(w)
-
-	time.Sleep(5 * time.Second)
-
-	var g = start_backend_for_test(w)
-	var proc = g.get_super_part()
-	var pool = proc.Pool
-	var desc = proc.Process_record
-	set_backend_proc(w.table, pool, desc)
-	//var proc = g.get_super_part()
-	//m.pool[proc.pool] = g
-	//time.Sleep(30 * time.Second)
-	//start_dummy_proxy(m)
-
-	start_multiplexer(m)
-}
-
 func start_backend_for_test(w *manager) backend {
 	fmt.Println("start_backend_for_test()")
-	var g = w.factory.make_backend("mMwfyMzLwOlb8QLYANRM")
+	//var pool = generate_pool_name()
+	var g = w.factory.make_backend("d4f0c4645fce5734")
 	var proc = g.get_super_part()
 
 	var u, err4 = user.Current()
@@ -266,14 +252,14 @@ func ping_server(w *manager, g backend) {
 	var proc = g.get_super_part()
 	proc.heartbeat_misses = 0
 	for {
-		time.Sleep(proc.heartbeat_interval * time.Second)
+		time.Sleep(proc.Heartbeat_interval * time.Second)
 		var status = g.heartbeat()
 		if status == 200 {
 			proc.heartbeat_misses = 0
 		} else {
 			proc.heartbeat_misses += 1
 		}
-		if proc.heartbeat_misses > w.heartbeat_tolerance {
+		if proc.heartbeat_misses > w.Heartbeat_miss_tolerance {
 			logger.infof(("Mux(pool=%s)" +
 				" Heartbeating server failed:" +
 				" misses=%v"),
@@ -352,7 +338,7 @@ func try_start_backend(w *manager, g backend) start_result {
 	var directory = proc.Buckets_directory
 	var command = g.make_command_line(address, directory)
 	var sudo_argv = []string{
-		w.bin_sudo,
+		w.Sudo,
 		"-n",
 		"-u", user,
 		"-g", group}

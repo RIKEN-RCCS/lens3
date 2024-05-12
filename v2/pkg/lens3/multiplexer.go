@@ -56,36 +56,23 @@ type multiplexer struct {
 
 	//proxy *backend_proxy
 
-	mux_addrs []string /*sorted*/
-	//mux_addrs = m.list_mux_ip_addresses()
+	// MUX_ADDRS is a sorted list of ip adrresses.
+	mux_addrs []string
+	// mux_addrs = m.list_mux_ip_addresses()
 
-	multiplexer_conf
+	// UNKNOW FIELDS OF Multiplexer_conf.
+	// front_host_ip?
+	// periodic_work_interval?
+	// mux_expiry?
 
-	//backend_conf
+	Multiplexer_conf
 }
 
-type multiplexer_conf struct {
-	mux_node_name string
-
-	front_host      string
-	trusted_proxies []string /*sorted*/
-	front_host_ip   string
-
-	mux_ep_update_interval time.Duration
-	periodic_work_interval time.Duration
-	mux_expiry             time.Duration
-
-	forwarding_timeout   time.Duration
-	probe_access_timeout time.Duration
-	bad_response_delay   time.Duration
-	busy_suspension_time time.Duration
-}
-
-type backend_proxy struct {
-	backend
-	multiplexer
-	client *http.Client
-}
+// type backend_proxy struct {
+// 	backend
+// 	multiplexer
+// 	client *http.Client
+// }
 
 // THE_MULTIPLEXER is the single multiplexer instance.
 var the_multiplexer = multiplexer{
@@ -97,12 +84,46 @@ const (
 	empty_payload_hash_sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 )
 
+func init_multiplexer(m *multiplexer, t *keyval_table, conf *Multiplexer_conf) {
+	m.table = t
+	m.Multiplexer_conf = *conf
+}
+
+func start_service_for_test() {
+	var dbconf = read_db_conf("conf.json")
+	var t = make_table(dbconf)
+	var muxconf = get_mux_conf(t, "mux")
+	var apiconf = get_api_conf(t, "api")
+	_ = apiconf
+
+	var m = &the_multiplexer
+	init_multiplexer(m, t, &muxconf.Multiplexer)
+
+	var w = &the_manager
+	init_manager(w, t, &muxconf.Manager)
+	go start_manager(w)
+
+	time.Sleep(5 * time.Second)
+
+	var g = start_backend_for_test(w)
+	var proc = g.get_super_part()
+	var pool = proc.Pool
+	var desc = proc.Process_record
+	set_backend_proc(w.table, pool, desc)
+	//var proc = g.get_super_part()
+	//m.pool[proc.pool] = g
+	//time.Sleep(30 * time.Second)
+	//start_dummy_proxy(m)
+
+	start_multiplexer(m)
+}
+
 func start_multiplexer(m *multiplexer) {
 	fmt.Println("start_multiplexer()")
-	m.forwarding_timeout = 60
+	m.Forwarding_timeout = 60
 	//m.client = &http.Client{}
 	//m.proxy = m.client
-	m.front_host = "localhost"
+	m.Front_host = "localhost"
 
 	// MEMO: ReverseProxy <: Handler as it implements ServeHTTP().
 	var proxy1 = httputil.ReverseProxy{
@@ -174,7 +195,8 @@ func make_forwarding_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 				"bad signature"})
 		}
 
-		var pool = "mMwfyMzLwOlb8QLYANRM"
+		var pool = "d4f0c4645fce5734"
+		//var pool = generate_pool_name()
 		var desc = get_backend_proc(m.table, pool)
 		if desc == nil {
 			http.Error(w, "BAD", http_status_500_internal_server_error)
@@ -208,7 +230,7 @@ func ensure_forwarding_host_trusted(m *multiplexer, r *http.Request) bool {
 		return false
 	}
 	var ip = make_typical_ip_address(peer_addr)
-	if string_search(ip, m.trusted_proxies) ||
+	if string_search(ip, m.Trusted_proxies) ||
 		string_search(ip, m.mux_addrs) {
 		return true
 	}

@@ -382,11 +382,11 @@ func (t *keyval_table) setting_clean_claim(uid string) {
 	}
 }
 
-func (t *keyval_table) Set_conf(conf interface{}) {
+func set_conf(t *keyval_table, conf lens3_conf) {
 	//var ctx = context.Background()
 	var db = t.setting
 	switch conf1 := conf.(type) {
-	case Mux_conf:
+	case *Mux_conf:
 		var sub = conf1.Subject
 		if !(sub == "mux" || (len(sub) >= 5 && sub[:4] == "mux:")) {
 			panic("bad conf; subject≠mux")
@@ -399,7 +399,7 @@ func (t *keyval_table) Set_conf(conf interface{}) {
 		// Zero for no expiration.
 		var w1 = db.Set(t.ctx, k1, v1, 0)
 		panic_non_nil(w1.Err())
-	case Api_conf:
+	case *Api_conf:
 		var sub = conf1.Subject
 		if !(sub == "api") {
 			panic("bad conf; subject≠api")
@@ -412,8 +412,7 @@ func (t *keyval_table) Set_conf(conf interface{}) {
 		var w2 = db.Set(t.ctx, k2, v2, 0)
 		panic_non_nil(w2.Err())
 	default:
-		var es = fmt.Sprintf("type %T ≠ Mux_conf nor Api_conf\n", conf)
-		panic(es)
+		log.Panicf("type: (%T) type≠Mux_conf nor type≠Api_conf\n", conf)
 	}
 }
 

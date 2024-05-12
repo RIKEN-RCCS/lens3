@@ -15,7 +15,8 @@ import (
 	//"io"
 	"log"
 	"os"
-	//"reflect"
+	"reflect"
+	"slices"
 )
 
 // DB_CONF is a pair of an endpoint and password to access a
@@ -78,19 +79,19 @@ type Multiplexer_conf struct {
 	Mux_access_log_file     string   `json:"mux_access_log_file"`
 }
 
+// claim_uid_map is one of {"id", "email-name", "map"}.
 type Registrar_conf struct {
-	Port            Number   `json:"port"`
-	Front_host      string   `json:"front_host"`
-	Trusted_proxies []string `json:"trusted_proxies"`
-	Base_path       string   `json:"base_path"`
-	Claim_uid_map   string   `json:"claim_uid_map"`
-	// {"id", "email-name", "map"}
-	Probe_access_timeout    Number `json:"probe_access_timeout"`
-	Max_pool_expiry         Number `json:"max_pool_expiry"`
-	Csrf_secret_seed        string `json:"csrf_secret_seed"`
-	Backend                 string `json:"backend"`
-	Backend_command_timeout Number `json:"backend_command_timeout"`
-	Api_access_log_file     string `json:"api_access_log_file"`
+	Port                    Number   `json:"port"`
+	Front_host              string   `json:"front_host"`
+	Trusted_proxies         []string `json:"trusted_proxies"`
+	Base_path               string   `json:"base_path"`
+	Claim_uid_map           string   `json:"claim_uid_map"`
+	Probe_access_timeout    Number   `json:"probe_access_timeout"`
+	Max_pool_expiry         Number   `json:"max_pool_expiry"`
+	Csrf_secret_seed        string   `json:"csrf_secret_seed"`
+	Backend                 string   `json:"backend"`
+	Backend_command_timeout Number   `json:"backend_command_timeout"`
+	Api_access_log_file     string   `json:"api_access_log_file"`
 }
 
 type Manager_conf struct {
@@ -123,17 +124,7 @@ type Syslog_conf struct {
 	Priority string `json:"priority"`
 }
 
-type Gunicorn_conf__ struct {
-	Port                Number
-	Workers             Number
-	Threads             Number
-	Timeout             Number
-	Access_logfile      string
-	Reload              string //bool
-	Log_file            string
-	Log_level           string
-	Log_syslog_facility string
-}
+var claim_conversions = []string{"id", "email-name", "map"}
 
 // READ_DB_CONF reads a conf-file for the keyval table.
 func read_db_conf(file string) Db_conf {
@@ -153,76 +144,50 @@ func read_db_conf(file string) Db_conf {
 	if conf.Ep == "" || conf.Password == "" {
 		log.Panic("conf.redis.ep or conf.redis.password missing")
 	}
-	check_redis_entry(conf)
+	check_db_entry(conf)
 	return conf
 }
 
 // Read_conf reads a configuration file and checks a structure is
 // properly filled.
-func Read_conf(file_ string) interface{} {
-	var _, err1 = os.ReadFile("conf.yaml")
+func read_conf(filename string) lens3_conf {
+	var json1, err1 = os.ReadFile(filename)
 	if err1 != nil {
 		panic(err1)
 	}
-	var yaml2 = make(map[string]interface{})
-	//var err2 = yaml.Unmarshal(b1, &yaml2)
-	var err2 error = nil
+	var conf1 = make(map[string]interface{})
+	var err2 = json.Unmarshal(json1, &conf1)
 	if err2 != nil {
 		panic(err2)
 	}
-	var json3, err4 = json.Marshal(yaml2)
-	if err4 != nil {
-		panic(err4)
-	}
 
-	//fmt.Println(yaml2)
-	//fmt.Println(string(json3))
-
-	/*
-		var c2 = yaml2["controller"].(map[string]interface{})
-		fmt.Println(c2)
-		var t2 = c2["minio_mc_timeout"]
-		fmt.Println(reflect.TypeOf(t2))
-		fmt.Println(t2)
-	*/
-	/*
-		var b3, err3 = json.Marshal(&yaml2)
-		if err3 != nil {
-			panic(err3)
-		}
-		fmt.Print(b3)
-	*/
-	/*
-		fmt.Println(yaml2)
-	*/
-
-	var sub = yaml2["subject"].(string)[:3]
+	var sub = conf1["subject"].(string)[:3]
 	switch sub {
 	case "mux":
 		var muxconf Mux_conf
-		var err5 = json.Unmarshal(json3, &muxconf)
-		if err5 != nil {
-			panic(fmt.Sprint("Bad .yaml conf file:", err5))
+		var err3 = json.Unmarshal(json1, &muxconf)
+		if err3 != nil {
+			panic(fmt.Sprint("Bad json conf file:", err3))
 		}
-		fmt.Println("MUX CONF is", muxconf)
-		//check_mux_conf(muxconf)
-		return muxconf
+		//fmt.Println("MUX CONF is", muxconf)
+		check_mux_conf(muxconf)
+		return &muxconf
 	case "api":
 		var apiconf Api_conf
-		var err6 = json.Unmarshal(json3, &apiconf)
-		if err6 != nil {
-			panic(fmt.Sprint("Bad .yaml conf file:", err6))
+		var err4 = json.Unmarshal(json1, &apiconf)
+		if err4 != nil {
+			panic(fmt.Sprint("Bad json conf file:", err4))
 		}
-		fmt.Println("API CONF is", apiconf)
-		//check_api_conf(apiconf)
-		return apiconf
+		//fmt.Println("API CONF is", apiconf)
+		check_api_conf(apiconf)
+		return &apiconf
 	default:
-		panic(fmt.Sprint("Bad .yaml conf file: Bad subject field."))
+		log.Panicf("Bad json conf file: Bad subject field (%s).", sub)
+		return nil
 	}
 }
 
 func check_mux_conf(conf Mux_conf) {
-	//check_gunicorn_entry(conf.Gunicorn)
 	check_multiplexer_entry(conf.Multiplexer)
 	check_manager_entry(conf.Manager)
 	check_minio_entry(conf.Minio)
@@ -230,7 +195,6 @@ func check_mux_conf(conf Mux_conf) {
 }
 
 func check_api_conf(conf Api_conf) {
-	//check_gunicorn_entry(conf.Gunicorn)
 	check_registrar_entry(conf.Registrar)
 	check_minio_entry(conf.Minio)
 	check_ui_entry(conf.UI)
@@ -243,48 +207,161 @@ func assert_slot(c bool) {
 	}
 }
 
-func check_gunicorn_entry(e Gunicorn_conf__) {
-	assert_slot(e.Port > 0)
-	assert_slot(e.Workers > 0)
-	//assert_slot(e.Threads >= 0)
-	assert_slot(e.Timeout > 0)
-	assert_slot(len(e.Access_logfile) > 0)
-	// assert_slot(e.Reload is bool and always OK.)
-	assert_slot(len(e.Log_file) > 0)
-	assert_slot(len(e.Log_level) > 0)
-	assert_slot(len(e.Log_syslog_facility) >= 0)
+func check_db_entry(e Db_conf) {
+	if len(e.Ep) > 0 && len(e.Password) > 0 {
+	} else {
+		log.Panic(fmt.Errorf(bad_message))
+	}
 }
 
-func check_registrar_entry(e Registrar_conf) {
-	if len(e.Front_host) > 0 &&
-		//e.Trusted_proxies : []string
-		len(e.Base_path) > 0 &&
-		len(e.Claim_uid_map) > 0 &&
-		// {"id", "email-name", "map"}
-		e.Probe_access_timeout > 0 &&
-		e.Backend_command_timeout > 0 &&
-		e.Max_pool_expiry > 0 &&
-		len(e.Csrf_secret_seed) > 0 {
-	} else {
-		panic(fmt.Errorf("Bad .yaml conf file."))
+const bad_message = "Bad json conf file."
+
+func check_field_required_and_positive(t any, slot string) {
+	var t1 = reflect.ValueOf(t)
+	var s = t1.FieldByName(slot)
+	//fmt.Printf("s=%T %v\n", s, s)
+	assert_fatal(s.IsValid())
+	switch s.Kind() {
+	case reflect.Int:
+		fallthrough
+	case reflect.Int8:
+		fallthrough
+	case reflect.Int16:
+		fallthrough
+	case reflect.Int32:
+		fallthrough
+	case reflect.Int64:
+		var x1 = s.Int()
+		if !(!s.IsZero() && x1 > 0) {
+			log.Panicf("field (%s) is required in %T.", slot, t)
+		}
+	case reflect.String:
+		if s.IsZero() {
+			log.Panicf("field (%s) is required in %T.", slot, t)
+		}
 	}
 }
 
 func check_multiplexer_entry(e Multiplexer_conf) {
-	if len(e.Front_host) > 0 &&
-		//e.Trusted_proxies : []string
+	for _, slot := range []string{
+		"Port",
+		"Front_host",
+		//"Trusted_proxies",
+		"Mux_ep_update_interval",
+		"Forwarding_timeout",
+		"Probe_access_timeout",
+		"Bad_response_delay",
+		"Busy_suspension_time",
+		//"Mux_node_name",
+		"Backend",
+		"Backend_command_timeout",
+		"Mux_access_log_file",
+	} {
+		check_field_required_and_positive(e, slot)
+	}
+}
+
+func check_registrar_entry(e Registrar_conf) {
+	for _, slot := range []string{
+		"Port",
+		"Front_host",
+		// "Trusted_proxies",
+		// "Base_path",
+		"Claim_uid_map",
+		"Probe_access_timeout",
+		"Max_pool_expiry",
+		"Csrf_secret_seed",
+		"Backend",
+		"Backend_command_timeout",
+		"Api_access_log_file",
+	} {
+		check_field_required_and_positive(e, slot)
+	}
+	if !slices.Contains(claim_conversions, e.Claim_uid_map) {
+		panic(fmt.Errorf(bad_message))
+	}
+}
+
+func check_manager_entry(e Manager_conf) {
+	for _, slot := range []string{
+		"Sudo",
+		"Port_min",
+		"Port_max",
+		"Backend_awake_duration",
+		"Backend_setup_at_start",
+		"Backend_start_timeout",
+		"Backend_setup_timeout",
+		"Backend_stop_timeout",
+		"Backend_command_timeout",
+		"Heartbeat_interval",
+		"Heartbeat_miss_tolerance",
+		"Heartbeat_timeout",
+	} {
+		check_field_required_and_positive(e, slot)
+	}
+}
+
+func check_minio_entry(e Minio_conf) {
+	if len(e.Minio) > 0 &&
+		len(e.Mc) > 0 {
+	} else {
+		panic(fmt.Errorf(bad_message))
+	}
+}
+
+func check_ui_entry(e UI_conf) {
+	if len(e.S3_url) > 0 &&
+		len(e.Footer_banner) > 0 {
+	} else {
+		panic(fmt.Errorf(bad_message))
+	}
+}
+
+func check_syslog_entry(e Syslog_conf) {
+	if len(e.Facility) > 0 &&
+		len(e.Priority) > 0 {
+	} else {
+		panic(fmt.Errorf(bad_message))
+	}
+}
+
+func check_registrar_entry_2(e Registrar_conf) {
+	if e.Port > 0 &&
+		e.Front_host != "" &&
+		// e.Trusted_proxies
+		// e.Base_path != "" &&
+		slices.Contains(claim_conversions, e.Claim_uid_map) &&
+		e.Probe_access_timeout > 0 &&
+		e.Backend_command_timeout > 0 &&
+		e.Max_pool_expiry > 0 &&
+		e.Csrf_secret_seed != "" &&
+		e.Backend != "" &&
+		e.Backend_command_timeout > 0 &&
+		e.Api_access_log_file != "" {
+	} else {
+		panic(fmt.Errorf(bad_message))
+	}
+}
+
+func check_multiplexer_entry_2(e Multiplexer_conf) {
+	if e.Port > 0 &&
+		e.Front_host != "" &&
+		// e.Trusted_proxies
 		e.Mux_ep_update_interval > 0 &&
 		e.Forwarding_timeout > 0 &&
 		e.Probe_access_timeout > 0 &&
 		e.Bad_response_delay > 0 &&
 		e.Busy_suspension_time > 0 &&
-		len(e.Mux_node_name) >= 0 {
+		//e.Mux_node_name
+		e.Backend != "" &&
+		e.Backend_command_timeout > 0 &&
+		e.Mux_access_log_file != "" {
 	} else {
-		panic(fmt.Errorf("Bad .yaml conf file."))
+		panic(fmt.Errorf(bad_message))
 	}
 }
 
-func check_manager_entry(e Manager_conf) {
+func check_manager_entry_2(e Manager_conf) {
 	assert_slot(len(e.Sudo) > 0)
 	assert_slot(e.Port_min > 0)
 	assert_slot(e.Port_max > 0)
@@ -297,35 +374,4 @@ func check_manager_entry(e Manager_conf) {
 	assert_slot(e.Heartbeat_interval > 0)
 	assert_slot(e.Heartbeat_miss_tolerance > 0)
 	assert_slot(e.Heartbeat_timeout > 0)
-}
-
-func check_redis_entry(e Db_conf) {
-	if len(e.Ep) > 0 && len(e.Password) > 0 {
-	} else {
-		log.Panic(fmt.Errorf("Bad conf.json conf-file."))
-	}
-}
-
-func check_minio_entry(e Minio_conf) {
-	if len(e.Minio) > 0 &&
-		len(e.Mc) > 0 {
-	} else {
-		panic(fmt.Errorf("Bad .yaml conf file."))
-	}
-}
-
-func check_ui_entry(e UI_conf) {
-	if len(e.S3_url) > 0 &&
-		len(e.Footer_banner) > 0 {
-	} else {
-		panic(fmt.Errorf("Bad .yaml conf file."))
-	}
-}
-
-func check_syslog_entry(e Syslog_conf) {
-	if len(e.Facility) > 0 &&
-		len(e.Priority) > 0 {
-	} else {
-		panic(fmt.Errorf("Bad .yaml conf file."))
-	}
 }

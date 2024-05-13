@@ -11,9 +11,9 @@ This describes design notes of Lenticularis-S3.
 * MinIO (S3 server)
 * Redis
 
-## Redis Databases (prefixes of keys)
+## Keyval-DB  Databases (prefixes of keys)
 
-Lens3 uses a couple of Redis databases (by database numbers), but the
+Lens3 uses a couple of keyval-db databases (by database numbers), but the
 division is arbitrary as distinct prefixes are used.  Most of the
 entries are json records, and others are simple strings.
 
@@ -23,8 +23,18 @@ NOTE: In the tables below, entries with "\*1" are set atomically (by
 A date+time is by unix seconds.  Web-UI also passes a date+time by
 unix seconds.
 
-Mux, Api, and Managers make (potentially) many connections to Redis,
+Mux, Api, and Managers make (potentially) many connections to keyval-db,
 because they use multiple databases.
+
+### CONSISTENCY OF ENTRIES.
+
+Some entries are dependent each other.  Crash-recovery should remove
+orphaned enties.
+
+__uu:uid and um:claim__.  uid ↔︎ claim is one-to-one if a user-info
+contains a claim.
+
+__bd:directory and bk:bucket-name__.
 
 ### Setting-Table (DB=0)
 
@@ -59,16 +69,16 @@ a service is very annoying.
 
 | Key           | Value         | Notes   |
 | ----          | ----          | ---- |
-| po:pool-id    | pool-description | |
-| ps:pool-id    | pool-state    | |
-| bd:directory  | pool-id       | A bucket-directory (path string) \*1 |
+| po:pool-name  | pool-description | |
+| ps:pool-name  | pool-state    | |
+| bd:directory  | pool-name       | A bucket-directory (path string) \*1 |
 
-A __po:pool-id__ entry is a pool description: {"pool_name",
+A __po:pool-name__ entry is a pool description: {"pool_name",
 "owner_uid", "owner_gid", "buckets_directory", "probe_key",
 "online_status", "expiration_time", "modification_time"}.  It holds
 the semi-static part of pool information.
 
-A __ps:pool-id__ entry is a pool-state which is a record {"state",
+A __ps:pool-name__ entry is a pool-state which is a record {"state",
 "reason", "modification_time"}.  A state is one of: {"initial",
 "ready", "suspended", "disabled", "inoperable"}.  A value of reason is
 a string, which can be a long string of an error message.
@@ -86,17 +96,17 @@ same directory transiently in a race in starting/stopping instances.
 
 | Key             | Value           | Notes   |
 | ----            | ----            | ---- |
-| ma:pool-id      | backend-manager   | \*1, \*2 |
-| mn:pool-id      | backend-process   | |
+;;| (ma:pool-name)  | backend-manager   | \*1, \*2 |
+;;| mn:pool-name    | backend-process   | |
 | mx:mux-endpoint | Mux-description | \*2 |
 
-An __ma:pool-id__ entry records a backend-manager under which a
+An __ma:pool-name__ entry records a backend-manager under which a
 backend process runs.  It is a record: {"mux_ep", "start_time"}.  It
 is atomically set to ensure uniqueness of a running Manager (a loser
 will quit).  A start-time makes the chosen entry distinguishable (but
 not strictly distinguishable).
 
-An __mn:pool-id__ entry is a backend-process description:
+An __mn:pool-name__ entry is a backend-process description:
 {"backend_ep", "backend_pid", "root_access", "root_secret", "mux_ep",
 "manager_pid", "modification_time"}.  A root_access/root_secret pair
 specifies an administrator access for a backend instance.
@@ -112,20 +122,20 @@ modification-time is a time the record is refreshed.
 
 | Key            | Value              | Notes   |
 | ----           | ----               | ---- |
-| ep:pool-id     | backend-endpoint   | |
+;;| (ep:pool-name) | backend-endpoint   | |
+| ep:pool-name   | backend-process    | \*1, \*2 |
 | bk:bucket-name | bucket-description | A mapping by a bucket-name \*1 |
-| ts:pool-id     | timestamp          | Timestamp on an access (string) |
+| ts:pool-name   | timestamp          | Timestamp on an access (string) |
 | us:uid         | timestamp          | Timestamp on a user access (string) |
 
-
-An __ep:pool-id__ entry is a backend-endpoint (a host:port string).
+An __ep:pool-name__ entry is a backend-endpoint (a host:port string).
 
 A __bk:bucket-name__ entry is a record of a bucket-description:
 {"pool", "bkt_policy", "modification_time"}.  A bkt-policy indicates
 public R/W status of a bucket: {"none", "upload", "download",
 "public"}, whose names are borrowed from backend.
 
-A __ts:pool-id__ entry is a last access timestamp of a pool.  It is
+A __ts:pool-name__ entry is a last access timestamp of a pool.  It is
 used to decide whether to stop a backend instance.
 
 A __us:uid__ is an access timestamp of a user.  It is just a record.
@@ -138,15 +148,15 @@ It is used to find out inactive users (no tools are provided).
 | pi:random     | key-description | \*1 |
 | ky:random     | key-description | \*1 |
 
-This table stores generated randoms for a pool-id or an access-key.
+This table stores generated randoms for a pool-name or an access-key.
 An entry is inserted to keep its uniqueness.
 
-A __pi:random__ entry is a pool-id and it is a record: {"owner",
+A __pi:random__ entry is a pool-name and it is a record: {"owner",
 "modification_time"}, where an owner is a uid.
 
 A __ky:random__ entry is an access-key and it is a record: {"owner",
 "secret_key", "key_policy", "expiration_time", "modification_time"},
-where an owner is a pool-id.  A key-policy is one of {"readwrite",
+where an owner is a pool-name.  A key-policy is one of {"readwrite",
 "readonly", "writeonly"}, whose names are borrowed from backend.
 
 ## Bucket policy
@@ -165,16 +175,16 @@ Accesses to deleted buckets in Lens3 are refused at Lens3-Mux, but
 they remain potentially accessible in backend, which have access policy
 "none" and are accessible using access-keys.
 
-## Redis Database Operations
+## Keyval-DB Database Operations
 
-A single Redis instance is used, and is not distributed.
+A single keyval-db instance is used, and is not distributed.
 
 It is usually required an uniqueness guarantee, such as for an
 access-keys and ID's for pools, and atomic set is suffice.  A failure
 condition is only considered for MinIO endpoints, and timeouts are set
-to "ma:pool-id" entries.  See the section Redis Database Keys.
+to "ma:pool-name" entries.  See the section Keyval-DB Database Keys.
 
-Redis client routines catches exceptions related to sockets (including
+Keyval-db client routines catches exceptions related to sockets (including
 ConnectionError and TimeoutError).  Others are not checked at all by
 Lens3.
 
@@ -211,8 +221,21 @@ state with the state of Lens3 at the next start.
 
 ### Lens3-Mux/Lens3-Api systemd Services
 
-All states of services are stored in Redis.  It is safe to stop/start
+All states of services are stored in keyval-db.  It is safe to stop/start
 systemd services.
+
+## Access Authorization Checks
+
+Lens3's check is minimal.  A permission of acces-keys is r/w and a
+permition of buckets is r/w.  It judges operations as reads by http
+GET and writes by http PUT/POST.
+
+Lens3 forwards requests to the backend S3 server that are signed by
+the single root credential for the backend.
+
+AWS S3 Documents:
+
+* [How Amazon S3 authorizes a request](https://docs.aws.amazon.com/AmazonS3/latest/userguide/how-s3-evaluates-access-control.html)
 
 ## Processes
 
@@ -268,11 +291,11 @@ that it leaves "minio" and "sudo" processes in the STOP state.
 
 ### Forced Termination of Lens3-Mux and MinIO
 
-### Forced Expiration of Lens3-Mux Entries in Redis
+### Forced Expiration of Lens3-Mux Entries in Keyval-DB
 
-The action to fake a forced removal of a __ma:pool-id__ entry in Redis
-should (1) start a new Lens3-Mux + MinIO pair, and then (2) stop an
-old Lens3-Mux + MinIO pair.
+The action to fake a forced removal of a __ma:pool-name__ entry in
+keyval-db should (1) start a new Lens3-Mux + MinIO pair, and then (2)
+stop an old Lens3-Mux + MinIO pair.
 
 ## Notes on MinIO
 

@@ -21,7 +21,7 @@ import (
 )
 
 // DB_CONF is a pair of an endpoint and password to access a
-// keyval-DB, and it is usually stored in a file in "etc".
+// keyval-db, and it is usually stored in a file in "etc".
 type Db_conf struct {
 	Ep       string
 	Password string

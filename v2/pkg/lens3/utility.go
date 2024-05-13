@@ -23,12 +23,25 @@ import (
 	//"slices"
 	"math/rand"
 	"reflect"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
 )
 
 type vacuous = struct{}
+
+const (
+	http_status_400_bad_request  int = 400
+	http_status_401_unauthorized int = 401
+	http_status_403_forbidden    int = 403
+	http_status_404_not_found    int = 404
+
+	http_status_500_internal_server_error int = 500
+	http_status_503_service_unavailable   int = 503
+
+	http_status_601_unanalyzable int = 601
+)
 
 func assert_fatal(c bool) {
 	if !c {
@@ -98,18 +111,6 @@ func termination(m string) *termination_exc {
 func api_error(code int, _ string) error {
 	return &api_error_exc{fmt.Sprintf("api_error code=%d", code)}
 }
-
-const (
-	http_status_400_bad_request  int = 400
-	http_status_401_unauthorized int = 401
-	http_status_403_forbidden    int = 403
-	http_status_404_not_found    int = 404
-
-	http_status_500_internal_server_error int = 500
-	http_status_503_service_unavailable   int = 503
-
-	http_status_601_unanalyzable int = 601
-)
 
 // STRING_SORT sorts strings non-destructively.  It currently uses
 // sort.Strings().  It will use slices.Sort in Go-1.22 and later.
@@ -315,4 +316,32 @@ func get_ip_addresses(hostname string) []string {
 		ips2 = append(ips2, make_typical_ip_address(ip))
 	}
 	return string_sort(ips2)
+}
+
+var bucket_naming_good_re = regexp.MustCompile(`^[a-z0-9-]$`)
+var bucket_naming_forbidden_re = regexp.MustCompile(
+	`^[0-9.]*$` +
+		`|^.*-$` +
+		`|^xn--.*$` +
+		`|^.*-s3alias$` +
+		`|^.*--ol-s3$` +
+		`|^aws$` +
+		`|^amazon$` +
+		`|^goog.*$` +
+		`|^g00g.*$` +
+		`|^minio$`)
+
+// CHECK_BUCKET_NAMING checks bucket naming restrictions.  Names are
+// 3-63 characters in all lowercase.  Lens3 forbits any DOTS, "aws",
+// "amazon", "minio", "goog*", and "g00g*".
+//
+// * Bucket naming rules:
+//   - https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucketnamingrules.html
+//
+// * Bucket naming guidelines
+//   - https://cloud.google.com/storage/docs/naming-buckets
+func check_bucket_naming(name string) bool {
+	return (len(name) >= 3 && len(name) <= 63 &&
+		bucket_naming_good_re.MatchString(name) &&
+		!bucket_naming_forbidden_re.MatchString(name))
 }

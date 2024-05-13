@@ -5,6 +5,23 @@
 
 package lens3
 
+// An AWS S3 V4 authorization header ("Authorization=") starts with a
+// keyword "AWS4-HMAC-SHA256", and consists of three subentries
+// separated by "," and zero or more blanks.  A "Credential=" subentry
+// is a five fields separated by "/" as
+// KEY/DATE/REGION/SERVICE/TYPE_OF_USAGE, with DATE="yyyymmdd",
+// SERVICE="s3", and TYPE_OF_USAGE="aws4_request".  A "SignedHeaders="
+// subentry is a list of header keys separated by ";" as
+// "host;x-amz-content-sha256;x-amz-date".  A "Signature=" subentry is
+// a string.
+//
+// Authorization header looks like:
+//
+//	Authorization="AWS4-HMAC-SHA256
+//	Credential={key}/20240511/us-east-1/s3/aws4_request,
+//	SignedHeaders=host;x-amz-content-sha256;x-amz-date,
+//	Signature={signature}"
+
 // Some reference documents:
 //   https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html
 //   https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-auth-using-authorization-header.html
@@ -177,23 +194,14 @@ func sign_by_backend_credential(r *http.Request, proc Process_record) {
 }
 
 // SCAN_AWS_AUTHORIZATION extracts elements in an "Authorization"
-// header.  On failure, it returns one with the signature field as "".
-// Keys in SignedHeaders are stored canonicalized.  An authorization
-// header starts with a keyword "AWS4-HMAC-SHA256", and consists of
-// three fields separated by "," and zero or more blanks.  A
-// credential is a five fields separated by "/" as
-// KEY/DATE/REGION/SERVICE/TYPE_OF_USAGE, with DATE="yyyymmdd",
-// SERVICE="s3", and TYPE_OF_USAGE="aws4_request".  A signedheaders is
-// a list of header keys separated by ";" as
-// "host;x-amz-content-sha256;x-amz-date".  A signature is a string.
-//
-// Authorization="AWS4-HMAC-SHA256
-//
-//	Credential={key}/20240511/us-east-1/s3/aws4_request,
-//	SignedHeaders=host;x-amz-content-sha256;x-amz-date,
-//	Signature={signature}"
+// header.  It accepts an emtpy string.  On failure, it returns one
+// with the signature field as "".  Returned keys in SignedHeaders are
+// canonicalized.
 func scan_aws_authorization(auth string) s3v4_authorization {
 	var bad = s3v4_authorization{}
+	if auth == "" {
+		return bad
+	}
 	var i1 = strings.Index(auth, " ")
 	if i1 == -1 || i1 != 16 {
 		//fmt.Println("*** no auth method", auth)

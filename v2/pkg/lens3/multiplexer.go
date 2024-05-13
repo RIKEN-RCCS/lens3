@@ -27,7 +27,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	//"strings"
+	"strings"
 	"time"
 	//"runtime"
 )
@@ -82,6 +82,14 @@ var the_multiplexer = multiplexer{
 
 const (
 	empty_payload_hash_sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+)
+
+const (
+	backend_not_running    = "backend not running"
+	no_bucket_name_in_url  = "no bucket name in url"
+	bad_bucket_name_in_url = "bad_bucket_name_in_url"
+	bad_signature          = "bad signature"
+	no_named_bucket        = "no_named_bucket"
 )
 
 func init_multiplexer(m *multiplexer, t *keyval_table, conf *Multiplexer_conf) {
@@ -155,8 +163,8 @@ func proxy_request_rewriter(m *multiplexer) func(r *httputil.ProxyRequest) {
 		var pool = x[0]
 		delete(r.In.Header, "lens3-pool")
 		delete(r.Out.Header, "lens3-pool")
-		fmt.Println("*** POOL=", pool)
 		var ep = get_backend_ep(m.table, pool)
+		fmt.Println("*** POOL=", pool, " EP=", ep)
 		if ep == "" {
 			logger.debug("Mux({pool}).")
 			raise(&proxy_exc{http_status_404_not_found, "pool non-exist"})
@@ -164,7 +172,11 @@ func proxy_request_rewriter(m *multiplexer) func(r *httputil.ProxyRequest) {
 		//var g = m.pool[pool]
 		//var proc = g.get_super_part()
 		var url1, err1 = url.Parse("http://" + ep)
-		assert_fatal(err1 == nil)
+		if err1 != nil {
+			logger.debugf("Mux(pool=%s) bad backend url: err=(%v)", pool, err1)
+			raise(&proxy_exc{http_status_500_internal_server_error,
+				"bad url"})
+		}
 		fmt.Println("*** URL=", url1)
 		r.SetURL(url1)
 		r.SetXForwarded()
@@ -172,9 +184,9 @@ func proxy_request_rewriter(m *multiplexer) func(r *httputil.ProxyRequest) {
 }
 
 // MAKE_FORWARDING_PROXY makes a filter that checks an access is
-// granted.  Also, the filter signs the request by a credential for
-// the backend.  It passes forwarding information to
-// ReverseProxy.Rewriter via a http header field "lens3-pool".  See
+// granted.  It passes the request to the next handler PROXY, after
+// signing it with a backend credential.  It embeds some information
+// under an http header "lens3-pool" for the next handler.  See
 // proxy_request_rewriter.
 func make_forwarding_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -183,16 +195,22 @@ func make_forwarding_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 		//var proc = get_backend_proc(m.table, "mMwfyMzLwOlb8QLYANRM")
 		//fmt.Println("*** POOL=", pool)
 
-		var keypair = [2]string{
-			"yDRzcPdqHkwupPqryAvO",
-			"ZNDov7ZJ5ecAksaJHaUxmoWwNOb52ZYj3lAdTq1lmkJGqaMx",
+		var authenticated = check_authenticated(m, r)
+		if authenticated == "" {
+			//http.Error(w, "BAD", http_status_401_unauthorized)
+			log_access(400, r)
+			raise(&proxy_exc{http_status_401_unauthorized,
+				bad_signature})
 		}
 
-		var goodsign = check_credential_in_request(m.verbose, r, keypair)
-		if !goodsign {
-			http.Error(w, "BAD", http_status_401_unauthorized)
-			raise(&proxy_exc{http_status_401_unauthorized,
-				"bad signature"})
+		// var bucketname = pick_bucket_in_path(m, r)
+		var bucketname = "lenticularis-oddity-a1"
+
+		var bucket = get_bucket(m.table, bucketname)
+		if bucket == nil {
+			log_access(400, r)
+			raise(&proxy_exc{http_status_404_not_found,
+				no_named_bucket})
 		}
 
 		var pool = "d4f0c4645fce5734"
@@ -201,7 +219,7 @@ func make_forwarding_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 		if desc == nil {
 			http.Error(w, "BAD", http_status_500_internal_server_error)
 			raise(&proxy_exc{http_status_500_internal_server_error,
-				"backend not running"})
+				backend_not_running})
 		}
 
 		ensure_forwarding_host_trusted(m, r)
@@ -215,11 +233,35 @@ func make_forwarding_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 		//	" Check configuration"))
 
 		/* Replace an authorization header. */
+
 		sign_by_backend_credential(r, *desc)
 
 		r.Header["lens3-pool"] = []string{pool}
 		proxy.ServeHTTP(w, r)
 	})
+}
+
+func check_authenticated(m *multiplexer, r *http.Request) string {
+	var a1 = r.Header.Get("Authorization")
+	var a2 s3v4_authorization = scan_aws_authorization(a1)
+	var key string
+	if a2.signature != "" {
+		key = a2.credential[0]
+	} else {
+		key = ""
+	}
+
+	var keypair = [2]string{
+		"yDRzcPdqHkwupPqryAvO",
+		"ZNDov7ZJ5ecAksaJHaUxmoWwNOb52ZYj3lAdTq1lmkJGqaMx",
+	}
+
+	var ok = check_credential_in_request(m.verbose, r, keypair)
+	if ok {
+		return key
+	} else {
+		return ""
+	}
 }
 
 // It double checks m.mux_addrs, because mux_addrs is updated only
@@ -314,83 +356,23 @@ func ensure_pool_state(m *multiplexer, r *http.Request) bool {
 	return true
 }
 
-/*
-func (m *backend_proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	var proc = m.get_super_part()
-	var failure_message = fmt.Sprintf(
-		("Mux ({self._mux_host}) urlopen failure:" +
-			" url={url} for {request_method} {request_url};"))
-	_ = failure_message
-
-	// Copy request headers.  Do not use Add or Set.  Set "HOST" in
-	// case it is missing.
-
-	var q_headers http.Header
-	for k1, v1 := range r.Header {
-		if strings.HasPrefix(k1, "HTTP_") {
-			var k2 = strings.Replace(k1[5:], "_", "-", -1)
-			var k3 = http.CanonicalHeaderKey(k2)
-			q_headers[k3] = v1
-		}
+func pick_bucket_in_path(m *multiplexer, r *http.Request) string {
+	var u1 = r.URL
+	var path = strings.Split(u1.EscapedPath(), "/")
+	if len(path) >= 2 && path[0] != "" {
+		raise(&proxy_exc{http_status_400_bad_request,
+			no_bucket_name_in_url})
 	}
-	q_headers.Add("HOST", m.front_host)
-	var content_type = r.Header.Get("CONTENT_TYPE")
-	if content_type != "" {
-		q_headers.Set("CONTENT-TYPE", content_type)
+	var bucket = path[1]
+	if bucket == "" {
+		log_access(400, r)
+		raise(&proxy_exc{http_status_400_bad_request,
+			no_bucket_name_in_url})
 	}
-	var content_length = r.Header.Get("CONTENT_LENGTH")
-	if content_length != "" {
-		q_headers.Set("CONTENT-LENGTH", content_length)
+	if !check_bucket_naming(bucket) {
+		log_access(400, r)
+		raise(&proxy_exc{http_status_400_bad_request,
+			bad_bucket_name_in_url})
 	}
-
-	var url = fmt.Sprintf("http://%s/%s?%s",
-		proc.ep,
-		r.URL.Path,
-		r.URL.RawQuery)
-	var body io.Reader = r.Body
-	var method string = r.Method
-	var timeout = time.Duration(m.forwarding_timeout * time.Second)
-	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	var req2, err2 = http.NewRequestWithContext(ctx, method, url, body)
-	assert_fatal(err2 != nil)
-	req2.Header = q_headers
-	// (rsp : *http.Response)
-	var rsp, err3 = m.client.Do(req2)
-	assert_fatal(err3 != nil)
-	var r_headers = w.Header()
-	for k4, v4 := range rsp.Header {
-		r_headers[k4] = v4
-	}
-}
-*/
-
-func make_proxy_2(m *multiplexer) http.Handler {
-	fmt.Println("make_proxy_2() 8005->9001")
-	var proxy = httputil.ReverseProxy{
-		Rewrite: func(r *httputil.ProxyRequest) {
-			var url1, err1 = url.Parse("http://localhost:9001")
-			assert_fatal(err1 == nil)
-			r.SetURL(url1)
-			r.SetXForwarded()
-		},
-	}
-	return &proxy
-}
-
-func make_proxy_1(m *multiplexer) http.Handler {
-	fmt.Println("make_proxy_1() 8005->9001")
-	var url1, err1 = url.Parse("http://localhost:9001")
-	assert_fatal(err1 == nil)
-	var proxy = httputil.NewSingleHostReverseProxy(url1)
-	return proxy
-}
-
-func start_example_proxy_() {
-	fmt.Println("start_example_proxy() 8005->9001")
-	var url1, err1 = url.Parse("http://localhost:9001")
-	assert_fatal(err1 == nil)
-	var proxy = httputil.NewSingleHostReverseProxy(url1)
-	var err2 = http.ListenAndServe(":8005", proxy)
-	log.Fatal(err2)
+	return bucket
 }

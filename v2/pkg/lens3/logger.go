@@ -10,6 +10,7 @@ package lens3
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 )
 
@@ -81,6 +82,6 @@ func (w *log_writer) debug(m string) error {
 	return nil
 }
 
-func log_access(code string, _ string) {
-	logger.infof("access code=%s", code)
+func log_access(code int, r *http.Request) {
+	logger.infof("access code=%d", code)
 }

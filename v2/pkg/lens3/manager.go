@@ -138,7 +138,7 @@ type backend_conf struct {
 	stabilize_wait_ms time.Duration
 	manager_expiry    int64
 
-	Manager_conf
+	manager_conf
 }
 
 // type backend_conf struct {
@@ -176,9 +176,9 @@ var the_manager = manager{
 
 var the_backend_conf = &the_manager.backend_conf
 
-func init_manager(w *manager, t *keyval_table, conf *Manager_conf) {
+func init_manager(w *manager, t *keyval_table, conf *manager_conf) {
 	w.table = t
-	w.Manager_conf = *conf
+	w.manager_conf = *conf
 }
 
 func manager_main() {

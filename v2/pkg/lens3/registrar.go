@@ -34,18 +34,18 @@ type pool_desc_ui struct {
 	Modification_time   int64            `json:"modification_time"`
 }
 
-type secret_desc_ui struct {
-	Pool              string `json:"owner"`
-	Access_key        string `json:"access_key"`
-	Secret_key        string `json:"secret_key"`
-	Key_policy        string `json:"key_policy"`
-	Expiration_time   int64  `json:"expiration_time"`
-	Modification_time int64  `json:"modification_time"`
-}
-
 type bucket_desc_ui struct {
 	Name              string `json:"name"`
 	Pool              string `json:"pool"`
 	Bkt_policy        string `json:"bkt_policy"`
+	Modification_time int64  `json:"modification_time"`
+}
+
+type secret_desc_ui struct {
+	Access_key        string `json:"access_key"`
+	Secret_key        string `json:"secret_key"`
+	Pool              string `json:"owner"`
+	Key_policy        string `json:"key_policy"`
+	Expiration_time   int64  `json:"expiration_time"`
 	Modification_time int64  `json:"modification_time"`
 }

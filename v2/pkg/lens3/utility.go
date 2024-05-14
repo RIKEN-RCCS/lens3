@@ -43,6 +43,20 @@ const (
 	http_status_601_unanalyzable int = 601
 )
 
+type Fatal struct {
+	Err error
+}
+
+func (e Fatal) Error() string {
+	return fmt.Sprintf("Fatal (%v)", e.Err)
+}
+
+func panic_non_nil(w any) {
+	if w != nil {
+		panic(w)
+	}
+}
+
 func assert_fatal(c bool) {
 	if !c {
 		panic("assert fail")

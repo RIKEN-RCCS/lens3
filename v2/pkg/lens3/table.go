@@ -1,4 +1,4 @@
-/* Accessors to a Keyval-DB (Valkey/Redis). */
+/* Accessors to a Keyval-DB (Redis/Valkey). */
 
 // Copyright 2022-2024 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
@@ -40,40 +40,23 @@ type keyval_table struct {
 	monokey *redis.Client
 }
 
-type Fatal struct {
-	Err error
-}
+// Configuration entries are defined in "conf.go".  They are "cf:api",
+// "cf:mux", and "cf:mux":mux-name .
 
-func (e Fatal) Error() string {
-	return fmt.Sprintf("Fatal (%v)", e.Err)
-}
-
-func panic_non_nil(w any) {
-	if w != nil {
-		panic(w)
-	}
-}
-
-// Configuration entries "cf:api", "cf:mux", and "cf:mux":mux-name are
-// definedin "conf.go".
-
-// "uu":uid entry.
+// "uu:uid" entry.
 type User_record struct {
-	Uid     string   `json:"uid"`
-	Claim   string   `json:"claim"`
-	Groups  []string `json:"groups"`
-	Enabled bool     `json:"enabled"`
-	Blocked bool     `json:"blocked"`
+	Uid             string   `json:"uid"`
+	Claim           string   `json:"claim"`
+	Groups          []string `json:"groups"`
+	Enabled         bool     `json:"enabled"`
+	Blocked         bool     `json:"blocked"`         // nonexist
+	Expiration_time int64    `json:"expiration_time"` // nonexist
 
-	Check_terms_and_conditions bool `json:"check_terms_and_conditions"`
-
-	Modification_time int64 `json:"modification_time"`
+	Check_terms_and_conditions bool  `json:"check_terms_and_conditions"`
+	Modification_time          int64 `json:"modification_time"`
 }
 
-// "um":claim entry is a string.
-type user_claim_record string
-
-// "po":pool-name entry.
+// "po:pool-name" entry.
 type Pool_record struct {
 	Pool              string `json:"pool_name"`
 	Owner_uid         string `json:"owner_uid"`
@@ -82,77 +65,88 @@ type Pool_record struct {
 	Probe_key         string `json:"probe_key"`
 	Online_status     bool   `json:"online_status"`
 	Expiration_time   int64  `json:"expiration_time"`
-	Modification_time int64  `json:"modification_time"`
+
+	Modification_time int64 `json:"modification_time"`
 }
 
-// "ps":pool-name entry.
-type Pool_state_record struct {
-	State             Pool_state `json:"state"`
-	Reason            string     `json:"reason"`
-	Modification_time int64      `json:"modification_time"`
+// "bk:bucket-name" entry.
+type Bucket_record struct {
+	bucket          string `json:"-"`
+	Pool            string `json:"pool"`
+	Bkt_policy      string `json:"bkt_policy"`
+	Expiration_time int64  `json:"expiration_time"` // nonexist
+
+	Modification_time int64 `json:"modification_time"`
 }
 
-// "ma":pool-name entry.
+// "ky:random" entry.  The access_key field is not stored in a
+// keyval-db.  (v1.2 "owner" → v2.1 "pool").
+type Secret_record struct {
+	Pool            string `json:"owner"`
+	access_key      string `json:"-"`
+	Secret_key      string `json:"secret_key"`
+	Key_policy      string `json:"key_policy"`
+	Expiration_time int64  `json:"expiration_time"`
+
+	Modification_time int64 `json:"modification_time"`
+}
+
+// "um:claim" entry is a string.
+type user_claim_record string
+
+// "pi:pool-name" entry.
+type Pool_name_record struct {
+	Owner_uid string `json:"owner"`
+
+	Modification_time int64 `json:"modification_time"`
+}
+
+// "bd:directory" entry is a string.
+type directory_owner_record string
+
+// "ep:pool-name" entry is a string.
+type backend_ep_record string
+
+// "ma:pool-name" entry.
 type Manager_record struct {
 	Mux_ep     string `json:"mux_ep"` // mux_host:mux_port
 	Start_time int64  `json:"start_time"`
 }
 
-// "mn":pool-name entry.  PROCESS_RECORD is about a backend.  A pair
+// "ps:pool-name" entry.
+type Pool_state_record struct {
+	State  Pool_state `json:"state"`
+	Reason string     `json:"reason"`
+
+	Modification_time int64 `json:"modification_time"`
+}
+
+// "mn:pool-name" entry.  PROCESS_RECORD is about a backend.  A pair
 // of root_access and root_secret is a credential for accessing a
 // backend.  manager_pid is unused.
 type Process_record struct {
-	Backend_ep        string `json:"backend_ep"`  // Minio_ep
-	Backend_pid       int    `json:"backend_pid"` // Minio_pid
-	Root_access       string `json:"root_access"` // Admin
-	Root_secret       string `json:"root_secret"` // Password
-	Mux_ep            string `json:"mux_ep"`      // Mux_host+Mux_port
-	Manager_pid       int    `json:"manager_pid"`
-	Modification_time int64  `json:"modification_time"`
+	Backend_ep  string `json:"backend_ep"`  // Minio_ep
+	Backend_pid int    `json:"backend_pid"` // Minio_pid
+	Root_access string `json:"root_access"` // Admin
+	Root_secret string `json:"root_secret"` // Password
+	Mux_ep      string `json:"mux_ep"`      // Mux_host+Mux_port
+	Manager_pid int    `json:"manager_pid"`
+
+	Modification_time int64 `json:"modification_time"`
 }
 
-// "pi":pool-name entry.
-type Pool_name_record struct {
-	Owner_uid         string `json:"owner"`
-	Modification_time int64  `json:"modification_time"`
-}
-
-// "ep":pool-name entry is a string.
-type backend_ep_record string
-
-// "bk":bucket-name entry.
-type Bucket_record struct {
-	bucket            string `json:"-"`
-	Pool              string `json:"pool"`
-	Bkt_policy        string `json:"bkt_policy"`
-	Modification_time int64  `json:"modification_time"`
-}
-
-// "bd":directory entry is a string.
-type directory_owner_record string
-
-// "mx":mux-endpoint entry.
+// "mx:mux-endpoint" entry.
 type Mux_record struct {
-	Mux_ep            string `json:"mux_ep"` // Host+Port
-	Start_time        int64  `json:"start_time"`
-	Modification_time int64  `json:"modification_time"`
+	Mux_ep     string `json:"mux_ep"` // Host+Port
+	Start_time int64  `json:"start_time"`
+
+	Modification_time int64 `json:"modification_time"`
 }
 
-// "ky":random entry.  The access_key field is not stored in a
-// keyval-db.  (v1.2 "owner" → v2.1 "pool").
-type Secret_record struct {
-	Pool              string `json:"owner"`
-	access_key        string `json:"-"`
-	Secret_key        string `json:"secret_key"`
-	Key_policy        string `json:"key_policy"`
-	Expiration_time   int64  `json:"expiration_time"`
-	Modification_time int64  `json:"modification_time"`
-}
-
-// "ts":pool-name entry is an int64
+// "ts:pool-name" entry is an int64
 type pool_access_timestamp_record int64
 
-// "us":uid entry is an int64
+// "us:uid" entry is an int64
 type user_access_timestamp_record int64
 
 // XID_RECORD is a union of Pool_name_record|Secret_record.
@@ -161,7 +155,7 @@ type xid_record interface{ xid_union() }
 func (Pool_name_record) xid_union() {}
 func (Secret_record) xid_union()    {}
 
-// Enum of states of a pool.
+// States of a pool.
 type Pool_state string
 
 const (
@@ -221,7 +215,7 @@ func assert_table_prefix_match(t *keyval_table, r *redis.Client, prefix string) 
 }
 
 // Makes a key-value DB client.
-func make_table(conf Db_conf) *keyval_table {
+func make_table(conf db_conf) *keyval_table {
 	var ep = conf.Ep
 	var pw = conf.Password
 
@@ -1320,56 +1314,56 @@ func clear_db(t *keyval_table, db *redis.Client, prefix string) {
 	}
 }
 
+func db_raw_table(t *keyval_table, dbname string) *redis.Client {
+	switch dbname {
+	case "setting":
+		return t.setting
+	case "storage":
+		return t.storage
+	case "process":
+		return t.process
+	case "routing":
+		return t.routing
+	case "monokey":
+		return t.monokey
+	default:
+		log.Panic("bad db-name", dbname)
+		return nil
+	}
+}
+
 // SET_DB_RAW sets key-value in a keyval-db intact.
-func set_db_raw(t *keyval_table, dbn string, kv [2]string) {
+func set_db_raw(t *keyval_table, dbname string, kv [2]string) {
 	if kv[0] == "" || kv[1] == "" {
 		panic("keyval empty")
 	}
-	var db *redis.Client
-	switch dbn {
-	case "setting":
-		db = t.setting
-	case "storage":
-		db = t.storage
-	case "process":
-		db = t.process
-	case "routing":
-		db = t.routing
-	case "monokey":
-		db = t.monokey
-	default:
-		log.Panic("bad db-name", dbn)
-	}
+	var db = db_raw_table(t, dbname)
 	var w1 = db.Set(t.ctx, kv[0], kv[1], 0)
 	panic_non_nil(w1.Err())
 }
 
-// PRINT_DB prints all keyval-db entries.  Each entry two lines; the
-// 1st line is ^key$ and 2nd line is prefix by 4whitespaces as
-// ^____value$.
-func print_db(t *keyval_table) {
-	var db *redis.Client
-	db = t.setting
-	print_db_entries(t, db, "Setting")
-	db = t.storage
-	print_db_entries(t, db, "Storage")
-	db = t.process
-	print_db_entries(t, db, "Process")
-	db = t.routing
-	print_db_entries(t, db, "Routing")
-	db = t.monokey
-	print_db_entries(t, db, "Monokey")
+type db_raw_iterator struct {
+	table    *keyval_table
+	db       *redis.Client
+	iterator *redis.ScanIterator
 }
 
-func print_db_entries(t *keyval_table, db *redis.Client, title string) {
-	fmt.Println("//----")
-	fmt.Println("// " + title)
-	fmt.Println("//----")
-	var pattern = ("*")
-	var ki = db.Scan(t.ctx, 0, pattern, 0).Iterator()
-	for ki.Next(t.ctx) {
-		var key = ki.Val()
-		var w = db.Get(t.ctx, key)
+// SCAN_DB_RAW returns an db_raw_iterator.
+func scan_db_raw(t *keyval_table, dbname string) *db_raw_iterator {
+	var db = db_raw_table(t, dbname)
+	return &db_raw_iterator{
+		table:    t,
+		db:       db,
+		iterator: db.Scan(t.ctx, 0, "*", 0).Iterator(),
+	}
+}
+
+// NEXT_DB_RAW returns a next entry by an iterator.  It return nil at
+// end.  It returns a single entry map.  A value is a string of json.
+func next_db_raw(db *db_raw_iterator) map[string]string {
+	for db.iterator.Next(db.table.ctx) {
+		var key = db.iterator.Val()
+		var w = db.db.Get(db.table.ctx, key)
 		var val, err1 = w.Bytes()
 		if err1 != nil {
 			if err1 == redis.Nil {
@@ -1378,9 +1372,9 @@ func print_db_entries(t *keyval_table, db *redis.Client, title string) {
 				panic(err1)
 			}
 		}
-		fmt.Printf("%s\n", key)
-		fmt.Printf("    %s\n", string(val))
+		return map[string]string{key: string(val)}
 	}
+	return nil
 }
 
 func Table_main() {

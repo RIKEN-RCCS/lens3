@@ -1,11 +1,11 @@
-/* A conf file reader. */
+/* A conf-file reader. */
 
 // Copyright 2022-2024 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
 
 package lens3
 
-// Conf files are read and checked against structures.  It accepts
+// Conf-files are read and checked against structures.  It accepts
 // extra fields.
 
 import (
@@ -22,7 +22,7 @@ import (
 
 // DB_CONF is a pair of an endpoint and password to access a
 // keyval-db, and it is usually stored in a file in "etc".
-type Db_conf struct {
+type db_conf struct {
 	Ep       string
 	Password string
 }
@@ -38,22 +38,23 @@ func (Api_conf) lens3_conf_union() {}
 type Mux_conf struct {
 	Conf_header
 	//Gunicorn      Gunicorn_conf
-	Multiplexer Multiplexer_conf `json:"multiplexer"`
-	Manager     Manager_conf     `json:"manager"`
-	Minio       Minio_conf       `json:"minio"`
+	Multiplexer multiplexer_conf `json:"multiplexer"`
+	Manager     manager_conf     `json:"manager"`
+	Minio       minio_conf       `json:"minio"`
+	Rclone      rclone_conf      `json:"rclone"`
 	Log_file    string           `json:"log_file"`
-	Log_syslog  Syslog_conf      `json:"log_syslog"`
+	Log_syslog  syslog_conf      `json:"log_syslog"`
 }
 
 // Api_conf is a configuration of Api.  log_file is optional.
 type Api_conf struct {
 	Conf_header
 	//Gunicorn   Gunicorn_conf
-	Registrar  Registrar_conf `json:"registrar"`
+	Registrar  registrar_conf `json:"registrar"`
 	UI         UI_conf        `json:"ui"`
-	Minio      Minio_conf     `json:"minio"`
+	Minio      minio_conf     `json:"minio"`
 	Log_file   string         `json:"log_file"`
-	Log_syslog Syslog_conf    `json:"log_syslog"`
+	Log_syslog syslog_conf    `json:"log_syslog"`
 }
 
 type Conf_header struct {
@@ -62,37 +63,69 @@ type Conf_header struct {
 	Aws_signature string `json:"aws_signature"`
 }
 
-type Multiplexer_conf struct {
-	Port                    int           `json:"port"`
-	Front_host              string        `json:"front_host"`
-	Trusted_proxies         []string      `json:"trusted_proxies"`
-	Mux_ep_update_interval  time.Duration `json:"mux_ep_update_interval"`
-	Forwarding_timeout      time.Duration `json:"forwarding_timeout"`
-	Probe_access_timeout    time.Duration `json:"probe_access_timeout"`
-	Bad_response_delay      time.Duration `json:"bad_response_delay"`
-	Busy_suspension_time    time.Duration `json:"busy_suspension_time"`
-	Mux_node_name           string        `json:"mux_node_name"`
-	Backend                 string        `json:"backend"`
-	Backend_command_timeout time.Duration `json:"backend_command_timeout"`
-	Mux_access_log_file     string        `json:"mux_access_log_file"`
+type multiplexer_conf struct {
+	Port                    int             `json:"port"`
+	Front_host              string          `json:"front_host"`
+	Trusted_proxies         []string        `json:"trusted_proxies"`
+	User_permission         user_permission `json:"user_permission"`
+	Mux_ep_update_interval  time.Duration   `json:"mux_ep_update_interval"`
+	Forwarding_timeout      time.Duration   `json:"forwarding_timeout"`
+	Probe_access_timeout    time.Duration   `json:"probe_access_timeout"`
+	Bad_response_delay      time.Duration   `json:"bad_response_delay"`
+	Busy_suspension_time    time.Duration   `json:"busy_suspension_time"`
+	Mux_node_name           string          `json:"mux_node_name"`
+	Backend                 backend_name    `json:"backend"`
+	Backend_command_timeout time.Duration   `json:"backend_command_timeout"`
+	Mux_access_log_file     string          `json:"mux_access_log_file"`
 }
 
-// claim_uid_map is one of {"id", "email-name", "map"}.
-type Registrar_conf struct {
-	Port                    int           `json:"port"`
-	Front_host              string        `json:"front_host"`
-	Trusted_proxies         []string      `json:"trusted_proxies"`
-	Base_path               string        `json:"base_path"`
-	Claim_uid_map           string        `json:"claim_uid_map"`
-	Probe_access_timeout    time.Duration `json:"probe_access_timeout"`
-	Max_pool_expiry         time.Duration `json:"max_pool_expiry"`
-	Csrf_secret_seed        string        `json:"csrf_secret_seed"`
-	Backend                 string        `json:"backend"`
-	Backend_command_timeout time.Duration `json:"backend_command_timeout"`
-	Api_access_log_file     string        `json:"api_access_log_file"`
+type registrar_conf struct {
+	Port                    int             `json:"port"`
+	Front_host              string          `json:"front_host"`
+	Trusted_proxies         []string        `json:"trusted_proxies"`
+	Base_path               string          `json:"base_path"`
+	Claim_uid_map           claim_uid_map   `json:"claim_uid_map"`
+	User_permission         user_permission `json:"user_permission"`
+	Backend                 backend_name    `json:"backend"`
+	Backend_command_timeout time.Duration   `json:"backend_command_timeout"`
+	Probe_access_timeout    time.Duration   `json:"probe_access_timeout"`
+	Pool_expiration         time.Duration   `json:"pool_expiration"`
+	Csrf_secret_seed        string          `json:"csrf_secret_seed"`
+	Api_access_log_file     string          `json:"api_access_log_file"`
 }
 
-type Manager_conf struct {
+type claim_uid_map string
+
+const (
+	// claim_uid_map is one of {"id", "email-name", "map"}.
+	claim_uid_map_id         claim_uid_map = "id"
+	claim_uid_map_email_name claim_uid_map = "email-name"
+	claim_uid_map_map        claim_uid_map = "map"
+)
+
+var claim_conversions = []claim_uid_map{
+	claim_uid_map_id, claim_uid_map_email_name, claim_uid_map_map,
+}
+
+type user_permission string
+
+const (
+	user_permission_allow user_permission = "allow"
+	user_permission_block user_permission = "block"
+)
+
+type backend_name string
+
+const (
+	backend_name_minio  backend_name = "minio"
+	backend_name_rclone backend_name = "rclone"
+)
+
+var backend_list = []backend_name{
+	backend_name_minio, backend_name_rclone,
+}
+
+type manager_conf struct {
 	Sudo                     string        `json:"sudo"`
 	Port_min                 int           `json:"port_min"`
 	Port_max                 int           `json:"port_max"`
@@ -107,7 +140,12 @@ type Manager_conf struct {
 	Heartbeat_timeout        time.Duration `json:"heartbeat_timeout"`
 }
 
-type Minio_conf struct {
+type minio_conf struct {
+	Minio string `json:"minio"`
+	Mc    string `json:"mc"`
+}
+
+type rclone_conf struct {
 	Minio string `json:"minio"`
 	Mc    string `json:"mc"`
 }
@@ -117,18 +155,15 @@ type UI_conf struct {
 	Footer_banner string `json:"footer_banner"`
 }
 
-type Syslog_conf struct {
+type syslog_conf struct {
 	Facility string `json:"facility"`
 	Priority string `json:"priority"`
 }
 
-var claim_conversions = []string{"id", "email-name", "map"}
-var backend_list = []string{"minio", "rclone"}
-
-const bad_message = "Bad json conf file."
+const bad_message = "Bad json conf-file."
 
 // READ_DB_CONF reads a conf-file for the keyval table.
-func read_db_conf(file string) Db_conf {
+func read_db_conf(file string) db_conf {
 	file = "conf.json"
 	var b1, err1 = os.ReadFile(file)
 	if err1 != nil {
@@ -137,7 +172,7 @@ func read_db_conf(file string) Db_conf {
 	var b2 = bytes.NewReader(b1)
 	var d = json.NewDecoder(b2)
 	d.DisallowUnknownFields()
-	var conf Db_conf
+	var conf db_conf
 	var err2 = d.Decode(&conf)
 	if err2 != nil {
 		log.Panic(err2)
@@ -168,7 +203,7 @@ func read_conf(filename string) lens3_conf {
 		var muxconf Mux_conf
 		var err3 = json.Unmarshal(json1, &muxconf)
 		if err3 != nil {
-			panic(fmt.Sprint("Bad json conf file:", err3))
+			panic(fmt.Sprint("Bad json conf-file:", err3))
 		}
 		//fmt.Println("MUX CONF is", muxconf)
 		check_mux_conf(muxconf)
@@ -177,13 +212,13 @@ func read_conf(filename string) lens3_conf {
 		var apiconf Api_conf
 		var err4 = json.Unmarshal(json1, &apiconf)
 		if err4 != nil {
-			panic(fmt.Sprint("Bad json conf file:", err4))
+			panic(fmt.Sprint("Bad json conf-file:", err4))
 		}
 		//fmt.Println("API CONF is", apiconf)
 		check_api_conf(apiconf)
 		return &apiconf
 	default:
-		log.Panicf("Bad json conf file: Bad subject field (%s).", sub)
+		log.Panicf("Bad json conf-file: Bad subject field (%s).", sub)
 		return nil
 	}
 }
@@ -210,11 +245,11 @@ func check_api_conf(conf Api_conf) {
 
 func assert_slot(c bool) {
 	if !c {
-		panic(fmt.Errorf("Bad conf file."))
+		panic(fmt.Errorf("Bad conf-file."))
 	}
 }
 
-func check_db_entry(e Db_conf) {
+func check_db_entry(e db_conf) {
 	if len(e.Ep) > 0 && len(e.Password) > 0 {
 	} else {
 		log.Panic(fmt.Errorf(bad_message))
@@ -247,11 +282,12 @@ func check_field_required_and_positive(t any, slot string) {
 	}
 }
 
-func check_multiplexer_entry(e Multiplexer_conf) {
+func check_multiplexer_entry(e multiplexer_conf) {
 	for _, slot := range []string{
 		"Port",
 		"Front_host",
 		//"Trusted_proxies",
+		"User_permission",
 		"Mux_ep_update_interval",
 		"Forwarding_timeout",
 		"Probe_access_timeout",
@@ -269,18 +305,19 @@ func check_multiplexer_entry(e Multiplexer_conf) {
 	}
 }
 
-func check_registrar_entry(e Registrar_conf) {
+func check_registrar_entry(e registrar_conf) {
 	for _, slot := range []string{
 		"Port",
 		"Front_host",
 		// "Trusted_proxies",
 		// "Base_path",
 		"Claim_uid_map",
-		"Probe_access_timeout",
-		"Max_pool_expiry",
-		"Csrf_secret_seed",
+		"User_permission",
 		"Backend",
 		"Backend_command_timeout",
+		"Probe_access_timeout",
+		"Pool_expiration",
+		"Csrf_secret_seed",
 		"Api_access_log_file",
 	} {
 		check_field_required_and_positive(e, slot)
@@ -293,7 +330,7 @@ func check_registrar_entry(e Registrar_conf) {
 	}
 }
 
-func check_manager_entry(e Manager_conf) {
+func check_manager_entry(e manager_conf) {
 	for _, slot := range []string{
 		"Sudo",
 		"Port_min",
@@ -312,7 +349,7 @@ func check_manager_entry(e Manager_conf) {
 	}
 }
 
-func check_minio_entry(e Minio_conf) {
+func check_minio_entry(e minio_conf) {
 	if len(e.Minio) > 0 &&
 		len(e.Mc) > 0 {
 	} else {
@@ -328,7 +365,7 @@ func check_ui_entry(e UI_conf) {
 	}
 }
 
-func check_syslog_entry(e Syslog_conf) {
+func check_syslog_entry(e syslog_conf) {
 	if len(e.Facility) > 0 &&
 		len(e.Priority) > 0 {
 	} else {
@@ -336,7 +373,7 @@ func check_syslog_entry(e Syslog_conf) {
 	}
 }
 
-// func check_registrar_entry_2(e Registrar_conf) {
+// func check_registrar_entry_2(e registrar_conf) {
 // 	if e.Port > 0 &&
 // 		e.Front_host != "" &&
 // 		// e.Trusted_proxies
@@ -354,7 +391,7 @@ func check_syslog_entry(e Syslog_conf) {
 // 	}
 // }
 
-// func check_multiplexer_entry_2(e Multiplexer_conf) {
+// func check_multiplexer_entry_2(e multiplexer_conf) {
 // 	if e.Port > 0 &&
 // 		e.Front_host != "" &&
 // 		// e.Trusted_proxies
@@ -372,7 +409,7 @@ func check_syslog_entry(e Syslog_conf) {
 // 	}
 // }
 
-// func check_manager_entry_2(e Manager_conf) {
+// func check_manager_entry_2(e manager_conf) {
 // 	assert_slot(len(e.Sudo) > 0)
 // 	assert_slot(e.Port_min > 0)
 // 	assert_slot(e.Port_max > 0)

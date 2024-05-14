@@ -65,7 +65,7 @@ type multiplexer struct {
 	// periodic_work_interval?
 	// mux_expiry?
 
-	Multiplexer_conf
+	multiplexer_conf
 }
 
 // type backend_proxy struct {
@@ -92,9 +92,9 @@ const (
 	no_named_bucket        = "no_named_bucket"
 )
 
-func init_multiplexer(m *multiplexer, t *keyval_table, conf *Multiplexer_conf) {
+func init_multiplexer(m *multiplexer, t *keyval_table, conf *multiplexer_conf) {
 	m.table = t
-	m.Multiplexer_conf = *conf
+	m.multiplexer_conf = *conf
 }
 
 func start_service_for_test() {

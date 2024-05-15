@@ -142,7 +142,7 @@ func check_credential_in_request(verbose bool, q *http.Request, keypair [2]strin
 
 // SIGN_BY_BACKEND_CREDENTIAL replaces an authorization header in an
 // http request for the backend.
-func sign_by_backend_credential(r *http.Request, proc Process_record) {
+func sign_by_backend_credential(r *http.Request, proc *backend_record) {
 	if false {
 		fmt.Println("r.Host(1)=", r.Host)
 		fmt.Println("r.Header(1)=", r.Header)

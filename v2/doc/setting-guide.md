@@ -660,7 +660,9 @@ Clear Redis databases.
 ```
 lens3$ export REDISCLI_AUTH=password
 lens3$ redis-cli -p 6378 FLUSHALL
-lens3$ redis-cli -p 6378 --scan --pattern '*'
+lens3$ redis-cli -p 6378 -n 1 --scan --pattern '*'
+lens3$ redis-cli -p 6378 -n 2 --scan --pattern '*'
+lens3$ redis-cli -p 6378 -n 3 --scan --pattern '*'
 ```
 
 ### Running MinIO by Hand

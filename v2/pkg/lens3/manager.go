@@ -39,19 +39,29 @@ import (
 	"os"
 	"os/exec"
 	//"os/signal"
-	"os/user"
+	"math/rand/v2"
+	"net"
+	//"os/user"
 	"sync"
 	//"bytes"
 	//"syscall"
 	"golang.org/x/sys/unix"
 	//"runtime"
 	//"reflect"
-	//"strconv"
+	"slices"
+	"strconv"
 	//"time"
 	//"testing"
 )
 
 type manager struct {
+	table *keyval_table
+
+	// MUX_EP and MUX_PID are about a process that a multiplexer and a
+	// manager run in.
+	mux_ep  string
+	mux_pid int
+
 	// BE factory is to make a backend.
 	factory backend_factory
 
@@ -66,9 +76,8 @@ type manager struct {
 	// CH_SIG is a channel to receive SIGCHLD.
 	ch_sig chan os.Signal
 
-	table *keyval_table
-
-	backend_conf
+	//backend_conf
+	manager_conf
 }
 
 // BACKEND_FACTORY is to make a backend instance.
@@ -78,9 +87,8 @@ type backend_factory interface {
 	make_backend(string) backend
 }
 
-// BACKEND is a backend server with a server specific part.  A backend
-// shall not start its long-running threads.  Or, it lets them enter a
-// wait-group.
+// BACKEND is a backend specific part.  A backend shall not start its
+// long-running threads.  Or, it lets them enter a wait-group.
 type backend interface {
 	// GET_SUPER_PART returns a generic part or a superclass.
 	get_super_part() *backend_process
@@ -107,12 +115,13 @@ type backend interface {
 	heartbeat() int
 }
 
-// BACKEND_PROCESS is a generic part of a server.  It is embedded in a
-// backend and initialized by it.  A backend is responsible for setting
-// "backend_conf" to share it with the "multiplexer".
+// BACKEND_PROCESS is a generic part of a backend.  It is embedded in
+// a backend and returned by get_super_part().  A backend is
+// responsible for setting "backend_conf" to share it with the
+// "multiplexer".
 type backend_process struct {
-	Pool_record
-	Process_record
+	pool_record
+	backend_record
 
 	verbose bool
 
@@ -128,40 +137,9 @@ type backend_process struct {
 
 	heartbeat_misses int
 
-	*backend_conf
+	//*backend_conf
+	*manager_conf
 }
-
-// BACKEND_CONF is a static and common part of a server.  It is read
-// from a configuration.  It is embedded and not directly used.
-type backend_conf struct {
-	watch_gap_minimal time.Duration
-	stabilize_wait_ms time.Duration
-	manager_expiry    int64
-
-	manager_conf
-}
-
-// type backend_conf struct {
-// 	bin_sudo string
-//
-// 	awake_duration time.Duration
-//
-// 	heartbeat_tolerance int
-// 	heartbeat_interval  time.Duration
-// 	heartbeat_timeout   time.Duration
-// 	watch_gap_minimal   time.Duration
-//
-// 	stabilize_wait_ms time.Duration
-//
-// 	manager_expiry int
-//
-// 	//mux_host int
-// 	//mux_port int
-// 	//mux_ep int
-// 	//port_min int
-// 	//port_max int
-// 	//manager_pid int
-// }
 
 type backend_command struct {
 	argv []string
@@ -174,11 +152,51 @@ var the_manager = manager{
 	proc:   make(map[int]backend),
 }
 
-var the_backend_conf = &the_manager.backend_conf
+var the_manager_conf = &the_manager.manager_conf
 
-func init_manager(w *manager, t *keyval_table, conf *manager_conf) {
+const (
+	on_out int = iota + 1
+	on_err
+)
+
+// STDIO_MESSAGE is a message passed through a channel.  Each is one
+// line of a message.  ON_OUT or ON_ERR indicates a message is from
+// stdout or stderr.
+type stdio_message struct {
+	int
+	string
+}
+
+type start_result struct {
+	start_state
+	message string
+}
+
+type start_state int
+
+const (
+	start_ongoing start_state = iota
+	start_started
+	start_to_retry
+	start_failed
+)
+
+func init_manager(w *manager, t *keyval_table, m *multiplexer, conf *manager_conf) {
 	w.table = t
 	w.manager_conf = *conf
+
+	w.watch_gap_minimal = 10
+	w.stabilize_wait_ms = 1000
+	w.manager_expiration = 1000
+
+	w.ch_sig = set_signal_handling()
+	w.environ = minimal_environ()
+
+	w.mux_ep = m.mux_ep
+	w.mux_pid = m.mux_pid
+
+	w.factory = the_backend_minio_factory
+	w.factory.configure()
 }
 
 func manager_main() {
@@ -186,16 +204,14 @@ func manager_main() {
 }
 
 func start_manager(w *manager) {
-	w.Sudo = "/usr/bin/sudo"
-	w.stabilize_wait_ms = 1000
-	w.Heartbeat_miss_tolerance = 3
-	w.Heartbeat_interval = 60
+	//w.table = t
+	//w.manager_conf = *conf
 
-	w.factory = the_backend_minio_factory
-	w.factory.configure()
-	w.ch_sig = set_signal_handling()
+	fmt.Println("start_manager() w=", w)
 
-	w.environ = minimal_environ()
+	//w.Sudo = "/usr/bin/sudo"
+	//w.Heartbeat_miss_tolerance = 3
+	//w.Heartbeat_interval = 60
 
 	reap_child_process(w)
 }
@@ -203,30 +219,33 @@ func start_manager(w *manager) {
 func start_backend_for_test(w *manager) backend {
 	fmt.Println("start_backend_for_test()")
 	//var pool = generate_pool_name()
-	var g = w.factory.make_backend("d4f0c4645fce5734")
+	/*
+		var g = w.factory.make_backend("d4f0c4645fce5734")
+		var proc = g.get_super_part()
+
+		var u, err4 = user.Current()
+		assert_fatal(err4 == nil)
+		proc.Owner_uid = "#" + u.Uid
+		proc.Owner_gid = "#" + u.Gid
+		proc.Buckets_directory = u.HomeDir + "/pool-x"
+		proc.Probe_key = generate_access_key()
+		proc.Online_status = true
+		proc.Expiration_time = 0
+
+		proc.Backend_ep = ""
+		proc.Backend_pid = 0
+		proc.Root_access = generate_access_key()
+		proc.Root_secret = generate_secret_key()
+		proc.Mux_ep = w.mux_ep
+		proc.Mux_pid = w.mux_pid
+
+		proc.verbose = true
+		proc.environ = &w.environ
+	*/
+
+	var g = start_backend(w, "d4f0c4645fce5734")
 	var proc = g.get_super_part()
-
-	var u, err4 = user.Current()
-	assert_fatal(err4 == nil)
-	proc.Owner_uid = "#" + u.Uid
-	proc.Owner_gid = "#" + u.Gid
-	proc.Buckets_directory = u.HomeDir + "/pool-x"
-	//Probe_key
-	//Online_status
-	//Expiration_time
-
-	//Backend_pid
-	proc.Root_access = generate_access_key()
-	proc.Root_secret = generate_secret_key()
-	//Mux_host
-	//Mux_port
-	//Manager_pid
-
 	proc.verbose = true
-	proc.environ = &w.environ
-
-	start_backend(w, g)
-	var _ = g.get_super_part()
 
 	go func() {
 
@@ -252,7 +271,7 @@ func ping_server(w *manager, g backend) {
 	var proc = g.get_super_part()
 	proc.heartbeat_misses = 0
 	for {
-		time.Sleep(proc.Heartbeat_interval * time.Second)
+		time.Sleep(time.Duration(proc.Heartbeat_interval) * time.Second)
 		var status = g.heartbeat()
 		if status == 200 {
 			proc.heartbeat_misses = 0
@@ -264,53 +283,9 @@ func ping_server(w *manager, g backend) {
 				" Heartbeating server failed:" +
 				" misses=%v"),
 				proc.Pool, proc.heartbeat_misses)
-			raise(termination("MinIO heartbeat failure"))
+			raise(termination("backend heartbeat failure"))
 		}
 	}
-}
-
-func start_backend(w *manager, g backend) {
-	fmt.Println("start_backend()")
-	//w.be = &backend_minio_template{}
-	/*
-		var svr = w.be.make_backend("mMwfyMzLwOlb8QLYANRM")
-		var proc = svr.get_super_part()
-
-		var u, err4 = user.Current()
-		assert_fatal(err4 == nil)
-		proc.owner_uid = "#" + u.Uid
-		proc.owner_gid = "#" + u.Gid
-		proc.ep = "localhost:9001"
-		proc.port = 9001
-		proc.directory = u.HomeDir + "/pool-x"
-
-		proc.root_access_key = generate_access_key()
-		proc.root_secret_key = generate_secret_key()
-
-		proc.verbose = true
-		proc.environ = w.environ
-	*/
-
-	var proc = g.get_super_part()
-	proc.Backend_ep = "localhost:9001"
-
-	var _ = try_start_backend(w, g)
-	assert_fatal(proc.cmd.Process != nil)
-	var pid = proc.cmd.Process.Pid
-	w.proc[pid] = g
-
-	go barf_stdio_to_log(proc)
-
-	// Sleep for a while for a server to be stable.
-	time.Sleep(proc.stabilize_wait_ms * time.Millisecond)
-
-	g.establish()
-	go ping_server(w, g)
-
-	fmt.Println("set_backend_ep() ep=", proc.Backend_ep)
-	set_backend_ep(w.table, proc.Pool, proc.Backend_ep)
-
-	fmt.Println("start_backend() done")
 }
 
 func stop_backend(w *manager, g backend) {
@@ -325,12 +300,162 @@ func stop_backend(w *manager, g backend) {
 	}
 }
 
+// START_BACKEND mutexes among all threads in all multiplexers,
+// choosing one who takes the control of starting a backend.
+func start_backend_mutexed(w *manager, pool string) backend {
+	var now int64 = time.Now().Unix()
+	var ep = &manager_record{
+		Mux_ep:     w.mux_ep,
+		Start_time: now,
+	}
+	var ok, _ = set_ex_manager(w.table, pool, ep)
+	if !ok {
+		var be1 = wait_for_backend_by_race(w, pool)
+		if be1 == nil {
+			logger.warnf("wait_for_backend_by_race(pool=%s) timeout", pool)
+		}
+		return nil
+	} else {
+		var be2 = start_backend(w, pool)
+		return be2
+	}
+}
+
+func start_backend(w *manager, pool string) backend {
+	fmt.Println("start_backend()")
+	delete_backend_process(w.table, pool)
+
+	var desc = get_pool(w.table, pool)
+	if desc == nil {
+		logger.warnf("start_backend() pool is missing pool=%s", pool)
+		return nil
+	}
+
+	var g = w.factory.make_backend(pool)
+	var proc *backend_process = g.get_super_part()
+	// Set proc.pool_record part.
+	proc.pool_record = *desc
+	// Set proc.backend_record part.
+	proc.Backend_ep = ""
+	proc.Backend_pid = 0
+	proc.Root_access = generate_access_key()
+	proc.Root_secret = generate_secret_key()
+	proc.Mux_ep = w.mux_ep
+	proc.Mux_pid = w.mux_pid
+
+	proc.verbose = true
+	proc.environ = &w.environ
+
+	var available_ports = list_ports_available(w)
+
+	fmt.Printf("start_backend() proc=%v ports=%v\n", proc, available_ports)
+
+	for _, port := range available_ports {
+		var r1 = try_start_backend(w, g, port)
+		switch r1.start_state {
+		case start_ongoing:
+			panic("internal")
+		case start_started:
+		case start_to_retry:
+		case start_failed:
+			logger.errorf("start_failed with: %s", r1.message)
+		}
+
+		assert_fatal(proc.cmd.Process != nil)
+		var pid = proc.cmd.Process.Pid
+		w.proc[pid] = g
+
+		go barf_stdio_to_log(proc)
+
+		// Sleep for a while for a server to be stable.
+		time.Sleep(time.Duration(proc.stabilize_wait_ms) * time.Millisecond)
+
+		g.establish()
+		go ping_server(w, g)
+
+		var desc = &proc.backend_record
+		fmt.Println("set_backend_process(1) ep=", proc.Backend_ep)
+		fmt.Println("proc.backend_record=")
+		print_in_json(desc)
+		set_backend_process(w.table, proc.Pool, desc)
+		//return &proc.backend_record
+		return g
+	}
+
+	// All ports are tried and failed.
+
+	logger.errorf("Mux(pool=%s) Starting a backend failed:"+
+		" (all ports used)", pool)
+	var state = pool_state_SUSPENDED
+	var reason = pool_reason_BACKEND_BUSY
+	set_pool_state(w.table, pool, state, reason)
+	return nil
+}
+
+// It sleeps in 1ms, 10ms, 100ms, and 1s, and keeps sleeping in 1s
+// until a timeout.
+func wait_for_backend_by_race(w *manager, pool string) *backend_record {
+	logger.debugf("Mux(%s) Waiting for a backend by race.", w.mux_ep)
+	var sleep int64 = 1
+	var limit = time.Now().Add(
+		(time.Duration(w.Backend_start_timeout) * time.Second) +
+			(time.Duration(w.Backend_setup_timeout) * time.Second))
+	for time.Now().Compare(limit) < 0 {
+		var be1 = get_backend_process(w.table, pool)
+		if be1 != nil {
+			return be1
+		}
+		time.Sleep(time.Duration(sleep) * time.Millisecond)
+		if sleep < 1000 {
+			sleep = sleep * 10
+		}
+	}
+	logger.debugf("Mux(%s) Waiting for a backend by race failed.", w.mux_ep)
+	return nil
+}
+
+// LIST_PORTS_AVAILABLE lists ports available.  It drops the ports
+// used by backends running on this same host locally.
+func list_ports_available(w *manager) []int {
+	var bes = list_backend_processes(w.table, "*")
+	var used []int
+	for _, be := range bes {
+		if be.Mux_ep == w.mux_ep {
+			var _, ps, err1 = net.SplitHostPort(be.Backend_ep)
+			if err1 != nil {
+				panic(err1)
+			}
+			var port, err2 = strconv.Atoi(ps)
+			if err2 != nil {
+				panic(err2)
+			}
+			used = append(used, port)
+		}
+	}
+	var ports []int
+	for i := w.Port_min; i <= w.Port_max+1; i++ {
+		if slices.Index(used, i) == -1 {
+			ports = append(ports, i)
+		}
+	}
+	rand.Shuffle(len(ports), func(i, j int) {
+		ports[i], ports[j] = ports[j], ports[i]
+	})
+	return ports
+}
+
 // TRY_START_BACKEND starts a process and waits for a message or a
 // timeout.  A message from the server is one that indicates a
 // success/failure.  Note that it changes a cancel function from
 // SIGKILL to SIGTERM to make it work with sudo.
-func try_start_backend(w *manager, g backend) start_result {
+func try_start_backend(w *manager, g backend, port int) start_result {
 	var proc = g.get_super_part()
+	var thishost, _, err1 = net.SplitHostPort(w.mux_ep)
+	if err1 != nil {
+		panic(err1)
+	}
+	proc.Backend_ep = net.JoinHostPort(thishost, strconv.Itoa(port))
+	fmt.Printf("try_start_backend(ep=%s)\n", proc.Backend_ep)
 
 	var user = proc.Owner_uid
 	var group = proc.Owner_gid
@@ -376,15 +501,19 @@ func try_start_backend(w *manager, g backend) start_result {
 
 	var err3 = cmd.Start()
 	if err3 != nil {
-		fmt.Println("cmd.Start() err=", err3)
+		logger.errorf("cmd.Start() err=%v", err3)
+		return start_result{
+			start_state: start_failed,
+			message:     err3.Error(),
+		}
 	}
 
-	var r1 = wait_for_server_come_up(g)
-	fmt.Println("DONE DONE DONE DONE")
+	proc.Backend_pid = cmd.Process.Pid
+	var r1 = wait_for_backend_come_up(g)
 	fmt.Println("DONE state=", r1.start_state, r1.message)
 
-	/*dump_threads()*/
-	//} ()
+	assert_fatal(r1.start_state != start_ongoing)
+
 	return r1
 }
 
@@ -439,41 +568,14 @@ func kill_server__(pid int) {
 	fmt.Println("unix.Kill()", err1)
 }
 
-const (
-	on_out int = iota + 1
-	on_err
-)
-
-// STDIO_MESSAGE is a message passed through a channel.  Each is one
-// line of a message.  ON_OUT or ON_ERR indicates a message is from
-// stdout or stderr.
-type stdio_message struct {
-	int
-	string
-}
-
-type start_result struct {
-	start_state
-	message string
-}
-
-type start_state int
-
-const (
-	start_ongoing start_state = iota
-	start_started
-	start_to_retry
-	start_failed
-)
-
-// WAIT_FOR_SERVER_COME_UP waits until either a server (1) outputs an
+// WAIT_FOR_BACKEND_COME_UP waits until either a server (1) outputs an
 // expected message, (2) outputs an error message, (3) outputs too
 // many messages, (4) reaches a timeout, (5) closes both
 // stdout+stderr.  It returns STARTED/TO_RETRY/FAILED.  It reads the
 // stdio channel as much as available.
-func wait_for_server_come_up(g backend) start_result {
+func wait_for_backend_come_up(g backend) start_result {
 	var proc *backend_process = g.get_super_part()
-	// fmt.Printf("WAIT_FOR_SERVER_COME_UP() svr=%T proc=%T\n", svr, proc)
+	// fmt.Printf("WAIT_FOR_BACKEND_COME_UP() svr=%T proc=%T\n", svr, proc)
 
 	var msg_out []string
 	var msg_err []string

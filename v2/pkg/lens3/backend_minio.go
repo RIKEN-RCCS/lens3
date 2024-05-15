@@ -84,7 +84,7 @@ var the_backend_minio_factory = &backend_minio_conf{}
 func (be *backend_minio_conf) make_backend(pool string) backend {
 	var g = &backend_minio{}
 	g.Pool = pool
-	g.backend_conf = the_backend_conf
+	g.manager_conf = the_manager_conf
 	g.backend_minio_conf = the_backend_minio_factory
 	runtime.SetFinalizer(g, finalize_backend_minio)
 	return g
@@ -209,7 +209,7 @@ func (g *backend_minio) heartbeat() int {
 
 	if g.heartbeat_client == nil {
 		//fmt.Println("minio.heartbeat(1) proc=", proc)
-		var timeout = (proc.Heartbeat_timeout * time.Second)
+		var timeout = (time.Duration(proc.Heartbeat_timeout) * time.Second)
 		//fmt.Println("minio.heartbeat(2) proc=", proc)
 		g.heartbeat_client = &http.Client{
 			Timeout: timeout,

@@ -17,7 +17,7 @@ import (
 	"os"
 	"reflect"
 	"slices"
-	"time"
+	//"time"
 )
 
 // DB_CONF is a pair of an endpoint and password to access a
@@ -37,7 +37,6 @@ func (Api_conf) lens3_conf_union() {}
 // optional.
 type Mux_conf struct {
 	Conf_header
-	//Gunicorn      Gunicorn_conf
 	Multiplexer multiplexer_conf `json:"multiplexer"`
 	Manager     manager_conf     `json:"manager"`
 	Minio       minio_conf       `json:"minio"`
@@ -49,7 +48,6 @@ type Mux_conf struct {
 // Api_conf is a configuration of Api.  log_file is optional.
 type Api_conf struct {
 	Conf_header
-	//Gunicorn   Gunicorn_conf
 	Registrar  registrar_conf `json:"registrar"`
 	UI         UI_conf        `json:"ui"`
 	Minio      minio_conf     `json:"minio"`
@@ -63,19 +61,21 @@ type Conf_header struct {
 	Aws_signature string `json:"aws_signature"`
 }
 
+type timesec int64
+
 type multiplexer_conf struct {
 	Port                    int             `json:"port"`
 	Front_host              string          `json:"front_host"`
 	Trusted_proxies         []string        `json:"trusted_proxies"`
 	User_permission         user_permission `json:"user_permission"`
-	Mux_ep_update_interval  time.Duration   `json:"mux_ep_update_interval"`
-	Forwarding_timeout      time.Duration   `json:"forwarding_timeout"`
-	Probe_access_timeout    time.Duration   `json:"probe_access_timeout"`
-	Bad_response_delay      time.Duration   `json:"bad_response_delay"`
-	Busy_suspension_time    time.Duration   `json:"busy_suspension_time"`
+	Mux_ep_update_interval  timesec         `json:"mux_ep_update_interval"`
+	Forwarding_timeout      timesec         `json:"forwarding_timeout"`
+	Probe_access_timeout    timesec         `json:"probe_access_timeout"`
+	Bad_response_delay      timesec         `json:"bad_response_delay"`
+	Busy_suspension_time    timesec         `json:"busy_suspension_time"`
 	Mux_node_name           string          `json:"mux_node_name"`
 	Backend                 backend_name    `json:"backend"`
-	Backend_command_timeout time.Duration   `json:"backend_command_timeout"`
+	Backend_command_timeout timesec         `json:"backend_command_timeout"`
 	Mux_access_log_file     string          `json:"mux_access_log_file"`
 }
 
@@ -86,10 +86,13 @@ type registrar_conf struct {
 	Base_path               string          `json:"base_path"`
 	Claim_uid_map           claim_uid_map   `json:"claim_uid_map"`
 	User_permission         user_permission `json:"user_permission"`
+	Uid_allow_range         string          `json:"uid_allow_range"`
+	Uid_block_range         string          `json:"uid_block_range"`
+	Gid_block_range         string          `json:"gid_block_range"`
 	Backend                 backend_name    `json:"backend"`
-	Backend_command_timeout time.Duration   `json:"backend_command_timeout"`
-	Probe_access_timeout    time.Duration   `json:"probe_access_timeout"`
-	Pool_expiration         time.Duration   `json:"pool_expiration"`
+	Backend_command_timeout timesec         `json:"backend_command_timeout"`
+	Probe_access_timeout    timesec         `json:"probe_access_timeout"`
+	Pool_expiration         timesec         `json:"pool_expiration"`
 	Csrf_secret_seed        string          `json:"csrf_secret_seed"`
 	Api_access_log_file     string          `json:"api_access_log_file"`
 }
@@ -126,18 +129,22 @@ var backend_list = []backend_name{
 }
 
 type manager_conf struct {
-	Sudo                     string        `json:"sudo"`
-	Port_min                 int           `json:"port_min"`
-	Port_max                 int           `json:"port_max"`
-	Backend_awake_duration   time.Duration `json:"backend_awake_duration"`
-	Backend_setup_at_start   bool          `json:"backend_setup_at_start"`
-	Backend_start_timeout    time.Duration `json:"backend_start_timeout"`
-	Backend_setup_timeout    time.Duration `json:"backend_setup_timeout"`
-	Backend_stop_timeout     time.Duration `json:"backend_stop_timeout"`
-	Backend_command_timeout  time.Duration `json:"backend_command_timeout"`
-	Heartbeat_interval       time.Duration `json:"heartbeat_interval"`
-	Heartbeat_miss_tolerance int           `json:"heartbeat_miss_tolerance"`
-	Heartbeat_timeout        time.Duration `json:"heartbeat_timeout"`
+	Sudo                     string  `json:"sudo"`
+	Port_min                 int     `json:"port_min"`
+	Port_max                 int     `json:"port_max"`
+	Backend_awake_duration   timesec `json:"backend_awake_duration"`
+	Backend_setup_at_start   bool    `json:"backend_setup_at_start"`
+	Backend_start_timeout    timesec `json:"backend_start_timeout"`
+	Backend_setup_timeout    timesec `json:"backend_setup_timeout"`
+	Backend_stop_timeout     timesec `json:"backend_stop_timeout"`
+	Backend_command_timeout  timesec `json:"backend_command_timeout"`
+	Heartbeat_interval       timesec `json:"heartbeat_interval"`
+	Heartbeat_miss_tolerance int     `json:"heartbeat_miss_tolerance"`
+	Heartbeat_timeout        timesec `json:"heartbeat_timeout"`
+
+	watch_gap_minimal  timesec
+	stabilize_wait_ms  timesec
+	manager_expiration timesec
 }
 
 type minio_conf struct {

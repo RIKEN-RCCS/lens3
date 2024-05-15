@@ -22,11 +22,13 @@ import (
 	//"io"
 	"log"
 	//"os"
-	//"net"
+	"net"
 	//"maps"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 	//"runtime"
@@ -35,9 +37,14 @@ import (
 // MULTIPLEXER is a single object, "the_multiplexer".  It is
 // with threads of a child process reaper.
 type multiplexer struct {
-	verbose bool
-
 	table *keyval_table
+
+	// MUX_EP and MUX_PID are about a process that a multiplexer and a
+	// manager run in.
+	mux_ep  string
+	mux_pid int
+
+	verbose bool
 
 	// BE factory is to make a backend.
 	//be backend_factory
@@ -51,7 +58,7 @@ type multiplexer struct {
 	// CH_SIG is a channel to receive SIGCHLD.
 	//ch_sig chan os.Signal
 
-	// CLIENT accesses backend servers.
+	// ??? CLIENT accesses backend servers.
 	client http.Client
 
 	//proxy *backend_proxy
@@ -95,6 +102,20 @@ const (
 func init_multiplexer(m *multiplexer, t *keyval_table, conf *multiplexer_conf) {
 	m.table = t
 	m.multiplexer_conf = *conf
+
+	var host string
+	if m.multiplexer_conf.Mux_node_name != "" {
+		host = m.multiplexer_conf.Mux_node_name
+	} else {
+		var h, err1 = os.Hostname()
+		if err1 != nil {
+			panic(err1)
+		}
+		host = h
+	}
+	var port = m.multiplexer_conf.Port
+	m.mux_ep = net.JoinHostPort(host, strconv.Itoa(port))
+	m.mux_pid = os.Getpid()
 }
 
 func start_service_for_test() {
@@ -108,20 +129,26 @@ func start_service_for_test() {
 	init_multiplexer(m, t, &muxconf.Multiplexer)
 
 	var w = &the_manager
-	init_manager(w, t, &muxconf.Manager)
+	init_manager(w, t, m, &muxconf.Manager)
 	go start_manager(w)
 
 	time.Sleep(5 * time.Second)
 
-	var g = start_backend_for_test(w)
-	var proc = g.get_super_part()
-	var pool = proc.Pool
-	var desc = proc.Process_record
-	set_backend_proc(w.table, pool, desc)
-	//var proc = g.get_super_part()
-	//m.pool[proc.pool] = g
-	//time.Sleep(30 * time.Second)
-	//start_dummy_proxy(m)
+	if true {
+		var g = start_backend_for_test(w)
+		var proc = g.get_super_part()
+		//var pool = proc.Pool
+
+		var desc = &proc.backend_record
+		fmt.Println("set_backend_process(2) ep=", proc.Backend_ep)
+		fmt.Println("proc.backend_record=")
+		print_in_json(desc)
+		set_backend_process(w.table, proc.Pool, desc)
+		//var proc = g.get_super_part()
+		//m.pool[proc.pool] = g
+		//time.Sleep(30 * time.Second)
+		//start_dummy_proxy(m)
+	}
 
 	start_multiplexer(m)
 }
@@ -163,15 +190,15 @@ func proxy_request_rewriter(m *multiplexer) func(r *httputil.ProxyRequest) {
 		var pool = x[0]
 		delete(r.In.Header, "lens3-pool")
 		delete(r.Out.Header, "lens3-pool")
-		var ep = get_backend_ep(m.table, pool)
-		fmt.Println("*** POOL=", pool, " EP=", ep)
-		if ep == "" {
+		var be = get_backend_process(m.table, pool)
+		if be == nil {
 			logger.debug("Mux({pool}).")
 			raise(&proxy_exc{http_status_404_not_found, "pool non-exist"})
 		}
+		fmt.Println("*** POOL=", pool, " BE=", be)
 		//var g = m.pool[pool]
 		//var proc = g.get_super_part()
-		var url1, err1 = url.Parse("http://" + ep)
+		var url1, err1 = url.Parse("http://" + be.Backend_ep)
 		if err1 != nil {
 			logger.debugf("Mux(pool=%s) bad backend url: err=(%v)", pool, err1)
 			raise(&proxy_exc{http_status_500_internal_server_error,
@@ -192,7 +219,7 @@ func make_forwarding_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		//var g = m.pool["mMwfyMzLwOlb8QLYANRM"]
 		//var proc = g.get_super_part()
-		//var proc = get_backend_proc(m.table, "mMwfyMzLwOlb8QLYANRM")
+		//var proc = get_backend_process(m.table, "mMwfyMzLwOlb8QLYANRM")
 		//fmt.Println("*** POOL=", pool)
 
 		var authenticated = check_authenticated(m, r)
@@ -215,7 +242,8 @@ func make_forwarding_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 
 		var pool = "d4f0c4645fce5734"
 		//var pool = generate_pool_name()
-		var desc = get_backend_proc(m.table, pool)
+		var desc = get_backend_process(m.table, pool)
+		logger.debugf("Mux(pool=%s) backend=%v.", pool, desc)
 		if desc == nil {
 			http.Error(w, "BAD", http_status_500_internal_server_error)
 			raise(&proxy_exc{http_status_500_internal_server_error,
@@ -234,7 +262,7 @@ func make_forwarding_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 
 		/* Replace an authorization header. */
 
-		sign_by_backend_credential(r, *desc)
+		sign_by_backend_credential(r, desc)
 
 		r.Header["lens3-pool"] = []string{pool}
 		proxy.ServeHTTP(w, r)

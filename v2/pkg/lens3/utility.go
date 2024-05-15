@@ -19,9 +19,9 @@ import (
 	//"log"
 	//"log/syslog"
 	"sort"
-	"time"
+	//"time"
 	//"slices"
-	"math/rand"
+	"math/rand/v2"
 	"reflect"
 	"regexp"
 	"runtime"
@@ -30,6 +30,15 @@ import (
 )
 
 type vacuous = struct{}
+
+// ITE if-then-else.
+func ITE[T any](c bool, e1 T, e2 T) T {
+	if c {
+		return e1
+	} else {
+		return e2
+	}
+}
 
 const (
 	http_status_400_bad_request  int = 400
@@ -160,9 +169,9 @@ func random_string(n int) string {
 	const alen = len(astr)
 	const blen = len(bstr)
 	var s = make([]byte, n, n)
-	s[0] = astr[rand.Intn(alen)]
+	s[0] = astr[rand.IntN(alen)]
 	for i := 1; i < n; i++ {
-		s[i] = bstr[rand.Intn(blen)]
+		s[i] = bstr[rand.IntN(blen)]
 	}
 	return string(s)
 }
@@ -182,7 +191,6 @@ func generate_pool_name() string {
 }
 
 func init() {
-	rand.Seed(time.Now().UnixNano())
 }
 
 // get_function_name returns a printable name of a function.

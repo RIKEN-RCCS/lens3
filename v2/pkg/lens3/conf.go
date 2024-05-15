@@ -27,15 +27,15 @@ type db_conf struct {
 	Password string
 }
 
-// LENS3_CONF is a union of Mux_conf|Api_conf.
+// LENS3_CONF is a union of mux_conf|api_conf.
 type lens3_conf interface{ lens3_conf_union() }
 
-func (Mux_conf) lens3_conf_union() {}
-func (Api_conf) lens3_conf_union() {}
+func (mux_conf) lens3_conf_union() {}
+func (api_conf) lens3_conf_union() {}
 
-// Mux_conf is a configuration of Mux.  mux_node_name and log_file are
+// MUX_CONF is a configuration of Mux.  mux_node_name and log_file are
 // optional.
-type Mux_conf struct {
+type mux_conf struct {
 	Conf_header
 	Multiplexer multiplexer_conf `json:"multiplexer"`
 	Manager     manager_conf     `json:"manager"`
@@ -45,8 +45,8 @@ type Mux_conf struct {
 	Log_syslog  syslog_conf      `json:"log_syslog"`
 }
 
-// Api_conf is a configuration of Api.  log_file is optional.
-type Api_conf struct {
+// API_CONF is a configuration of Api.  log_file is optional.
+type api_conf struct {
 	Conf_header
 	Registrar  registrar_conf `json:"registrar"`
 	UI         UI_conf        `json:"ui"`
@@ -207,22 +207,22 @@ func read_conf(filename string) lens3_conf {
 	var sub = conf1["subject"].(string)[:3]
 	switch sub {
 	case "mux":
-		var muxconf Mux_conf
+		var muxconf mux_conf
 		var err3 = json.Unmarshal(json1, &muxconf)
 		if err3 != nil {
 			panic(fmt.Sprint("Bad json conf-file:", err3))
 		}
 		//fmt.Println("MUX CONF is", muxconf)
-		check_mux_conf(muxconf)
+		check_mux_conf(&muxconf)
 		return &muxconf
 	case "api":
-		var apiconf Api_conf
+		var apiconf api_conf
 		var err4 = json.Unmarshal(json1, &apiconf)
 		if err4 != nil {
 			panic(fmt.Sprint("Bad json conf-file:", err4))
 		}
 		//fmt.Println("API CONF is", apiconf)
-		check_api_conf(apiconf)
+		check_api_conf(&apiconf)
 		return &apiconf
 	default:
 		log.Panicf("Bad json conf-file: Bad subject field (%s).", sub)
@@ -230,7 +230,7 @@ func read_conf(filename string) lens3_conf {
 	}
 }
 
-func check_mux_conf(conf Mux_conf) {
+func check_mux_conf(conf *mux_conf) {
 	check_multiplexer_entry(conf.Multiplexer)
 	check_manager_entry(conf.Manager)
 	switch conf.Multiplexer.Backend {
@@ -240,7 +240,7 @@ func check_mux_conf(conf Mux_conf) {
 	check_syslog_entry(conf.Log_syslog)
 }
 
-func check_api_conf(conf Api_conf) {
+func check_api_conf(conf *api_conf) {
 	check_registrar_entry(conf.Registrar)
 	switch conf.Registrar.Backend {
 	case "minio":

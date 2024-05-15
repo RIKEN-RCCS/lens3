@@ -435,7 +435,7 @@ func set_conf(t *keyval_table, conf lens3_conf) {
 	var db = t.key_prefix_to_db[prefix]
 	//var ctx = context.Background()
 	switch conf1 := conf.(type) {
-	case *Mux_conf:
+	case *mux_conf:
 		var sub = conf1.Subject
 		if !(sub == "mux" || (len(sub) >= 5 && sub[:4] == "mux:")) {
 			panic("bad conf; subject≠mux")
@@ -448,7 +448,7 @@ func set_conf(t *keyval_table, conf lens3_conf) {
 		// Zero for no expiration.
 		var w1 = db.Set(t.ctx, k1, v1, 0)
 		panic_non_nil(w1.Err())
-	case *Api_conf:
+	case *api_conf:
 		var sub = conf1.Subject
 		if !(sub == "api") {
 			panic("bad conf; subject≠api")
@@ -461,7 +461,7 @@ func set_conf(t *keyval_table, conf lens3_conf) {
 		var w2 = db.Set(t.ctx, k2, v2, 0)
 		panic_non_nil(w2.Err())
 	default:
-		log.Panicf("type: (%T) type≠Mux_conf nor type≠Api_conf\n", conf)
+		log.Panicf("type: (%T) type≠mux_conf nor type≠api_conf\n", conf)
 	}
 }
 
@@ -473,8 +473,8 @@ func delete_conf(t *keyval_table, sub string) {
 	panic_non_nil(w.Err())
 }
 
-// LIST_CONFS returns a list of confs.  It contains both Mux_conf and
-// Api_conf.
+// LIST_CONFS returns a list of confs.  It contains both mux_conf and
+// api_conf.
 func list_confs(t *keyval_table) []*lens3_conf {
 	var prefix = db_conf_prefix
 	var keyi = scan_table(t, prefix, "*")
@@ -497,34 +497,34 @@ func list_confs(t *keyval_table) []*lens3_conf {
 	return confs
 }
 
-func get_mux_conf(t *keyval_table, sub string) *Mux_conf {
+func get_mux_conf(t *keyval_table, sub string) *mux_conf {
 	var prefix = db_conf_prefix
 	var db = t.key_prefix_to_db[prefix]
 	assert_fatal(sub == "mux" || (len(sub) >= 5 && sub[:4] == "mux:"))
 	var k = (prefix + sub)
 	var w = db.Get(t.ctx, k)
-	var conf Mux_conf
+	var conf mux_conf
 	var ok = load_db_data(w, &conf)
 	if ok {
 		//fmt.Println("MUX CONF is", conf)
-		check_mux_conf(conf)
+		check_mux_conf(&conf)
 		return &conf
 	} else {
 		return nil
 	}
 }
 
-func get_api_conf(t *keyval_table, sub string) *Api_conf {
+func get_api_conf(t *keyval_table, sub string) *api_conf {
 	assert_fatal(sub == "api")
 	var prefix = db_conf_prefix
 	var db = t.key_prefix_to_db[prefix]
 	var k = (prefix + sub)
 	var w = db.Get(t.ctx, k)
-	var conf Api_conf
+	var conf api_conf
 	var ok = load_db_data(w, &conf)
 	if ok {
 		//fmt.Println("API CONF is", conf)
-		check_api_conf(conf)
+		check_api_conf(&conf)
 		return &conf
 	} else {
 		return nil

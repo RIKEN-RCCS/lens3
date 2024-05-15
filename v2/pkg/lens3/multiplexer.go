@@ -99,9 +99,9 @@ const (
 	no_named_bucket        = "no_named_bucket"
 )
 
-func init_multiplexer(m *multiplexer, t *keyval_table, conf *multiplexer_conf) {
+func init_multiplexer(m *multiplexer, t *keyval_table, conf *mux_conf) {
 	m.table = t
-	m.multiplexer_conf = *conf
+	m.multiplexer_conf = conf.Multiplexer
 
 	var host string
 	if m.multiplexer_conf.Mux_node_name != "" {
@@ -126,10 +126,10 @@ func start_service_for_test() {
 	_ = apiconf
 
 	var m = &the_multiplexer
-	init_multiplexer(m, t, &muxconf.Multiplexer)
+	init_multiplexer(m, t, muxconf)
 
 	var w = &the_manager
-	init_manager(w, t, m, &muxconf.Manager)
+	init_manager(w, t, m, muxconf)
 	go start_manager(w)
 
 	time.Sleep(5 * time.Second)

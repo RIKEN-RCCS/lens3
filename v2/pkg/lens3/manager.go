@@ -82,7 +82,7 @@ type manager struct {
 
 // BACKEND_FACTORY is to make a backend instance.
 type backend_factory interface {
-	configure()
+	configure(conf *mux_conf)
 	clean_at_exit()
 	make_backend(string) backend
 }
@@ -116,9 +116,8 @@ type backend interface {
 }
 
 // BACKEND_PROCESS is a generic part of a backend.  It is embedded in
-// a backend and returned by get_super_part().  A backend is
-// responsible for setting "backend_conf" to share it with the
-// "multiplexer".
+// a backend instance and returned by get_super_part().  A
+// configuration "manager_conf" is shared with the manager".
 type backend_process struct {
 	pool_record
 	backend_record
@@ -152,7 +151,7 @@ var the_manager = manager{
 	proc:   make(map[int]backend),
 }
 
-var the_manager_conf = &the_manager.manager_conf
+//var the_manager_conf = &the_manager.manager_conf
 
 const (
 	on_out int = iota + 1
@@ -181,9 +180,9 @@ const (
 	start_failed
 )
 
-func init_manager(w *manager, t *keyval_table, m *multiplexer, conf *manager_conf) {
+func init_manager(w *manager, t *keyval_table, m *multiplexer, conf *mux_conf) {
 	w.table = t
-	w.manager_conf = *conf
+	w.manager_conf = conf.Manager
 
 	w.watch_gap_minimal = 10
 	w.stabilize_wait_ms = 1000
@@ -196,7 +195,7 @@ func init_manager(w *manager, t *keyval_table, m *multiplexer, conf *manager_con
 	w.mux_pid = m.mux_pid
 
 	w.factory = the_backend_minio_factory
-	w.factory.configure()
+	w.factory.configure(conf)
 }
 
 func manager_main() {

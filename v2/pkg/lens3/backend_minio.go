@@ -55,18 +55,21 @@ type backend_minio struct {
 	*backend_minio_conf
 }
 
-// BACKEND_MINIO_CONF is a static and common part of a manager.  It
-// is embedded.  It also doubles as a factory.
+// BACKEND_MINIO_CONF is a static and common part of a MinIO backend.
+// It doubles as a factory.
 type backend_minio_conf struct {
-	bin_minio string
-	bin_mc    string
+	*minio_conf
+	//bin_minio string
+	//bin_mc    string
 
-	minio_setup_at_start    bool
-	minio_start_timeout     time.Duration
-	minio_setup_timeout     time.Duration
-	minio_stop_timeout      time.Duration
-	minio_mc_timeout        time.Duration
-	minio_watch_gap_minimal time.Duration
+	//*manager_conf
+	// In manager_conf.
+	//minio_setup_at_start    bool
+	//minio_start_timeout     time.Duration
+	//minio_setup_timeout     time.Duration
+	//minio_stop_timeout      time.Duration
+	//minio_mc_timeout        time.Duration
+	//minio_watch_gap_minimal time.Duration
 }
 
 type keyval = map[string]interface{}
@@ -81,28 +84,30 @@ type minio_message_ struct {
 
 var the_backend_minio_factory = &backend_minio_conf{}
 
-func (be *backend_minio_conf) make_backend(pool string) backend {
+func (fa *backend_minio_conf) make_backend(pool string) backend {
 	var g = &backend_minio{}
 	g.Pool = pool
-	g.manager_conf = the_manager_conf
+	g.manager_conf = &the_manager.manager_conf
 	g.backend_minio_conf = the_backend_minio_factory
 	runtime.SetFinalizer(g, finalize_backend_minio)
 	return g
 }
 
-func (be *backend_minio_conf) configure() {
-	be.bin_minio = "/usr/local/bin/minio"
-	be.bin_mc = "/usr/local/bin/mc"
+func (fa *backend_minio_conf) configure(conf *mux_conf) {
+	fa.minio_conf = &conf.Minio
 
-	be.minio_setup_at_start = true
-	be.minio_start_timeout = 60
-	be.minio_setup_timeout = 60
-	be.minio_stop_timeout = 30
-	be.minio_mc_timeout = 60
-	//be.minio_watch_gap_minimal = 30
+	//fa.bin_minio = "/usr/local/bin/minio"
+	//fa.bin_mc = "/usr/local/bin/mc"
+
+	//fa.minio_setup_at_start = true
+	//fa.minio_start_timeout = 60
+	//fa.minio_setup_timeout = 60
+	//fa.minio_stop_timeout = 30
+	//fa.minio_mc_timeout = 60
+	//fa.minio_watch_gap_minimal = 30
 }
 
-func (be *backend_minio_conf) clean_at_exit() {
+func (fa *backend_minio_conf) clean_at_exit() {
 	clean_tmp()
 }
 
@@ -119,7 +124,7 @@ func (g *backend_minio) get_super_part() *backend_process {
 
 func (proc *backend_minio) make_command_line(address string, directory string) backend_command {
 	var argv = []string{
-		proc.bin_minio,
+		proc.Minio,
 		"--json", "--anonymous", "server",
 		"--address", address, directory}
 	var envs = []string{
@@ -341,11 +346,11 @@ func execute_mc_cmd(g *backend_minio, name string, command []string) mc_result {
 	//var proc = g.get_super_part()
 	assert_fatal(g.mc_alias != "" && g.mc_config_dir != "")
 	var argv = append([]string{
-		g.bin_mc,
+		g.Mc,
 		"--json",
 		fmt.Sprintf("--config-dir=%s", g.mc_config_dir)},
 		command...)
-	var timeout = (g.minio_mc_timeout * time.Second)
+	var timeout = (time.Duration(g.Backend_command_timeout) * time.Second)
 	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	var cmd = exec.CommandContext(ctx, argv[0], argv[1:]...)

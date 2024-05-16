@@ -30,7 +30,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
+	//"time"
 	//"runtime"
 )
 
@@ -99,7 +99,7 @@ const (
 	no_named_bucket        = "no_named_bucket"
 )
 
-func init_multiplexer(m *multiplexer, t *keyval_table, conf *mux_conf) {
+func configure_multiplexer(m *multiplexer, t *keyval_table, conf *mux_conf) {
 	m.table = t
 	m.multiplexer_conf = conf.Multiplexer
 
@@ -116,41 +116,6 @@ func init_multiplexer(m *multiplexer, t *keyval_table, conf *mux_conf) {
 	var port = m.multiplexer_conf.Port
 	m.mux_ep = net.JoinHostPort(host, strconv.Itoa(port))
 	m.mux_pid = os.Getpid()
-}
-
-func start_service_for_test() {
-	var dbconf = read_db_conf("conf.json")
-	var t = make_table(dbconf)
-	var muxconf = get_mux_conf(t, "mux")
-	var apiconf = get_api_conf(t, "api")
-	_ = apiconf
-
-	var m = &the_multiplexer
-	init_multiplexer(m, t, muxconf)
-
-	var w = &the_manager
-	init_manager(w, t, m, muxconf)
-	go start_manager(w)
-
-	time.Sleep(5 * time.Second)
-
-	if true {
-		var g = start_backend_for_test(w)
-		var proc = g.get_super_part()
-		//var pool = proc.Pool
-
-		var desc = &proc.backend_record
-		fmt.Println("set_backend_process(2) ep=", proc.Backend_ep)
-		fmt.Println("proc.backend_record=")
-		print_in_json(desc)
-		set_backend_process(w.table, proc.Pool, desc)
-		//var proc = g.get_super_part()
-		//m.pool[proc.pool] = g
-		//time.Sleep(30 * time.Second)
-		//start_dummy_proxy(m)
-	}
-
-	start_multiplexer(m)
 }
 
 func start_multiplexer(m *multiplexer) {

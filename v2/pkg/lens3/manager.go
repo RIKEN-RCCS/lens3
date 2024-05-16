@@ -182,7 +182,7 @@ const (
 	start_failed
 )
 
-func init_manager(w *manager, t *keyval_table, m *multiplexer, conf *mux_conf) {
+func configure_manager(w *manager, t *keyval_table, m *multiplexer, conf *mux_conf) {
 	w.table = t
 	w.manager_conf = conf.Manager
 
@@ -205,10 +205,10 @@ func manager_main() {
 }
 
 func start_manager(w *manager) {
+	fmt.Println("start_manager() w=", w)
+
 	//w.table = t
 	//w.manager_conf = *conf
-
-	fmt.Println("start_manager() w=", w)
 
 	//w.Sudo = "/usr/bin/sudo"
 	//w.Heartbeat_miss_tolerance = 3
@@ -313,11 +313,11 @@ func start_backend_mutexed(w *manager, pool string) backend {
 		Mux_ep:     w.mux_ep,
 		Start_time: now,
 	}
-	var ok, _ = set_ex_manager(w.table, pool, ep)
+	var ok, _ = set_ex_manager_lock(w.table, pool, ep)
 	if !ok {
 		var be1 = wait_for_backend_by_race(w, pool)
 		if be1 == nil {
-			logger.warnf("wait_for_backend_by_race(pool=%s) timeout", pool)
+			logger.debugf("start_backend(pool=%s) waits by race", pool)
 		}
 		return nil
 	} else {
@@ -361,9 +361,13 @@ func start_backend(w *manager, pool string) backend {
 		case start_ongoing:
 			panic("internal")
 		case start_started:
+			// OK.
 		case start_to_retry:
+			continue
 		case start_failed:
-			logger.errorf("start_failed with: %s", r1.message)
+			logger.errorf("Mux(pool=%s) Starting a backend failed: %s",
+				pool, r1.message)
+			return nil
 		}
 
 		assert_fatal(proc.cmd.Process != nil)
@@ -383,14 +387,13 @@ func start_backend(w *manager, pool string) backend {
 		fmt.Println("proc.backend_record=")
 		print_in_json(desc)
 		set_backend_process(w.table, proc.Pool, desc)
-		//return &proc.backend_record
 		return g
 	}
 
 	// All ports are tried and failed.
 
-	logger.errorf("Mux(pool=%s) Starting a backend failed:"+
-		" (all ports used)", pool)
+	logger.warnf("Mux(pool=%s) Starting a backend SUSPENDED: %s",
+		pool, " (all ports used)")
 	var state = pool_state_SUSPENDED
 	var reason = pool_reason_BACKEND_BUSY
 	set_pool_state(w.table, pool, state, reason)

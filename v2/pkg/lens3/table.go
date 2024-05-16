@@ -822,11 +822,10 @@ func delete_pool_state(t *keyval_table, pool string) {
 
 /* PROCESS-TABLE */
 
-// SET_EX_MANAGER registers atomically a manager process.  It returns
-// OK/NG, paired with a manager that took the role earlier when it
-// fails.  At a failure, a returned current owner information can be
-// None due to a race (but practically never).
-func set_ex_manager(t *keyval_table, pool string, desc *manager_record) (bool, *manager_record) {
+// SET_EX_MANAGER_LOCK atomically sets a manager record that is used
+// as a mutex.  It returns OK/NG.  It returns an old record, but it
+// can be null due to a race (but practically never).
+func set_ex_manager_lock(t *keyval_table, pool string, desc *manager_record) (bool, *manager_record) {
 	var prefix = db_backend_manager_prefix
 	var db = t.key_prefix_to_db[prefix]
 	var k = (prefix + pool)

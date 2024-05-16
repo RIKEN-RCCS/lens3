@@ -6,20 +6,22 @@
 package lens3
 
 // A manager watches the backend server state and records its outputs
-// in logs.  The first few lines from a server is used to check its
-// start.  A server usually does not output anything later except on
+// in logs.  The first few lines from a backend is used to check its
+// start.  A backend usually does not output anything later except on
 // errors.
-//
+
 // MEMO: A manager tries to kill a server by sudo's signal forwarding,
 // when a shutdown fails.  Signal forwarding works because sudo runs
-// with the same RUID.  PDEATHSIG in exec/Command nor
-// prctl(PR_SET_PDEATHSIG) does not work because of sudo.  The default
-// in exec/Command.Cancel kills with SIGKILL, and it does not work
-// with sudo.  See "src/os/exec/exec.go".  A cancel function is
-// replaced by one with SIGTERM, (though it won't be used).
-
-// os.Signal is an interface, unix.Signal, syscall.Signal are
-// identical and concrete.
+// with the same RUID.  It uses SIGTERM for using signal forwarding.
+// A cancel function is replaced by one with SIGTERM.  The default in
+// exec/Command.Cancel kills with SIGKILL, and does not work with
+// sudo.  See "src/os/exec/exec.go".
+//
+// MEMO: It does not use "Pdeathsig" in "unix.SysProcAttr".
+// Pdeathsig, or prctl(PR_SET_PDEATHSIG), is Linux.
+//
+// MEMO: os.Signal is an interface, while unix.Signal, syscall.Signal
+// are identical and concrete.
 
 import (
 	// Golang prefers "x/sys/unix" over "syscall".  "SysProcAttr" are
@@ -243,6 +245,10 @@ func start_backend_for_test(w *manager) backend {
 	*/
 
 	var g = start_backend(w, "d4f0c4645fce5734")
+	if g == nil {
+		fmt.Println("START_BACKEND() FAILED")
+		os.Exit(1)
+	}
 	var proc = g.get_super_part()
 	proc.verbose = true
 
@@ -326,7 +332,7 @@ func start_backend(w *manager, pool string) backend {
 
 	var desc = get_pool(w.table, pool)
 	if desc == nil {
-		logger.warnf("start_backend() pool is missing pool=%s", pool)
+		logger.warnf("start_backend() pool is missing: pool=%s", pool)
 		return nil
 	}
 
@@ -487,7 +493,6 @@ func try_start_backend(w *manager, g backend, port int) start_result {
 		Setctty:    false,
 		Noctty:     false,
 		Foreground: false,
-		Pdeathsig:  unix.SIGTERM,
 	}
 	cmd.Cancel = func() error {
 		return cmd.Process.Signal(unix.SIGTERM)

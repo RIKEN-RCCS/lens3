@@ -24,6 +24,8 @@ import (
 	//"runtime"
 )
 
+const lens3_version string = "v2.1"
+
 func start_service_for_test() {
 	var dbconf = read_db_conf("conf.json")
 	var t = make_table(dbconf)

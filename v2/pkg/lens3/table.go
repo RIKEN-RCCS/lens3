@@ -36,7 +36,7 @@ type keyval_table struct {
 // "cf:mux", and "cf:mux":mux-name .
 
 // "uu:uid" entry.
-type User_record struct {
+type user_record struct {
 	Uid             string   `json:"uid"`
 	Claim           string   `json:"claim"`
 	Groups          []string `json:"groups"`
@@ -51,9 +51,9 @@ type User_record struct {
 // "po:pool-name" entry.
 type pool_record struct {
 	Pool              string `json:"pool_name"`
+	Buckets_directory string `json:"buckets_directory"`
 	Owner_uid         string `json:"owner_uid"`
 	Owner_gid         string `json:"owner_gid"`
-	Buckets_directory string `json:"buckets_directory"`
 	Probe_key         string `json:"probe_key"`
 	Online_status     bool   `json:"online_status"`
 	Expiration_time   int64  `json:"expiration_time"`
@@ -533,7 +533,7 @@ func get_api_conf(t *keyval_table, sub string) *api_conf {
 
 // ADD_USER adds a user and its claim entry.  A duplicate claim is an
 // error.  It deletes an old entry first if exits.
-func add_user(t *keyval_table, ui User_record) {
+func add_user(t *keyval_table, ui *user_record) {
 	var uid = ui.Uid
 	var claim = ui.Claim
 	assert_fatal(uid != "")
@@ -550,7 +550,7 @@ func add_user(t *keyval_table, ui User_record) {
 }
 
 // (Use add_user() instead).
-func set_user_force(t *keyval_table, ui User_record) {
+func set_user_force(t *keyval_table, ui *user_record) {
 	var prefix = db_user_info_prefix
 	var db = t.key_prefix_to_db[prefix]
 	var uid = ui.Uid
@@ -572,12 +572,12 @@ func set_user_force(t *keyval_table, ui User_record) {
 }
 
 // GET_USER gets a user by a uid.  It may return nil.
-func get_user(t *keyval_table, uid string) *User_record {
+func get_user(t *keyval_table, uid string) *user_record {
 	var prefix = db_user_info_prefix
 	var db = t.key_prefix_to_db[prefix]
 	var k = (prefix + uid)
 	var w = db.Get(t.ctx, k)
-	var ui User_record
+	var ui user_record
 	var ok = load_db_data(w, &ui)
 	if ok {
 		return &ui

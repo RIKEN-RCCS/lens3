@@ -61,21 +61,21 @@ type Conf_header struct {
 	Aws_signature string `json:"aws_signature"`
 }
 
-type timesec int64
+type time_in_sec int64
 
 type multiplexer_conf struct {
 	Port                    int             `json:"port"`
 	Front_host              string          `json:"front_host"`
 	Trusted_proxies         []string        `json:"trusted_proxies"`
 	User_permission         user_permission `json:"user_permission"`
-	Mux_ep_update_interval  timesec         `json:"mux_ep_update_interval"`
-	Forwarding_timeout      timesec         `json:"forwarding_timeout"`
-	Probe_access_timeout    timesec         `json:"probe_access_timeout"`
-	Bad_response_delay      timesec         `json:"bad_response_delay"`
-	Busy_suspension_time    timesec         `json:"busy_suspension_time"`
+	Mux_ep_update_interval  time_in_sec     `json:"mux_ep_update_interval"`
+	Forwarding_timeout      time_in_sec     `json:"forwarding_timeout"`
+	Probe_access_timeout    time_in_sec     `json:"probe_access_timeout"`
+	Bad_response_delay      time_in_sec     `json:"bad_response_delay"`
+	Busy_suspension_time    time_in_sec     `json:"busy_suspension_time"`
 	Mux_node_name           string          `json:"mux_node_name"`
 	Backend                 backend_name    `json:"backend"`
-	Backend_command_timeout timesec         `json:"backend_command_timeout"`
+	Backend_command_timeout time_in_sec     `json:"backend_command_timeout"`
 	Mux_access_log_file     string          `json:"mux_access_log_file"`
 }
 
@@ -90,9 +90,9 @@ type registrar_conf struct {
 	Uid_block_range         string          `json:"uid_block_range"`
 	Gid_block_range         string          `json:"gid_block_range"`
 	Backend                 backend_name    `json:"backend"`
-	Backend_command_timeout timesec         `json:"backend_command_timeout"`
-	Probe_access_timeout    timesec         `json:"probe_access_timeout"`
-	Pool_expiration         timesec         `json:"pool_expiration"`
+	Backend_command_timeout time_in_sec     `json:"backend_command_timeout"`
+	Probe_access_timeout    time_in_sec     `json:"probe_access_timeout"`
+	Pool_expiration         time_in_sec     `json:"pool_expiration"`
 	Csrf_secret_seed        string          `json:"csrf_secret_seed"`
 	Api_access_log_file     string          `json:"api_access_log_file"`
 }
@@ -129,22 +129,22 @@ var backend_list = []backend_name{
 }
 
 type manager_conf struct {
-	Sudo                     string  `json:"sudo"`
-	Port_min                 int     `json:"port_min"`
-	Port_max                 int     `json:"port_max"`
-	Backend_awake_duration   timesec `json:"backend_awake_duration"`
-	Backend_setup_at_start   bool    `json:"backend_setup_at_start"`
-	Backend_start_timeout    timesec `json:"backend_start_timeout"`
-	Backend_setup_timeout    timesec `json:"backend_setup_timeout"`
-	Backend_stop_timeout     timesec `json:"backend_stop_timeout"`
-	Backend_command_timeout  timesec `json:"backend_command_timeout"`
-	Heartbeat_interval       timesec `json:"heartbeat_interval"`
-	Heartbeat_miss_tolerance int     `json:"heartbeat_miss_tolerance"`
-	Heartbeat_timeout        timesec `json:"heartbeat_timeout"`
+	Sudo                     string      `json:"sudo"`
+	Port_min                 int         `json:"port_min"`
+	Port_max                 int         `json:"port_max"`
+	Backend_awake_duration   time_in_sec `json:"backend_awake_duration"`
+	Backend_setup_at_start   bool        `json:"backend_setup_at_start"`
+	Backend_start_timeout    time_in_sec `json:"backend_start_timeout"`
+	Backend_setup_timeout    time_in_sec `json:"backend_setup_timeout"`
+	Backend_stop_timeout     time_in_sec `json:"backend_stop_timeout"`
+	Backend_command_timeout  time_in_sec `json:"backend_command_timeout"`
+	Heartbeat_interval       time_in_sec `json:"heartbeat_interval"`
+	Heartbeat_miss_tolerance int         `json:"heartbeat_miss_tolerance"`
+	Heartbeat_timeout        time_in_sec `json:"heartbeat_timeout"`
 
-	watch_gap_minimal  timesec
-	stabilize_wait_ms  timesec
-	manager_expiration timesec
+	watch_gap_minimal  time_in_sec
+	stabilize_wait_ms  time_in_sec
+	manager_expiration time_in_sec
 }
 
 type minio_conf struct {

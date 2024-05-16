@@ -67,16 +67,16 @@ type manager struct {
 	// BE factory is to make a backend.
 	factory backend_factory
 
-	// POOL maps a POOL-ID to a process record.
-	pool__ map[string]backend
-
-	// PROC maps a PID to a process record.  PID is int in "os".
-	proc map[int]backend
-
-	environ []string
+	// PROCESSES maps an os.Pid (int) to a backend record.
+	process map[int]backend
+	// MUTEX protects the processes map.
+	mutex sync.Mutex
 
 	// CH_SIG is a channel to receive SIGCHLD.
 	ch_sig chan os.Signal
+
+	// ENVIRON holds a copy of the minimal list of environs.
+	environ []string
 
 	//backend_conf
 	manager_conf
@@ -149,8 +149,7 @@ type backend_command struct {
 
 // THE_MANAGER is the single multiplexer instance.
 var the_manager = manager{
-	pool__: make(map[string]backend),
-	proc:   make(map[int]backend),
+	//processes: make(map[int]backend),
 }
 
 //var the_manager_conf = &the_manager.manager_conf
@@ -372,7 +371,11 @@ func start_backend(w *manager, pool string) backend {
 
 		assert_fatal(proc.cmd.Process != nil)
 		var pid = proc.cmd.Process.Pid
-		w.proc[pid] = g
+		func() {
+			w.mutex.Lock()
+			defer w.mutex.Unlock()
+			w.process[pid] = g
+		}()
 
 		go barf_stdio_to_log(proc)
 

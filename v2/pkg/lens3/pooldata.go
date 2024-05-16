@@ -25,7 +25,7 @@ import (
 
 type pool_desc struct {
 	pool_record       `json:"pool_record"`
-	User_record       `json:"user_record"`
+	user_record       `json:"user_record"`
 	pool_state_record `json:"pool_state_record"`
 	Buckets           map[string]*Bucket_record `json:"buckets"`
 	Secrets           map[string]*Secret_record `json:"secrets"`
@@ -65,7 +65,7 @@ func gather_pool_desc(t *keyval_table, pool string) *pool_desc {
 		logger.warnf("inconsistent entry found in keyval-db")
 	}
 	if u != nil {
-		pooldesc.User_record = *u
+		pooldesc.user_record = *u
 	}
 	//
 	// Gather dynamic states.

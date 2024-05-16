@@ -39,16 +39,20 @@ import (
 	//"net/url"
 	//"os"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
-	//"time"
+	"time"
 	//"runtime"
 )
 
 import "embed"
 
 //go:embed ui
-var efs embed.FS
+var efs1 embed.FS
+
+//go:embed ui2
+var efs2 embed.FS
 
 //{policy: "readwrite", keys: pool_data.secrets_rw},
 //{policy: "readonly", keys: pool_data.secrets_ro},
@@ -60,8 +64,6 @@ type registrar struct {
 	server *http.Server
 	router *http.ServeMux
 
-	lens3_version string
-
 	*api_conf
 	//registrar_conf
 }
@@ -71,38 +73,40 @@ type response_to_ui interface{ response_union() }
 func (*pool_desc_response) response_union() {}
 func (*user_info_response) response_union() {}
 
-type response_to_ui_common struct {
-	// Status is "success" or "error".
+// Status is "success" or "error".
+type response_common struct {
 	Status       string `json:"status"`
 	Reason       string `json:"reason"`
 	X_csrf_token string `json:"x_csrf_token"`
-	Time         string `json:"time"`
+	Timestamp    int64  `json:"time"`
 }
 
-// RESPONSE_TO_UI is the json format of the response to UI.  See also
-// the function set_pool_data() in "v1/ui/src/lens3c.ts".
+// POOL_DESC_RESPONSE is a json format of a response to UI.  See the
+// function set_pool_data() in "v1/ui/src/lens3c.ts".
 type pool_desc_response struct {
-	response_to_ui_common
+	response_common
 	Pool_desc pool_desc_ui `json:"pool_desc"`
 }
 
-// POOL_DESC_UI is a subfield of response_to_ui.
+type pool_list_response struct {
+	response_common
+	Pool_list []*pool_desc_ui `json:"pool_list"`
+}
+
 type pool_desc_ui struct {
-	response_to_ui_common
-	Pool_name           string           `json:"pool_name"`
-	Buckets_directory   string           `json:"buckets_directory"`
-	Owner_uid           string           `json:"owner_uid"`
-	Owner_gid           string           `json:"owner_gid"`
-	Buckets             []bucket_desc_ui `json:"buckets"`
-	Secrets             []secret_desc_ui `json:"secrets"`
-	Probe_key           string           `json:"probe_key"`
-	Expiration_time     int64            `json:"expiration_time"`
-	Online_status       string           `json:"online_status"`
-	User_enabled_status bool             `json:"user_enabled_status"`
-	Minio_state         string           `json:"minio_state"`
-	Minio_reason        string           `json:"minio_reason"`
-	Modification_time   int64            `json:"modification_time"`
-	Time                int64            `json:"time"`
+	Pool_name           string            `json:"pool_name"`
+	Buckets_directory   string            `json:"buckets_directory"`
+	Owner_uid           string            `json:"owner_uid"`
+	Owner_gid           string            `json:"owner_gid"`
+	Buckets             []*bucket_desc_ui `json:"buckets"`
+	Secrets             []*secret_desc_ui `json:"secrets"`
+	Probe_key           string            `json:"probe_key"`
+	Expiration_time     int64             `json:"expiration_time"`
+	Online_status       bool              `json:"online_status"`
+	User_enabled_status bool              `json:"user_enabled_status"`
+	Backend_state       pool_state        `json:"minio_state"`
+	Backend_reason      pool_reason       `json:"minio_reason"`
+	Modification_time   int64             `json:"modification_time"`
 }
 
 type bucket_desc_ui struct {
@@ -121,8 +125,9 @@ type secret_desc_ui struct {
 	Modification_time int64  `json:"modification_time"`
 }
 
+// user_info_response is a json format of a response to UI.
 type user_info_response struct {
-	response_to_ui_common
+	response_common
 	User_info user_info_ui `json:"user_info"`
 }
 
@@ -142,7 +147,6 @@ var err_body_not_allowed = errors.New("http: request method or response status c
 func configure_registrar(z *registrar, t *keyval_table, conf *api_conf) {
 	z.table = t
 	z.api_conf = conf
-	z.lens3_version = "v2.1"
 }
 
 func start_registrar(z *registrar) {
@@ -190,12 +194,12 @@ func start_registrar(z *registrar) {
 
 	z.router.HandleFunc("GET /ui/", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_proxy_exc(z, w, r)
-		return_file(z, w, r, r.URL.Path)
+		return_file(z, w, r, r.URL.Path, &efs1)
 	})
 
 	z.router.HandleFunc("GET /ui2/", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_proxy_exc(z, w, r)
-		return_file(z, w, r, r.URL.Path)
+		return_file(z, w, r, r.URL.Path, &efs2)
 	})
 
 	// This returns a user information and initializes the CSRF state.
@@ -205,7 +209,7 @@ func start_registrar(z *registrar) {
 		//grant_access(z, uid, nil, false)
 		var u = get_user(z.table, uid)
 		if u == nil {
-			u = &User_record{
+			u = &user_record{
 				Uid:                        "aho",
 				Claim:                      "",
 				Groups:                     []string{"boo1", "hoo2", "woo2"},
@@ -220,17 +224,16 @@ func start_registrar(z *registrar) {
 			Api_version:   z.Version,
 			Uid:           u.Uid,
 			Groups:        u.Groups,
-			Lens3_version: z.lens3_version,
+			Lens3_version: lens3_version,
 			S3_url:        z.UI.S3_url,
 			Footer_banner: z.UI.Footer_banner,
 		}
 		var rspn = &user_info_response{
-			//response_to_ui_common: uic,
-			response_to_ui_common: response_to_ui_common{
+			response_common: response_common{
 				Status:       "success",
 				Reason:       "",
 				X_csrf_token: "???",
-				Time:         "???",
+				Timestamp:    time.Now().Unix(),
 			},
 			User_info: *info,
 		}
@@ -238,9 +241,52 @@ func start_registrar(z *registrar) {
 		if err1 != nil {
 			panic(err1)
 		}
-		fmt.Println("GET(/user-info)=", string(v1))
 		io.WriteString(w, string(v1))
+		log_access(200, r)
 	})
+
+	z.router.HandleFunc("GET /pool", func(w http.ResponseWriter, r *http.Request) {
+		var x_remote_user = r.Header.Get("X_Remote_User")
+		var x_real_ip = r.Header.Get("X_Real_Ip")
+		_ = x_remote_user
+		_ = x_real_ip
+		//var uid = map_claim_to_uid(z, x_remote_user)
+		var uid = "matu"
+		//grant_access(z, uid, None, False)
+		var poollist1 = list_pools_of_user(z, uid, "*")
+		var rspn = &pool_list_response{
+			response_common: response_common{
+				Status:       "success",
+				Reason:       "",
+				X_csrf_token: "???",
+				Timestamp:    time.Now().Unix(),
+			},
+			Pool_list: poollist1,
+		}
+		var v1, err1 = json.Marshal(rspn)
+		if err1 != nil {
+			panic(err1)
+		}
+		io.WriteString(w, string(v1))
+		log_access(200, r)
+	})
+
+	// Makes a pool.
+	z.router.HandleFunc("POST /pool", func(w http.ResponseWriter, r *http.Request) {})
+
+	z.router.HandleFunc("GET /pool/{pool}", func(w http.ResponseWriter, r *http.Request) {})
+
+	z.router.HandleFunc("DELETE /pool/{pool}", func(w http.ResponseWriter, r *http.Request) {})
+
+	// Make a bucket.
+	z.router.HandleFunc("PUT /pool/{pool}/bucket", func(w http.ResponseWriter, r *http.Request) {})
+
+	z.router.HandleFunc("DELETE /pool/{pool}/bucket/{bucket}", func(w http.ResponseWriter, r *http.Request) {})
+
+	// Make a secret.
+	z.router.HandleFunc("POST /pool/{pool}/secret", func(w http.ResponseWriter, r *http.Request) {})
+
+	z.router.HandleFunc("DELETE /pool/{pool}/secret/{key}", func(w http.ResponseWriter, r *http.Request) {})
 
 	log.Println("Api start service")
 	var err1 = z.server.ListenAndServe()
@@ -307,9 +353,85 @@ func validate_session(z *registrar, w http.ResponseWriter, r *http.Request, agen
 	agent.ServeHTTP(w, r)
 }
 
+// LIST_POOLS_OF_USER lists pools owned by a user.  It checks the owner
+// of a pool if pooi is given.
+func list_pools_of_user(z *registrar, uid string, pool string) []*pool_desc_ui {
+	var namelist = list_pools(z.table, pool)
+	var pools []*pool_desc_ui
+	for _, name := range namelist {
+		var d = gather_pool_desc(z.table, name)
+		if d != nil && d.Owner_uid == uid {
+			pools = append(pools, copy_pool_desc_to_ui(d))
+		}
+	}
+	slices.SortFunc(pools, func(x, y *pool_desc_ui) int {
+		return strings.Compare(x.Buckets_directory, y.Buckets_directory)
+	})
+	return pools
+}
+
+func map_claim_to_uid(z *registrar, x_remote_user string) string {
+	return x_remote_user
+}
+
+func copy_pool_desc_to_ui(d *pool_desc) *pool_desc_ui {
+	var u = pool_desc_ui{
+		// POOL_RECORD
+		Pool_name:         d.Pool,
+		Buckets_directory: d.Buckets_directory,
+		Owner_uid:         d.Owner_uid,
+		Owner_gid:         d.Owner_gid,
+		Probe_key:         d.Probe_key,
+		Online_status:     d.Online_status,
+		Expiration_time:   d.pool_record.Expiration_time,
+		Modification_time: d.pool_record.Modification_time,
+		// POOL_DESC
+		Buckets: copy_bucket_desc_to_ui(d.Buckets),
+		Secrets: copy_secret_desc_to_ui(d.Secrets),
+		// USER_RECORD
+		User_enabled_status: d.Enabled,
+		// POOL_STATE_RECORD
+		Backend_state:  d.State,
+		Backend_reason: d.Reason,
+	}
+	return &u
+}
+
+func copy_bucket_desc_to_ui(m map[string]*Bucket_record) []*bucket_desc_ui {
+	var buckets []*bucket_desc_ui
+	for n, d := range m {
+		assert_fatal(d.bucket == n)
+		var u = &bucket_desc_ui{
+			Name:              d.bucket,
+			Pool:              d.Pool,
+			Bkt_policy:        d.Bkt_policy,
+			Modification_time: d.Modification_time,
+		}
+		buckets = append(buckets, u)
+	}
+	return buckets
+}
+
+func copy_secret_desc_to_ui(m map[string]*Secret_record) []*secret_desc_ui {
+	var secrets []*secret_desc_ui
+	for n, d := range m {
+		assert_fatal(d.access_key == n)
+		var u = &secret_desc_ui{
+			Access_key:        d.access_key,
+			Secret_key:        d.Secret_key,
+			Pool:              d.Pool,
+			Key_policy:        d.Key_policy,
+			Expiration_time:   d.Expiration_time,
+			Modification_time: d.Modification_time,
+		}
+		secrets = append(secrets, u)
+	}
+	return secrets
+}
+
 func return_ui_script(z *registrar, w http.ResponseWriter, r *http.Request, path string) {
 	defer handle_proxy_exc(z, w, r)
-	var data1, err1 = efs.ReadFile(path)
+	var data1, err1 = efs1.ReadFile(path)
 	if err1 != nil {
 		http.Error(w, "BAD", http_status_500_internal_server_error)
 		return
@@ -322,9 +444,9 @@ func return_ui_script(z *registrar, w http.ResponseWriter, r *http.Request, path
 	io.WriteString(w, string(data2))
 }
 
-func return_file(z *registrar, w http.ResponseWriter, r *http.Request, path string) {
+func return_file(z *registrar, w http.ResponseWriter, r *http.Request, path string, efs1 *embed.FS) {
 	defer handle_proxy_exc(z, w, r)
-	var data1, err1 = efs.ReadFile(path)
+	var data1, err1 = efs1.ReadFile(path)
 	if err1 != nil {
 		http.Error(w, "BAD", http_status_500_internal_server_error)
 		return

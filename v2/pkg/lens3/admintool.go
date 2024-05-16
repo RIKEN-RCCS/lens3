@@ -30,7 +30,7 @@ type cmd struct {
 
 type dump_data struct {
 	Confs []*lens3_conf  `json:"Confs"`
-	Users []*User_record `json:"Users"`
+	Users []*user_record `json:"Users"`
 	Pools []*pool_desc   `json:"Pools"`
 }
 
@@ -94,7 +94,7 @@ func dump_db__(t *keyval_table) *dump_data {
 	var confs = list_confs(t)
 	// Collect users:
 	var userlist = list_users(t)
-	var users []*User_record
+	var users []*user_record
 	for _, uid := range userlist {
 		var i = get_user(t, uid)
 		if i != nil {
@@ -305,7 +305,7 @@ var cmd_list = []*cmd{
 			fmt.Println("// dumping...")
 			//var record = dump_db(adm.table)
 			var userlist = list_users(adm.table)
-			var users []*User_record
+			var users []*user_record
 			for _, uid := range userlist {
 				var i = get_user(adm.table, uid)
 				if i != nil {

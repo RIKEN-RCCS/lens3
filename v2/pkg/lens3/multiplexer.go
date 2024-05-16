@@ -58,8 +58,8 @@ type multiplexer struct {
 	// CH_SIG is a channel to receive SIGCHLD.
 	//ch_sig chan os.Signal
 
-	// ??? CLIENT accesses backend servers.
-	client http.Client
+	// CLIENT accesses backend servers.
+	// client http.Client
 
 	//proxy *backend_proxy
 

@@ -62,7 +62,7 @@ type pool_record struct {
 }
 
 // "bk:bucket-name" entry.
-type Bucket_record struct {
+type bucket_record struct {
 	bucket          string `json:"-"`
 	Pool            string `json:"pool"`
 	Bkt_policy      string `json:"bkt_policy"`
@@ -73,7 +73,7 @@ type Bucket_record struct {
 
 // "ky:random" entry.  The access_key field is not stored in a
 // keyval-db.  (v1.2 "owner" → v2.1 "pool").
-type Secret_record struct {
+type secret_record struct {
 	Pool            string `json:"pool"`
 	access_key      string `json:"-"`
 	Secret_key      string `json:"secret_key"`
@@ -160,11 +160,11 @@ const (
 	bkt_policy_PUBLIC   bkt_policy = "public"
 )
 
-// XID_RECORD is a union of Pool_name_record|Secret_record.
+// XID_RECORD is a union of Pool_name_record|secret_record.
 type xid_record interface{ xid_union() }
 
 func (Pool_name_record) xid_union() {}
-func (Secret_record) xid_union()    {}
+func (secret_record) xid_union()    {}
 
 type name_timestamp_pair struct {
 	name      string
@@ -180,7 +180,7 @@ type routing_bucket_desc_keys__ struct {
 // KEY_PAIR is a access-key and a secret-key.
 type key_pair struct {
 	access_key string
-	Secret_record
+	secret_record
 }
 
 // POOL_DIRECTORY is returned by list_buckets_directories()
@@ -980,7 +980,7 @@ func list_mux_eps(t *keyval_table) []*Mux_record {
 // paired with a pool-id that took the bucket name earlier when it
 // fails.  At a failure, a returned current owner information can be
 // None due to a race (but practically never).
-func set_ex_bucket(t *keyval_table, bucket string, desc Bucket_record) (string, bool) {
+func set_ex_bucket(t *keyval_table, bucket string, desc bucket_record) (string, bool) {
 	var prefix = db_bucket_prefix
 	var db = t.key_prefix_to_db[prefix]
 	var k = (prefix + bucket)
@@ -996,12 +996,12 @@ func set_ex_bucket(t *keyval_table, bucket string, desc Bucket_record) (string, 
 	}
 }
 
-func get_bucket(t *keyval_table, bucket string) *Bucket_record {
+func get_bucket(t *keyval_table, bucket string) *bucket_record {
 	var prefix = db_bucket_prefix
 	var db = t.key_prefix_to_db[prefix]
 	var k = (prefix + bucket)
 	var w = db.Get(t.ctx, k)
-	var desc Bucket_record
+	var desc bucket_record
 	var ok = load_db_data(w, &desc)
 	if ok {
 		desc.bucket = bucket
@@ -1020,10 +1020,10 @@ func delete_bucket(t *keyval_table, bucket string) {
 }
 
 // LIST_BUCKETS lists buckets.  If pool≠"", lists buckets for a pool.
-func list_buckets(t *keyval_table, pool string) map[string]*Bucket_record {
+func list_buckets(t *keyval_table, pool string) map[string]*bucket_record {
 	var prefix = db_bucket_prefix
 	var keyi = scan_table(t, prefix, "*")
-	var descs = map[string]*Bucket_record{}
+	var descs = map[string]*bucket_record{}
 	for keyi.Next(t.ctx) {
 		var key = keyi.Key()
 		var d = get_bucket(t, key)
@@ -1193,7 +1193,7 @@ func choose_prefix_by_usage(usage key_usage) (string, xid_record) {
 		var desc Pool_name_record
 		return db_pool_name_prefix, &desc
 	case key_usage_akey:
-		var desc Secret_record
+		var desc secret_record
 		return db_secret_prefix, &desc
 	default:
 		logger.error("internal")
@@ -1216,7 +1216,7 @@ func make_unique_id(t *keyval_table, usage key_usage, owner string, info xid_rec
 		desc.Modification_time = now
 		v, err = json.Marshal(desc)
 		panic_non_nil(err)
-	case Secret_record:
+	case secret_record:
 		assert_fatal(usage == key_usage_akey)
 		desc.Pool = owner
 		desc.Modification_time = now
@@ -1231,7 +1231,7 @@ func make_unique_id(t *keyval_table, usage key_usage, owner string, info xid_rec
 		switch info.(type) {
 		case Pool_name_record:
 			xid = generate_pool_name()
-		case Secret_record:
+		case secret_record:
 			xid = generate_access_key()
 		default:
 			panic("internal")
@@ -1287,7 +1287,7 @@ func delete_pool_name_unconditionally(t *keyval_table, pool string) {
 }
 
 // SET_EX_SECRET is used in restoring database.
-func set_ex_secret(t *keyval_table, key string, desc *Secret_record) bool {
+func set_ex_secret(t *keyval_table, key string, desc *secret_record) bool {
 	var prefix = db_secret_prefix
 	var db = t.key_prefix_to_db[prefix]
 	var k = (prefix + key)
@@ -1301,12 +1301,12 @@ func set_ex_secret(t *keyval_table, key string, desc *Secret_record) bool {
 	}
 }
 
-func get_secret(t *keyval_table, key string) *Secret_record {
+func get_secret(t *keyval_table, key string) *secret_record {
 	var prefix = db_secret_prefix
 	var db = t.key_prefix_to_db[prefix]
 	var k = (prefix + key)
 	var w = db.Get(t.ctx, k)
-	var desc Secret_record
+	var desc secret_record
 	var ok = load_db_data(w, &desc)
 	if ok {
 		desc.access_key = key
@@ -1327,10 +1327,10 @@ func delete_secret_unconditionally(t *keyval_table, key string) {
 // LIST_SECRETS_OF_POOL lists secrets (access-keys) of a pool.  It
 // includes a probe-key.  A probe-key is an access-key but has no
 // corresponding secret-key.
-func list_secrets_of_pool(t *keyval_table, pool string) map[string]*Secret_record {
+func list_secrets_of_pool(t *keyval_table, pool string) map[string]*secret_record {
 	var prefix = db_secret_prefix
 	var keyi = scan_table(t, prefix, "*")
-	var descs = map[string]*Secret_record{}
+	var descs = map[string]*secret_record{}
 	for keyi.Next(t.ctx) {
 		var key = keyi.Key()
 		var d = get_secret(t, key)

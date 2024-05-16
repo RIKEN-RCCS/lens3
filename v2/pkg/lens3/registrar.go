@@ -302,8 +302,8 @@ func handle_proxy_exc(z *registrar, w http.ResponseWriter, r *http.Request) {
 		http.Error(w, e.m, e.code)
 	default:
 		fmt.Println("RECOVER!", e)
-		fmt.Println("stacktrace from panic: \n" + string(debug.Stack()))
-		//http.Error(w, "BAD", http_status_500_internal_server_error)
+		fmt.Println("stacktrace:\n" + string(debug.Stack()))
+		http.Error(w, "BAD", http_status_500_internal_server_error)
 	}
 }
 
@@ -397,7 +397,7 @@ func copy_pool_desc_to_ui(d *pool_desc) *pool_desc_ui {
 	return &u
 }
 
-func copy_bucket_desc_to_ui(m map[string]*Bucket_record) []*bucket_desc_ui {
+func copy_bucket_desc_to_ui(m map[string]*bucket_record) []*bucket_desc_ui {
 	var buckets []*bucket_desc_ui
 	for n, d := range m {
 		assert_fatal(d.bucket == n)
@@ -412,7 +412,7 @@ func copy_bucket_desc_to_ui(m map[string]*Bucket_record) []*bucket_desc_ui {
 	return buckets
 }
 
-func copy_secret_desc_to_ui(m map[string]*Secret_record) []*secret_desc_ui {
+func copy_secret_desc_to_ui(m map[string]*secret_record) []*secret_desc_ui {
 	var secrets []*secret_desc_ui
 	for n, d := range m {
 		assert_fatal(d.access_key == n)

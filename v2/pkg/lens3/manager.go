@@ -304,15 +304,16 @@ func stop_backend(w *manager, g backend) {
 	}
 }
 
-// START_BACKEND mutexes among all threads in all multiplexers,
-// choosing one who takes the control of starting a backend.
+// START_BACKEND_MUTEXED mutexes among all threads in all distributed
+// processes of multiplexers, choosing one who takes the control of
+// starting a backend.
 func start_backend_mutexed(w *manager, pool string) backend {
 	var now int64 = time.Now().Unix()
-	var ep = &manager_record{
+	var ep = &manager_mutex_record{
 		Mux_ep:     w.mux_ep,
 		Start_time: now,
 	}
-	var ok, _ = set_ex_manager_lock(w.table, pool, ep)
+	var ok, _ = set_ex_manager(w.table, pool, ep)
 	if !ok {
 		var be1 = wait_for_backend_by_race(w, pool)
 		if be1 == nil {

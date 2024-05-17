@@ -1,4 +1,4 @@
-/* Lens3-Api.  It is a pool mangement. */
+/* Lens3-Reg.  It is a registrar of buckets and secrets. */
 
 // Copyright 2022-2024 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
@@ -27,6 +27,7 @@ package lens3
 import (
 	"fmt"
 	//"flag"
+	"path/filepath"
 	"runtime/debug"
 	//"context"
 	"encoding/json"
@@ -64,6 +65,8 @@ type registrar struct {
 	server *http.Server
 	router *http.ServeMux
 
+	determine_expiration_time int64
+
 	*api_conf
 	//registrar_conf
 }
@@ -85,7 +88,7 @@ type response_common struct {
 // function set_pool_data() in "v1/ui/src/lens3c.ts".
 type pool_desc_response struct {
 	response_common
-	Pool_desc pool_desc_ui `json:"pool_desc"`
+	Pool_desc *pool_desc_ui `json:"pool_desc"`
 }
 
 type pool_list_response struct {
@@ -94,7 +97,7 @@ type pool_list_response struct {
 }
 
 type pool_desc_ui struct {
-	Pool_name           string            `json:"pool_name"`
+	Pool                string            `json:"pool_name"`
 	Buckets_directory   string            `json:"buckets_directory"`
 	Owner_uid           string            `json:"owner_uid"`
 	Owner_gid           string            `json:"owner_gid"`
@@ -110,19 +113,19 @@ type pool_desc_ui struct {
 }
 
 type bucket_desc_ui struct {
-	Name              string `json:"name"`
-	Pool              string `json:"pool"`
-	Bkt_policy        string `json:"bkt_policy"`
-	Modification_time int64  `json:"modification_time"`
+	Name              string     `json:"name"`
+	Pool              string     `json:"pool"`
+	Bkt_policy        bkt_policy `json:"bkt_policy"`
+	Modification_time int64      `json:"modification_time"`
 }
 
 type secret_desc_ui struct {
-	Access_key        string `json:"access_key"`
-	Secret_key        string `json:"secret_key"`
-	Pool              string `json:"owner"`
-	Key_policy        string `json:"key_policy"`
-	Expiration_time   int64  `json:"expiration_time"`
-	Modification_time int64  `json:"modification_time"`
+	Access_key        string     `json:"access_key"`
+	Secret_key        string     `json:"secret_key"`
+	Pool              string     `json:"owner"`
+	Key_policy        key_policy `json:"key_policy"`
+	Expiration_time   int64      `json:"expiration_time"`
+	Modification_time int64      `json:"modification_time"`
 }
 
 // user_info_response is a json format of a response to UI.
@@ -138,6 +141,11 @@ type user_info_ui struct {
 	Lens3_version string   `json:"lens3_version"`
 	S3_url        string   `json:"s3_url"`
 	Footer_banner string   `json:"footer_banner"`
+}
+
+type make_pool_request struct {
+	Buckets_directory string `json:"buckets_directory"`
+	Owner_gid         string `json:"owner_gid"`
 }
 
 var the_registrar = registrar{}
@@ -272,7 +280,20 @@ func start_registrar(z *registrar) {
 	})
 
 	// Makes a pool.
-	z.router.HandleFunc("POST /pool", func(w http.ResponseWriter, r *http.Request) {})
+	z.router.HandleFunc("POST /pool", func(w http.ResponseWriter, r *http.Request) {
+		//csrf_protect.validate_csrf(r)
+		var rspn *pool_desc_response = make_new_pool(z, w, r)
+		if rspn == nil {
+			// A response was already returned on an error.
+			return
+		}
+		var v1, err1 = json.Marshal(rspn)
+		if err1 != nil {
+			panic(err1)
+		}
+		io.WriteString(w, string(v1))
+		log_access(200, r)
+	})
 
 	z.router.HandleFunc("GET /pool/{pool}", func(w http.ResponseWriter, r *http.Request) {})
 
@@ -353,6 +374,51 @@ func validate_session(z *registrar, w http.ResponseWriter, r *http.Request, agen
 	agent.ServeHTTP(w, r)
 }
 
+// GRANT_ACCESS checks an access to a pool is granted.  It does not
+// check the pool-state on deleting a pool.
+func grant_access(z *registrar, uid string, pool string, check_pool_state bool) bool {
+	/*
+		var tables = z.table
+		if ensure_mux_is_running(z.table) {
+			return false
+		}
+		if ensure_user_is_authorized(z.table, uid) {
+			return false
+		}
+		if pool != "" {
+			if ensure_pool_owner(z.table, pool, uid) {
+				return false
+			}
+		}
+		if pool != nil && check_pool_state {
+			if ensure_pool_state(z.table, pool, true) {
+				return false
+			}
+		}
+	*/
+	return true
+}
+
+func decode_request_body(z *registrar, r *http.Request, data any) bool {
+	// r.Body : io.ReadCloser.
+	var d = json.NewDecoder(r.Body)
+	d.DisallowUnknownFields()
+	var err1 = d.Decode(data)
+	if err1 != nil {
+		return false
+	}
+	if !check_fields_filled(data) {
+		return false
+	}
+	// Check EOF.  Garbage data means an error.
+	var is = d.Buffered()
+	var _, err2 = is.Read([]byte{9})
+	if err2 == nil {
+		return false
+	}
+	return true
+}
+
 // LIST_POOLS_OF_USER lists pools owned by a user.  It checks the owner
 // of a pool if pooi is given.
 func list_pools_of_user(z *registrar, uid string, pool string) []*pool_desc_ui {
@@ -377,7 +443,7 @@ func map_claim_to_uid(z *registrar, x_remote_user string) string {
 func copy_pool_desc_to_ui(d *pool_desc) *pool_desc_ui {
 	var u = pool_desc_ui{
 		// POOL_RECORD
-		Pool_name:         d.Pool,
+		Pool:              d.Pool,
 		Buckets_directory: d.Buckets_directory,
 		Owner_uid:         d.Owner_uid,
 		Owner_gid:         d.Owner_gid,
@@ -452,6 +518,85 @@ func return_file(z *registrar, w http.ResponseWriter, r *http.Request, path stri
 		return
 	}
 	io.WriteString(w, string(data1))
+}
+
+func make_new_pool(z *registrar, w http.ResponseWriter, r *http.Request) *pool_desc_response {
+	var uid = "AHO"
+	var makepool make_pool_request
+	var ok1 = decode_request_body(z, r, &makepool)
+	if !ok1 {
+		http.Error(w, "BAD", http_status_401_unauthorized)
+		return nil
+	}
+	//z.table
+	var expiration = z.determine_expiration_time
+	if !grant_access(z, uid, "", false) {
+		http.Error(w, "BAD", http_status_401_unauthorized)
+		return nil
+	}
+	check_make_pool_arguments(z, uid, &makepool)
+	var now int64 = time.Now().Unix()
+	var poolname = &pool_mutex_record{
+		Owner_uid:         uid,
+		Modification_time: now,
+	}
+	var pool = set_with_unique_pool_name(z.table, poolname)
+	var secret = &secret_record{
+		Pool:              pool,
+		access_key:        "",
+		Secret_key:        "",
+		Key_policy:        key_policy_READWRITE,
+		Expiration_time:   expiration,
+		Modification_time: now,
+	}
+	var probe = set_with_unique_access_key(z.table, secret)
+	var ok, oldholder = set_ex_buckets_directory(z.table, makepool.Buckets_directory, pool)
+	if !ok {
+		delete_pool_name_unconditionally(z.table, pool)
+		delete_secret_key_unconditionally(z.table, probe)
+		var owner = get_pool_owner_for_messages(z, oldholder)
+		raise(reg_error(400, fmt.Sprintf("Buckets-directory is already used:"+
+			" path=(%s), holder=(%s)",
+			makepool.Buckets_directory, owner)))
+		return nil
+	}
+	set_pool_state(z.table, pool, pool_state_INITIAL, pool_reason_NORMAL)
+	// Return a pool info.
+	var d = gather_pool_desc(z.table, pool)
+	assert_fatal(d != nil)
+	var pooldesc2 = copy_pool_desc_to_ui(d)
+	return &pool_desc_response{
+		Pool_desc: pooldesc2,
+	}
+}
+
+// CHECK_MAKE_POOL_ARGUMENTS checks the entires of buckets_directory
+// and owner_gid.  It normalizes the path of a buckets-directory (in
+// the posix sense).
+func check_make_pool_arguments(z *registrar, uid string, makepool *make_pool_request) bool {
+	var u = get_user(z.table, uid)
+	if u == nil {
+		return false
+	}
+	// Check GID.  UID is not in the arguments.
+	var groups = u.Groups
+	var gid = makepool.Owner_gid
+	if slices.Index(groups, gid) == -1 {
+		raise(reg_error(403, fmt.Sprintf("Bad group=%s", gid)))
+	}
+	// Check bucket-directory path.
+	var bd = makepool.Buckets_directory
+	var path = filepath.Clean(bd)
+	if !filepath.IsAbs(path) {
+		raise(reg_error(400, fmt.Sprintf("Buckets-directory is not absolute:"+
+			" path=(%s)", bd)))
+	}
+	makepool.Buckets_directory = path
+	return true
+}
+
+func get_pool_owner_for_messages(z *registrar, oldholder string) string {
+	return "AHO"
 }
 
 //(rtoken, stoken) = csrf_protect.generate_csrf_tokens()

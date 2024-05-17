@@ -63,10 +63,10 @@ type pool_record struct {
 
 // "bk:bucket-name" entry.
 type bucket_record struct {
-	bucket          string `json:"-"`
-	Pool            string `json:"pool"`
-	Bkt_policy      string `json:"bkt_policy"`
-	Expiration_time int64  `json:"expiration_time"` // nonexist
+	bucket          string     `json:"-"`
+	Pool            string     `json:"pool"`
+	Bkt_policy      bkt_policy `json:"bkt_policy"`
+	Expiration_time int64      `json:"expiration_time"` // nonexist
 
 	Modification_time int64 `json:"modification_time"`
 }
@@ -74,11 +74,11 @@ type bucket_record struct {
 // "ky:random" entry.  The access_key field is not stored in a
 // keyval-db.  (v1.2 "owner" → v2.1 "pool").
 type secret_record struct {
-	Pool            string `json:"pool"`
-	access_key      string `json:"-"`
-	Secret_key      string `json:"secret_key"`
-	Key_policy      string `json:"key_policy"`
-	Expiration_time int64  `json:"expiration_time"`
+	Pool            string     `json:"pool"`
+	access_key      string     `json:"-"`
+	Secret_key      string     `json:"secret_key"`
+	Key_policy      key_policy `json:"key_policy"`
+	Expiration_time int64      `json:"expiration_time"`
 
 	Modification_time int64 `json:"modification_time"`
 }
@@ -87,7 +87,7 @@ type secret_record struct {
 type user_claim_record string
 
 // "pi:pool-name" entry.
-type Pool_name_record struct {
+type pool_mutex_record struct {
 	Owner_uid string `json:"owner"`
 
 	Modification_time int64 `json:"modification_time"`
@@ -100,7 +100,7 @@ type directory_owner_record string
 type backend_ep_record string
 
 // "bx:pool-name" entry.
-type manager_record struct {
+type manager_mutex_record struct {
 	Mux_ep     string `json:"mux_ep"` // mux_host:mux_port
 	Start_time int64  `json:"start_time"`
 }
@@ -159,12 +159,6 @@ const (
 	bkt_policy_DOWNLOAD bkt_policy = "download"
 	bkt_policy_PUBLIC   bkt_policy = "public"
 )
-
-// XID_RECORD is a union of Pool_name_record|secret_record.
-type xid_record interface{ xid_union() }
-
-func (Pool_name_record) xid_union() {}
-func (secret_record) xid_union()    {}
 
 type name_timestamp_pair struct {
 	name      string
@@ -288,6 +282,8 @@ const (
 	pool_reason_POOL_DISABLED_INITIALLY_ pool_reason = "pool disabled initially"
 )
 
+const db_no_expiration = 0
+
 // MAKE_TABLE makes keyval-db clients.
 func make_table(conf db_conf) *keyval_table {
 	var ep = conf.Ep
@@ -390,9 +386,6 @@ func load_db_data(v *redis.StringCmd, data any) bool {
 		}
 	}
 
-	// Old db stores strings without quotes (not in json).  Handle
-	// them specically.
-
 	if false {
 		switch s := data.(type) {
 		case *string:
@@ -428,6 +421,12 @@ func load_db_data__(v *redis.StringCmd, data any) bool {
 	return true
 }
 
+func panic_if_marshal_fail(w any) {
+	if w != nil {
+		panic(w)
+	}
+}
+
 /* SETTING-TABLE */
 
 func set_conf(t *keyval_table, conf lens3_conf) {
@@ -442,11 +441,8 @@ func set_conf(t *keyval_table, conf lens3_conf) {
 		}
 		var k1 = (db_conf_prefix + sub)
 		var v1, err1 = json.Marshal(conf1)
-		if err1 != nil {
-			panic(err1)
-		}
-		// Zero for no expiration.
-		var w1 = db.Set(t.ctx, k1, v1, 0)
+		panic_if_marshal_fail(err1)
+		var w1 = db.Set(t.ctx, k1, v1, db_no_expiration)
 		panic_non_nil(w1.Err())
 	case *api_conf:
 		var sub = conf1.Subject
@@ -455,10 +451,8 @@ func set_conf(t *keyval_table, conf lens3_conf) {
 		}
 		var k2 = (db_conf_prefix + sub)
 		var v2, err1 = json.Marshal(conf1)
-		if err1 != nil {
-			panic(err1)
-		}
-		var w2 = db.Set(t.ctx, k2, v2, 0)
+		panic_if_marshal_fail(err1)
+		var w2 = db.Set(t.ctx, k2, v2, db_no_expiration)
 		panic_non_nil(w2.Err())
 	default:
 		log.Panicf("type: (%T) type≠mux_conf nor type≠api_conf\n", conf)
@@ -555,18 +549,16 @@ func set_user_force(t *keyval_table, ui *user_record) {
 	var db = t.key_prefix_to_db[prefix]
 	var uid = ui.Uid
 	assert_fatal(uid != "")
-	var v, err1 = json.Marshal(&ui)
-	if err1 != nil {
-		panic(err1)
-	}
 	var k1 = (prefix + uid)
-	var w1 = db.Set(t.ctx, k1, v, 0)
+	var v, err1 = json.Marshal(&ui)
+	panic_if_marshal_fail(err1)
+	var w1 = db.Set(t.ctx, k1, v, db_no_expiration)
 	panic_non_nil(w1.Err())
 	var claim = ui.Claim
 	if claim != "" {
 		set_user_claim(t, claim, ui.Uid)
 		var k2 = (prefix + claim)
-		var w2 = db.Set(t.ctx, k2, v, 0)
+		var w2 = db.Set(t.ctx, k2, v, db_no_expiration)
 		panic_non_nil(w2.Err())
 	}
 }
@@ -620,8 +612,8 @@ func set_user_claim(t *keyval_table, claim string, uid string) {
 	var db = t.key_prefix_to_db[prefix]
 	var k = (prefix + claim)
 	var v, err = json.Marshal(uid)
-	panic_non_nil(err)
-	var w = db.Set(t.ctx, k, v, 0)
+	panic_if_marshal_fail(err)
+	var w = db.Set(t.ctx, k, v, db_no_expiration)
 	panic_non_nil(w.Err())
 }
 
@@ -674,8 +666,8 @@ func set_pool(t *keyval_table, pool string, desc *pool_record) {
 	var db = t.key_prefix_to_db[prefix]
 	var k = (prefix + pool)
 	var v, err = json.Marshal(desc)
-	panic_non_nil(err)
-	var w = db.Set(t.ctx, k, v, 0)
+	panic_if_marshal_fail(err)
+	var w = db.Set(t.ctx, k, v, db_no_expiration)
 	panic_non_nil(w.Err())
 }
 
@@ -720,7 +712,9 @@ func set_ex_buckets_directory(t *keyval_table, path string, pool string) (bool, 
 	var prefix = db_buckets_directory_prefix
 	var db = t.key_prefix_to_db[prefix]
 	var k = (prefix + path)
-	var w = db.SetNX(t.ctx, k, pool, 0)
+	var v, err = json.Marshal(pool)
+	panic_if_marshal_fail(err)
+	var w = db.SetNX(t.ctx, k, v, db_no_expiration)
 	if w.Err() == nil {
 		return true, ""
 	}
@@ -793,8 +787,8 @@ func set_pool_state(t *keyval_table, pool string, state pool_state, reason pool_
 	}
 	var k = (prefix + pool)
 	var v, err = json.Marshal(record)
-	panic_non_nil(err)
-	var w = db.Set(t.ctx, k, v, 0)
+	panic_if_marshal_fail(err)
+	var w = db.Set(t.ctx, k, v, db_no_expiration)
 	panic_non_nil(w.Err())
 }
 
@@ -822,16 +816,16 @@ func delete_pool_state(t *keyval_table, pool string) {
 
 /* PROCESS-TABLE */
 
-// SET_EX_MANAGER_LOCK atomically sets a manager record that is used
-// as a mutex.  It returns OK/NG.  It returns an old record, but it
-// can be null due to a race (but practically never).
-func set_ex_manager_lock(t *keyval_table, pool string, desc *manager_record) (bool, *manager_record) {
+// SET_EX_MANAGER atomically sets a manager-mutex record.  It returns
+// OK/NG.It returns an old record, but it can be null due to a race
+// (but practically never).
+func set_ex_manager(t *keyval_table, pool string, desc *manager_mutex_record) (bool, *manager_mutex_record) {
 	var prefix = db_backend_manager_prefix
 	var db = t.key_prefix_to_db[prefix]
 	var k = (prefix + pool)
 	var v, err = json.Marshal(desc)
-	panic_non_nil(err)
-	var w = db.SetNX(t.ctx, k, v, 0)
+	panic_if_marshal_fail(err)
+	var w = db.SetNX(t.ctx, k, v, db_no_expiration)
 	if w.Err() == nil {
 		return true, nil
 	} else {
@@ -849,12 +843,12 @@ func set_manager_expiry(t *keyval_table, pool string, timeout int64) {
 	panic_non_nil(w.Err())
 }
 
-func get_manager(t *keyval_table, pool string) *manager_record {
+func get_manager(t *keyval_table, pool string) *manager_mutex_record {
 	var prefix = db_backend_manager_prefix
 	var db = t.key_prefix_to_db[prefix]
 	var k = (prefix + pool)
 	var w = db.Get(t.ctx, k)
-	var ep manager_record
+	var ep manager_mutex_record
 	var ok = load_db_data(w, &ep)
 	if ok {
 		return &ep
@@ -876,8 +870,8 @@ func set_backend_process(t *keyval_table, pool string, desc *backend_record) {
 	var db = t.key_prefix_to_db[prefix]
 	var k = (prefix + pool)
 	var v, err = json.Marshal(desc)
-	panic_non_nil(err)
-	var w = db.Set(t.ctx, k, v, 0)
+	panic_if_marshal_fail(err)
+	var w = db.Set(t.ctx, k, v, db_no_expiration)
 	panic_non_nil(w.Err())
 }
 
@@ -924,8 +918,8 @@ func set_mux_ep(t *keyval_table, mux_ep string, desc *Mux_record) {
 	var db = t.key_prefix_to_db[prefix]
 	var k = (prefix + mux_ep)
 	var v, err = json.Marshal(desc)
-	panic_non_nil(err)
-	var w = db.Set(t.ctx, k, v, 0)
+	panic_if_marshal_fail(err)
+	var w = db.Set(t.ctx, k, v, db_no_expiration)
 	panic_non_nil(w.Err())
 }
 
@@ -985,8 +979,8 @@ func set_ex_bucket(t *keyval_table, bucket string, desc bucket_record) (string, 
 	var db = t.key_prefix_to_db[prefix]
 	var k = (prefix + bucket)
 	var v, err = json.Marshal(desc)
-	panic_non_nil(err)
-	var w = db.SetNX(t.ctx, k, v, 0)
+	panic_if_marshal_fail(err)
+	var w = db.SetNX(t.ctx, k, v, db_no_expiration)
 	if w.Err() == nil {
 		return "", true
 	} else {
@@ -1044,8 +1038,8 @@ func set_backend_ep(t *keyval_table, pool string, ep string) {
 	var db = t.key_prefix_to_db[prefix]
 	var k = (prefix + pool)
 	var v, err = json.Marshal(ep)
-	panic_non_nil(err)
-	var w = db.Set(t.ctx, k, v, 0)
+	panic_if_marshal_fail(err)
+	var w = db.Set(t.ctx, k, v, db_no_expiration)
 	panic_non_nil(w.Err())
 }
 
@@ -1092,8 +1086,8 @@ func set_access_timestamp(t *keyval_table, pool string) {
 	var k = (prefix + pool)
 	var now int64 = time.Now().Unix()
 	var v, err = json.Marshal(now)
-	panic_non_nil(err)
-	var w = db.Set(t.ctx, k, v, 0)
+	panic_if_marshal_fail(err)
+	var w = db.Set(t.ctx, k, v, db_no_expiration)
 	panic_non_nil(w.Err())
 }
 
@@ -1141,8 +1135,8 @@ func set_user_timestamp(t *keyval_table, uid string) {
 	var k = (prefix + uid)
 	var now int64 = time.Now().Unix()
 	var v, err = json.Marshal(now)
-	panic_non_nil(err)
-	var w = db.Set(t.ctx, k, v, 0)
+	panic_if_marshal_fail(err)
+	var w = db.Set(t.ctx, k, v, db_no_expiration)
 	panic_non_nil(w.Err())
 }
 
@@ -1185,78 +1179,52 @@ func list_user_timestamps(t *keyval_table) []name_timestamp_pair {
 	return descs
 }
 
-/* MONOKEY-TABLE */
-
-func choose_prefix_by_usage(usage key_usage) (string, xid_record) {
-	switch usage {
-	case key_usage_pool:
-		var desc Pool_name_record
-		return db_pool_name_prefix, &desc
-	case key_usage_akey:
-		var desc secret_record
-		return db_secret_prefix, &desc
-	default:
-		logger.error("internal")
-		return "", nil
-	}
+// SET_WITH_UNIQUE_POOL_NAME makes a random unique id for a pool-name or an
+// access-key.
+func set_with_unique_pool_name(t *keyval_table, desc *pool_mutex_record) string {
+	var prefix = db_pool_data_prefix
+	var v, err = json.Marshal(desc)
+	panic_if_marshal_fail(err)
+	var s = set_with_unique_id_loop(t, prefix, v, generate_pool_name)
+	return s
 }
 
-// MAKE_UNIQUE_ID makes a random unique id for a pool-name or an
+// SET_WITH_UNIQUE_ACCESS_KEY makes a random unique id for a an
 // access-key.
-func make_unique_id(t *keyval_table, usage key_usage, owner string, info xid_record) string {
-	var prefix, _ = choose_prefix_by_usage(usage)
+func set_with_unique_access_key(t *keyval_table, desc *secret_record) string {
+	var prefix = db_pool_data_prefix
+	var v, err = json.Marshal(desc)
+	panic_if_marshal_fail(err)
+	var s = set_with_unique_id_loop(t, prefix, v, generate_access_key)
+	return s
+}
+
+func set_with_unique_id_loop(t *keyval_table, prefix string, v []byte, generator func() string) string {
 	var db = t.key_prefix_to_db[prefix]
-	var now int64 = time.Now().Unix()
-	var v []byte
-	var err error
-	switch desc := info.(type) {
-	case Pool_name_record:
-		assert_fatal(usage == key_usage_pool)
-		desc.Owner_uid = owner
-		desc.Modification_time = now
-		v, err = json.Marshal(desc)
-		panic_non_nil(err)
-	case secret_record:
-		assert_fatal(usage == key_usage_akey)
-		desc.Pool = owner
-		desc.Modification_time = now
-		v, err = json.Marshal(desc)
-		panic_non_nil(err)
-	default:
-		panic("internal")
-	}
-	var xid_generation_loops = 0
+	var counter = 0
 	for {
-		var xid string
-		switch info.(type) {
-		case Pool_name_record:
-			xid = generate_pool_name()
-		case secret_record:
-			xid = generate_access_key()
-		default:
-			panic("internal")
-		}
-		var k = (prefix + xid)
-		var w = db.SetNX(t.ctx, k, v, 0)
+		var id = generator()
+		var k = (prefix + id)
+		var w = db.SetNX(t.ctx, k, v, db_no_expiration)
 		if w.Err() == nil {
-			return xid
+			return id
 		}
 		// Retry.
-		xid_generation_loops += 1
-		if !(xid_generation_loops < limit_of_id_generation_loop) {
+		counter += 1
+		if !(counter < limit_of_id_generation_loop) {
 			panic("internal: unique key generation")
 		}
 	}
 }
 
 // SET_EX_POOL_NAME is used in restoring database.
-func set_ex_pool_name(t *keyval_table, pool string, desc *Pool_name_record) bool {
+func set_ex_pool_name(t *keyval_table, pool string, desc *pool_mutex_record) bool {
 	var prefix = db_pool_name_prefix
 	var db = t.key_prefix_to_db[prefix]
 	var k = (prefix + pool)
 	var v, err = json.Marshal(desc)
-	panic_non_nil(err)
-	var w = db.SetNX(t.ctx, k, v, 0)
+	panic_if_marshal_fail(err)
+	var w = db.SetNX(t.ctx, k, v, db_no_expiration)
 	if w.Err() != nil {
 		return false
 	} else {
@@ -1264,12 +1232,12 @@ func set_ex_pool_name(t *keyval_table, pool string, desc *Pool_name_record) bool
 	}
 }
 
-func get_pool_name(t *keyval_table, pool string) *Pool_name_record {
+func get_pool_name(t *keyval_table, pool string) *pool_mutex_record {
 	var prefix = db_pool_name_prefix
 	var db = t.key_prefix_to_db[prefix]
 	var k = (prefix + pool)
 	var w = db.Get(t.ctx, k)
-	var desc Pool_name_record
+	var desc pool_mutex_record
 	var ok = load_db_data(w, &desc)
 	if ok {
 		return &desc
@@ -1292,8 +1260,8 @@ func set_ex_secret(t *keyval_table, key string, desc *secret_record) bool {
 	var db = t.key_prefix_to_db[prefix]
 	var k = (prefix + key)
 	var v, err = json.Marshal(desc)
-	panic_non_nil(err)
-	var w = db.SetNX(t.ctx, k, v, 0)
+	panic_if_marshal_fail(err)
+	var w = db.SetNX(t.ctx, k, v, db_no_expiration)
 	if w.Err() != nil {
 		return false
 	} else {
@@ -1316,7 +1284,7 @@ func get_secret(t *keyval_table, key string) *secret_record {
 	}
 }
 
-func delete_secret_unconditionally(t *keyval_table, key string) {
+func delete_secret_key_unconditionally(t *keyval_table, key string) {
 	var prefix = db_secret_prefix
 	var db = t.key_prefix_to_db[prefix]
 	var k = (prefix + key)
@@ -1389,7 +1357,7 @@ func set_db_raw(t *keyval_table, kv [2]string) {
 	}
 	var prefix = kv[0][:3]
 	var db = t.key_prefix_to_db[prefix]
-	var w1 = db.Set(t.ctx, kv[0], kv[1], 0)
+	var w1 = db.Set(t.ctx, kv[0], kv[1], db_no_expiration)
 	panic_non_nil(w1.Err())
 }
 
@@ -1427,56 +1395,4 @@ func next_db_raw(db *db_raw_iterator) map[string]string {
 		return map[string]string{key: string(val)}
 	}
 	return nil
-}
-
-func Table_main() {
-	// Check utility functions.
-
-	fmt.Println("Check sorting strings...")
-	var x1 = string_sort([]string{"jkl", "ghi", "def", "abc"})
-	fmt.Println("sorted strings=", x1)
-
-	fmt.Println("")
-	fmt.Println("Check string-set equal...")
-	var s1 = []string{
-		"uid", "modification_time", "groups", "enabled", "claim",
-	}
-	var s2 = string_sort([]string{
-		"uid", "claim", "groups", "enabled", "modification_time",
-	})
-	var eq = string_set_equal(s1, s2)
-	fmt.Println("equal=", eq)
-
-	// Check JSON Marshal/Unmarshal on integer and strings.
-
-	fmt.Println("")
-	fmt.Println("Check marshal/unmarshal string...")
-	var b3, err3 = json.Marshal("helo")
-	fmt.Println("Marshal(helo)=", string(b3), err3)
-	var s4 string
-	var err4 = json.Unmarshal(b3, &s4)
-	fmt.Println("Unmarshal(helo)=", s4, err4)
-
-	fmt.Println("")
-	fmt.Println("Check marshal/unmarshal integer...")
-	var b5, err5 = json.Marshal(12345)
-	fmt.Println("Marshal(12345)=", string(b5), err5)
-	var s6 int
-	var err6 = json.Unmarshal(b5, &s6)
-	fmt.Println("Unmarshal(12345)=", s6, err6)
-
-	// Check a keyval-db connection.
-
-	fmt.Println("")
-	fmt.Println("Check a keyval-db connection...")
-	fmt.Println(redis.Version())
-
-	var dbconf = read_db_conf("conf.json")
-	var t = make_table(dbconf)
-
-	v1, err1 := t.setting.Get(t.ctx, "uu:m-matsuda").Result()
-	if err1 != nil {
-		panic(err1)
-	}
-	fmt.Println("key", v1)
 }

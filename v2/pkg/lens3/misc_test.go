@@ -221,3 +221,20 @@ func test_get_lines() {
 	}
 	close(ch1)
 }
+
+func test_functions_in_utility_go() {
+	fmt.Println("Check sorting strings...")
+	var x1 = string_sort([]string{"jkl", "ghi", "def", "abc"})
+	fmt.Println("sorted strings=", x1)
+
+	fmt.Println("")
+	fmt.Println("Check string-set equal...")
+	var s1 = []string{
+		"uid", "modification_time", "groups", "enabled", "claim",
+	}
+	var s2 = string_sort([]string{
+		"uid", "claim", "groups", "enabled", "modification_time",
+	})
+	var eq = string_set_equal(s1, s2)
+	fmt.Println("equal=", eq)
+}

@@ -131,7 +131,7 @@ func termination(m string) *termination_exc {
 	return &termination_exc{m}
 }
 
-func api_error(code int, _ string) error {
+func reg_error(code int, _ string) error {
 	return &api_error_exc{fmt.Sprintf("api_error code=%d", code)}
 }
 
@@ -366,4 +366,43 @@ func check_bucket_naming(name string) bool {
 	return (len(name) >= 3 && len(name) <= 63 &&
 		bucket_naming_good_re.MatchString(name) &&
 		!bucket_naming_forbidden_re.MatchString(name))
+}
+
+// CHECK_FIELDS_FILLED checks if all fields of a structure is
+// non-zero, recursively.  It assumes no pointers.
+func check_fields_filled(data any) bool {
+	var v = reflect.ValueOf(data)
+	return check_fields_filled_loop(v)
+}
+
+func check_fields_filled_loop(v reflect.Value) bool {
+	if v.IsZero() {
+		return false
+	}
+	switch v.Kind() {
+	case reflect.Pointer:
+		return true
+	case reflect.Array:
+		fallthrough
+	case reflect.Map:
+		fallthrough
+	case reflect.Slice:
+		for i := 0; i < v.Len(); i++ {
+			var f = v.Index(i)
+			if !check_fields_filled(f) {
+				return false
+			}
+		}
+		return true
+	case reflect.Struct:
+		for i := 0; i < v.NumField(); i++ {
+			var f = v.Field(i)
+			if !check_fields_filled(f) {
+				return false
+			}
+		}
+		return true
+	default:
+		return true
+	}
 }

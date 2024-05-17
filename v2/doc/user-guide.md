@@ -247,3 +247,5 @@ by request by filtering server logs.
 
 * Checking authentication is done by Lens3.  Lens3-v1.2 passed
   requests to a backend unchecked.
+* v1.2 keyval-db stores string data without quotes (not in json).  It
+  has now quotes and readable in json.

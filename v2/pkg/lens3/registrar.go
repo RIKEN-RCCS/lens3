@@ -525,29 +525,35 @@ func validate_session(z *registrar, w http.ResponseWriter, r *http.Request, agen
 	agent.ServeHTTP(w, r)
 }
 
-// GRANT_ACCESS checks an access to a pool is granted.  It does not
-// check the pool-state on deleting a pool.
+// GRANT_ACCESS checks an access to a pool by a user is granted.  It
+// does not check the pool-state on deleting a pool.
 func grant_access(z *registrar, uid string, pool string, check_pool_state bool) bool {
-	/*
-		var tables = z.table
-		if ensure_mux_is_running(z.table) {
+	if ensure_lens3_is_running(z.table) {
+		return false
+	}
+	if ensure_user_is_active(z.table, uid, z.Registrar.User_approval) {
+		return false
+	}
+	if pool != "" {
+		if ensure_pool_owner(z.table, pool, uid) {
 			return false
 		}
-		if ensure_user_is_authorized(z.table, uid) {
+	}
+	if pool != "" && check_pool_state {
+		if ensure_pool_state(z.table, pool, z.Registrar.User_approval) {
 			return false
 		}
-		if pool != "" {
-			if ensure_pool_owner(z.table, pool, uid) {
-				return false
-			}
-		}
-		if pool != nil && check_pool_state {
-			if ensure_pool_state(z.table, pool, true) {
-				return false
-			}
-		}
-	*/
+	}
 	return true
+}
+
+func ensure_pool_owner(t *keyval_table, pool string, uid string) bool {
+	var pooldesc = get_pool(t, pool)
+	if pooldesc != nil && pooldesc.Owner_uid == uid {
+		return true
+	} else {
+		return false
+	}
 }
 
 func decode_request_body(z *registrar, r *http.Request, data any) bool {

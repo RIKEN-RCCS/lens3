@@ -6,21 +6,21 @@
 package lens3
 
 import (
-// "fmt"
-// "flag"
-// "context"
-// "io"
-// "log"
-// "os"
-// "net"
-// "net/http"
-// "net/http/httputil"
-// "net/url"
-// "math/big"
-// "strings"
-// "time"
-// "runtime"
-// "slices"
+	// "fmt"
+	// "flag"
+	// "context"
+	// "io"
+	// "log"
+	// "os"
+	// "net"
+	// "net/http"
+	// "net/http/httputil"
+	// "net/url"
+	// "math/big"
+	// "strings"
+	"time"
+	// "runtime"
+	// "slices"
 )
 
 type pool_desc struct {
@@ -97,4 +97,70 @@ func gather_secrets(t *keyval_table, pool string) []*secret_record {
 	//return (big.NewInt(x.Modification_time).Cmp(big.NewInt(y.Modification_time)))
 	//})
 	return keys1
+}
+
+// UPDATE_POOL_STATE checks the changes of user and pool settings, and
+// updates the state.  This code should be called periodically.  It
+// returns a pair of a state and a reason.
+func update_pool_state(t *keyval_table, pool string, permitted user_approval) (pool_state, pool_reason) {
+	var desc = get_pool(t, pool)
+	if desc == nil {
+		return pool_state_INOPERABLE, pool_reason_POOL_REMOVED
+	}
+	var state *pool_state_record = get_pool_state(t, pool)
+	if state == nil {
+		logger.errorf("Mux(pool=%s): pool-state not found.", pool)
+		return pool_state_INOPERABLE, pool_reason_POOL_REMOVED
+	}
+
+	switch state.State {
+	case pool_state_SUSPENDED:
+		return state.State, state.Reason
+	case pool_state_INOPERABLE:
+		return state.State, state.Reason
+	default:
+	}
+
+	// Check a state transition.
+
+	switch state.State {
+	case pool_state_SUSPENDED:
+		panic("internal")
+	case pool_state_INOPERABLE:
+		panic("internal")
+	case pool_state_INITIAL:
+	case pool_state_READY:
+	case pool_state_DISABLED:
+	default:
+		panic("internal")
+	}
+
+	var uid = desc.Owner_uid
+	var active = ensure_user_is_active(t, uid, permitted)
+	if !active {
+		set_pool_state(t, pool, pool_state_DISABLED, state.Reason)
+		return pool_state_DISABLED, pool_reason_USER_INACTIVE
+	}
+
+	var now = time.Now().Unix()
+	var unexpired = !(desc.Expiration_time < now)
+	var online = desc.Online_status
+	var ok = (unexpired && online)
+	if ok {
+		if state.State == pool_state_DISABLED {
+			set_pool_state(t, pool, pool_state_INITIAL, pool_reason_NORMAL)
+		}
+		return pool_state_INITIAL, pool_reason_NORMAL
+	} else {
+		var reason pool_reason
+		if !unexpired {
+			reason = pool_reason_POOL_EXPIRED
+		} else if !online {
+			reason = pool_reason_POOL_OFFLINE
+		} else {
+			reason = pool_reason_NORMAL
+		}
+		set_pool_state(t, pool, pool_state_DISABLED, reason)
+		return pool_state_DISABLED, reason
+	}
 }

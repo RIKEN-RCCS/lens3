@@ -361,7 +361,7 @@ var cmd_list = []*cmd{
 
 	&cmd{
 		synopsis: "remove-entry key",
-		doc: `Removes an entry in the keyval-db by a key.`,
+		doc:      `Removes an entry in the keyval-db by a key.`,
 		run: func(adm *adm, args []string) {
 			remove_db_entry(adm.table, args[1])
 		},

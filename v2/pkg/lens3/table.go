@@ -257,20 +257,24 @@ const (
 type pool_reason string
 
 const (
-	// pool_state_INITIAL or pool_state_READY.
+	/* Reasons for INITIAL or READY are: */
+
 	pool_reason_NORMAL pool_reason = "-"
 
-	// pool_state_SUSPENDED.
+	/* Reasons for SUSPENDED are: */
+
 	pool_reason_BACKEND_BUSY pool_reason = "backend busy"
 
-	// pool_state_DISABLED.
+	/* Reasons for DISABLED are: */
+
 	pool_reason_POOL_EXPIRED  pool_reason = "pool expired"
-	pool_reason_USER_DISABLED pool_reason = "user disabled"
+	pool_reason_USER_INACTIVE pool_reason = "user inactive"
 	pool_reason_POOL_OFFLINE  pool_reason = "pool offline"
 
-	// pool_state_INOPERABLE.
+	/* Reasons for INOPERABLE are: */
+
 	pool_reason_POOL_REMOVED pool_reason = "pool removed"
-	pool_reason_USER_REMOVED pool_reason = "user removed"
+	//pool_reason_USER_REMOVED pool_reason = "user removed"
 	pool_reason_EXEC_FAILED  pool_reason = "start failed: "
 	pool_reason_SETUP_FAILED pool_reason = "initialization failed: "
 

@@ -23,6 +23,7 @@ import (
 	"log"
 	//"os"
 	"net"
+	"os/user"
 	//"maps"
 	"net/http"
 	"net/http/httputil"
@@ -30,7 +31,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	//"time"
+	"time"
 	//"runtime"
 )
 
@@ -215,10 +216,12 @@ func make_forwarding_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 				backend_not_running})
 		}
 
+		var uid = "AHOAHOAHO"
+
 		ensure_forwarding_host_trusted(m, r)
 		//http.Error(w, "ERROR!", http.StatusMethodNotAllowed)
-		ensure_pool_state(m, r)
-		ensure_user_is_authorized(m, r)
+		ensure_pool_state(m.table, pool, m.multiplexer_conf.User_approval)
+		ensure_user_is_active(m.table, uid, m.multiplexer_conf.User_approval)
 		ensure_secret_owner(m, r)
 		ensure_bucket_policy(m, r)
 		//logger.error(("Mux ({m._mux_host}) Got a request from" +
@@ -254,6 +257,51 @@ func check_authenticated(m *multiplexer, r *http.Request) string {
 		return key
 	} else {
 		return ""
+	}
+}
+
+// (ensure_mux_is_running) ENSURE_LENS3_IS_RUNNING checks if any
+// Mux'es are running.
+func ensure_lens3_is_running(t *keyval_table) bool {
+	var muxs = list_mux_eps(t)
+	return len(muxs) > 0
+}
+
+func ensure_user_is_active(t *keyval_table, uid string, permitted user_approval) bool {
+	var _, err1 = user.Lookup(uid)
+	if err1 != nil {
+		switch err1.(type) {
+		case user.UnknownUserError:
+		default:
+			logger.warnf("user.Lookup(%s) fails: err=(%v)", uid, err1)
+		}
+		return false
+	}
+	// (uu.Uid : string, uu.Gid : stirng)
+	var ui = get_user(t, uid)
+	var now int64 = time.Now().Unix()
+	if ui != nil && ui.Expiration_time > now {
+		return false
+	}
+	switch permitted {
+	case user_approval_allow:
+		if ui == nil {
+			return true
+		} else if ui.Blocked {
+			return false
+		} else {
+			return true
+		}
+	case user_approval_block:
+		if ui == nil {
+			return false
+		} else if ui.Enabled {
+			return true
+		} else {
+			return false
+		}
+	default:
+		panic("internal")
 	}
 }
 
@@ -294,17 +342,6 @@ func ensure_bucket_policy(m *multiplexer, r *http.Request) bool {
 	return true
 }
 
-func ensure_user_is_authorized(m *multiplexer, r *http.Request) bool {
-	/*
-		    u = tables.get_user(user_id)
-		    assert u is not None
-		    if not u.get("enabled") {
-				raise Reg_Error(403, (f"User disabled: {user_id}"))
-			}
-	*/
-	return true
-}
-
 func ensure_secret_owner(m *multiplexer, r *http.Request) bool {
 	/*
 		    u = tables.get_user(user_id)
@@ -316,36 +353,26 @@ func ensure_secret_owner(m *multiplexer, r *http.Request) bool {
 	return true
 }
 
-func ensure_mux_is_running(m *multiplexer, r *http.Request) bool {
-	/*
-		    muxs = tables.list_mux_eps()
-		    if len(muxs) == 0 {
-		        raise Reg_Error(500, (f"No Mux services in Lens3"))
-			}
-	*/
-	return true
-}
-
-func ensure_pool_state(m *multiplexer, r *http.Request) bool {
-	/*
-		    (state, reason) = update_pool_state(tables, pool_id)
-		    if state == Pool_State.INITIAL {
-		        if reject_initial_state {
-		            logger.error(f"Manager (pool={pool_id}) is in initial state.")
-		            raise Reg_Error(403, f"Pool is in initial state")
-				}
-		    } elif state == Pool_State.READY {
-		        pass
-		    } elif state == Pool_State.SUSPENDED {
-		        raise Reg_Error(503, f"Pool suspended")
-		    } elif state == Pool_State.DISABLED {
-		        raise Reg_Error(403, f"Pool disabled")
-		    } elif state == Pool_State.INOPERABLE {
-		        raise Reg_Error(403, f"Pool inoperable")
-		    } else {
-		        assert False
-			}
-	*/
+func ensure_pool_state(t *keyval_table, pool string, permitted user_approval) bool {
+	var reject_initial_state = false
+	var state, _ = update_pool_state(t, pool, permitted)
+	switch state {
+	case pool_state_INITIAL:
+		if reject_initial_state {
+			logger.errorf("Mux(pool=%s) is in initial state.", pool)
+			raise(reg_error(403, "Pool is in initial state"))
+		}
+	case pool_state_READY:
+		// Skip.
+	case pool_state_SUSPENDED:
+		raise(reg_error(503, "Pool suspended"))
+	case pool_state_DISABLED:
+		raise(reg_error(403, "Pool disabled"))
+	case pool_state_INOPERABLE:
+		raise(reg_error(403, "Pool inoperable"))
+	default:
+		assert_fatal(false)
+	}
 	return true
 }
 

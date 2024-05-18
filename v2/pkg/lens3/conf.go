@@ -64,37 +64,37 @@ type Conf_header struct {
 type time_in_sec int64
 
 type multiplexer_conf struct {
-	Port                    int             `json:"port"`
-	Front_host              string          `json:"front_host"`
-	Trusted_proxies         []string        `json:"trusted_proxies"`
-	User_permission         user_permission `json:"user_permission"`
-	Mux_ep_update_interval  time_in_sec     `json:"mux_ep_update_interval"`
-	Forwarding_timeout      time_in_sec     `json:"forwarding_timeout"`
-	Probe_access_timeout    time_in_sec     `json:"probe_access_timeout"`
-	Bad_response_delay      time_in_sec     `json:"bad_response_delay"`
-	Busy_suspension_time    time_in_sec     `json:"busy_suspension_time"`
-	Mux_node_name           string          `json:"mux_node_name"`
-	Backend                 backend_name    `json:"backend"`
-	Backend_command_timeout time_in_sec     `json:"backend_command_timeout"`
-	Mux_access_log_file     string          `json:"mux_access_log_file"`
+	Port                    int           `json:"port"`
+	Front_host              string        `json:"front_host"`
+	Trusted_proxies         []string      `json:"trusted_proxies"`
+	User_approval           user_approval `json:"user_approval"`
+	Mux_ep_update_interval  time_in_sec   `json:"mux_ep_update_interval"`
+	Forwarding_timeout      time_in_sec   `json:"forwarding_timeout"`
+	Probe_access_timeout    time_in_sec   `json:"probe_access_timeout"`
+	Bad_response_delay      time_in_sec   `json:"bad_response_delay"`
+	Busy_suspension_time    time_in_sec   `json:"busy_suspension_time"`
+	Mux_node_name           string        `json:"mux_node_name"`
+	Backend                 backend_name  `json:"backend"`
+	Backend_command_timeout time_in_sec   `json:"backend_command_timeout"`
+	Mux_access_log_file     string        `json:"mux_access_log_file"`
 }
 
 type registrar_conf struct {
-	Port                    int             `json:"port"`
-	Front_host              string          `json:"front_host"`
-	Trusted_proxies         []string        `json:"trusted_proxies"`
-	Base_path               string          `json:"base_path"`
-	Claim_uid_map           claim_uid_map   `json:"claim_uid_map"`
-	User_permission         user_permission `json:"user_permission"`
-	Uid_allow_range         string          `json:"uid_allow_range"`
-	Uid_block_range         string          `json:"uid_block_range"`
-	Gid_block_range         string          `json:"gid_block_range"`
-	Backend                 backend_name    `json:"backend"`
-	Backend_command_timeout time_in_sec     `json:"backend_command_timeout"`
-	Probe_access_timeout    time_in_sec     `json:"probe_access_timeout"`
-	Pool_expiration         time_in_sec     `json:"pool_expiration"`
-	Csrf_secret_seed        string          `json:"csrf_secret_seed"`
-	Reg_access_log_file     string          `json:"reg_access_log_file"`
+	Port                    int           `json:"port"`
+	Front_host              string        `json:"front_host"`
+	Trusted_proxies         []string      `json:"trusted_proxies"`
+	Base_path               string        `json:"base_path"`
+	Claim_uid_map           claim_uid_map `json:"claim_uid_map"`
+	User_approval           user_approval `json:"user_approval"`
+	Uid_allow_range         string        `json:"uid_allow_range"`
+	Uid_block_range         string        `json:"uid_block_range"`
+	Gid_block_range         string        `json:"gid_block_range"`
+	Backend                 backend_name  `json:"backend"`
+	Backend_command_timeout time_in_sec   `json:"backend_command_timeout"`
+	Probe_access_timeout    time_in_sec   `json:"probe_access_timeout"`
+	Pool_expiration         time_in_sec   `json:"pool_expiration"`
+	Csrf_secret_seed        string        `json:"csrf_secret_seed"`
+	Reg_access_log_file     string        `json:"reg_access_log_file"`
 }
 
 type claim_uid_map string
@@ -110,11 +110,11 @@ var claim_conversions = []claim_uid_map{
 	claim_uid_map_id, claim_uid_map_email_name, claim_uid_map_map,
 }
 
-type user_permission string
+type user_approval string
 
 const (
-	user_permission_allow user_permission = "allow"
-	user_permission_block user_permission = "block"
+	user_approval_allow user_approval = "allow"
+	user_approval_block user_approval = "block"
 )
 
 type backend_name string
@@ -294,7 +294,7 @@ func check_multiplexer_entry(e multiplexer_conf) {
 		"Port",
 		"Front_host",
 		//"Trusted_proxies",
-		"User_permission",
+		"User_approval",
 		"Mux_ep_update_interval",
 		"Forwarding_timeout",
 		"Probe_access_timeout",
@@ -319,7 +319,7 @@ func check_registrar_entry(e registrar_conf) {
 		// "Trusted_proxies",
 		// "Base_path",
 		"Claim_uid_map",
-		"User_permission",
+		"User_approval",
 		"Backend",
 		"Backend_command_timeout",
 		"Probe_access_timeout",

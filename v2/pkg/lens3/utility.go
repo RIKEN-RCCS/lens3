@@ -91,7 +91,7 @@ type termination_exc struct {
 	m string
 }
 
-type api_error_exc struct {
+type reg_error_exc struct {
 	m string
 }
 
@@ -104,8 +104,8 @@ func (e *termination_exc) Error() string {
 	return "termination_exc:" + e.m
 }
 
-func (e *api_error_exc) Error() string {
-	return "api_error_exc:" + e.m
+func (e *reg_error_exc) Error() string {
+	return "reg_error_exc:" + e.m
 }
 
 func (e *proxy_exc) Error() string {
@@ -132,7 +132,7 @@ func termination(m string) *termination_exc {
 }
 
 func reg_error(code int, _ string) error {
-	return &api_error_exc{fmt.Sprintf("api_error code=%d", code)}
+	return &reg_error_exc{fmt.Sprintf("reg_error code=%d", code)}
 }
 
 // STRING_SORT sorts strings non-destructively.  It currently uses
@@ -188,6 +188,13 @@ func generate_pool_name() string {
 	var v1 = strconv.FormatUint(rand.Uint64(), 16)
 	var v2 = "0000000000000000" + v1
 	return v2[len(v2)-16:]
+}
+
+var access_key_naming_good_re = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9]*$`)
+
+func check_access_key_naming(s string) bool {
+	return (len(s) == access_key_length &&
+		access_key_naming_good_re.MatchString(s))
 }
 
 func init() {
@@ -366,6 +373,13 @@ func check_bucket_naming(name string) bool {
 	return (len(name) >= 3 && len(name) <= 63 &&
 		bucket_naming_good_re.MatchString(name) &&
 		!bucket_naming_forbidden_re.MatchString(name))
+}
+
+var pool_naming_good_re = regexp.MustCompile(`^[a-h0-9]$`)
+
+func check_pool_naming(name string) bool {
+	return (len(name) == 16 &&
+		pool_naming_good_re.MatchString(name))
 }
 
 // CHECK_FIELDS_FILLED checks if all fields of a structure is

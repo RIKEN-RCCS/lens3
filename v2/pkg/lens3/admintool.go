@@ -228,7 +228,7 @@ var cmd_list = []*cmd{
 						panic(err3)
 					}
 					fmt.Println(string(c3))
-				case *api_conf:
+				case *reg_conf:
 					fmt.Printf("// Conf %s\n", c.Subject)
 					var c4, err4 = json.MarshalIndent(c, "", "    ")
 					if err4 != nil {

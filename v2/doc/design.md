@@ -5,7 +5,7 @@ This describes design notes of Lenticularis-S3.
 ## Components of Lens3
 
 * Lens3-Mux
-* Lens3-Api (Web-UI)
+* Lens3-Reg (Web-UI)
 * Manager: A Manager runs under a Lens3-Mux and starts a MinIO
   instance and manages its lifetime.
 * MinIO (S3 server)
@@ -23,7 +23,7 @@ NOTE: In the tables below, entries with "\*1" are set atomically (by
 A date+time is by unix seconds.  Web-UI also passes a date+time by
 unix seconds.
 
-Mux, Api, and Managers make (potentially) many connections to keyval-db,
+Mux, Reg, and Managers make (potentially) many connections to keyval-db,
 because they use multiple databases.
 
 ### CONSISTENCY OF ENTRIES.
@@ -40,7 +40,7 @@ __bd:directory and bk:bucket-name__.
 
 | Key             | Value     | Notes   |
 | ----            | ----      | ---- |
-| "cf:api"        | api-conf  | |
+| "cf:reg"        | reg-conf  | |
 | "cf:mux"        | mux-conf  | |
 | cf:mux:mux-name | mux-conf  | Optional |
 | uu:uid          | user-info | |
@@ -48,7 +48,7 @@ __bd:directory and bk:bucket-name__.
 
 The Setting-Table stores semi-static information.
 
-__cf:api__ and __cf:mux__ (literal strings) entries store the settings
+__cf:reg__ and __cf:mux__ (literal strings) entries store the settings
 of services.  __cf:mux:mux-name__ is used to choose a specific setting
 to each Mux service, whose mux-name is replaced by a string in an
 environment variable "LENS3_MUX_NAME" passed to a service.
@@ -58,7 +58,7 @@ A __uu:uid__ entry is a record of a user-info: {"uid", "groups",
 list, "claim" is a string (maybe empty), and "enabled" is a boolean.
 
 A __um:claim__ entry is a map from a user claim to a uid.  It is
-optional and an entry is used only when Lens-Api is configured with
+optional and an entry is used only when Lens-Reg is configured with
 "claim_uid_map=map".
 
 A primary reason for storing configurations in the database is to let
@@ -219,7 +219,7 @@ running).  At waking up from suspension, it moves the state to INITIAL
 (not READY) so that it will adjust the state of MinIO to a consistent
 state with the state of Lens3 at the next start.
 
-### Lens3-Mux/Lens3-Api systemd Services
+### Lens3-Mux/Lens3-Reg systemd Services
 
 All states of services are stored in keyval-db.  It is safe to stop/start
 systemd services.
@@ -239,9 +239,9 @@ AWS S3 Documents:
 
 ## Processes
 
-### Lens3-Api Processes
+### Lens3-Reg Processes
 
-Lens3-Api is not designed to work in distributed for load-balancing.
+Lens3-Reg is not designed to work in distributed for load-balancing.
 
 ### Lens3-Mux Processes
 
@@ -263,7 +263,7 @@ Lens3 UI is created by vuejs+vuetify.  The code for Vuetify is in the
 ## Security
 
 Security mainly depends on the setting of the frontend proxy.  Please
-consult experts for setting up the proxy.  Accesses to Lens3-Api are
+consult experts for setting up the proxy.  Accesses to Lens3-Reg are
 authenticated as it is behind the proxy, and thus it is of less
 concern.  Lens3-Mux restricts accesses by checking a pair of a bucket
 and a secret.  Checker functions have names beginning with "ensure_".
@@ -271,7 +271,7 @@ Please review those functions intensively.
 
 ## HTTP Status Code
 
-Lens3-Api and Lens3-Mux returns a limited set of status codes.  Other
+Lens3-Reg and Lens3-Mux returns a limited set of status codes.  Other
 than these, the codes are also from the proxy and from MinIO.
 
 * 200 OK
@@ -369,7 +369,7 @@ MESSAGES from older versions
 
 ## Glossary
 
-* __Probe-key__: An access-key used by Lens3-Api to tell Lens3-Mux
+* __Probe-key__: An access-key used by Lens3-Reg to tell Lens3-Mux
   about a wake up of MinIO.  This is key has no corresponding secret.
   It is distiguished by an empty secret.
 
@@ -392,14 +392,14 @@ MESSAGES from older versions
 * Make it not an error when an MC command returns
   "Code=BucketAlreadyOwnedByYou".  It can be ignored safely.
 
-* Make access-key generation of Lens3-Api like STS.
+* Make access-key generation of Lens3-Reg like STS.
 
 * Make UI refresh the MinIO state, when a pool is edited and
   transitions such as from READY to INOPERABLE or from SUSPENDED to
   READY.
 
 * Run a reaper of orphaned directories, buckets, and secrets at a
-  Lens3-Api start.  Adding a bucket/secret and removing a pool may
+  Lens3-Reg start.  Adding a bucket/secret and removing a pool may
   have a race.  Or, a crash at creation/deletion of a pool may leave
   an orphaned directory.
 

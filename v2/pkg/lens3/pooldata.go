@@ -27,8 +27,8 @@ type pool_desc struct {
 	pool_record       `json:"pool_record"`
 	user_record       `json:"user_record"`
 	pool_state_record `json:"pool_state_record"`
-	Buckets           map[string]*bucket_record `json:"buckets"`
-	Secrets           map[string]*secret_record `json:"secrets"`
+	Buckets           []*bucket_record `json:"buckets"`
+	Secrets           []*secret_record `json:"secrets"`
 }
 
 // GATHER_POOL_DESC returns a pool record.  It constructs a record by
@@ -80,7 +80,7 @@ func gather_pool_desc(t *keyval_table, pool string) *pool_desc {
 
 // GATHER_BUCKETS gathers buckets in a pool.  A returned list is
 // sorted for displaying.
-func gather_buckets(t *keyval_table, pool string) map[string]*bucket_record {
+func gather_buckets(t *keyval_table, pool string) []*bucket_record {
 	var bkts1 = list_buckets(t, pool)
 	//slices.SortFunc(bkts1, func(x, y *bucket_record) int {
 	//return strings.Compare(x.Pool, y.Pool)
@@ -88,10 +88,10 @@ func gather_buckets(t *keyval_table, pool string) map[string]*bucket_record {
 	return bkts1
 }
 
-// GATHER_SECRETS gathers secrets (access-keys) in a pool.  A returned
-// list is sorted for displaying.  It excludes a probe-key (which is
-// internally used).
-func gather_secrets(t *keyval_table, pool string) map[string]*secret_record {
+// GATHER_SECRETS gathers secrets (access key pairs) in a pool.  A
+// returned list is sorted for displaying.  It excludes a probe-key
+// (which is internally used).
+func gather_secrets(t *keyval_table, pool string) []*secret_record {
 	var keys1 = list_secrets_of_pool(t, pool)
 	//slices.SortFunc(keys1, func(x, y *secret_record) int {
 	//return (big.NewInt(x.Modification_time).Cmp(big.NewInt(y.Modification_time)))

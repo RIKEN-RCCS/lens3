@@ -8,7 +8,7 @@ instance, and the modifications will be reflected at the next start of
 a MinIO instance.  Moreover, modifications could be inconsistent.
 
 "lens3-admin" command should typically be run on the same host of
-Lens3-Api.  See the help by running "lens3-admin -c conf.json help",
+Lens3-Reg.  See the help by running "lens3-admin -c conf.json help",
 for the list of commands.
 
 ### User Mangement
@@ -98,10 +98,10 @@ ProxyPreserveHost on (for Apache2)
 ## Load-Balanced Setting
 
 Lens3-Mux's can be run on multiple hosts, and a reverse-proxy will
-distribute accesses to Lens3-Mux's.  In contrast, Lens3-Api service is
+distribute accesses to Lens3-Mux's.  In contrast, Lens3-Reg service is
 single.  In a multiple Lens3-Mux setting, firewall settings need to be
 fixed.  The port range of communication for both Lens3-Mux's and
-MinIO's on hosts must be open to Lens3-Api, since Lens3-Api accesses
+MinIO's on hosts must be open to Lens3-Reg, since Lens3-Reg accesses
 both Lens3-Mux's and MinIO's.
 
 ## S3 Signature Algorithm Version

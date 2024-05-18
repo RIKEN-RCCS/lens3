@@ -27,9 +27,11 @@ fix::
 	go fix
 
 get::
-	go get -u github.com/aws/aws-sdk-go-v2/aws
-	go get -u github.com/go-redis/redis/v8
 	go get -u golang.org/x/sys
+	go get -u github.com/aws/aws-sdk-go-v2/aws
+	go get -u github.com/aws/aws-sdk-go-v2/credentials
+	go get -u github.com/aws/aws-sdk-go-v2/service/s3
+	go get -u github.com/go-redis/redis/v8
 	go mod tidy
 
 mod::

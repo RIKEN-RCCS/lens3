@@ -30,7 +30,7 @@ func start_service_for_test() {
 	var dbconf = read_db_conf("conf.json")
 	var t = make_table(dbconf)
 	var muxconf = get_mux_conf(t, "mux")
-	var apiconf = get_api_conf(t, "api")
+	var regconf = get_reg_conf(t, "reg")
 
 	var m = &the_multiplexer
 	configure_multiplexer(m, t, muxconf)
@@ -40,7 +40,7 @@ func start_service_for_test() {
 	go start_manager(w)
 
 	var z = &the_registrar
-	configure_registrar(z, t, apiconf)
+	configure_registrar(z, t, regconf)
 	go start_registrar(z)
 
 	time.Sleep(5 * time.Second)

@@ -27,11 +27,11 @@ type db_conf struct {
 	Password string
 }
 
-// LENS3_CONF is a union of mux_conf|api_conf.
+// LENS3_CONF is a union of mux_conf|reg_conf.
 type lens3_conf interface{ lens3_conf_union() }
 
 func (mux_conf) lens3_conf_union() {}
-func (api_conf) lens3_conf_union() {}
+func (reg_conf) lens3_conf_union() {}
 
 // MUX_CONF is a configuration of Mux.  mux_node_name and log_file are
 // optional.
@@ -45,8 +45,8 @@ type mux_conf struct {
 	Log_syslog  syslog_conf      `json:"log_syslog"`
 }
 
-// API_CONF is a configuration of Api.  log_file is optional.
-type api_conf struct {
+// REG_CONF is a configuration of Reg.  log_file is optional.
+type reg_conf struct {
 	Conf_header
 	Registrar  registrar_conf `json:"registrar"`
 	UI         UI_conf        `json:"ui"`
@@ -94,7 +94,7 @@ type registrar_conf struct {
 	Probe_access_timeout    time_in_sec     `json:"probe_access_timeout"`
 	Pool_expiration         time_in_sec     `json:"pool_expiration"`
 	Csrf_secret_seed        string          `json:"csrf_secret_seed"`
-	Api_access_log_file     string          `json:"api_access_log_file"`
+	Reg_access_log_file     string          `json:"reg_access_log_file"`
 }
 
 type claim_uid_map string
@@ -215,15 +215,15 @@ func read_conf(filename string) lens3_conf {
 		//fmt.Println("MUX CONF is", muxconf)
 		check_mux_conf(&muxconf)
 		return &muxconf
-	case "api":
-		var apiconf api_conf
-		var err4 = json.Unmarshal(json1, &apiconf)
+	case "reg":
+		var regconf reg_conf
+		var err4 = json.Unmarshal(json1, &regconf)
 		if err4 != nil {
 			panic(fmt.Sprint("Bad json conf-file:", err4))
 		}
-		//fmt.Println("API CONF is", apiconf)
-		check_api_conf(&apiconf)
-		return &apiconf
+		//fmt.Println("REG CONF is", regconf)
+		check_reg_conf(&regconf)
+		return &regconf
 	default:
 		log.Panicf("Bad json conf-file: Bad subject field (%s).", sub)
 		return nil
@@ -240,7 +240,7 @@ func check_mux_conf(conf *mux_conf) {
 	check_syslog_entry(conf.Log_syslog)
 }
 
-func check_api_conf(conf *api_conf) {
+func check_reg_conf(conf *reg_conf) {
 	check_registrar_entry(conf.Registrar)
 	switch conf.Registrar.Backend {
 	case "minio":
@@ -325,7 +325,7 @@ func check_registrar_entry(e registrar_conf) {
 		"Probe_access_timeout",
 		"Pool_expiration",
 		"Csrf_secret_seed",
-		"Api_access_log_file",
+		"Reg_access_log_file",
 	} {
 		check_field_required_and_positive(e, slot)
 	}
@@ -392,7 +392,7 @@ func check_syslog_entry(e syslog_conf) {
 // 		e.Csrf_secret_seed != "" &&
 // 		e.Backend != "" &&
 // 		e.Backend_command_timeout > 0 &&
-// 		e.Api_access_log_file != "" {
+// 		e.Reg_access_log_file != "" {
 // 	} else {
 // 		panic(fmt.Errorf(bad_message))
 // 	}

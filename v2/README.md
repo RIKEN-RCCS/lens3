@@ -22,7 +22,7 @@ This service, called "Lens3-Mux", is started as a systemd service.
 Lens3 also provides a simple Web-UI for managing bucket pools.  A
 "bucket pool" is a management unit in Lens3 which is associated to
 each S3 server instance.  A Web-UI is used to register S3 buckets to a
-pool.  This service, called "Lens3-Api", is started as a systemd
+pool.  This service, called "Lens3-Reg", is started as a systemd
 serivce, too.
 
 ## Guides

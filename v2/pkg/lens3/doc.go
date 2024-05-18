@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: BSD-2-Clause
 
 // Lens3 implementation.  Lens3 service consists of three
-// sub-services, Multiplexer (Mux), Manager, and Registrar (Api).
+// sub-services, Multiplexer (Mux), Manager, and Registrar (Reg).
 // Lens3 also has Admintool command.  Multiplexer is a proxy, Manager
 // is a sentinel of backend servers, and Registrar is a web-service to
 // setup buckets and access-keys by users.  Manager is a supporting

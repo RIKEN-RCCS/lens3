@@ -173,6 +173,10 @@ func restore_db(t *keyval_table, filename string) {
 	}
 }
 
+func remove_db_entry(t *keyval_table, key string) {
+	del_db_raw(t, key)
+}
+
 // PRINT_DB prints all keyval-db entries.  Each entry is printed as a
 // key+value record in json.  Note that a value is a string of a json
 // record.  (* Each entry two lines; the 1st line is ^key$ and 2nd
@@ -352,6 +356,14 @@ var cmd_list = []*cmd{
 		"process", "routing", or "monokey".`,
 		run: func(adm *adm, args []string) {
 			restore_db(adm.table, args[1])
+		},
+	},
+
+	&cmd{
+		synopsis: "remove-entry key",
+		doc: `Removes an entry in the keyval-db by a key.`,
+		run: func(adm *adm, args []string) {
+			remove_db_entry(adm.table, args[1])
 		},
 	},
 }

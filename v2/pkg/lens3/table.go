@@ -1379,6 +1379,16 @@ func set_db_raw(t *keyval_table, kv [2]string) {
 	raise_on_error(w1.Err())
 }
 
+func del_db_raw(t *keyval_table, key string) {
+	if key == "" {
+		panic("keyl empty")
+	}
+	var prefix = key[:3]
+	var db = t.key_prefix_to_db[prefix]
+	var w = db.Del(t.ctx, key)
+	raise_on_error(w.Err())
+}
+
 type db_raw_iterator struct {
 	table    *keyval_table
 	db       *redis.Client

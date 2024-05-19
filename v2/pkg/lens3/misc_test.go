@@ -9,12 +9,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"time"
 	//"reflect"
 	"io"
 	"os"
 	"os/exec"
 	"os/signal"
+	"os/user"
 	"strings"
 	"syscall"
 	"testing"
@@ -27,12 +29,14 @@ func Test_misc(t *testing.T) {
 	//test_pipe_timeout()
 	//test_get_lines()
 
-	start_service_for_test()
+	//start_service_for_test()
 
 	// check_type_switch_on_nil()
 	// test_minimal_environ()
 
 	// check_json()
+
+	test_registrar()
 }
 
 func test_minimal_environ() {
@@ -304,4 +308,45 @@ func check_json() {
 	fmt.Printf("F6 = %v : %T\n", x2.F6, x2.F6)
 	fmt.Printf("F7 = %v : %T\n", x2.F7, x2.F7)
 	fmt.Printf("F8 = %v : %T\n", x2.F8, x2.F8)
+}
+
+func test_registrar() {
+	var dbconf = read_db_conf("conf.json")
+	var t = make_table(dbconf)
+	var muxconf = get_mux_conf(t, "mux")
+	var regconf = get_reg_conf(t, "reg")
+	_ = muxconf
+
+	var z = &the_registrar
+	configure_registrar(z, t, regconf)
+	go func() {
+		time.Sleep(1 * time.Second)
+		fmt.Println("client do...")
+
+		var u, err1 = user.Current()
+		if err1 != nil {
+			panic(err1)
+		}
+
+		var client = &http.Client{}
+		var url1 = "http://localhost:8004/user-info"
+		var req, err2 = http.NewRequest("GET", url1, nil)
+		if err2 != nil {
+			panic(err2)
+		}
+		//req.Header.Add("X-Real-Ip", "localhost")
+		req.Header.Add("X-Remote-User", u.Name)
+		var rsp, err3 = client.Do(req)
+		if err3 != nil {
+			panic(err3)
+		}
+		fmt.Println("client.Do()=", rsp)
+		var content, err4 = io.ReadAll(rsp.Body)
+		if err4 != nil {
+			panic(err4)
+		}
+		fmt.Println("client.Do().content=", string(content))
+	}()
+
+	start_registrar(z)
 }

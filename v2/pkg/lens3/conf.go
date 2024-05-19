@@ -88,6 +88,7 @@ type registrar_conf struct {
 	Uid_allow_range_list    [][2]int      `json:"uid_allow_range_list"`
 	Uid_block_range_list    [][2]int      `json:"uid_block_range_list"`
 	Gid_drop_list           []int         `json:"gid_drop_list"`
+	User_expiration_days    int           `json:"user_expiration_days"`
 	Backend                 backend_name  `json:"backend"`
 	Backend_command_timeout time_in_sec   `json:"backend_command_timeout"`
 	Probe_access_timeout    time_in_sec   `json:"probe_access_timeout"`
@@ -322,6 +323,7 @@ func check_registrar_entry(e registrar_conf) {
 		// "Uid_allow_range_list",
 		// "Uid_block_range_list",
 		// "Gid_drop_list",
+		// "User_expiration_days",
 		"Backend",
 		"Backend_command_timeout",
 		"Probe_access_timeout",

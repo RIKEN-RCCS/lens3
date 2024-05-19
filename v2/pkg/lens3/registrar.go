@@ -62,12 +62,15 @@ var efs2 embed.FS
 //{policy: "writeonly", keys: pool_data.secrets_wo},
 
 type registrar struct {
+	ep    string
 	table *keyval_table
 
 	server *http.Server
 	router *http.ServeMux
 
 	determine_expiration_time int64
+
+	trusted_proxies []net.IP
 
 	*reg_conf
 	//registrar_conf
@@ -144,7 +147,7 @@ type secret_desc_ui struct {
 }
 
 type user_info_ui struct {
-	Reg_version   string   `json:"reg_version"`
+	Reg_version   string   `json:"api_version"`
 	Uid           string   `json:"uid"`
 	Groups        []string `json:"groups"`
 	Lens3_version string   `json:"lens3_version"`
@@ -203,18 +206,35 @@ var (
 		"Bad arguments"}
 )
 
-func configure_registrar(z *registrar, t *keyval_table, conf *reg_conf) {
+func configure_registrar(z *registrar, t *keyval_table, c *reg_conf) {
 	z.table = t
-	z.reg_conf = conf
+	z.reg_conf = c
+
+	var conf = &z.Registrar
+	z.ep = net.JoinHostPort("", strconv.Itoa(conf.Port))
+
+	var addrs []net.IP
+	for _, h := range conf.Trusted_proxy_list {
+		var ips, err1 = net.LookupIP(h)
+		if err1 != nil {
+			logger.warnf("net.LookupIP(%s) fails: err=(%v)", h, err1)
+			continue
+		}
+		addrs = append(addrs, ips...)
+	}
+	logger.debugf("Reg(%s) trusted_proxies=(%v)", z.ep, addrs)
+	if len(addrs) == 0 {
+		panic("No trusted proxies")
+	}
+	z.trusted_proxies = addrs
 }
 
 func start_registrar(z *registrar) {
 	fmt.Println("start_registrar() z=", z)
-	var conf = &z.Registrar
+	//var conf = &z.Registrar
 	z.router = http.NewServeMux()
-	var ep = net.JoinHostPort("", strconv.Itoa(conf.Port))
 	z.server = &http.Server{
-		Addr:    ep,
+		Addr:    z.ep,
 		Handler: z.router,
 	}
 
@@ -222,7 +242,8 @@ func start_registrar(z *registrar) {
 
 	z.router.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_proxy_exc(z, w, r)
-		logger.debug("REG.GET /")
+		fmt.Println("Reg.GET /")
+		logger.debug("Reg.GET /")
 		//	defer func() {
 		//		var x = recover()
 		//		switch e := x.(type) {
@@ -237,12 +258,12 @@ func start_registrar(z *registrar) {
 		http.Redirect(w, r, "./ui/index.html", http.StatusSeeOther)
 	})
 
-	z.router.HandleFunc("GET /ui/index.html/{$}", func(w http.ResponseWriter, r *http.Request) {
+	z.router.HandleFunc("GET /ui/index.html", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_proxy_exc(z, w, r)
 		var _ = return_ui_script(z, w, r, "ui/index.html")
 	})
 
-	z.router.HandleFunc("GET /ui2/index.html/{$}", func(w http.ResponseWriter, r *http.Request) {
+	z.router.HandleFunc("GET /ui2/index.html", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_proxy_exc(z, w, r)
 		var _ = return_ui_script(z, w, r, "ui2/index.html")
 	})
@@ -257,33 +278,31 @@ func start_registrar(z *registrar) {
 		var _ = return_file(z, w, r, r.URL.Path, &efs2)
 	})
 
-	// A "/user-info" request is assumed as the first request and it
-	// initializes the CSRF state.
-
-	z.router.HandleFunc("GET /user-info/{$}", func(w http.ResponseWriter, r *http.Request) {
+	z.router.HandleFunc("GET /user-info", func(w http.ResponseWriter, r *http.Request) {
+		logger.debug("Reg.GET /user-info")
 		defer handle_proxy_exc(z, w, r)
 		var _ = return_user_info(z, w, r)
 	})
 
-	z.router.HandleFunc("GET /pool/{$}", func(w http.ResponseWriter, r *http.Request) {
+	z.router.HandleFunc("GET /pool", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_proxy_exc(z, w, r)
 		var _ = return_list_pools_of_user(z, w, r, "*")
 	})
 
 	// A POST request makes a pool.
 
-	z.router.HandleFunc("POST /pool/{$}", func(w http.ResponseWriter, r *http.Request) {
+	z.router.HandleFunc("POST /pool", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_proxy_exc(z, w, r)
 		var _ = make_pool_and_return_response(z, w, r)
 	})
 
-	z.router.HandleFunc("GET /pool/{pool}/{$}", func(w http.ResponseWriter, r *http.Request) {
+	z.router.HandleFunc("GET /pool/{pool}", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_proxy_exc(z, w, r)
 		var pool = r.PathValue("pool")
 		var _ = return_list_pools_of_user(z, w, r, pool)
 	})
 
-	z.router.HandleFunc("DELETE /pool/{pool}/{$}", func(w http.ResponseWriter, r *http.Request) {
+	z.router.HandleFunc("DELETE /pool/{pool}", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_proxy_exc(z, w, r)
 		var pool = r.PathValue("pool")
 		var _ = delete_pool_and_return_response(z, w, r, pool)
@@ -291,13 +310,13 @@ func start_registrar(z *registrar) {
 
 	// A PUT request makes a bucket.
 
-	z.router.HandleFunc("PUT /pool/{pool}/bucket/{$}", func(w http.ResponseWriter, r *http.Request) {
+	z.router.HandleFunc("PUT /pool/{pool}/bucket", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_proxy_exc(z, w, r)
 		var pool = r.PathValue("pool")
 		var _ = make_bucket_and_return_response(z, w, r, pool)
 	})
 
-	z.router.HandleFunc("DELETE /pool/{pool}/bucket/{bucket}/{$}", func(w http.ResponseWriter, r *http.Request) {
+	z.router.HandleFunc("DELETE /pool/{pool}/bucket/{bucket}", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_proxy_exc(z, w, r)
 		var pool = r.PathValue("pool")
 		var bucket = r.PathValue("bucket")
@@ -312,14 +331,14 @@ func start_registrar(z *registrar) {
 		var _ = make_secret_and_return_response(z, w, r, pool)
 	})
 
-	z.router.HandleFunc("DELETE /pool/{pool}/secret/{secret}/{$}", func(w http.ResponseWriter, r *http.Request) {
+	z.router.HandleFunc("DELETE /pool/{pool}/secret/{secret}", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_proxy_exc(z, w, r)
 		var pool = r.PathValue("pool")
 		var secret = r.PathValue("secret")
 		var _ = delete_secret_and_return_response(z, w, r, pool, secret)
 	})
 
-	log.Printf("Reg(%s) start service", ep)
+	log.Printf("Reg(%s) start service", z.ep)
 	for {
 		var err1 = z.server.ListenAndServe()
 		logger.infof("Reg ListenAndServe() done err=%v", err1)
@@ -367,24 +386,26 @@ func return_file(z *registrar, w http.ResponseWriter, r *http.Request, path stri
 	return &data1
 }
 
+// A "/user-info" request is assumed as the first request and it
+// initializes the CSRF state.
 func return_user_info(z *registrar, w http.ResponseWriter, r *http.Request) *user_info_response {
-	//var x_remote_user = r.Header.Get("X_Remote_User")
-	//var x_real_ip = r.Header.Get("X_Real_Ip")
-	//_, _ = x_remote_user, x_real_ip
-	var uid = "???"
-	grant_access(z, uid, "", true)
-	var u = get_user(z.table, uid)
+	var u = grant_access(z, r, "", true)
 	if u == nil {
-		u = &user_record{
-			Uid:                        "AHOAHOAHO",
-			Claim:                      "",
-			Groups:                     []string{"boo1", "hoo2", "woo2"},
-			Enabled:                    true,
-			Expiration_time:            10,
-			Check_terms_and_conditions: true,
-			Modification_time:          20,
-		}
+		return nil
 	}
+	/*
+		if u == nil {
+			u = &user_record{
+				Uid:                        "AHOAHOAHO",
+				Claim:                      "",
+				Groups:                     []string{"boo1", "hoo2", "woo2"},
+				Enabled:                    true,
+				Expiration_time:            10,
+				Check_terms_and_conditions: true,
+				Modification_time:          20,
+			}
+		}
+	*/
 	var info = &user_info_ui{
 		Reg_version:   z.Version,
 		Uid:           u.Uid,
@@ -402,12 +423,7 @@ func return_user_info(z *registrar, w http.ResponseWriter, r *http.Request) *use
 		},
 		User_info: *info,
 	}
-	var v1, err1 = json.Marshal(rspn)
-	if err1 != nil {
-		panic(err1)
-	}
-	io.WriteString(w, string(v1))
-	log_access(200, r)
+	return_json_repsonse(z, w, r, rspn)
 	return rspn
 }
 
@@ -416,15 +432,14 @@ func return_user_info(z *registrar, w http.ResponseWriter, r *http.Request) *use
 // pool-name.
 func return_list_pools_of_user(z *registrar, w http.ResponseWriter, r *http.Request, pool string) *pool_list_response {
 	//var uid = map_claim_to_uid(z, x_remote_user)
-	//grant_access(uid, None, False)
+	//grant_access(uid, r, "", false)
 
 	var x_remote_user = r.Header.Get("X_Remote_User")
 	var x_real_ip = r.Header.Get("X_Real_Ip")
 	_ = x_remote_user
 	_ = x_real_ip
-	//var uid = map_claim_to_uid(z, x_remote_user)
-	//grant_access(z, uid, None, False)
-	var uid = "matu" //AHOAHOAHO
+	var uid = map_claim_to_uid(z, x_remote_user)
+	//grant_access(z, r, "", false)
 
 	if !check_pool_naming_with_error_return(z, w, r, pool) {
 		return nil
@@ -469,19 +484,14 @@ func return_list_pools_of_user(z *registrar, w http.ResponseWriter, r *http.Requ
 		},
 		Pool_list: poollist,
 	}
-	var v1, err1 = json.Marshal(rspn)
-	if err1 != nil {
-		panic(err1)
-	}
-	io.WriteString(w, string(v1))
-	log_access(200, r)
+	return_json_repsonse(z, w, r, rspn)
 	return rspn
 }
 
 func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request) *pool_desc_response {
 	//csrf_protect.validate_csrf(r)
 	//var uid = map_claim_to_uid(z, x_remote_user)
-	//grant_access(z, uid, None, False)
+	//grant_access(z, r, "", false)
 
 	var uid = "AHOAHOAHO"
 	var makepool make_pool_request
@@ -492,7 +502,8 @@ func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 	}
 	//z.table
 	var expiration = z.determine_expiration_time
-	if !grant_access(z, uid, "", false) {
+	var u = grant_access(z, r, "", false)
+	if u == nil {
 		http.Error(w, "BAD", http_status_401_unauthorized)
 		return nil
 	}
@@ -531,7 +542,7 @@ func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 func delete_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request, pool string) *success_response {
 	//csrf_protect.validate_csrf(r)
 	//var uid = map_claim_to_uid(z, x_remote_user)
-	//grant_access(z, uid, None, False)
+	//grant_access(z, r, "", false)
 
 	if !check_pool_naming_with_error_return(z, w, r, pool) {
 		return nil
@@ -583,16 +594,15 @@ func delete_pool_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 			Timestamp:    time.Now().Unix(),
 		},
 	}
-	var v1, err3 = json.Marshal(rspn)
-	if err3 != nil {
-		panic(err3)
-	}
-	io.WriteString(w, string(v1))
-	log_access(200, r)
+	return_json_repsonse(z, w, r, rspn)
 	return rspn
 }
 
 func make_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request, pool string) *pool_desc_response {
+	//csrf_protect.validate_csrf(r)
+	//var uid = map_claim_to_uid(z, x_remote_user)
+	//grant_access(z, r, "", false)
+
 	if !check_pool_naming_with_error_return(z, w, r, pool) {
 		return nil
 	}
@@ -658,7 +668,7 @@ func delete_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *h
 			})
 		return nil
 	}
-	var rspn *pool_desc_response = return_pool_data(z, w, r, pool)
+	var rspn = return_pool_data(z, w, r, pool)
 	return rspn
 }
 
@@ -701,7 +711,7 @@ func make_secret_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 		Modification_time: now,
 	}
 	var _ = set_with_unique_access_key(z.table, secret)
-	var rspn *pool_desc_response = return_pool_data(z, w, r, pool)
+	var rspn = return_pool_data(z, w, r, pool)
 	return rspn
 }
 
@@ -713,7 +723,7 @@ func delete_secret_and_return_response(z *registrar, w http.ResponseWriter, r *h
 		return nil
 	}
 
-	//grant_access(uid, pool, false)
+	//grant_access(z, r, pool, false)
 	//ensure_secret_owner_only(self.tables, access_key, pool_id)
 	var err2 = delete_secret_key_unconditionally(z.table, secret)
 	if err2 != nil {
@@ -730,8 +740,39 @@ func delete_secret_and_return_response(z *registrar, w http.ResponseWriter, r *h
 	return rpsn
 }
 
-// VALIDATE_SESSION validates a session early.  (Note it performs
-// mapping of a user-id twice, once here and once later).
+// RETURN_POOL_DATA returns pool data.
+func return_pool_data(z *registrar, w http.ResponseWriter, r *http.Request, pool string) *pool_desc_response {
+	var d = gather_pool_desc(z.table, pool)
+	assert_fatal(d != nil)
+	var pooldesc = copy_pool_desc_to_ui(d)
+	var rspn = &pool_desc_response{
+		response_common: response_common{
+			Status:       "success",
+			Reason:       "",
+			X_csrf_token: "???",
+			Timestamp:    time.Now().Unix(),
+		},
+		Pool_desc: pooldesc,
+	}
+	return_json_repsonse(z, w, r, rspn)
+	return rspn
+}
+
+func return_json_repsonse(z *registrar, w http.ResponseWriter, r *http.Request, rspn any) {
+	var v1, err1 = json.Marshal(rspn)
+	if err1 != nil {
+		panic(err1)
+	}
+
+	fmt.Println("io.WriteString(w, string(v1))=", len(string(v1)))
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	io.WriteString(w, string(v1))
+	log_access(200, r)
+	return
+}
+
+// VALIDATE_SESSION validates a session early.
 func validate_session(z *registrar, w http.ResponseWriter, r *http.Request, agent http.Handler) {
 	//	peer_addr = make_typical_ip_address(str(request.client.host))
 	//	x_remote_user = request.headers.get("X-REMOTE-USER")
@@ -777,46 +818,83 @@ func validate_session(z *registrar, w http.ResponseWriter, r *http.Request, agen
 }
 
 // GRANT_ACCESS checks an access to a pool by a user is granted.  It
-// does not check the pool-state on deleting a pool.
-func grant_access(z *registrar, uid string, pool string, firstsession bool) bool {
+// returns a user record on success.  It does not check the pool-state
+// on deleting a pool.
+func grant_access(z *registrar, r *http.Request, pool string, firstsession bool) *user_record {
+	var conf = &z.Registrar
+	_ = conf
+
+	fmt.Println("r.RemoteAddr=", r.RemoteAddr)
+	fmt.Println("X-Real-Ip=", r.Header.Get("X-Real-Ip"))
+	fmt.Println("X-Remote-User=", r.Header.Get("X-Remote-User"))
+
 	if ensure_lens3_is_running(z.table) {
-		return false
+		logger.debugf("Reg() lens3 is not running")
+		//return nil
 	}
-	if check_user_account(z, uid, true) {
-		return false
+
+	//var client = r.Header.Get("X-Real-Ip")
+	var proxy = r.RemoteAddr
+	if !check_frontend_proxy_trusted(z, proxy) {
+		logger.debugf("Reg() frontend proxy is untrusted: proxy=(%v)", proxy)
+		//return nil
 	}
+
+	var x_remote_user = r.Header.Get("X-Remote-User")
+	var uid = map_claim_to_uid(z, x_remote_user)
+	var u = check_user_account(z, uid, firstsession)
+	if u == nil {
+		logger.debugf("Reg() user is not active: uid=(%s)", uid)
+		return nil
+	}
+
 	if pool != "" {
-		if ensure_pool_owner(z.table, pool, uid) {
-			return false
+		if check_pool_owner(z.table, uid, pool) {
+			logger.debugf("Reg() bad owner of pool: uid=(%s) pool=(%s)",
+				uid, pool)
+			return nil
 		}
 	}
+
 	var check_pool_state = false //AHOAHOAHO
 	if pool != "" && check_pool_state {
 		if ensure_pool_state(z.table, pool) {
-			return false
+			return nil
 		}
 	}
-	return true
+	return u
 }
 
-func ensure_pool_owner(t *keyval_table, pool string, uid string) bool {
-	var pooldesc = get_pool(t, pool)
-	if pooldesc != nil && pooldesc.Owner_uid == uid {
-		return true
-	} else {
+func check_frontend_proxy_trusted(z *registrar, proxy string) bool {
+	var conf = &z.Registrar
+	_ = conf
+	var host, _, err1 = net.SplitHostPort(proxy)
+	if err1 != nil {
+		logger.warnf("bad r.RemoteAddr=(%s): err=(%v)", proxy, err1)
 		return false
 	}
+	var ips, err2 = net.LookupIP(host)
+	if err2 != nil {
+		logger.warnf("net.LookupIP(%s) failed: err=(%v)", host, err2)
+		return false
+	}
+	for _, ip := range ips {
+		if slices.IndexFunc(z.trusted_proxies, ip.Equal) != -1 {
+			return true
+		}
+	}
+	return false
 }
 
 // CHECK_USER_ACCOUNT checks the user account is active.  It may
 // register a new user record, when it is the first session under
 // default-allow setting.
-func check_user_account(z *registrar, uid string, firstsession bool) bool {
+func check_user_account(z *registrar, uid string, firstsession bool) *user_record {
 	var conf = &z.Registrar
 	var approving = (conf.User_approval == user_default_allow)
 	var ui = get_user(z.table, uid)
 	if !(approving && firstsession) && ui == nil {
-		return false
+		return nil
 	}
 
 	var uu, err1 = user.Lookup(uid)
@@ -826,18 +904,19 @@ func check_user_account(z *registrar, uid string, firstsession bool) bool {
 		default:
 		}
 		logger.errorf("user.Lookup(%s) fails: err=(%v)", uid, err1)
-		return false
+		return nil
 	}
 
 	var now int64 = time.Now().Unix()
 	if ui != nil {
 		if !ui.Enabled {
-			return false
+			return nil
 		}
 		if ui.Expiration_time < now {
-			return false
+			return nil
 		}
-		return true
+		extend_user_expiration_time(z, ui)
+		return ui
 	}
 
 	// Regiter a new user record.
@@ -848,35 +927,36 @@ func check_user_account(z *registrar, uid string, firstsession bool) bool {
 		logger.errorf("Reg() configuration error:"+
 			" user_approval=%s claim_uid_map=%s",
 			conf.User_approval, conf.Claim_uid_map)
-		return false
+		return nil
 	}
 
 	var uid_n, err2 = strconv.Atoi(uu.Uid)
 	if err2 != nil {
-		logger.errorf("user.Lookup(%s) returns non-numeric: uid=(%s)", uid)
-		return false
+		logger.errorf("user.Lookup(%s) returns non-numeric: uid=(%s)",
+			uid, uu.Uid)
+		return nil
 	}
 	if len(conf.Uid_allow_range_list) != 0 {
 		if !check_int_in_ranges(uid_n, conf.Uid_allow_range_list) {
 			logger.infof("Reg() user blocked: uid=(%s)", uid)
-			return false
+			return nil
 		}
 	}
 	if check_int_in_ranges(uid_n, conf.Uid_block_range_list) {
 		logger.infof("Reg() user blocked: uid=(%s)", uid)
-		return false
+		return nil
 	}
 
 	var gids, err3 = uu.GroupIds()
 	if err3 != nil {
 		logger.errorf("user.GroupIds(%s) failed: err=(%v)", uid, err3)
-		return false
+		return nil
 	}
 	var groups []string
 	for _, g1 := range gids {
 		var gid_n, err3 = strconv.Atoi(g1)
 		if err3 != nil {
-			logger.errorf("user.GroupIds(%s) returns non-numeric: gid=(%s)", g1)
+			logger.errorf("user.GroupIds() returns non-numeric: gid=(%s)", g1)
 			continue
 		}
 		if slices.Index(conf.Gid_drop_list, gid_n) != -1 {
@@ -891,10 +971,12 @@ func check_user_account(z *registrar, uid string, firstsession bool) bool {
 	}
 	if len(groups) == 0 {
 		logger.infof("no groups allowed: uid=(%s)", uid)
-		return false
+		return nil
 	}
 
-	var expiration = time.Now().AddDate(0, 0, 365).Unix()
+	var days = ITE(conf.User_expiration_days != 0,
+		conf.User_expiration_days, 365)
+	var expiration = time.Now().AddDate(0, 0, days).Unix()
 	var newuser = user_record{
 		Uid:                        uid,
 		Claim:                      "",
@@ -905,7 +987,7 @@ func check_user_account(z *registrar, uid string, firstsession bool) bool {
 		Modification_time:          now,
 	}
 	set_user_force(z.table, &newuser)
-	return true
+	return &newuser
 }
 
 func decode_request_body(z *registrar, r *http.Request, data any) bool {
@@ -926,6 +1008,15 @@ func decode_request_body(z *registrar, r *http.Request, data any) bool {
 		return false
 	}
 	return true
+}
+
+func check_pool_owner(t *keyval_table, uid string, pool string) bool {
+	var pooldesc = get_pool(t, pool)
+	if pooldesc != nil && pooldesc.Owner_uid == uid {
+		return true
+	} else {
+		return false
+	}
 }
 
 // CHECK_MAKE_POOL_ARGUMENTS checks the entires of buckets_directory
@@ -954,6 +1045,7 @@ func check_make_pool_arguments(z *registrar, uid string, makepool *make_pool_req
 }
 
 func map_claim_to_uid(z *registrar, x_remote_user string) string {
+	//AHOAHOAHO
 	return x_remote_user
 }
 
@@ -1045,31 +1137,6 @@ func return_error_response(z *registrar, w http.ResponseWriter, r *http.Request,
 	log_access(code, r)
 }
 
-// RETURN_POOL_DATA returns pool data.
-func return_pool_data(z *registrar, w http.ResponseWriter, r *http.Request, pool string) *pool_desc_response {
-	var d = gather_pool_desc(z.table, pool)
-	assert_fatal(d != nil)
-	var pooldesc = copy_pool_desc_to_ui(d)
-
-	var rspn = &pool_desc_response{
-		response_common: response_common{
-			Status:       "success",
-			Reason:       "",
-			X_csrf_token: "???",
-			Timestamp:    time.Now().Unix(),
-		},
-		Pool_desc: pooldesc,
-	}
-	var v1, err1 = json.Marshal(rspn)
-	if err1 != nil {
-		panic(err1)
-	}
-
-	io.WriteString(w, string(v1))
-	log_access(200, r)
-	return rspn
-}
-
 // FIND_OWNER_OF_POOL finds an owner of a pool for printing
 // error messages.  It returns unknown-user, when an owner is not
 // found.
@@ -1158,6 +1225,17 @@ func check_empty_arguments_with_error_return(z *registrar, w http.ResponseWriter
 			})
 	}
 	return ok
+}
+
+func extend_user_expiration_time(z *registrar, ui *user_record) {
+	var conf = &z.Registrar
+	var days = ITE(conf.User_expiration_days != 0,
+		conf.User_expiration_days, 365)
+	var expiration = time.Now().AddDate(0, 0, days).Unix()
+	if ui.Expiration_time < expiration {
+		ui.Expiration_time = expiration
+	}
+	set_user_force(z.table, ui)
 }
 
 //(rtoken, stoken) = csrf_protect.generate_csrf_tokens()

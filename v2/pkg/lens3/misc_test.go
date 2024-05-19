@@ -319,6 +319,9 @@ func test_registrar() {
 
 	var z = &the_registrar
 	configure_registrar(z, t, regconf)
+
+	fmt.Println("now+365=", time.Now().AddDate(0, 0, 30).Unix())
+
 	go func() {
 		time.Sleep(1 * time.Second)
 		fmt.Println("client do...")
@@ -329,23 +332,72 @@ func test_registrar() {
 		}
 
 		var client = &http.Client{}
-		var url1 = "http://localhost:8004/user-info"
-		var req, err2 = http.NewRequest("GET", url1, nil)
-		if err2 != nil {
-			panic(err2)
+
+		{
+			var url1 = "http://localhost:8004/user-info"
+			var req, err2 = http.NewRequest("GET", url1, nil)
+			if err2 != nil {
+				panic(err2)
+			}
+			//req.Header.Add("X-Real-Ip", "localhost")
+			req.Header.Add("X-Remote-User", u.Name)
+			var rsp, err3 = client.Do(req)
+			if err3 != nil {
+				panic(err3)
+			}
+			fmt.Println("client.Do()=", rsp)
+			var content, err4 = io.ReadAll(rsp.Body)
+			if err4 != nil {
+				panic(err4)
+			}
+			fmt.Println("client.Do().content=", string(content))
+			fmt.Println("")
+			fmt.Println("")
 		}
-		//req.Header.Add("X-Real-Ip", "localhost")
-		req.Header.Add("X-Remote-User", u.Name)
-		var rsp, err3 = client.Do(req)
-		if err3 != nil {
-			panic(err3)
+
+		{
+			var url1 = "http://localhost:8004/pool"
+			var req, err2 = http.NewRequest("GET", url1, nil)
+			if err2 != nil {
+				panic(err2)
+			}
+			//req.Header.Add("X-Real-Ip", "localhost")
+			req.Header.Add("X-Remote-User", u.Name)
+			var rsp, err3 = client.Do(req)
+			if err3 != nil {
+				panic(err3)
+			}
+			fmt.Println("client.Do()=", rsp)
+			var content, err4 = io.ReadAll(rsp.Body)
+			if err4 != nil {
+				panic(err4)
+			}
+			fmt.Println("client.Do().content=", string(content))
+			fmt.Println("")
+			fmt.Println("")
 		}
-		fmt.Println("client.Do()=", rsp)
-		var content, err4 = io.ReadAll(rsp.Body)
-		if err4 != nil {
-			panic(err4)
+
+		{
+			var url1 = "http://localhost:8004/pool/d4f0c4645fce5734/bucket"
+			var req, err2 = http.NewRequest("PUT", url1, nil)
+			if err2 != nil {
+				panic(err2)
+			}
+			//req.Header.Add("X-Real-Ip", "localhost")
+			req.Header.Add("X-Remote-User", u.Name)
+			var rsp, err3 = client.Do(req)
+			if err3 != nil {
+				panic(err3)
+			}
+			fmt.Println("client.Do()=", rsp)
+			var content, err4 = io.ReadAll(rsp.Body)
+			if err4 != nil {
+				panic(err4)
+			}
+			fmt.Println("client.Do().content=", string(content))
+			fmt.Println("")
+			fmt.Println("")
 		}
-		fmt.Println("client.Do().content=", string(content))
 	}()
 
 	start_registrar(z)

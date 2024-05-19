@@ -149,9 +149,9 @@ type user_access_timestamp_record int64
 type secret_policy string
 
 const (
-	secret_policy_READWRITE secret_policy = "readwrite"
-	secret_policy_READONLY  secret_policy = "readonly"
-	secret_policy_WRITEONLY secret_policy = "writeonly"
+	secret_policy_RW secret_policy = "rw"
+	secret_policy_RO secret_policy = "ro"
+	secret_policy_WO secret_policy = "wo"
 )
 
 // BUCKET_POLICY is a public-access policy attached to a bucket.
@@ -1377,6 +1377,9 @@ func set_db_raw(t *keyval_table, kv [2]string) {
 	}
 	var prefix = kv[0][:3]
 	var db = t.key_prefix_to_db[prefix]
+	if db == nil {
+		panic(fmt.Sprintf("keyval-db bad prefix (%s)", prefix))
+	}
 	var w1 = db.Set(t.ctx, kv[0], kv[1], db_no_expiration)
 	raise_on_error(w1.Err())
 }

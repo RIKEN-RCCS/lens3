@@ -44,7 +44,8 @@ func gather_pool_desc(t *keyval_table, pool string) *pool_desc {
 	var bd = get_buckets_directory_of_pool(t, pool)
 	assert_fatal(desc1.Pool == pool)
 	if !(desc1.Buckets_directory == bd) {
-		logger.warnf("inconsistent entry found in keyval-db")
+		logger.errorf("inconsistent entry found in keyval-db;"+
+			" buckets_directory(%v)≠(%v)", desc1.Buckets_directory, bd)
 	}
 	//
 	// Gather buckets.
@@ -62,7 +63,8 @@ func gather_pool_desc(t *keyval_table, pool string) *pool_desc {
 	var uid = pooldesc.Owner_uid
 	var u = get_user(t, uid)
 	if u == nil {
-		logger.warnf("inconsistent entry found in keyval-db")
+		logger.errorf("inconsistent entry found in keyval-db;"+
+			" user of pool nonexists uid=(%s) pool=(%s)", uid, pool)
 	}
 	if u != nil {
 		pooldesc.user_record = *u

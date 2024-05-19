@@ -85,10 +85,10 @@ func (*user_info_response) response_union() {}
 // function set_pool_data() in "v1/ui/src/lens3c.ts".  Status is
 // "success" or "error".
 type response_common struct {
-	Status       string `json:"status"`
-	Reason       string `json:"reason"`
-	X_csrf_token string `json:"x_csrf_token"`
-	Timestamp    int64  `json:"time"`
+	Status       string            `json:"status"`
+	Reason       map[string]string `json:"reason"`
+	X_csrf_token string            `json:"x_csrf_token"`
+	Timestamp    int64             `json:"time"`
 }
 
 type success_response struct {
@@ -138,12 +138,12 @@ type bucket_desc_ui struct {
 }
 
 type secret_desc_ui struct {
-	Pool              string        `json:"owner"`
-	Access_key        string        `json:"access_key"`
-	Secret_key        string        `json:"secret_key"`
-	Secret_policy     secret_policy `json:"secret_policy"`
-	Expiration_time   int64         `json:"expiration_time"`
-	Modification_time int64         `json:"modification_time"`
+	Pool              string `json:"owner"`
+	Access_key        string `json:"access_key"`
+	Secret_key        string `json:"secret_key"`
+	Secret_policy     string `json:"secret_policy"`
+	Expiration_time   int64  `json:"expiration_time"`
+	Modification_time int64  `json:"modification_time"`
 }
 
 type user_info_ui struct {
@@ -177,10 +177,16 @@ var the_registrar = registrar{}
 var err_body_not_allowed = errors.New("http: request method or response status code does not allow body")
 
 const (
-	secret_policy_ui_READWRITE string = "readwrite"
-	secret_policy_ui_READONLY  string = "readonly"
-	secret_policy_ui_WRITEONLY string = "writeonly"
+	secret_policy_ui_RW string = "readwrite"
+	secret_policy_ui_RO string = "readonly"
+	secret_policy_ui_WO string = "writeonly"
 )
+
+var map_secret_policy_to_ui = map[secret_policy]string{
+	secret_policy_RW: secret_policy_ui_RW,
+	secret_policy_RO: secret_policy_ui_RO,
+	secret_policy_WO: secret_policy_ui_WO,
+}
 
 const (
 	bucket_policy_ui_NONE     string = "none"
@@ -190,20 +196,22 @@ const (
 )
 
 var (
-	message_Missing_or_bad_pool_id = [2]string{"message",
-		"Missing or bad pool id"}
-	message_Missing_or_bad_bucket = [2]string{"message",
-		"Missing or bad bucket"}
-	message_Missing_or_bad_secret = [2]string{"message",
-		"Missing or bad secret"}
-	message_No_pool = [2]string{"message",
-		"No pool"}
-	message_No_bucket = [2]string{"message",
-		"No bucket"}
-	message_Arguments_not_empty = [2]string{"message",
-		"Arguments not empty"}
-	message_Bad_arguments = [2]string{"message",
-		"Bad arguments"}
+	message_internal_error = [2]string{
+		"message", "(internal)"}
+	message_Missing_or_bad_pool_id = [2]string{
+		"message", "Missing or bad pool id"}
+	message_Missing_or_bad_bucket = [2]string{
+		"message", "Missing or bad bucket"}
+	message_Missing_or_bad_secret = [2]string{
+		"message", "Missing or bad secret"}
+	message_No_pool = [2]string{
+		"message", "No pool"}
+	message_No_bucket = [2]string{
+		"message", "No bucket"}
+	message_Arguments_not_empty = [2]string{
+		"message", "Arguments not empty"}
+	message_Bad_arguments = [2]string{
+		"message", "Bad arguments"}
 )
 
 func configure_registrar(z *registrar, t *keyval_table, c *reg_conf) {
@@ -393,31 +401,12 @@ func return_user_info(z *registrar, w http.ResponseWriter, r *http.Request) *use
 	if u == nil {
 		return nil
 	}
-	/*
-		if u == nil {
-			u = &user_record{
-				Uid:                        "AHOAHOAHO",
-				Claim:                      "",
-				Groups:                     []string{"boo1", "hoo2", "woo2"},
-				Enabled:                    true,
-				Expiration_time:            10,
-				Check_terms_and_conditions: true,
-				Modification_time:          20,
-			}
-		}
-	*/
-	var info = &user_info_ui{
-		Reg_version:   z.Version,
-		Uid:           u.Uid,
-		Groups:        u.Groups,
-		Lens3_version: lens3_version,
-		S3_url:        z.UI.S3_url,
-		Footer_banner: z.UI.Footer_banner,
-	}
+
+	var info = copy_user_record_to_ui(z, u)
 	var rspn = &user_info_response{
 		response_common: response_common{
 			Status:       "success",
-			Reason:       "",
+			Reason:       nil,
 			X_csrf_token: "???",
 			Timestamp:    time.Now().Unix(),
 		},
@@ -431,17 +420,11 @@ func return_user_info(z *registrar, w http.ResponseWriter, r *http.Request) *use
 // for pool-name.  Or, it returns information of the pool given a
 // pool-name.
 func return_list_pools_of_user(z *registrar, w http.ResponseWriter, r *http.Request, pool string) *pool_list_response {
-	//var uid = map_claim_to_uid(z, x_remote_user)
-	//grant_access(uid, r, "", false)
-
-	var x_remote_user = r.Header.Get("X_Remote_User")
-	var x_real_ip = r.Header.Get("X_Real_Ip")
-	_ = x_remote_user
-	_ = x_real_ip
-	var uid = map_claim_to_uid(z, x_remote_user)
-	//grant_access(z, r, "", false)
-
-	if !check_pool_naming_with_error_return(z, w, r, pool) {
+	var u = grant_access(z, r, pool, true)
+	if u == nil {
+		return nil
+	}
+	if pool != "*" && !check_pool_naming_with_error_return(z, w, r, pool) {
 		return nil
 	}
 
@@ -449,7 +432,7 @@ func return_list_pools_of_user(z *registrar, w http.ResponseWriter, r *http.Requ
 	var poollist []*pool_desc_ui
 	for _, name := range namelist {
 		var d = gather_pool_desc(z.table, name)
-		if d != nil && d.Owner_uid == uid {
+		if d != nil && d.Owner_uid == u.Uid {
 			poollist = append(poollist, copy_pool_desc_to_ui(d))
 		}
 	}
@@ -463,11 +446,11 @@ func return_list_pools_of_user(z *registrar, w http.ResponseWriter, r *http.Requ
 		return nil
 	}
 	if pool != "*" && len(poollist) > 1 {
-		logger.errorf("Reg inconsistency; multiple pools (pool=%s)",
+		logger.errorf("Reg() multiple pools with the same id (pool=%s)",
 			pool)
 		return_error_response(z, w, r, http_status_500_internal_server_error,
 			[][2]string{
-				{"message", "(internal: duplicate pool entries)"},
+				message_internal_error,
 			})
 		return nil
 	}
@@ -478,7 +461,7 @@ func return_list_pools_of_user(z *registrar, w http.ResponseWriter, r *http.Requ
 	var rspn = &pool_list_response{
 		response_common: response_common{
 			Status:       "success",
-			Reason:       "",
+			Reason:       nil,
 			X_csrf_token: "???",
 			Timestamp:    time.Now().Unix(),
 		},
@@ -518,7 +501,7 @@ func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 		Pool:              pool,
 		_access_key:       "",
 		Secret_key:        "",
-		Secret_policy:     secret_policy_READWRITE,
+		Secret_policy:     secret_policy_RW,
 		Expiration_time:   expiration,
 		Modification_time: now,
 	}
@@ -589,7 +572,7 @@ func delete_pool_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 	var rspn = &success_response{
 		response_common: response_common{
 			Status:       "success",
-			Reason:       "",
+			Reason:       nil,
 			X_csrf_token: "???",
 			Timestamp:    time.Now().Unix(),
 		},
@@ -748,7 +731,7 @@ func return_pool_data(z *registrar, w http.ResponseWriter, r *http.Request, pool
 	var rspn = &pool_desc_response{
 		response_common: response_common{
 			Status:       "success",
-			Reason:       "",
+			Reason:       nil,
 			X_csrf_token: "???",
 			Timestamp:    time.Now().Unix(),
 		},
@@ -763,9 +746,6 @@ func return_json_repsonse(z *registrar, w http.ResponseWriter, r *http.Request, 
 	if err1 != nil {
 		panic(err1)
 	}
-
-	fmt.Println("io.WriteString(w, string(v1))=", len(string(v1)))
-
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	io.WriteString(w, string(v1))
 	log_access(200, r)
@@ -1049,8 +1029,20 @@ func map_claim_to_uid(z *registrar, x_remote_user string) string {
 	return x_remote_user
 }
 
+func copy_user_record_to_ui(z *registrar, u *user_record) *user_info_ui {
+	var v = &user_info_ui{
+		Reg_version:   z.Version,
+		Uid:           u.Uid,
+		Groups:        u.Groups,
+		Lens3_version: lens3_version,
+		S3_url:        z.UI.S3_url,
+		Footer_banner: z.UI.Footer_banner,
+	}
+	return v
+}
+
 func copy_pool_desc_to_ui(d *pool_desc) *pool_desc_ui {
-	var u = pool_desc_ui{
+	var v = &pool_desc_ui{
 		// POOL_RECORD
 		Pool:              d.pool_record.Pool,
 		Buckets_directory: d.Buckets_directory,
@@ -1069,7 +1061,7 @@ func copy_pool_desc_to_ui(d *pool_desc) *pool_desc_ui {
 		Backend_state:  d.State,
 		Backend_reason: d.Reason,
 	}
-	return &u
+	return v
 }
 
 func copy_bucket_desc_to_ui(m []*bucket_record) []*bucket_desc_ui {
@@ -1093,7 +1085,7 @@ func copy_secret_desc_to_ui(m []*secret_record) []*secret_desc_ui {
 			Pool:              d.Pool,
 			Access_key:        d._access_key,
 			Secret_key:        d.Secret_key,
-			Secret_policy:     d.Secret_policy,
+			Secret_policy:     map_secret_policy_to_ui[d.Secret_policy],
 			Expiration_time:   d.Expiration_time,
 			Modification_time: d.Modification_time,
 		}
@@ -1102,37 +1094,44 @@ func copy_secret_desc_to_ui(m []*secret_record) []*secret_desc_ui {
 	return secrets
 }
 
-func encode_error_message(keyvals [][2]string) string {
+func encode_error_message__(keyvals [][2]string) string {
+	fmt.Printf("encode_error_message for=%#v\n", keyvals)
+
 	var b bytes.Buffer
 	b.Write([]byte("{"))
 	for _, kv := range keyvals {
 		var b1, err1 = json.Marshal(kv[0])
-		assert_fatal(err1 != nil)
+		assert_fatal(err1 == nil)
 		var _, err2 = b.Write(b1)
-		assert_fatal(err2 != nil)
+		assert_fatal(err2 == nil)
 		var _, err3 = b.Write([]byte(":"))
-		assert_fatal(err3 != nil)
+		assert_fatal(err3 == nil)
 		var b2, err4 = json.Marshal(kv[1])
-		assert_fatal(err4 != nil)
+		assert_fatal(err4 == nil)
 		var _, err5 = b.Write(b2)
-		assert_fatal(err5 != nil)
+		assert_fatal(err5 == nil)
 		var _, err6 = b.Write([]byte(","))
-		assert_fatal(err6 != nil)
+		assert_fatal(err6 == nil)
 	}
+	b.Write([]byte("}"))
 	return string(b.Bytes())
 }
 
 func return_error_response(z *registrar, w http.ResponseWriter, r *http.Request, code int, reason [][2]string) {
+	var m = map[string]string{}
+	for _, kv := range reason {
+		m[kv[0]] = kv[1]
+	}
 	var rspn = &error_response{
 		response_common: response_common{
 			Status:       "error",
-			Reason:       encode_error_message(reason),
+			Reason:       m,
 			X_csrf_token: "???",
 			Timestamp:    time.Now().Unix(),
 		},
 	}
 	var b1, err1 = json.Marshal(rspn)
-	assert_fatal(err1 != nil)
+	assert_fatal(err1 == nil)
 	http.Error(w, string(b1), code)
 	log_access(code, r)
 }
@@ -1153,12 +1152,12 @@ func find_owner_of_pool(z *registrar, pool string) string {
 
 func intern_ui_secret_policy(policy string) secret_policy {
 	switch policy {
-	case secret_policy_ui_READWRITE:
-		return secret_policy_READWRITE
-	case secret_policy_ui_READONLY:
-		return secret_policy_READONLY
-	case secret_policy_ui_WRITEONLY:
-		return secret_policy_WRITEONLY
+	case secret_policy_ui_RW:
+		return secret_policy_RW
+	case secret_policy_ui_RO:
+		return secret_policy_RO
+	case secret_policy_ui_WO:
+		return secret_policy_WO
 	default:
 		return ""
 	}

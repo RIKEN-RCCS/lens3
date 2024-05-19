@@ -41,7 +41,6 @@ type user_record struct {
 	Claim           string   `json:"claim"`
 	Groups          []string `json:"groups"`
 	Enabled         bool     `json:"enabled"`
-	Blocked         bool     `json:"blocked"`         // nonexist
 	Expiration_time int64    `json:"expiration_time"` // nonexist
 
 	Check_terms_and_conditions bool  `json:"check_terms_and_conditions"`
@@ -532,8 +531,8 @@ func get_reg_conf(t *keyval_table, sub string) *reg_conf {
 	}
 }
 
-// ADD_USER adds a user and its claim entry.  A duplicate claim is an
-// error.  It deletes an old entry first if exits.
+// ADD_USER adds/modifies a user and its claim entry.  A duplicate
+// claim is an error.
 func add_user(t *keyval_table, ui *user_record) {
 	var uid = ui.Uid
 	var claim = ui.Claim
@@ -546,7 +545,6 @@ func add_user(t *keyval_table, ui *user_record) {
 			panic(err2)
 		}
 	}
-	delete_user(t, uid)
 	set_user_force(t, ui)
 }
 

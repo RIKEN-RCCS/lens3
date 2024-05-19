@@ -136,7 +136,7 @@ func update_pool_state(t *keyval_table, pool string, permitted user_approval) (p
 	}
 
 	var uid = desc.Owner_uid
-	var active = ensure_user_is_active(t, uid, permitted)
+	var active = ensure_user_is_active(t, uid)
 	if !active {
 		set_pool_state(t, pool, pool_state_DISABLED, state.Reason)
 		return pool_state_DISABLED, pool_reason_USER_INACTIVE

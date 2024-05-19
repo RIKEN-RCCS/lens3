@@ -420,3 +420,14 @@ func check_fields_filled_loop(v reflect.Value) bool {
 		return true
 	}
 }
+
+// CHECK_INT_IN_RANGES checks int v is in any of ranges, lb≤v≤ub for
+// [lb,ub] (lower/upper-bounds inclusive).
+func check_int_in_ranges(v int, pairs [][2]int) bool {
+	for _, lbub := range pairs {
+		if lbub[0] <= v && v < lbub[1] {
+			return true
+		}
+	}
+	return false
+}

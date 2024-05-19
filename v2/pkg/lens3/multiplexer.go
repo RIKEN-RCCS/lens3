@@ -220,8 +220,8 @@ func make_forwarding_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 
 		ensure_forwarding_host_trusted(m, r)
 		//http.Error(w, "ERROR!", http.StatusMethodNotAllowed)
-		ensure_pool_state(m.table, pool, m.multiplexer_conf.User_approval)
-		ensure_user_is_active(m.table, uid, m.multiplexer_conf.User_approval)
+		ensure_pool_state(m.table, pool)
+		ensure_user_is_active(m.table, uid)
 		ensure_secret_owner(m, r)
 		ensure_bucket_policy(m, r)
 		//logger.error(("Mux ({m._mux_host}) Got a request from" +
@@ -260,49 +260,35 @@ func check_authenticated(m *multiplexer, r *http.Request) string {
 	}
 }
 
-// (ensure_mux_is_running) ENSURE_LENS3_IS_RUNNING checks if any
-// Mux'es are running.
+// (ensure_mux_is_running) ENSURE_LENS3_IS_RUNNING checks if any Muxs
+// are running.
 func ensure_lens3_is_running(t *keyval_table) bool {
 	var muxs = list_mux_eps(t)
 	return len(muxs) > 0
 }
 
-func ensure_user_is_active(t *keyval_table, uid string, permitted user_approval) bool {
+func ensure_user_is_active(t *keyval_table, uid string) bool {
+	var ui = get_user(t, uid)
+	var now int64 = time.Now().Unix()
+	if ui != nil {
+		return false
+	}
+	if !ui.Enabled || ui.Expiration_time < now {
+		return false
+	}
+
 	var _, err1 = user.Lookup(uid)
 	if err1 != nil {
 		switch err1.(type) {
 		case user.UnknownUserError:
 		default:
-			logger.warnf("user.Lookup(%s) fails: err=(%v)", uid, err1)
 		}
+		logger.warnf("user.Lookup(%s) fails: err=(%v)", uid, err1)
 		return false
 	}
-	// (uu.Uid : string, uu.Gid : stirng)
-	var ui = get_user(t, uid)
-	var now int64 = time.Now().Unix()
-	if ui != nil && ui.Expiration_time > now {
-		return false
-	}
-	switch permitted {
-	case user_approval_allow:
-		if ui == nil {
-			return true
-		} else if ui.Blocked {
-			return false
-		} else {
-			return true
-		}
-	case user_approval_block:
-		if ui == nil {
-			return false
-		} else if ui.Enabled {
-			return true
-		} else {
-			return false
-		}
-	default:
-		panic("internal")
-	}
+	// (uu.Uid : string, uu.Gid : string)
+
+	return true
 }
 
 // It double checks m.mux_addrs, because mux_addrs is updated only
@@ -313,7 +299,7 @@ func ensure_forwarding_host_trusted(m *multiplexer, r *http.Request) bool {
 		return false
 	}
 	var ip = make_typical_ip_address(peer_addr)
-	if string_search(ip, m.Trusted_proxies) ||
+	if string_search(ip, m.Trusted_proxy_list) ||
 		string_search(ip, m.mux_addrs) {
 		return true
 	}
@@ -353,9 +339,10 @@ func ensure_secret_owner(m *multiplexer, r *http.Request) bool {
 	return true
 }
 
-func ensure_pool_state(t *keyval_table, pool string, permitted user_approval) bool {
+func ensure_pool_state(t *keyval_table, pool string) bool {
 	var reject_initial_state = false
-	var state, _ = update_pool_state(t, pool, permitted)
+	//AHOAHOAHO var state, _ = update_pool_state(t, pool, permitted)
+	var state = pool_state_INITIAL //AHOAHOAHO
 	switch state {
 	case pool_state_INITIAL:
 		if reject_initial_state {

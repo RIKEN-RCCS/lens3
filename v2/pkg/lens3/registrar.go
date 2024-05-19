@@ -41,6 +41,7 @@ import (
 	//"net/url"
 	//"os"
 	"errors"
+	"os/user"
 	"slices"
 	"strconv"
 	"strings"
@@ -209,9 +210,9 @@ func configure_registrar(z *registrar, t *keyval_table, conf *reg_conf) {
 
 func start_registrar(z *registrar) {
 	fmt.Println("start_registrar() z=", z)
+	var conf = &z.Registrar
 	z.router = http.NewServeMux()
-	var port = z.Registrar.Port
-	var ep = net.JoinHostPort("", strconv.Itoa(port))
+	var ep = net.JoinHostPort("", strconv.Itoa(conf.Port))
 	z.server = &http.Server{
 		Addr:    ep,
 		Handler: z.router,
@@ -238,22 +239,22 @@ func start_registrar(z *registrar) {
 
 	z.router.HandleFunc("GET /ui/index.html/{$}", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_proxy_exc(z, w, r)
-		return_ui_script(z, w, r, "ui/index.html")
+		var _ = return_ui_script(z, w, r, "ui/index.html")
 	})
 
 	z.router.HandleFunc("GET /ui2/index.html/{$}", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_proxy_exc(z, w, r)
-		return_ui_script(z, w, r, "ui2/index.html")
+		var _ = return_ui_script(z, w, r, "ui2/index.html")
 	})
 
 	z.router.HandleFunc("GET /ui/", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_proxy_exc(z, w, r)
-		return_file(z, w, r, r.URL.Path, &efs1)
+		var _ = return_file(z, w, r, r.URL.Path, &efs1)
 	})
 
 	z.router.HandleFunc("GET /ui2/", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_proxy_exc(z, w, r)
-		return_file(z, w, r, r.URL.Path, &efs2)
+		var _ = return_file(z, w, r, r.URL.Path, &efs2)
 	})
 
 	// A "/user-info" request is assumed as the first request and it
@@ -261,92 +262,30 @@ func start_registrar(z *registrar) {
 
 	z.router.HandleFunc("GET /user-info/{$}", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_proxy_exc(z, w, r)
-		//var x_remote_user = r.Header.Get("X_Remote_User")
-		//var x_real_ip = r.Header.Get("X_Real_Ip")
-		//_, _ = x_remote_user, x_real_ip
-		var uid = "???"
-		//grant_access(z, uid, nil, false)
-		var u = get_user(z.table, uid)
-		if u == nil {
-			u = &user_record{
-				Uid:                        "AHOAHOAHO",
-				Claim:                      "",
-				Groups:                     []string{"boo1", "hoo2", "woo2"},
-				Enabled:                    true,
-				Blocked:                    true,
-				Expiration_time:            10,
-				Check_terms_and_conditions: true,
-				Modification_time:          20,
-			}
-		}
-		var info = &user_info_ui{
-			Reg_version:   z.Version,
-			Uid:           u.Uid,
-			Groups:        u.Groups,
-			Lens3_version: lens3_version,
-			S3_url:        z.UI.S3_url,
-			Footer_banner: z.UI.Footer_banner,
-		}
-		var rspn = &user_info_response{
-			response_common: response_common{
-				Status:       "success",
-				Reason:       "",
-				X_csrf_token: "???",
-				Timestamp:    time.Now().Unix(),
-			},
-			User_info: *info,
-		}
-		var v1, err1 = json.Marshal(rspn)
-		if err1 != nil {
-			panic(err1)
-		}
-		io.WriteString(w, string(v1))
-		log_access(200, r)
+		var _ = return_user_info(z, w, r)
 	})
 
 	z.router.HandleFunc("GET /pool/{$}", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_proxy_exc(z, w, r)
-		var x_remote_user = r.Header.Get("X_Remote_User")
-		var x_real_ip = r.Header.Get("X_Real_Ip")
-		_ = x_remote_user
-		_ = x_real_ip
-		//var uid = map_claim_to_uid(z, x_remote_user)
-		//grant_access(z, uid, None, False)
-		var uid = "matu"
-		var _ = return_list_pools_of_user(z, w, r, uid, "*")
+		var _ = return_list_pools_of_user(z, w, r, "*")
 	})
 
 	// A POST request makes a pool.
 
 	z.router.HandleFunc("POST /pool/{$}", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_proxy_exc(z, w, r)
-		//csrf_protect.validate_csrf(r)
-		//var uid = map_claim_to_uid(z, x_remote_user)
-		//grant_access(z, uid, None, False)
-		var _ *pool_desc_response = make_new_pool_and_return_response(z, w, r)
+		var _ = make_pool_and_return_response(z, w, r)
 	})
 
 	z.router.HandleFunc("GET /pool/{pool}/{$}", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_proxy_exc(z, w, r)
-		//var uid = map_claim_to_uid(z, x_remote_user)
-		//grant_access(uid, None, False)
-		var uid = "AHOAHOAHO"
 		var pool = r.PathValue("pool")
-		if !check_pool_naming_with_error_return(z, w, r, pool) {
-			return
-		}
-		var _ = return_list_pools_of_user(z, w, r, uid, pool)
+		var _ = return_list_pools_of_user(z, w, r, pool)
 	})
 
 	z.router.HandleFunc("DELETE /pool/{pool}/{$}", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_proxy_exc(z, w, r)
-		//csrf_protect.validate_csrf(r)
-		//var uid = map_claim_to_uid(z, x_remote_user)
-		//grant_access(z, uid, None, False)
 		var pool = r.PathValue("pool")
-		if !check_pool_naming_with_error_return(z, w, r, pool) {
-			return
-		}
 		var _ = delete_pool_and_return_response(z, w, r, pool)
 	})
 
@@ -355,34 +294,14 @@ func start_registrar(z *registrar) {
 	z.router.HandleFunc("PUT /pool/{pool}/bucket/{$}", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_proxy_exc(z, w, r)
 		var pool = r.PathValue("pool")
-		if !check_pool_naming_with_error_return(z, w, r, pool) {
-			return
-		}
 		var _ = make_bucket_and_return_response(z, w, r, pool)
 	})
 
 	z.router.HandleFunc("DELETE /pool/{pool}/bucket/{bucket}/{$}", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_proxy_exc(z, w, r)
 		var pool = r.PathValue("pool")
-		if !check_pool_naming_with_error_return(z, w, r, pool) {
-			return
-		}
 		var bucket = r.PathValue("bucket")
-		if !check_bucket_naming_with_error_return(z, w, r, bucket) {
-			return
-		}
-
-		var err1 = delete_bucket_unconditionally(z.table, bucket)
-		if err1 != nil {
-			return_error_response(z, w, r, http_status_404_not_found,
-				[][2]string{
-					message_No_bucket,
-					{"pool", pool},
-					{"bucket", bucket},
-				})
-			return
-		}
-		var _ *pool_desc_response = return_pool_data(z, w, r, pool)
+		var _ = delete_bucket_and_return_response(z, w, r, pool, bucket)
 	})
 
 	// A POST request makes a secret.
@@ -390,75 +309,17 @@ func start_registrar(z *registrar) {
 	z.router.HandleFunc("POST /pool/{pool}/secret/{$}", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_proxy_exc(z, w, r)
 		var pool = r.PathValue("pool")
-		if !check_pool_naming_with_error_return(z, w, r, pool) {
-			return
-		}
-
-		var makesecret make_secret_request
-		var ok1 = decode_request_body(z, r, &makesecret)
-		if !ok1 {
-			return_error_response(z, w, r, http_status_400_bad_request,
-				[][2]string{
-					message_Bad_arguments,
-					{"op", "make-secret"},
-					{"pool", pool},
-				})
-			return
-		}
-
-		var policy = intern_ui_secret_policy(makesecret.Secret_policy)
-		if policy == "" {
-			return_error_response(z, w, r, http_status_400_bad_request,
-				[][2]string{
-					message_Bad_arguments,
-					{"op", "make-secret"},
-					{"policy", makesecret.Secret_policy},
-				})
-			return
-		}
-
-		var expiration = z.determine_expiration_time
-		var now = time.Now().Unix()
-		var secret = &secret_record{
-			Pool:              pool,
-			_access_key:       "",
-			Secret_key:        generate_secret_key(),
-			Secret_policy:     policy,
-			Expiration_time:   expiration,
-			Modification_time: now,
-		}
-		var _ = set_with_unique_access_key(z.table, secret)
-		var _ *pool_desc_response = return_pool_data(z, w, r, pool)
+		var _ = make_secret_and_return_response(z, w, r, pool)
 	})
 
 	z.router.HandleFunc("DELETE /pool/{pool}/secret/{secret}/{$}", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_proxy_exc(z, w, r)
 		var pool = r.PathValue("pool")
-		if !check_pool_naming_with_error_return(z, w, r, pool) {
-			return
-		}
 		var secret = r.PathValue("secret")
-		if !check_access_key_naming_with_error_return(z, w, r, secret) {
-			return
-		}
-
-		//grant_access(uid, pool, false)
-		//ensure_secret_owner_only(self.tables, access_key, pool_id)
-		var err2 = delete_secret_key_unconditionally(z.table, secret)
-		if err2 != nil {
-			logger.infof("delete_secret_key failed (ignored): err=(%v)", err2)
-			return_error_response(z, w, r, http_status_400_bad_request,
-				[][2]string{
-					message_Missing_or_bad_secret,
-					{"secret", secret},
-				})
-			return
-		}
-
-		var _ *pool_desc_response = return_pool_data(z, w, r, pool)
+		var _ = delete_secret_and_return_response(z, w, r, pool, secret)
 	})
 
-	log.Println("Reg start service")
+	log.Printf("Reg(%s) start service", ep)
 	for {
 		var err1 = z.server.ListenAndServe()
 		logger.infof("Reg ListenAndServe() done err=%v", err1)
@@ -477,6 +338,396 @@ func handle_proxy_exc(z *registrar, w http.ResponseWriter, r *http.Request) {
 		fmt.Println("stacktrace:\n" + string(debug.Stack()))
 		http.Error(w, "BAD", http_status_500_internal_server_error)
 	}
+}
+
+func return_ui_script(z *registrar, w http.ResponseWriter, r *http.Request, path string) *string {
+	defer handle_proxy_exc(z, w, r)
+	var data1, err1 = efs1.ReadFile(path)
+	if err1 != nil {
+		http.Error(w, "BAD", http_status_500_internal_server_error)
+		return nil
+	}
+	var parameters = (`<script type="text/javascript">const base_path_="` +
+		z.Registrar.Base_path + `";</script>`)
+	var data2 = strings.Replace(string(data1),
+		"PLACE_BASE_PATH_SETTING_HERE", parameters, 1)
+	//fmt.Println(string(data2))
+	io.WriteString(w, data2)
+	return &data2
+}
+
+func return_file(z *registrar, w http.ResponseWriter, r *http.Request, path string, efs1 *embed.FS) *[]byte {
+	defer handle_proxy_exc(z, w, r)
+	var data1, err1 = efs1.ReadFile(path)
+	if err1 != nil {
+		http.Error(w, "BAD", http_status_500_internal_server_error)
+		return nil
+	}
+	io.WriteString(w, string(data1))
+	return &data1
+}
+
+func return_user_info(z *registrar, w http.ResponseWriter, r *http.Request) *user_info_response {
+	//var x_remote_user = r.Header.Get("X_Remote_User")
+	//var x_real_ip = r.Header.Get("X_Real_Ip")
+	//_, _ = x_remote_user, x_real_ip
+	var uid = "???"
+	grant_access(z, uid, "", true)
+	var u = get_user(z.table, uid)
+	if u == nil {
+		u = &user_record{
+			Uid:                        "AHOAHOAHO",
+			Claim:                      "",
+			Groups:                     []string{"boo1", "hoo2", "woo2"},
+			Enabled:                    true,
+			Expiration_time:            10,
+			Check_terms_and_conditions: true,
+			Modification_time:          20,
+		}
+	}
+	var info = &user_info_ui{
+		Reg_version:   z.Version,
+		Uid:           u.Uid,
+		Groups:        u.Groups,
+		Lens3_version: lens3_version,
+		S3_url:        z.UI.S3_url,
+		Footer_banner: z.UI.Footer_banner,
+	}
+	var rspn = &user_info_response{
+		response_common: response_common{
+			Status:       "success",
+			Reason:       "",
+			X_csrf_token: "???",
+			Timestamp:    time.Now().Unix(),
+		},
+		User_info: *info,
+	}
+	var v1, err1 = json.Marshal(rspn)
+	if err1 != nil {
+		panic(err1)
+	}
+	io.WriteString(w, string(v1))
+	log_access(200, r)
+	return rspn
+}
+
+// RETURN_LIST_POOLS_OF_USER lists pools owned by a user if passed "*"
+// for pool-name.  Or, it returns information of the pool given a
+// pool-name.
+func return_list_pools_of_user(z *registrar, w http.ResponseWriter, r *http.Request, pool string) *pool_list_response {
+	//var uid = map_claim_to_uid(z, x_remote_user)
+	//grant_access(uid, None, False)
+
+	var x_remote_user = r.Header.Get("X_Remote_User")
+	var x_real_ip = r.Header.Get("X_Real_Ip")
+	_ = x_remote_user
+	_ = x_real_ip
+	//var uid = map_claim_to_uid(z, x_remote_user)
+	//grant_access(z, uid, None, False)
+	var uid = "matu" //AHOAHOAHO
+
+	if !check_pool_naming_with_error_return(z, w, r, pool) {
+		return nil
+	}
+
+	var namelist = list_pools(z.table, pool)
+	var poollist []*pool_desc_ui
+	for _, name := range namelist {
+		var d = gather_pool_desc(z.table, name)
+		if d != nil && d.Owner_uid == uid {
+			poollist = append(poollist, copy_pool_desc_to_ui(d))
+		}
+	}
+
+	if pool != "*" && len(poollist) == 0 {
+		return_error_response(z, w, r, http_status_400_bad_request,
+			[][2]string{
+				message_No_pool,
+				{"pool", pool},
+			})
+		return nil
+	}
+	if pool != "*" && len(poollist) > 1 {
+		logger.errorf("Reg inconsistency; multiple pools (pool=%s)",
+			pool)
+		return_error_response(z, w, r, http_status_500_internal_server_error,
+			[][2]string{
+				{"message", "(internal: duplicate pool entries)"},
+			})
+		return nil
+	}
+
+	slices.SortFunc(poollist, func(x, y *pool_desc_ui) int {
+		return strings.Compare(x.Buckets_directory, y.Buckets_directory)
+	})
+	var rspn = &pool_list_response{
+		response_common: response_common{
+			Status:       "success",
+			Reason:       "",
+			X_csrf_token: "???",
+			Timestamp:    time.Now().Unix(),
+		},
+		Pool_list: poollist,
+	}
+	var v1, err1 = json.Marshal(rspn)
+	if err1 != nil {
+		panic(err1)
+	}
+	io.WriteString(w, string(v1))
+	log_access(200, r)
+	return rspn
+}
+
+func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request) *pool_desc_response {
+	//csrf_protect.validate_csrf(r)
+	//var uid = map_claim_to_uid(z, x_remote_user)
+	//grant_access(z, uid, None, False)
+
+	var uid = "AHOAHOAHO"
+	var makepool make_pool_request
+	var ok1 = decode_request_body(z, r, &makepool)
+	if !ok1 {
+		http.Error(w, "BAD", http_status_400_bad_request)
+		return nil
+	}
+	//z.table
+	var expiration = z.determine_expiration_time
+	if !grant_access(z, uid, "", false) {
+		http.Error(w, "BAD", http_status_401_unauthorized)
+		return nil
+	}
+	check_make_pool_arguments(z, uid, &makepool)
+	var now int64 = time.Now().Unix()
+	var poolname = &pool_mutex_record{
+		Owner_uid:         uid,
+		Modification_time: now,
+	}
+	var pool = set_with_unique_pool_name(z.table, poolname)
+	var secret = &secret_record{
+		Pool:              pool,
+		_access_key:       "",
+		Secret_key:        "",
+		Secret_policy:     secret_policy_READWRITE,
+		Expiration_time:   expiration,
+		Modification_time: now,
+	}
+	var probe = set_with_unique_access_key(z.table, secret)
+	var ok, holder = set_ex_buckets_directory(z.table, makepool.Buckets_directory, pool)
+	if !ok {
+		var _ = delete_pool_name_unconditionally(z.table, pool)
+		var _ = delete_secret_key_unconditionally(z.table, probe)
+		var owner = find_owner_of_pool(z, holder)
+		raise(reg_error(400, fmt.Sprintf("Buckets-directory is already used:"+
+			" path=(%s), holder=(%s)",
+			makepool.Buckets_directory, owner)))
+		return nil
+	}
+	set_pool_state(z.table, pool, pool_state_INITIAL, pool_reason_NORMAL)
+
+	var rspn = return_pool_data(z, w, r, pool)
+	return rspn
+}
+
+func delete_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request, pool string) *success_response {
+	//csrf_protect.validate_csrf(r)
+	//var uid = map_claim_to_uid(z, x_remote_user)
+	//grant_access(z, uid, None, False)
+
+	if !check_pool_naming_with_error_return(z, w, r, pool) {
+		return nil
+	}
+
+	// activate_backend(pool)
+	// disable_backend_secrets()
+	// disable_backend_buckets()
+
+	var d = gather_pool_desc(z.table, pool)
+
+	// Delete buckets_directory.
+
+	var err1 = delete_buckets_directory_unconditionally(z.table, d.Buckets_directory)
+	if err1 != nil {
+		logger.infof("delete_buckets_directory failed (ignored): err=(%v)", err1)
+	}
+
+	// Delete buckets.
+
+	var bkts = list_buckets(z.table, pool)
+	for _, b := range bkts {
+		var err2 = delete_bucket_unconditionally(z.table, b.Bucket)
+		if err2 != nil {
+			logger.infof("delete_bucket failed (ignored): err=(%v)", err2)
+		}
+	}
+
+	// Delete access-keys.
+
+	for _, k := range d.Secrets {
+		assert_fatal(k.Pool == pool)
+		var err2 = delete_secret_key_unconditionally(z.table, k._access_key)
+		if err2 != nil {
+			logger.infof("delete_secret_key failed (ignored): err=(%v)", err2)
+		}
+	}
+
+	// DOIT OR NOT DOIT: set none-policy to buckets for MinIO backend.
+
+	//erase_backend_ep(self.tables, pool)
+	//erase_pool_data(self.tables, pool)
+
+	var rspn = &success_response{
+		response_common: response_common{
+			Status:       "success",
+			Reason:       "",
+			X_csrf_token: "???",
+			Timestamp:    time.Now().Unix(),
+		},
+	}
+	var v1, err3 = json.Marshal(rspn)
+	if err3 != nil {
+		panic(err3)
+	}
+	io.WriteString(w, string(v1))
+	log_access(200, r)
+	return rspn
+}
+
+func make_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request, pool string) *pool_desc_response {
+	if !check_pool_naming_with_error_return(z, w, r, pool) {
+		return nil
+	}
+
+	var makebucket make_bucket_request
+	var ok1 = decode_request_body(z, r, &makebucket)
+	if !ok1 {
+		http.Error(w, "BAD", http_status_400_bad_request)
+		return nil
+	}
+
+	var bucket = makebucket.Bucket
+	if !check_bucket_naming_with_error_return(z, w, r, bucket) {
+		return nil
+	}
+
+	var policy = intern_ui_bucket_policy(makebucket.Bucket_policy)
+	if policy == "" {
+		return_error_response(z, w, r, http_status_400_bad_request,
+			[][2]string{
+				message_Bad_arguments,
+				{"op", "make-bucket"},
+				{"bucket-policy", makebucket.Bucket_policy},
+			})
+		return nil
+	}
+
+	var now int64 = time.Now().Unix()
+	var expiration = z.determine_expiration_time
+	var desc = &bucket_record{
+		Pool:              pool,
+		Bucket:            bucket,
+		Bucket_policy:     policy,
+		Expiration_time:   expiration,
+		Modification_time: now,
+	}
+	var ok2, holder = set_ex_bucket(z.table, bucket, desc)
+	if !ok2 {
+		var owner = find_owner_of_pool(z, holder)
+		raise(reg_error(403, fmt.Sprintf("Bucket name taken: owner=%s",
+			owner)))
+		return nil
+	}
+
+	var rspn = return_pool_data(z, w, r, pool)
+	return rspn
+}
+
+func delete_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request, pool string, bucket string) *pool_desc_response {
+	if !check_pool_naming_with_error_return(z, w, r, pool) {
+		return nil
+	}
+	if !check_bucket_naming_with_error_return(z, w, r, bucket) {
+		return nil
+	}
+	var err1 = delete_bucket_unconditionally(z.table, bucket)
+	if err1 != nil {
+		return_error_response(z, w, r, http_status_404_not_found,
+			[][2]string{
+				message_No_bucket,
+				{"pool", pool},
+				{"bucket", bucket},
+			})
+		return nil
+	}
+	var rspn *pool_desc_response = return_pool_data(z, w, r, pool)
+	return rspn
+}
+
+func make_secret_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request, pool string) *pool_desc_response {
+	if !check_pool_naming_with_error_return(z, w, r, pool) {
+		return nil
+	}
+
+	var makesecret make_secret_request
+	var ok1 = decode_request_body(z, r, &makesecret)
+	if !ok1 {
+		return_error_response(z, w, r, http_status_400_bad_request,
+			[][2]string{
+				message_Bad_arguments,
+				{"op", "make-secret"},
+				{"pool", pool},
+			})
+		return nil
+	}
+
+	var policy = intern_ui_secret_policy(makesecret.Secret_policy)
+	if policy == "" {
+		return_error_response(z, w, r, http_status_400_bad_request,
+			[][2]string{
+				message_Bad_arguments,
+				{"op", "make-secret"},
+				{"policy", makesecret.Secret_policy},
+			})
+		return nil
+	}
+
+	var expiration = z.determine_expiration_time
+	var now = time.Now().Unix()
+	var secret = &secret_record{
+		Pool:              pool,
+		_access_key:       "",
+		Secret_key:        generate_secret_key(),
+		Secret_policy:     policy,
+		Expiration_time:   expiration,
+		Modification_time: now,
+	}
+	var _ = set_with_unique_access_key(z.table, secret)
+	var rspn *pool_desc_response = return_pool_data(z, w, r, pool)
+	return rspn
+}
+
+func delete_secret_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request, pool string, secret string) *pool_desc_response {
+	if !check_pool_naming_with_error_return(z, w, r, pool) {
+		return nil
+	}
+	if !check_access_key_naming_with_error_return(z, w, r, secret) {
+		return nil
+	}
+
+	//grant_access(uid, pool, false)
+	//ensure_secret_owner_only(self.tables, access_key, pool_id)
+	var err2 = delete_secret_key_unconditionally(z.table, secret)
+	if err2 != nil {
+		logger.infof("delete_secret_key failed (ignored): err=(%v)", err2)
+		return_error_response(z, w, r, http_status_400_bad_request,
+			[][2]string{
+				message_Missing_or_bad_secret,
+				{"secret", secret},
+			})
+		return nil
+	}
+
+	var rpsn *pool_desc_response = return_pool_data(z, w, r, pool)
+	return rpsn
 }
 
 // VALIDATE_SESSION validates a session early.  (Note it performs
@@ -527,11 +778,11 @@ func validate_session(z *registrar, w http.ResponseWriter, r *http.Request, agen
 
 // GRANT_ACCESS checks an access to a pool by a user is granted.  It
 // does not check the pool-state on deleting a pool.
-func grant_access(z *registrar, uid string, pool string, check_pool_state bool) bool {
+func grant_access(z *registrar, uid string, pool string, firstsession bool) bool {
 	if ensure_lens3_is_running(z.table) {
 		return false
 	}
-	if ensure_user_is_active(z.table, uid, z.Registrar.User_approval) {
+	if check_user_account(z, uid, true) {
 		return false
 	}
 	if pool != "" {
@@ -539,8 +790,9 @@ func grant_access(z *registrar, uid string, pool string, check_pool_state bool) 
 			return false
 		}
 	}
+	var check_pool_state = false //AHOAHOAHO
 	if pool != "" && check_pool_state {
-		if ensure_pool_state(z.table, pool, z.Registrar.User_approval) {
+		if ensure_pool_state(z.table, pool) {
 			return false
 		}
 	}
@@ -554,6 +806,106 @@ func ensure_pool_owner(t *keyval_table, pool string, uid string) bool {
 	} else {
 		return false
 	}
+}
+
+// CHECK_USER_ACCOUNT checks the user account is active.  It may
+// register a new user record, when it is the first session under
+// default-allow setting.
+func check_user_account(z *registrar, uid string, firstsession bool) bool {
+	var conf = &z.Registrar
+	var approving = (conf.User_approval == user_default_allow)
+	var ui = get_user(z.table, uid)
+	if !(approving && firstsession) && ui == nil {
+		return false
+	}
+
+	var uu, err1 = user.Lookup(uid)
+	if err1 != nil {
+		switch err1.(type) {
+		case user.UnknownUserError:
+		default:
+		}
+		logger.errorf("user.Lookup(%s) fails: err=(%v)", uid, err1)
+		return false
+	}
+
+	var now int64 = time.Now().Unix()
+	if ui != nil {
+		if !ui.Enabled {
+			return false
+		}
+		if ui.Expiration_time < now {
+			return false
+		}
+		return true
+	}
+
+	// Regiter a new user record.
+
+	assert_fatal((approving && firstsession) && ui == nil)
+
+	if conf.Claim_uid_map == claim_uid_map_map {
+		logger.errorf("Reg() configuration error:"+
+			" user_approval=%s claim_uid_map=%s",
+			conf.User_approval, conf.Claim_uid_map)
+		return false
+	}
+
+	var uid_n, err2 = strconv.Atoi(uu.Uid)
+	if err2 != nil {
+		logger.errorf("user.Lookup(%s) returns non-numeric: uid=(%s)", uid)
+		return false
+	}
+	if len(conf.Uid_allow_range_list) != 0 {
+		if !check_int_in_ranges(uid_n, conf.Uid_allow_range_list) {
+			logger.infof("Reg() user blocked: uid=(%s)", uid)
+			return false
+		}
+	}
+	if check_int_in_ranges(uid_n, conf.Uid_block_range_list) {
+		logger.infof("Reg() user blocked: uid=(%s)", uid)
+		return false
+	}
+
+	var gids, err3 = uu.GroupIds()
+	if err3 != nil {
+		logger.errorf("user.GroupIds(%s) failed: err=(%v)", uid, err3)
+		return false
+	}
+	var groups []string
+	for _, g1 := range gids {
+		var gid_n, err3 = strconv.Atoi(g1)
+		if err3 != nil {
+			logger.errorf("user.GroupIds(%s) returns non-numeric: gid=(%s)", g1)
+			continue
+		}
+		if slices.Index(conf.Gid_drop_list, gid_n) != -1 {
+			continue
+		}
+		var gr, err4 = user.LookupGroupId(g1)
+		if err4 != nil {
+			logger.errorf("user.LookupGroupId(%s) failed: err=(%v)", g1, err4)
+			continue
+		}
+		groups = append(groups, gr.Name)
+	}
+	if len(groups) == 0 {
+		logger.infof("no groups allowed: uid=(%s)", uid)
+		return false
+	}
+
+	var expiration = time.Now().AddDate(0, 0, 365).Unix()
+	var newuser = user_record{
+		Uid:                        uid,
+		Claim:                      "",
+		Groups:                     groups,
+		Enabled:                    true,
+		Expiration_time:            expiration,
+		Check_terms_and_conditions: false,
+		Modification_time:          now,
+	}
+	set_user_force(z.table, &newuser)
+	return true
 }
 
 func decode_request_body(z *registrar, r *http.Request, data any) bool {
@@ -576,56 +928,29 @@ func decode_request_body(z *registrar, r *http.Request, data any) bool {
 	return true
 }
 
-// RETURN_LIST_POOLS_OF_USER lists pools owned by a user if passed "*"
-// for pool-name.  Or, it returns information of the pool given a
-// pool-name.
-func return_list_pools_of_user(z *registrar, w http.ResponseWriter, r *http.Request, uid string, pool string) *pool_list_response {
-	var namelist = list_pools(z.table, pool)
-	var poollist []*pool_desc_ui
-	for _, name := range namelist {
-		var d = gather_pool_desc(z.table, name)
-		if d != nil && d.Owner_uid == uid {
-			poollist = append(poollist, copy_pool_desc_to_ui(d))
-		}
+// CHECK_MAKE_POOL_ARGUMENTS checks the entires of buckets_directory
+// and owner_gid.  It normalizes the path of a buckets-directory (in
+// the posix sense).
+func check_make_pool_arguments(z *registrar, uid string, makepool *make_pool_request) bool {
+	var u = get_user(z.table, uid)
+	if u == nil {
+		return false
 	}
-
-	if pool != "*" && len(poollist) == 0 {
-		return_error_response(z, w, r, http_status_400_bad_request,
-			[][2]string{
-				message_No_pool,
-				{"pool", pool},
-			})
-		return nil
+	// Check GID.  UID is not in the arguments.
+	var groups = u.Groups
+	var gid = makepool.Owner_gid
+	if slices.Index(groups, gid) == -1 {
+		raise(reg_error(403, fmt.Sprintf("Bad group=%s", gid)))
 	}
-	if pool != "*" && len(poollist) > 1 {
-		logger.errorf("Reg inconsistency; multiple pools (pool=%s)",
-			pool)
-		return_error_response(z, w, r, http_status_500_internal_server_error,
-			[][2]string{
-				{"message", "(internal: duplicate pool entries)"},
-			})
-		return nil
+	// Check bucket-directory path.
+	var bd = makepool.Buckets_directory
+	var path = filepath.Clean(bd)
+	if !filepath.IsAbs(path) {
+		raise(reg_error(400, fmt.Sprintf("Buckets-directory is not absolute:"+
+			" path=(%s)", bd)))
 	}
-
-	slices.SortFunc(poollist, func(x, y *pool_desc_ui) int {
-		return strings.Compare(x.Buckets_directory, y.Buckets_directory)
-	})
-	var rspn = &pool_list_response{
-		response_common: response_common{
-			Status:       "success",
-			Reason:       "",
-			X_csrf_token: "???",
-			Timestamp:    time.Now().Unix(),
-		},
-		Pool_list: poollist,
-	}
-	var v1, err1 = json.Marshal(rspn)
-	if err1 != nil {
-		panic(err1)
-	}
-	io.WriteString(w, string(v1))
-	log_access(200, r)
-	return rspn
+	makepool.Buckets_directory = path
+	return true
 }
 
 func map_claim_to_uid(z *registrar, x_remote_user string) string {
@@ -683,209 +1008,6 @@ func copy_secret_desc_to_ui(m []*secret_record) []*secret_desc_ui {
 		secrets = append(secrets, u)
 	}
 	return secrets
-}
-
-func return_ui_script(z *registrar, w http.ResponseWriter, r *http.Request, path string) {
-	defer handle_proxy_exc(z, w, r)
-	var data1, err1 = efs1.ReadFile(path)
-	if err1 != nil {
-		http.Error(w, "BAD", http_status_500_internal_server_error)
-		return
-	}
-	var parameters = (`<script type="text/javascript">const base_path_="` +
-		z.Registrar.Base_path + `";</script>`)
-	var data2 = strings.Replace(string(data1),
-		"PLACE_BASE_PATH_SETTING_HERE", parameters, 1)
-	//fmt.Println(string(data2))
-	io.WriteString(w, string(data2))
-}
-
-func return_file(z *registrar, w http.ResponseWriter, r *http.Request, path string, efs1 *embed.FS) {
-	defer handle_proxy_exc(z, w, r)
-	var data1, err1 = efs1.ReadFile(path)
-	if err1 != nil {
-		http.Error(w, "BAD", http_status_500_internal_server_error)
-		return
-	}
-	io.WriteString(w, string(data1))
-}
-
-/* POOL-MAKING */
-
-func make_new_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request) *pool_desc_response {
-	var uid = "AHOAHOAHO"
-	var makepool make_pool_request
-	var ok1 = decode_request_body(z, r, &makepool)
-	if !ok1 {
-		http.Error(w, "BAD", http_status_400_bad_request)
-		return nil
-	}
-	//z.table
-	var expiration = z.determine_expiration_time
-	if !grant_access(z, uid, "", false) {
-		http.Error(w, "BAD", http_status_401_unauthorized)
-		return nil
-	}
-	check_make_pool_arguments(z, uid, &makepool)
-	var now int64 = time.Now().Unix()
-	var poolname = &pool_mutex_record{
-		Owner_uid:         uid,
-		Modification_time: now,
-	}
-	var pool = set_with_unique_pool_name(z.table, poolname)
-	var secret = &secret_record{
-		Pool:              pool,
-		_access_key:       "",
-		Secret_key:        "",
-		Secret_policy:     secret_policy_READWRITE,
-		Expiration_time:   expiration,
-		Modification_time: now,
-	}
-	var probe = set_with_unique_access_key(z.table, secret)
-	var ok, holder = set_ex_buckets_directory(z.table, makepool.Buckets_directory, pool)
-	if !ok {
-		var _ = delete_pool_name_unconditionally(z.table, pool)
-		var _ = delete_secret_key_unconditionally(z.table, probe)
-		var owner = find_owner_of_pool(z, holder)
-		raise(reg_error(400, fmt.Sprintf("Buckets-directory is already used:"+
-			" path=(%s), holder=(%s)",
-			makepool.Buckets_directory, owner)))
-		return nil
-	}
-	set_pool_state(z.table, pool, pool_state_INITIAL, pool_reason_NORMAL)
-
-	var rspn = return_pool_data(z, w, r, pool)
-	return rspn
-}
-
-// CHECK_MAKE_POOL_ARGUMENTS checks the entires of buckets_directory
-// and owner_gid.  It normalizes the path of a buckets-directory (in
-// the posix sense).
-func check_make_pool_arguments(z *registrar, uid string, makepool *make_pool_request) bool {
-	var u = get_user(z.table, uid)
-	if u == nil {
-		return false
-	}
-	// Check GID.  UID is not in the arguments.
-	var groups = u.Groups
-	var gid = makepool.Owner_gid
-	if slices.Index(groups, gid) == -1 {
-		raise(reg_error(403, fmt.Sprintf("Bad group=%s", gid)))
-	}
-	// Check bucket-directory path.
-	var bd = makepool.Buckets_directory
-	var path = filepath.Clean(bd)
-	if !filepath.IsAbs(path) {
-		raise(reg_error(400, fmt.Sprintf("Buckets-directory is not absolute:"+
-			" path=(%s)", bd)))
-	}
-	makepool.Buckets_directory = path
-	return true
-}
-
-/* POOL-DELETION */
-
-func delete_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request, pool string) *success_response {
-	// activate_backend(pool)
-	// disable_backend_secrets()
-	// disable_backend_buckets()
-
-	var d = gather_pool_desc(z.table, pool)
-
-	// Delete buckets_directory.
-
-	var err1 = delete_buckets_directory_unconditionally(z.table, d.Buckets_directory)
-	if err1 != nil {
-		logger.infof("delete_buckets_directory failed (ignored): err=(%v)", err1)
-	}
-
-	// Delete buckets.
-
-	var bkts = list_buckets(z.table, pool)
-	for _, b := range bkts {
-		var err2 = delete_bucket_unconditionally(z.table, b.Bucket)
-		if err2 != nil {
-			logger.infof("delete_bucket failed (ignored): err=(%v)", err2)
-		}
-	}
-
-	// Delete access-keys.
-
-	for _, k := range d.Secrets {
-		assert_fatal(k.Pool == pool)
-		var err2 = delete_secret_key_unconditionally(z.table, k._access_key)
-		if err2 != nil {
-			logger.infof("delete_secret_key failed (ignored): err=(%v)", err2)
-		}
-	}
-
-	// DOIT OR NOT DOIT: set none-policy to buckets for MinIO backend.
-
-	//erase_backend_ep(self.tables, pool)
-	//erase_pool_data(self.tables, pool)
-
-	var rspn = &success_response{
-		response_common: response_common{
-			Status:       "success",
-			Reason:       "",
-			X_csrf_token: "???",
-			Timestamp:    time.Now().Unix(),
-		},
-	}
-	var v1, err3 = json.Marshal(rspn)
-	if err3 != nil {
-		panic(err3)
-	}
-	io.WriteString(w, string(v1))
-	log_access(200, r)
-	return rspn
-}
-
-func make_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request, pool string) *pool_desc_response {
-	var makebucket make_bucket_request
-	var ok1 = decode_request_body(z, r, &makebucket)
-	if !ok1 {
-		http.Error(w, "BAD", http_status_400_bad_request)
-		return nil
-	}
-
-	var bucket = makebucket.Bucket
-	if !check_bucket_naming_with_error_return(z, w, r, bucket) {
-		return nil
-	}
-
-	var policy = intern_ui_bucket_policy(makebucket.Bucket_policy)
-	if policy == "" {
-		return_error_response(z, w, r, http_status_400_bad_request,
-			[][2]string{
-				message_Bad_arguments,
-				{"op", "make-bucket"},
-				{"bucket-policy", makebucket.Bucket_policy},
-			})
-		return nil
-	}
-
-	var now int64 = time.Now().Unix()
-	var expiration = z.determine_expiration_time
-	var desc = &bucket_record{
-		Pool:              pool,
-		Bucket:            bucket,
-		Bucket_policy:     policy,
-		Expiration_time:   expiration,
-		Modification_time: now,
-	}
-	var ok2, holder = set_ex_bucket(z.table, bucket, desc)
-	if !ok2 {
-		var owner = find_owner_of_pool(z, holder)
-		raise(reg_error(403, fmt.Sprintf("Bucket name taken: owner=%s",
-			owner)))
-		return nil
-	}
-
-	var ok3 = make_bucket_in_backend(z, pool, &makebucket)
-	_ = ok3
-	var rspn = return_pool_data(z, w, r, pool)
-	return rspn
 }
 
 func encode_error_message(keyvals [][2]string) string {

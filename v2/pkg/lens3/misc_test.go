@@ -6,7 +6,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	//"encoding/json"
+	"encoding/json"
 	"fmt"
 	"log"
 	"time"
@@ -26,9 +26,13 @@ func Test_misc(t *testing.T) {
 	//test_collect_process_output()
 	//test_pipe_timeout()
 	//test_get_lines()
+
 	start_service_for_test()
+
 	// check_type_switch_on_nil()
 	// test_minimal_environ()
+
+	// check_json()
 }
 
 func test_minimal_environ() {
@@ -237,4 +241,67 @@ func test_functions_in_utility_go() {
 	})
 	var eq = string_set_equal(s1, s2)
 	fmt.Println("equal=", eq)
+}
+
+func check_json() {
+	fmt.Println("Check json on [][2]int strings...")
+
+	// marshaling result:
+	// {"F1":[[10,20],[30,40],[40,50]],"F2":[[10,20],[30,40],[40,50]],
+	// "F3":null,"F4":null,
+	// "F5":[],"F6":[],
+	// "F7":[[0,0]],"F8":[[0,0]]}
+	// {[[10 20] [30 40] [40 50]] 0xc000012258
+	// [] <nil>
+	// [] 0xc000012288
+	// [[0 0]] 0xc0000122b8}
+	// F1 = [[10 20] [30 40] [40 50]] : [][2]int
+	// F2 = &[[10 20] [30 40] [40 50]] : *[][2]int
+	// F3 = [] : [][2]int
+	// F4 = <nil> : *[][2]int
+	// F5 = [] : [][2]int
+	// F6 = &[] : *[][2]int
+	// F7 = [[0 0]] : [][2]int
+	// F8 = &[[0 0]] : *[][2]int
+
+	type S1 struct {
+		//F1string string
+		F1 [][2]int
+		F2 *[][2]int
+		F3 [][2]int
+		F4 *[][2]int
+		F5 [][2]int
+		F6 *[][2]int
+		F7 [][2]int
+		F8 *[][2]int
+	}
+	var x1 = S1{
+		F1: [][2]int{{10, 20}, {30, 40}, {40, 50}},
+		F2: &[][2]int{{10, 20}, {30, 40}, {40, 50}},
+		//F3:
+		//F4:
+		F5: [][2]int{},
+		F6: &[][2]int{},
+		F7: [][2]int{{}},
+		F8: &[][2]int{{}},
+	}
+	var b1, err1 = json.Marshal(x1)
+	if err1 != nil {
+		panic(err1)
+	}
+	fmt.Println("json marshal", string(b1))
+	var x2 S1
+	var err2 = json.Unmarshal(b1, &x2)
+	if err2 != nil {
+		panic(err2)
+	}
+	fmt.Println("json unmarshal", x2)
+	fmt.Printf("F1 = %v : %T\n", x2.F1, x2.F1)
+	fmt.Printf("F2 = %v : %T\n", x2.F2, x2.F2)
+	fmt.Printf("F3 = %v : %T\n", x2.F3, x2.F3)
+	fmt.Printf("F4 = %v : %T\n", x2.F4, x2.F4)
+	fmt.Printf("F5 = %v : %T\n", x2.F5, x2.F5)
+	fmt.Printf("F6 = %v : %T\n", x2.F6, x2.F6)
+	fmt.Printf("F7 = %v : %T\n", x2.F7, x2.F7)
+	fmt.Printf("F8 = %v : %T\n", x2.F8, x2.F8)
 }

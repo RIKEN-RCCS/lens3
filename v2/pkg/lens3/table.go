@@ -77,7 +77,7 @@ type secret_record struct {
 	_access_key     string        `json:"-"`
 	Secret_key      string        `json:"secret_key"`
 	Secret_policy   secret_policy `json:"secret_policy"`
-	Usage           string        `json:"usage"`
+	Internal_use    bool          `json:"internal_use"`
 	Expiration_time int64         `json:"expiration_time"`
 
 	Modification_time int64 `json:"modification_time"`

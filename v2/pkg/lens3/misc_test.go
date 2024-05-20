@@ -378,8 +378,17 @@ func test_registrar() {
 		}
 
 		{
+			var args1 = &make_bucket_arguments{
+				Bucket:        "lenticularis-oddity-x3",
+				Bucket_policy: "public",
+			}
+			var b1, err1 = json.Marshal(args1)
+			if err1 != nil {
+				panic(err1)
+			}
+			var body1 = bytes.NewReader(b1)
 			var url1 = "http://localhost:8004/pool/d4f0c4645fce5734/bucket"
-			var req, err2 = http.NewRequest("PUT", url1, nil)
+			var req, err2 = http.NewRequest("PUT", url1, body1)
 			if err2 != nil {
 				panic(err2)
 			}

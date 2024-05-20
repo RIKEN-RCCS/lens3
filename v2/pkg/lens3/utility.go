@@ -11,6 +11,7 @@ import (
 
 	//"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	//"github.com/go-redis/redis/v8"
 	"io"
@@ -430,4 +431,17 @@ func check_int_in_ranges(v int, pairs [][2]int) bool {
 		}
 	}
 	return false
+}
+
+var garbage_in_input_stream_error = errors.New("garbage_in_stream")
+
+// CHECK_STREAM_EOF checks is the input stream is empty.  It returns
+// nil on EOF.  IT READS ONE BYTE.
+func check_stream_eof(is io.Reader) error {
+	var _, err2 = is.Read([]byte{9})
+	if err2 == io.EOF {
+		return nil
+	} else {
+		return ITE(err2 != nil, err2, garbage_in_input_stream_error)
+	}
 }

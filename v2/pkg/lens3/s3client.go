@@ -27,7 +27,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-func make_bucket_in_backend(z *registrar, pool string, makebucket *make_bucket_request) bool {
+func make_bucket_in_backend(z *registrar, pool string, args *make_bucket_arguments) bool {
 	var provider = credentials.NewStaticCredentialsProvider(
 		"key",
 		"secret",

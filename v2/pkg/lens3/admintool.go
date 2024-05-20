@@ -174,7 +174,13 @@ func restore_db(t *keyval_table, filename string) {
 }
 
 func remove_db_entry(t *keyval_table, key string) {
-	del_db_raw(t, key)
+	adm_del_db_raw(t, key)
+}
+
+func wipe_out_db_everything(t *keyval_table, yes string) {
+	if yes == "yes" {
+		clear_everything(t)
+	}
 }
 
 // PRINT_DB prints all keyval-db entries.  Each entry is printed as a
@@ -364,6 +370,14 @@ var cmd_list = []*cmd{
 		doc:      `Removes an entry in the keyval-db by a key.`,
 		run: func(adm *adm, args []string) {
 			remove_db_entry(adm.table, args[1])
+		},
+	},
+
+	&cmd{
+		synopsis: "wipe-out-db-everything yes",
+		doc:      `Removes everything in the keyval-db.`,
+		run: func(adm *adm, args []string) {
+			wipe_out_db_everything(adm.table, args[1])
 		},
 	},
 }

@@ -348,7 +348,7 @@ func get_ip_addresses(hostname string) []string {
 	return string_sort(ips2)
 }
 
-var bucket_naming_good_re = regexp.MustCompile(`^[a-z0-9-]$`)
+var bucket_naming_good_re = regexp.MustCompile(`^[a-z0-9-]{3,63}$`)
 var bucket_naming_forbidden_re = regexp.MustCompile(
 	`^[0-9.]*$` +
 		`|^.*-$` +
@@ -362,8 +362,8 @@ var bucket_naming_forbidden_re = regexp.MustCompile(
 		`|^minio$`)
 
 // CHECK_BUCKET_NAMING checks bucket naming restrictions.  Names are
-// 3-63 characters in all lowercase.  Lens3 forbits any DOTS, "aws",
-// "amazon", "minio", "goog*", and "g00g*".
+// 3-63 characters in all lowercase, but exclude all digits.  Lens3
+// forbits any DOTS, "aws", "amazon", "goog*", "g00g*", and "minio".
 //
 // * Bucket naming rules:
 //   - https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucketnamingrules.html
@@ -376,11 +376,10 @@ func check_bucket_naming(name string) bool {
 		!bucket_naming_forbidden_re.MatchString(name))
 }
 
-var pool_naming_good_re = regexp.MustCompile(`^[a-h0-9]$`)
+var pool_naming_good_re = regexp.MustCompile(`^[a-h0-9]{16}$`)
 
 func check_pool_naming(name string) bool {
-	return (len(name) == 16 &&
-		pool_naming_good_re.MatchString(name))
+	return pool_naming_good_re.MatchString(name)
 }
 
 // CHECK_FIELDS_FILLED checks if all fields of a structure is

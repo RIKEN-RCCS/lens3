@@ -346,7 +346,7 @@ func ensure_pool_state(t *keyval_table, pool string) bool {
 	switch state {
 	case pool_state_INITIAL:
 		if reject_initial_state {
-			logger.errorf("Mux(pool=%s) is in initial state.", pool)
+			logger.errf("Mux(pool=%s) is in initial state.", pool)
 			raise(reg_error(403, "Pool is in initial state"))
 		}
 	case pool_state_READY:

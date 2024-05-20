@@ -309,7 +309,7 @@ type mc_result struct {
 func simplify_mc_message(s []byte) mc_result {
 	var mm, ok = decode_json([]string{string(s)})
 	if !ok {
-		logger.error("Mux() json-decode failed")
+		logger.err("Mux() json-decode failed")
 		var msg1 = fmt.Sprintf("MC-command returned a bad json: (%s)", s)
 		return mc_result{nil, msg1}
 	}
@@ -367,12 +367,12 @@ func execute_mc_cmd(g *backend_minio, name string, command []string) mc_result {
 	case *exec.ExitError:
 		// Not successful.
 		var status = err.ProcessState.ExitCode()
-		logger.errorf(("Mux(pool=) MC-command failed:" +
+		logger.errf(("Mux(pool=) MC-command failed:" +
 			" cmd=%v; exit=%d error=(%v) stdout=(%s) stderr=(%s)"),
 			argv, status, err, outb.String(), errb.String())
 	default:
 		fmt.Printf("cmd.Run()=%T %v", err1, err1)
-		logger.errorf(("Mux(pool=) MC-command failed:" +
+		logger.errf(("Mux(pool=) MC-command failed:" +
 			" cmd=%v; error=(%v) stdout=(%s) stderr=(%s)"),
 			argv, err, outb.String(), errb.String())
 	}
@@ -383,7 +383,7 @@ func execute_mc_cmd(g *backend_minio, name string, command []string) mc_result {
 			argv, wstatus, outb.String(), errb.String())
 	}
 	if wstatus == -1 {
-		logger.errorf(("Mux(pool=) MC-command unfinished:" +
+		logger.errf(("Mux(pool=) MC-command unfinished:" +
 			" cmd=%v; stdout=(%s) stderr=(%s)"),
 			argv, outb.String(), errb.String())
 		var msg2 = fmt.Sprintf("MC-command unfinished: (%s)", outb.String())
@@ -397,7 +397,7 @@ func execute_mc_cmd(g *backend_minio, name string, command []string) mc_result {
 			logger.debugf("Mux(pool=) MC-command OK: cmd=%s", name)
 		}
 	} else {
-		logger.errorf(("Mux(pool=) MC-command failed:" +
+		logger.errf(("Mux(pool=) MC-command failed:" +
 			" cmd=%v; error=%v stdout=(%v) stderr=(%v)"),
 			argv, v1.cause, outb, errb)
 	}
@@ -411,7 +411,7 @@ func mc_alias_set(g *backend_minio) mc_result {
 	//g.mc_config_dir = tempfile.TemporaryDirectory()
 	var dir, err1 = os.MkdirTemp("", "lens3-mc-")
 	if err1 != nil {
-		logger.errorf("Mux(pool=) %s", err1)
+		logger.errf("Mux(pool=) %s", err1)
 		return mc_result{nil, err1.Error()}
 	}
 	g.mc_config_dir = dir

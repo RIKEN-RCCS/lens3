@@ -44,7 +44,7 @@ func gather_pool_desc(t *keyval_table, pool string) *pool_desc {
 	var bd = get_buckets_directory_of_pool(t, pool)
 	assert_fatal(desc1.Pool == pool)
 	if !(desc1.Buckets_directory == bd) {
-		logger.errorf("inconsistent entry found in keyval-db;"+
+		logger.errf("inconsistent entry found in keyval-db;"+
 			" buckets_directory(%v)≠(%v)", desc1.Buckets_directory, bd)
 	}
 	//
@@ -63,7 +63,7 @@ func gather_pool_desc(t *keyval_table, pool string) *pool_desc {
 	var uid = pooldesc.Owner_uid
 	var u = get_user(t, uid)
 	if u == nil {
-		logger.errorf("inconsistent entry found in keyval-db;"+
+		logger.errf("inconsistent entry found in keyval-db;"+
 			" user of pool nonexists uid=(%s) pool=(%s)", uid, pool)
 	}
 	if u != nil {
@@ -111,7 +111,7 @@ func update_pool_state(t *keyval_table, pool string, permitted user_approval) (p
 	}
 	var state *pool_state_record = get_pool_state(t, pool)
 	if state == nil {
-		logger.errorf("Mux(pool=%s): pool-state not found.", pool)
+		logger.errf("Mux(pool=%s): pool-state not found.", pool)
 		return pool_state_INOPERABLE, pool_reason_POOL_REMOVED
 	}
 

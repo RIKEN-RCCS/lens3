@@ -365,7 +365,7 @@ func start_backend(w *manager, pool string) backend {
 		case start_to_retry:
 			continue
 		case start_failed:
-			logger.errorf("Mux(pool=%s) Starting a backend failed: %s",
+			logger.errf("Mux(pool=%s) Starting a backend failed: %s",
 				pool, r1.message)
 			return nil
 		}
@@ -512,7 +512,7 @@ func try_start_backend(w *manager, g backend, port int) start_result {
 
 	var err3 = cmd.Start()
 	if err3 != nil {
-		logger.errorf("cmd.Start() err=%v", err3)
+		logger.errf("cmd.Start() err=%v", err3)
 		return start_result{
 			start_state: start_failed,
 			message:     err3.Error(),

@@ -77,12 +77,13 @@ type secret_record struct {
 	_access_key     string        `json:"-"`
 	Secret_key      string        `json:"secret_key"`
 	Secret_policy   secret_policy `json:"secret_policy"`
+	Usage           string        `json:"usage"`
 	Expiration_time int64         `json:"expiration_time"`
 
 	Modification_time int64 `json:"modification_time"`
 }
 
-// "um:claim" entry is a string.
+// "um:"-claim entry is a string.
 type user_claim_record string
 
 // "pi:"-pool-name entry.

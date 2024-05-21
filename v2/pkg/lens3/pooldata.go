@@ -31,8 +31,8 @@ type pool_desc struct {
 	Secrets           []*secret_record `json:"secrets"`
 }
 
-// GATHER_POOL_DESC returns a pool record.  It constructs a record by
-// gathering data scattered in a keyval-db.
+// GATHER_POOL_DESC returns a pool description.  It constructs a
+// description by gathering data scattered in the keyval-db.
 func gather_pool_desc(t *keyval_table, pool string) *pool_desc {
 	var pooldesc = pool_desc{}
 	var desc1 = get_pool(t, pool)
@@ -40,12 +40,15 @@ func gather_pool_desc(t *keyval_table, pool string) *pool_desc {
 		logger.warnf("RACE in gather_pool_desc")
 		return nil
 	}
-	pooldesc.pool_record = *desc1
-	var bd = get_buckets_directory_of_pool(t, pool)
 	assert_fatal(desc1.Pool == pool)
+	pooldesc.pool_record = *desc1
+	//
+	// Check a buckets-directory entry.
+	//
+	var bd = find_buckets_directory_of_pool(t, pool)
 	if !(desc1.Buckets_directory == bd) {
 		logger.errf("inconsistent entry found in keyval-db;"+
-			" buckets_directory(%v)≠(%v)", desc1.Buckets_directory, bd)
+			" buckets-directory (%v)≠(%v)", desc1.Buckets_directory, bd)
 	}
 	//
 	// Gather buckets.

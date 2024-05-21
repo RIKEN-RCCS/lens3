@@ -177,8 +177,8 @@ func remove_db_entry(t *keyval_table, key string) {
 	adm_del_db_raw(t, key)
 }
 
-func wipe_out_db_everything(t *keyval_table, yes string) {
-	if yes == "yes" {
+func wipe_out_db(t *keyval_table, everything string) {
+	if everything == "everything" {
 		clear_everything(t)
 	}
 }
@@ -374,10 +374,10 @@ var cmd_list = []*cmd{
 	},
 
 	&cmd{
-		synopsis: "wipe-out-db-everything yes",
+		synopsis: "wipe-out-db 'everything' (type literally)",
 		doc:      `Removes everything in the keyval-db.`,
 		run: func(adm *adm, args []string) {
-			wipe_out_db_everything(adm.table, args[1])
+			wipe_out_db(adm.table, args[1])
 		},
 	},
 }

@@ -407,7 +407,7 @@ func handle_proxy_exc(z *registrar, w http.ResponseWriter, r *http.Request) {
 		fmt.Println("RECOVER!", e)
 		http.Error(w, e.m, e.code)
 	default:
-		fmt.Println("RECOVER!", e)
+		fmt.Println("TRAP unhandled panic", e)
 		fmt.Println("stacktrace:\n" + string(debug.Stack()))
 		http.Error(w, "BAD", http_status_500_internal_server_error)
 	}
@@ -542,7 +542,12 @@ func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 	// Register buckets-directory.
 
 	var path = args.Buckets_directory
-	var ok, holder = set_ex_buckets_directory(z.table, path, pool)
+	var bd = &bucket_directory_record{
+		Pool:              pool,
+		Directory:         path,
+		Modification_time: now,
+	}
+	var ok, holder = set_ex_buckets_directory(z.table, path, bd)
 	if !ok {
 		var _ = delete_pool_name_unconditionally(z.table, pool)
 		var owner = find_owner_of_pool(z, holder)
@@ -977,14 +982,19 @@ func grant_access_with_error_return(z *registrar, w http.ResponseWriter, r *http
 
 // CHECK_USER_ACCOUNT checks the user account is active.  It may
 // register a new user record, when it is the first session under
-// default-allow setting.
+// default-allow setting (i.e., conf.User_approval=allow).
 func check_user_account(z *registrar, uid string, firstsession bool) *user_record {
+	// Reject unregistered users.
+
 	var conf = &z.Registrar
-	var approving = (conf.User_approval == user_default_allow)
+	var approving = (conf.User_approval == user_default_allow && firstsession)
 	var ui = get_user(z.table, uid)
-	if !(approving && firstsession) && ui == nil {
+	if !approving && ui == nil {
 		return nil
 	}
+
+	// Reject users without local accounts.  It is weird,
+	// authenticated users without local accounts.
 
 	var uu, err1 = user.Lookup(uid)
 	if err1 != nil {
@@ -992,25 +1002,25 @@ func check_user_account(z *registrar, uid string, firstsession bool) *user_recor
 		case user.UnknownUserError:
 		default:
 		}
-		logger.errf("user.Lookup(%s) fails: err=(%v)", uid, err1)
+		logger.errf("Reg() user.Lookup(%s) fails: err=(%v)", uid, err1)
 		return nil
 	}
 
+	// Check if the user is enabled.
+
 	var now int64 = time.Now().Unix()
 	if ui != nil {
-		if !ui.Enabled {
+		if !ui.Enabled || ui.Expiration_time < now {
 			return nil
+		} else {
+			extend_user_expiration_time(z, ui)
+			return ui
 		}
-		if ui.Expiration_time < now {
-			return nil
-		}
-		extend_user_expiration_time(z, ui)
-		return ui
 	}
 
 	// Regiter a new user record.
 
-	assert_fatal((approving && firstsession) && ui == nil)
+	assert_fatal(ui == nil && approving)
 
 	if conf.Claim_uid_map == claim_uid_map_map {
 		logger.errf("Reg() configuration error:"+
@@ -1021,31 +1031,32 @@ func check_user_account(z *registrar, uid string, firstsession bool) *user_recor
 
 	var uid_n, err2 = strconv.Atoi(uu.Uid)
 	if err2 != nil {
-		logger.errf("user.Lookup(%s) returns non-numeric: uid=(%s)",
+		logger.errf("Reg() user.Lookup(%s) returns non-numeric uid=(%s)",
 			uid, uu.Uid)
 		return nil
 	}
 	if len(conf.Uid_allow_range_list) != 0 {
 		if !check_int_in_ranges(uid_n, conf.Uid_allow_range_list) {
-			logger.infof("Reg() user blocked: uid=(%s)", uid)
+			logger.infof("Reg() a new user blocked: uid=(%s)", uid)
 			return nil
 		}
 	}
 	if check_int_in_ranges(uid_n, conf.Uid_block_range_list) {
-		logger.infof("Reg() user blocked: uid=(%s)", uid)
+		logger.infof("Reg() a new user blocked: uid=(%s)", uid)
 		return nil
 	}
 
 	var gids, err3 = uu.GroupIds()
 	if err3 != nil {
-		logger.errf("user.GroupIds(%s) failed: err=(%v)", uid, err3)
+		logger.errf("Reg() user.GroupIds(%s) failed: err=(%v)", uid, err3)
 		return nil
 	}
 	var groups []string
 	for _, g1 := range gids {
 		var gid_n, err3 = strconv.Atoi(g1)
 		if err3 != nil {
-			logger.errf("user.GroupIds() returns non-numeric: gid=(%s)", g1)
+			logger.errf("Reg() user.GroupIds(%s) returns non-numeric gid=(%s)",
+				uid, g1)
 			continue
 		}
 		if slices.Index(conf.Gid_drop_list, gid_n) != -1 {
@@ -1059,14 +1070,18 @@ func check_user_account(z *registrar, uid string, firstsession bool) *user_recor
 		groups = append(groups, gr.Name)
 	}
 	if len(groups) == 0 {
-		logger.infof("no groups allowed: uid=(%s)", uid)
+		logger.infof("no groups for a new user: uid=(%s)", uid)
 		return nil
 	}
+
+	logger.infof("Reg() registering a new user: uid=(%s)", uid)
+
+	// It doesn't care races...
 
 	var days = ITE(conf.User_expiration_days != 0,
 		conf.User_expiration_days, 365)
 	var expiration = time.Now().AddDate(0, 0, days).Unix()
-	var newuser = user_record{
+	var newuser = &user_record{
 		Uid:                        uid,
 		Claim:                      "",
 		Groups:                     groups,
@@ -1075,8 +1090,8 @@ func check_user_account(z *registrar, uid string, firstsession bool) *user_recor
 		Check_terms_and_conditions: false,
 		Modification_time:          now,
 	}
-	set_user_force(z.table, &newuser)
-	return &newuser
+	set_user_force(z.table, newuser)
+	return newuser
 }
 
 func check_frontend_proxy_trusted(z *registrar, proxy string) bool {

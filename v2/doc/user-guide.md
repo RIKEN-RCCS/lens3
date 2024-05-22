@@ -50,7 +50,7 @@ The S3-endpoint URL can be found in the menu at the top-left corner.
 ### Simple UI
 
 The current UI is created with vuejs+vuetify.  It is not good for your
-taste, try simple UI.  Simple UI reveals interactions with Web-Api.
+taste, try simple UI.  Simple UI reveals interactions with Web-API.
 If you are currently accessing the UI by a URL ending with
 ".../ui/index.html", the simple UI is avaiable at
 ".../ui2/index.html".
@@ -86,8 +86,8 @@ messages.  It is on the todo list.
 |:--:|
 | **Fig. Lens3 overview.** |
 
-Lens3 consists of Lens3-Mux and Lens3-Api -- Lens3-Mux is a
-multiplexer and Lens3-Api is a setting Web-API.  Others are by
+Lens3 consists of Lens3-Mux and Lens3-Reg -- Lens3-Mux is a
+multiplexer and Lens3-Reg is a setting Web-API.  Others are by
 third-parties.  MinIO is an open-source but commercially supported S3
 server.  Redis is an open-source database system.  A reverse-proxy is
 not specified in Lens3 but it is required for operation.
@@ -102,7 +102,7 @@ Lens3-Mux starts a MinIO instance on receiving an access request, and
 after a while, Lens3-Mux stops the instance when it becomes idle.
 Lens3-Mux starts a MinIO instance as a user process using "sudo".
 
-Lens3-Api provides management of buckets.  Lens3-Api manages buckets
+Lens3-Reg provides management of buckets.  Lens3-Reg manages buckets
 by a bucket pool, which is a unit of management in Lens3 and
 corresponds to a single MinIO instance.  A user first creates a bucket
 pool, then registers buckets to the pool.
@@ -162,7 +162,7 @@ immediately.
 ### No Bucket Operations
 
 Lens3 does not accept any bucket operations: creation, deletion, and
-listing.  Buckets can only be managed via Lens3-Api.  Specifically, a
+listing.  Buckets can only be managed via Lens3-Reg.  Specifically, a
 bucket creation request will fail because the request (applying to the
 root path) is not forwarded to a MinIO instance.  A bucket deletion
 will succeed, but it makes the states of Lens3 and a MinIO instance
@@ -214,7 +214,7 @@ by request by filtering server logs.
 
 * __bucket pool__: A management unit of S3 buckets.  It corresponds to
   a single MinIO instance.
-* __probe access__: Lens3-Api or the administrator tool accesses
+* __probe access__: Lens3-Reg or the administrator tool accesses
   Lens3-Mux to start a MinIO instance.  Such access is called a probe
   access.  A probe access is dropped at Lens3-Mux and not forwarded to
   a MinIO instance.
@@ -238,8 +238,8 @@ by request by filtering server logs.
 * Access keys have expiration.
 * Rich features are dropped.
 * Some locks in accessing a database are omitted.  Operations by
-  Lens3-Api and the administrator tool is sloppy.
-* MC commands are directly invoked from Lens3-Api to change the
+  Lens3-Reg and the administrator tool is sloppy.
+* MC commands are directly invoked from Lens3-Reg to change the
   setting of a MinIO instance.  MC commands were invoked at Lens3-Mux
   in v1.1.
 

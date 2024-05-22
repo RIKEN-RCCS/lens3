@@ -409,22 +409,6 @@ func load_db_data(v *redis.StringCmd, data any) bool {
 	return true
 }
 
-func load_db_data__(v *redis.StringCmd, data any) bool {
-	var b, err1 = v.Bytes()
-	if err1 != nil {
-		if err1 == redis.Nil {
-			return false
-		} else {
-			panic(err1)
-		}
-	}
-	var err2 = json.Unmarshal(b, data)
-	if err2 != nil {
-		panic(fmt.Sprint("Bad json data in the keyval-db", err1))
-	}
-	return true
-}
-
 func raise_when_marshaling_fail(w any) {
 	if w != nil {
 		panic(w)

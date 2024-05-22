@@ -13,7 +13,7 @@ The steps are:
 * Set up a proxy (Apache httpd)
 * Start Redis
 * Start Lens3-Mux (a Multiplexer service)
-* Start Lens3-Api (a Web-API service)
+* Start Lens3-Reg (a Registrar service)
 * Register users
 
 ## Assumptions
@@ -22,8 +22,8 @@ Lens3 consists of a couple of services as depicted in the
 configuration figure above.  A reverse-proxy can be any server, but
 Apache HTTP Server is used in this guide.  A key-value database
 server, Redis, runs at port=6378.  The Lens3 services, Lens3-Mux and
-Lens3-Api, run at port=8003 and port=8004, respectively.  The proxy is
-set up to forward requests to Lens3-Mux and Lens3-Api.
+Lens3-Reg, run at port=8003 and port=8004, respectively.  The proxy is
+set up to forward requests to Lens3-Mux and Lens3-Reg.
 
 A pseudo user "lens3" is the owner of the services in this guide, who
 is given a privilege of sudoers.  Optionally, a second pseudo user,
@@ -39,14 +39,14 @@ It is highly recommended the server host is not open for users.
   * HTTP Proxy (port=433)
   * Redis (port=6378)
   * Lens3-Mux (port=8003)
-  * Lens3-Api (port=8004)
+  * Lens3-Reg (port=8004)
 
 * User IDs
   * `lens3:lens3` -- a pseudo user for services
   * `httpd` or `nginx`
 
 * Files and directories
-  * /usr/lib/systemd/system/lenticularis-api.service
+  * /usr/lib/systemd/system/lenticularis-reg.service
   * /usr/lib/systemd/system/lenticularis-mux.service
   * /usr/lib/systemd/system/lenticularis-redis.service
   * /etc/lenticularis/conf.json
@@ -220,8 +220,8 @@ manager for setting.
 
 A path, "location" or "proxypass", should be "/" for Lens3-Mux,
 because a path cannot be specified for the S3 service.  Thus, when
-Lens3-Mux and Lens3-Api services are co-hosted, the Lens3-Mux path
-should be "/" and the Lens3-Api path should be something like
+Lens3-Mux and Lens3-Reg services are co-hosted, the Lens3-Mux path
+should be "/" and the Lens3-Reg path should be something like
 "/lens3.sts/" that is NOT a legitimate bucket name.  We will use
 "lens3.sts" in the following.
 
@@ -234,7 +234,7 @@ Server](https://min.io/docs/minio/linux/integrations/setup-nginx-proxy-with-mini
 
 ### A Note on Required HTTP Headers
 
-Lens3-Api trusts the "X-Remote-User" header passed by the proxy, which
+Lens3-Reg trusts the "X-Remote-User" header passed by the proxy, which
 holds an authenticated user claim.  Make sure the header is properly
 filtered and prepared by the proxy.
 
@@ -270,7 +270,7 @@ can be found in $TOP/apache/.  Copy one as
 A note for proxy setting: A trailing slash in
 ProxyPass/ProxyPassReverse lines is necessary (in both the pattern
 part and the URL part as noted in Apache documents).  It instructs the
-proxy to forward directory accesses to Lens3-Api.  As a consequence,
+proxy to forward directory accesses to Lens3-Reg.  As a consequence,
 accesses by "https://lens3.exmaple.com/lens3.sts" (without a slash)
 will fail.
 
@@ -418,7 +418,7 @@ Prepare a systemd unit file for Redis, and start/restart Redis.
 # systemctl start lenticularis-redis
 ```
 
-Lens3-Mux and Lens3-Api connect to Redis using the information held in
+Lens3-Mux and Lens3-Reg connect to Redis using the information held in
 "/etc/lenticularis/conf.json".  Copy and edit the configuration file.
 Keep it secure as it holds the password to Redis.
 
@@ -431,22 +431,22 @@ Keep it secure as it holds the password to Redis.
 
 ## Store Lens3 Settings in Redis
 
-Lens3-Mux and Lens3-Api load the configuration from Redis.  This
+Lens3-Mux and Lens3-Reg load the configuration from Redis.  This
 section prepares it.  It is better to run `lens3-admin` on the same
 host running Redis.  See the following descriptions of the fields of
 the configurations.
 
 * [mux-conf-yaml.md](mux-conf-yaml.md)
-* [api-conf-yaml.md](api-conf-yaml.md)
+* [reg-conf-yaml.md](reg-conf-yaml.md)
 
 Make the configurations in files to load them in Redis.
 
 ```
 # su - lens3
 lens3$ cd ~
-lens3$ cp $TOP/unit-file/api-conf.yaml api-conf.yaml
-lens3$ cp $TOP/unit-file/mux-conf.yaml mux-conf.yaml
-lens3$ vi api-conf.yaml
+lens3$ cp $TOP/v2/unit-file/reg-conf.yaml reg-conf.yaml
+lens3$ cp $TOP/v3/unit-file/mux-conf.yaml mux-conf.yaml
+lens3$ vi reg-conf.yaml
 lens3$ vi mux-conf.yaml
 ```
 
@@ -461,12 +461,12 @@ database in raw text.
 # chmod 660 /home/lens3/conf.json
 # su - lens3
 lens3$ cd ~
-lens3$ lens3-admin -c conf.json load-conf api-conf.yaml
+lens3$ lens3-admin -c conf.json load-conf reg-conf.yaml
 lens3$ lens3-admin -c conf.json load-conf mux-conf.yaml
 lens3$ lens3-admin -c conf.json show-conf
 ```
 
-Restarting of services, lenticularis-mux and lenticularis-api, is
+Restarting of services, lenticularis-mux and lenticularis-reg, is
 needed after setting configurations.  Run `systemctl restart` on them.
 
 ## Set up sudoers for Lens3-Mux
@@ -484,7 +484,7 @@ in "/etc/sudoers.d/lenticularis-sudoers".
 
 ## (Optional) Set up Log Rotation
 
-Logs from Lens3-Mux, Lens3-Api, Gunicorn, and Redis are rotated with
+Logs from Lens3-Mux, Lens3-Reg, Gunicorn, and Redis are rotated with
 "copytruncate".  Note the "copytruncate" method has a minor race.  The
 USR1 signal to Gunicorn is not used because it would terminate the
 process (in our environment), contrary to the Gunicorn document.  A
@@ -498,14 +498,14 @@ its work differs from what we expected.
 # chmod 644 /etc/logrotate.d/lenticularis
 ```
 
-## Start Lens3-Mux and Lens3-Api Services
+## Start Lens3-Mux and Lens3-Reg Services
 
-Lens3-Mux and Lens3-Api will be started as a system service with
+Lens3-Mux and Lens3-Reg will be started as a system service with
 uid:gid=lens3:lens3.  Copy (and edit) the systemd unit files for
-Lens3-Api and Lens3-Mux.
+Lens3-Reg and Lens3-Mux.
 
 ```
-# cp $TOP/unit-file/api/lenticularis-api.service /usr/lib/systemd/system/
+# cp $TOP/unit-file/reg/lenticularis-reg.service /usr/lib/systemd/system/
 # cp $TOP/unit-file/mux/lenticularis-mux.service /usr/lib/systemd/system/
 ```
 
@@ -513,9 +513,9 @@ Lens3-Api and Lens3-Mux.
 # systemctl daemon-reload
 # systemctl enable lenticularis-mux
 # systemctl start lenticularis-mux
-# systemctl enable lenticularis-api
-# systemctl start lenticularis-api
-# systemctl status lenticularis-mux lenticularis-api
+# systemctl enable lenticularis-reg
+# systemctl start lenticularis-reg
+# systemctl status lenticularis-mux lenticularis-reg
 
 ```
 
@@ -575,11 +575,11 @@ Redis status:
 # systemctl status lenticularis-redis
 ```
 
-Lens3-Mux and Lens3-Api status:
+Lens3-Mux and Lens3-Reg status:
 
 ```
 # systemctl status lenticularis-mux
-# systemctl status lenticularis-api
+# systemctl status lenticularis-reg
 # su - lens3
 lens3$ cd ~
 lens3$ lens3-admin -c conf.json show-ep
@@ -590,7 +590,7 @@ instances.  Something goes wrong if there are no entries of Lens3-Mux.
 
 ## Test Accesses
 
-Access Lens3-Api by a browser (for example):
+Access Lens3-Reg by a browser (for example):
 `http://lens3.example.com/lens3.sts/`
 
 For accessing buckets from S3 client, copy the access/secret keys
@@ -619,7 +619,7 @@ lens3$ aws --endpoint-url https://lens3.example.com/ s3 cp s3://bkt1/somefile1 -
 First check the systemd logs.  Diagnosing errors before a start of
 logging is tricky.
 
-A log of Lens3-Api may include a string "EXAMINE THE GUNICORN LOG",
+A log of Lens3-Reg may include a string "EXAMINE THE GUNICORN LOG",
 which indicates a Gunicorn process finishes by some reason.  Check the
 logs of Gunicorn.
 
@@ -680,6 +680,6 @@ It would happen in an https only site.  It may be fixed by modifying a
 
 ### No Support for Multiple Hosts
 
-Current version requires all the proxy, Lens3-Mux, and Lens3-Api run
+Current version requires all the proxy, Lens3-Mux, and Lens3-Reg run
 on a single host.  To set up for multiple hosts, it needs at least to
 specify options to Gunicorn to accept non-local connections.

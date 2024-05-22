@@ -41,14 +41,15 @@ func run_registrar() {
 }
 
 type customer struct {
-	client *http.Client
-	ep     string
-	user   *user.User
-	group  *user.Group
-	pool string
-	buckets []string
+	client   *http.Client
+	ep       string
+	user     *user.User
+	group    *user.Group
+	pool     string
+	buckets  []string
+	secrets  []string
 	response any
-	verbose bool
+	verbose  bool
 }
 
 func run_client() {
@@ -68,12 +69,13 @@ func run_client() {
 	var client = &http.Client{}
 
 	var c = &customer{
-		client: client,
-		ep:     "http://localhost:8004/",
-		user:   user1,
-		group:  group1,
-		pool: "",
+		client:  client,
+		ep:      "http://localhost:8004/",
+		user:    user1,
+		group:   group1,
+		pool:    "",
 		buckets: []string{},
+		verbose: false,
 	}
 
 	get_user_info(c, 200)
@@ -82,8 +84,13 @@ func run_client() {
 	list_pool(c, 200)
 	make_bucket(c, "lenticularis-oddity-x3", 200)
 	make_bucket(c, "lenticularis-oddity-x3", 400)
+	make_secret(c, 200)
+	make_secret(c, 200)
 	list_pool(c, 200)
 	delete_bucket(c, "lenticularis-oddity-x3", 200)
+	delete_secret(c, c.secrets[0], 200)
+	delete_secret(c, c.secrets[1], 200)
+	remove_pool(c, 200)
 }
 
 func consume_response(c *customer, opr string, rsp *http.Response) {
@@ -119,6 +126,15 @@ func check_expected_code(c *customer, opr string, rsp *http.Response, code int) 
 }
 
 func get_in_string_map(v1 any, keys ...string) string {
+	var vv = get_any_in_string_map(v1, keys...)
+	var v3, ok3 = vv.(string)
+	if !ok3 {
+		panic("v.(string)")
+	}
+	return v3
+}
+
+func get_any_in_string_map(v1 any, keys ...string) any {
 	var vv = v1
 	for _, key := range keys {
 		var m1, ok1 = vv.(map[string]any)
@@ -132,11 +148,7 @@ func get_in_string_map(v1 any, keys ...string) string {
 		//fmt.Println("map", vv, "→", v2)
 		vv = v2
 	}
-	var v3, ok3 = vv.(string)
-	if !ok3 {
-		panic("v.(string)")
-	}
-	return v3
+	return vv
 }
 
 func get_user_info(c *customer, code int) {
@@ -199,6 +211,31 @@ func make_pool(c *customer, dir string, code int) {
 		var v1 = get_in_string_map(c.response, "pool_desc", "pool_name")
 		fmt.Println("pool=", v1)
 		c.pool = v1
+	}
+}
+
+func remove_pool(c *customer, code int) {
+	var opr = "delete_pool"
+	fmt.Println("")
+	fmt.Println("")
+	var body1 io.Reader = nil
+	var url1 = c.ep + "pool/" + c.pool
+	var req, err2 = http.NewRequest("DELETE", url1, body1)
+	if err2 != nil {
+		panic(err2)
+	}
+	//req.Header.Add("X-Real-Ip", "localhost")
+	req.Header.Add("X-Remote-User", c.user.Name)
+	var rsp, err3 = c.client.Do(req)
+	if err3 != nil {
+		panic(err3)
+	}
+
+	consume_response(c, opr, rsp)
+	check_expected_code(c, opr, rsp, code)
+
+	if rsp.StatusCode == 200 {
+		fmt.Println(opr, "client.Do() content=", c.response)
 	}
 }
 
@@ -268,6 +305,74 @@ func delete_bucket(c *customer, bucket string, code int) {
 	fmt.Println("")
 	var body1 io.Reader = nil
 	var url1 = c.ep + "pool/" + c.pool + "/bucket/" + bucket
+	var req, err2 = http.NewRequest("DELETE", url1, body1)
+	if err2 != nil {
+		panic(err2)
+	}
+	//req.Header.Add("X-Real-Ip", "localhost")
+	req.Header.Add("X-Remote-User", c.user.Name)
+	var rsp, err3 = c.client.Do(req)
+	if err3 != nil {
+		panic(err3)
+	}
+
+	consume_response(c, opr, rsp)
+	check_expected_code(c, opr, rsp, code)
+	if rsp.StatusCode == 200 {
+		fmt.Println(opr, "client.Do() content=", c.response)
+	}
+}
+
+func make_secret(c *customer, code int) {
+	var opr = "make_secret"
+	fmt.Println("")
+	fmt.Println("")
+	var args1 = &make_secret_arguments{
+		Secret_policy:   "readwrite",
+		Expiration_time: time.Now().AddDate(0, 0, 30).Unix(),
+	}
+	var b1, err1 = json.Marshal(args1)
+	if err1 != nil {
+		panic(err1)
+	}
+	var body1 = bytes.NewReader(b1)
+
+	var url1 = c.ep + "pool/" + c.pool + "/secret"
+	var req, err2 = http.NewRequest("POST", url1, body1)
+	if err2 != nil {
+		panic(err2)
+	}
+	//req.Header.Add("X-Real-Ip", "localhost")
+	req.Header.Add("X-Remote-User", c.user.Name)
+	var rsp, err3 = c.client.Do(req)
+	if err3 != nil {
+		panic(err3)
+	}
+
+	consume_response(c, opr, rsp)
+	check_expected_code(c, opr, rsp, code)
+	if rsp.StatusCode == 200 {
+		var vv = get_any_in_string_map(c.response, "pool_desc", "secrets")
+		var v1, ok1 = vv.([]any)
+		if !ok1 {
+			panic("v.([]any)")
+		}
+		var accesskeys []string
+		for _, accesskey := range v1 {
+			var k = get_in_string_map(accesskey, "access_key")
+			accesskeys = append(accesskeys, k)
+		}
+		c.secrets = accesskeys
+		fmt.Println("secrets=", c.secrets)
+	}
+}
+
+func delete_secret(c *customer, secret string, code int) {
+	var opr = "delete_secret"
+	fmt.Println("")
+	fmt.Println("")
+	var body1 io.Reader = nil
+	var url1 = c.ep + "pool/" + c.pool + "/secret/" + secret
 	var req, err2 = http.NewRequest("DELETE", url1, body1)
 	if err2 != nil {
 		panic(err2)

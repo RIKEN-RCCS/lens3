@@ -379,7 +379,7 @@ func start_registrar(z *registrar) {
 
 	// A POST request makes a secret.
 
-	z.router.HandleFunc("POST /pool/{pool}/secret/{$}", func(w http.ResponseWriter, r *http.Request) {
+	z.router.HandleFunc("POST /pool/{pool}/secret", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_proxy_exc(z, w, r)
 		var pool = r.PathValue("pool")
 		var _ = make_secret_and_return_response(z, w, r, pool)

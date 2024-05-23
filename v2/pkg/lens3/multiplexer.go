@@ -207,7 +207,7 @@ func make_forwarding_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 		}
 
 		var pool = "d4f0c4645fce5734"
-		//var pool = generate_pool_name()
+		//var pool = generate_random_key()
 		var desc = get_backend_process(m.table, pool)
 		logger.debugf("Mux(pool=%s) backend=%v.", pool, desc)
 		if desc == nil {

@@ -16,13 +16,15 @@ package lens3
 //   separators=(",", ":"),
 // ).encode("utf-8")
 
-// ??? NOTE: Maybe, consider adding a "Retry-After" header for 503 error.
-
-// ??? For CSRF prevention, this uses a "double submit cookie" as specified
-// by fastapi_csrf_protect.  It uses a cookie "fastapi-csrf-token" and
-// a header "X-CSRF-Token" (the names are fixed).  The CSRF state is
-// initialized in getting user_info.  See
+// It uses a "double submit cookie" for CSRF prevention used in
+// fastapi_csrf_protect.  It uses a cookie+header pair.  A cookie is
+// "fastapi-csrf-token" and a header is "X-Csrf-Token".  However, this
+// implementes only the header part, assuming the cookie part is
+// subsumed by authenitication by httpd.  The CSRF state of a client
+// is set by a response of "GET /user_info".  See
 // https://github.com/aekasitt/fastapi-csrf-protect.
+
+// ??? NOTE: Maybe, consider adding a "Retry-After" header for 503 error.
 
 import (
 	"bytes"
@@ -79,17 +81,17 @@ type registrar struct {
 
 type response_to_ui interface{ response_union() }
 
-func (*pool_desc_response) response_union() {}
+func (*pool_data_response) response_union() {}
 func (*user_info_response) response_union() {}
 
 // ???_RESPONSE is a json format of a response to UI.  See the
 // function set_pool_data() in "v1/ui/src/lens3c.ts".  Status is
 // "success" or "error".
 type response_common struct {
-	Status       string            `json:"status"`
-	Reason       map[string]string `json:"reason"`
-	X_csrf_token string            `json:"x_csrf_token"`
-	Timestamp    int64             `json:"time"`
+	Status    string            `json:"status"`
+	Reason    map[string]string `json:"reason"`
+	Timestamp int64             `json:"time"`
+	//X_csrf_token string            `json:"x_csrf_token"`
 }
 
 type success_response struct {
@@ -102,20 +104,21 @@ type error_response struct {
 
 type user_info_response struct {
 	response_common
-	User_info user_info_ui `json:"user_info"`
+	Csrf_token string       `json:"x_csrf_token"`
+	User_info  user_info_ui `json:"user_info"`
 }
 
-type pool_desc_response struct {
+type pool_data_response struct {
 	response_common
-	Pool_desc *pool_desc_ui `json:"pool_desc"`
+	Pool_data *pool_data_ui `json:"pool_desc"`
 }
 
 type pool_list_response struct {
 	response_common
-	Pool_list []*pool_desc_ui `json:"pool_list"`
+	Pool_list []*pool_data_ui `json:"pool_list"`
 }
 
-type pool_desc_ui struct {
+type pool_data_ui struct {
 	Pool                string            `json:"pool_name"`
 	Buckets_directory   string            `json:"buckets_directory"`
 	Owner_uid           string            `json:"owner_uid"`
@@ -128,23 +131,23 @@ type pool_desc_ui struct {
 	User_enabled_status bool              `json:"user_enabled_status"`
 	Backend_state       pool_state        `json:"minio_state"`
 	Backend_reason      pool_reason       `json:"minio_reason"`
-	Modification_time   int64             `json:"modification_time"`
+	Timestamp           int64             `json:"modification_time"`
 }
 
 type bucket_desc_ui struct {
-	Pool              string        `json:"pool"`
-	Bucket            string        `json:"name"`
-	Bucket_policy     bucket_policy `json:"bkt_policy"`
-	Modification_time int64         `json:"modification_time"`
+	Pool          string        `json:"pool"`
+	Bucket        string        `json:"name"`
+	Bucket_policy bucket_policy `json:"bkt_policy"`
+	Timestamp     int64         `json:"modification_time"`
 }
 
 type secret_desc_ui struct {
-	Pool              string `json:"owner"`
-	Access_key        string `json:"access_key"`
-	Secret_key        string `json:"secret_key"`
-	Secret_policy     string `json:"secret_policy"`
-	Expiration_time   int64  `json:"expiration_time"`
-	Modification_time int64  `json:"modification_time"`
+	Pool            string `json:"owner"`
+	Access_key      string `json:"access_key"`
+	Secret_key      string `json:"secret_key"`
+	Secret_policy   string `json:"secret_policy"`
+	Expiration_time int64  `json:"expiration_time"`
+	Timestamp       int64  `json:"modification_time"`
 }
 
 type user_info_ui struct {
@@ -223,6 +226,8 @@ var (
 		"message", "Bad proxy configuration"}
 	message_Bad_user_account = [2]string{
 		"message", "Missing or bad user_account"}
+	message_Bad_csrf_tokens = [2]string{
+		"message", "Missing or bad csrf-tokens"}
 	message_No_pool = [2]string{
 		"message", "No pool"}
 	message_No_bucket = [2]string{
@@ -451,14 +456,16 @@ func return_user_info(z *registrar, w http.ResponseWriter, r *http.Request) *use
 	}
 
 	var info = copy_user_record_to_ui(z, u)
+	var csrf = make_csrf_tokens(z, u.Uid)
+	var now = time.Now().Unix()
 	var rspn = &user_info_response{
 		response_common: response_common{
-			Status:       "success",
-			Reason:       nil,
-			X_csrf_token: "???",
-			Timestamp:    time.Now().Unix(),
+			Status:    "success",
+			Reason:    nil,
+			Timestamp: now,
 		},
-		User_info: *info,
+		Csrf_token: csrf.Csrf_token_h,
+		User_info:  *info,
 	}
 	return_json_repsonse(z, w, r, rspn)
 	return rspn
@@ -477,11 +484,11 @@ func list_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 	}
 
 	var namelist = list_pools(z.table, ITE(pool == "", "*", pool))
-	var poollist []*pool_desc_ui
+	var poollist []*pool_data_ui
 	for _, name := range namelist {
-		var d = gather_pool_desc(z.table, name)
+		var d = gather_pool_data(z.table, name)
 		if d != nil && d.Owner_uid == u.Uid {
-			poollist = append(poollist, copy_pool_desc_to_ui(d))
+			poollist = append(poollist, copy_pool_data_to_ui(d))
 		}
 	}
 
@@ -501,15 +508,14 @@ func list_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 		return nil
 	}
 
-	slices.SortFunc(poollist, func(x, y *pool_desc_ui) int {
+	slices.SortFunc(poollist, func(x, y *pool_data_ui) int {
 		return strings.Compare(x.Buckets_directory, y.Buckets_directory)
 	})
 	var rspn = &pool_list_response{
 		response_common: response_common{
-			Status:       "success",
-			Reason:       nil,
-			X_csrf_token: "???",
-			Timestamp:    time.Now().Unix(),
+			Status:    "success",
+			Reason:    nil,
+			Timestamp: time.Now().Unix(),
 		},
 		Pool_list: poollist,
 	}
@@ -517,7 +523,7 @@ func list_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 	return rspn
 }
 
-func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request) *pool_desc_response {
+func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request) *pool_data_response {
 	var opr = "make-pool"
 	var u = grant_access_with_error_return(z, w, r, "", false)
 	if u == nil {
@@ -534,8 +540,8 @@ func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 
 	var now int64 = time.Now().Unix()
 	var poolname = &pool_mutex_record{
-		Owner_uid:         u.Uid,
-		Modification_time: now,
+		Owner_uid: u.Uid,
+		Timestamp: now,
 	}
 	var pool = set_with_unique_pool_name(z.table, poolname)
 
@@ -543,9 +549,9 @@ func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 
 	var path = args.Buckets_directory
 	var bd = &bucket_directory_record{
-		Pool:              pool,
-		Directory:         path,
-		Modification_time: now,
+		Pool:      pool,
+		Directory: path,
+		Timestamp: now,
 	}
 	var ok, holder = set_ex_buckets_directory(z.table, path, bd)
 	if !ok {
@@ -569,8 +575,8 @@ func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 		Secret_key:    generate_secret_key(),
 		Secret_policy: secret_policy_internal_use,
 		//Internal_use:      true,
-		Expiration_time:   expiration,
-		Modification_time: now,
+		Expiration_time: expiration,
+		Timestamp:       now,
 	}
 	var probe = set_with_unique_secret_key(z.table, secret)
 
@@ -584,11 +590,10 @@ func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 		Probe_key:         probe,
 		Online_status:     true,
 		Expiration_time:   expiration,
-		Modification_time: now,
+		Timestamp:         now,
 	}
 	set_pool(z.table, pool, newpool)
 	set_pool_state(z.table, pool, pool_state_INITIAL, pool_reason_NORMAL)
-
 	var rspn = return_pool_data(z, w, r, pool)
 	return rspn
 }
@@ -603,7 +608,7 @@ func delete_pool_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 		return nil
 	}
 
-	var d = gather_pool_desc(z.table, pool)
+	var d = gather_pool_data(z.table, pool)
 	if d == nil {
 		return_error_response(z, w, r, http_status_400_bad_request,
 			[][2]string{
@@ -620,9 +625,9 @@ func delete_pool_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 	// Delete buckets_directory.
 
 	var path = d.Buckets_directory
-	var err1 = delete_buckets_directory_unconditionally(z.table, path)
-	if err1 != nil {
-		logger.infof("delete_buckets_directory failed (ignored): err=(%v)", err1)
+	var ok1 = delete_buckets_directory_unconditionally(z.table, path)
+	if !ok1 {
+		logger.infof("delete_buckets_directory failed (ignored)")
 	}
 
 	// Delete buckets.
@@ -630,9 +635,9 @@ func delete_pool_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 	var bkts = d.Buckets
 	for _, b := range bkts {
 		assert_fatal(b.Pool == pool)
-		var err2 = delete_bucket_unconditionally(z.table, b.Bucket)
-		if err2 != nil {
-			logger.infof("delete_bucket failed (ignored): err=(%v)", err2)
+		var ok2 = delete_bucket_unconditionally(z.table, b.Bucket)
+		if !ok2 {
+			logger.infof("delete_bucket failed (ignored)")
 		}
 	}
 
@@ -640,9 +645,9 @@ func delete_pool_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 
 	for _, k := range d.Secrets {
 		assert_fatal(k.Pool == pool)
-		var err3 = delete_secret_key_unconditionally(z.table, k._access_key)
-		if err3 != nil {
-			logger.infof("delete_secret_key failed (ignored): err=(%v)", err3)
+		var ok = delete_secret_key_unconditionally(z.table, k._access_key)
+		if !ok {
+			logger.infof("delete_secret_key failed (ignored)")
 		}
 	}
 
@@ -655,17 +660,16 @@ func delete_pool_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 
 	var rspn = &success_response{
 		response_common: response_common{
-			Status:       "success",
-			Reason:       nil,
-			X_csrf_token: "???",
-			Timestamp:    time.Now().Unix(),
+			Status:    "success",
+			Reason:    nil,
+			Timestamp: time.Now().Unix(),
 		},
 	}
 	return_json_repsonse(z, w, r, rspn)
 	return rspn
 }
 
-func make_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request, pool string) *pool_desc_response {
+func make_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request, pool string) *pool_data_response {
 	var opr = "make-bucket"
 	var u = grant_access_with_error_return(z, w, r, pool, false)
 	if u == nil {
@@ -684,11 +688,11 @@ func make_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 	var now int64 = time.Now().Unix()
 	var expiration = z.determine_expiration_time
 	var desc = &bucket_record{
-		Pool:              pool,
-		Bucket:            bucket,
-		Bucket_policy:     policy,
-		Expiration_time:   expiration,
-		Modification_time: now,
+		Pool:            pool,
+		Bucket:          bucket,
+		Bucket_policy:   policy,
+		Expiration_time: expiration,
+		Timestamp:       now,
 	}
 	var ok1, holder = set_ex_bucket(z.table, bucket, desc)
 	if !ok1 {
@@ -707,7 +711,7 @@ func make_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 	return rspn
 }
 
-func delete_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request, pool string, bucket string) *pool_desc_response {
+func delete_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request, pool string, bucket string) *pool_data_response {
 	var opr = "delete-bucket"
 	var u = grant_access_with_error_return(z, w, r, pool, false)
 	if u == nil {
@@ -720,8 +724,8 @@ func delete_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *h
 		return nil
 	}
 
-	var err1 = delete_bucket_unconditionally(z.table, bucket)
-	if err1 != nil {
+	var ok1 = delete_bucket_unconditionally(z.table, bucket)
+	if !ok1 {
 		return_error_response(z, w, r, http_status_404_not_found,
 			[][2]string{
 				message_No_bucket,
@@ -733,7 +737,7 @@ func delete_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *h
 	return rspn
 }
 
-func make_secret_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request, pool string) *pool_desc_response {
+func make_secret_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request, pool string) *pool_data_response {
 	var opr = "make-secret"
 	var u = grant_access_with_error_return(z, w, r, pool, false)
 	if u == nil {
@@ -751,19 +755,19 @@ func make_secret_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 	var expiration = z.determine_expiration_time
 	var now = time.Now().Unix()
 	var secret = &secret_record{
-		Pool:              pool,
-		_access_key:       "",
-		Secret_key:        generate_secret_key(),
-		Secret_policy:     policy,
-		Expiration_time:   expiration,
-		Modification_time: now,
+		Pool:            pool,
+		_access_key:     "",
+		Secret_key:      generate_secret_key(),
+		Secret_policy:   policy,
+		Expiration_time: expiration,
+		Timestamp:       now,
 	}
 	var _ = set_with_unique_secret_key(z.table, secret)
 	var rspn = return_pool_data(z, w, r, pool)
 	return rspn
 }
 
-func delete_secret_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request, pool string, secret string) *pool_desc_response {
+func delete_secret_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request, pool string, secret string) *pool_data_response {
 	var opr = "delete-secret"
 	var u = grant_access_with_error_return(z, w, r, pool, false)
 	if u == nil {
@@ -777,9 +781,9 @@ func delete_secret_and_return_response(z *registrar, w http.ResponseWriter, r *h
 	}
 
 	//ensure_secret_owner_only(self.tables, access_key, pool_id)
-	var err2 = delete_secret_key_unconditionally(z.table, secret)
-	if err2 != nil {
-		logger.infof("delete_secret_key failed (ignored): err=(%v)", err2)
+	var ok = delete_secret_key_unconditionally(z.table, secret)
+	if !ok {
+		logger.infof("delete_secret_key failed (ignored)")
 		return_error_response(z, w, r, http_status_400_bad_request,
 			[][2]string{
 				message_Bad_secret,
@@ -788,23 +792,22 @@ func delete_secret_and_return_response(z *registrar, w http.ResponseWriter, r *h
 		return nil
 	}
 
-	var rpsn *pool_desc_response = return_pool_data(z, w, r, pool)
+	var rpsn *pool_data_response = return_pool_data(z, w, r, pool)
 	return rpsn
 }
 
 // RETURN_POOL_DATA returns pool data.
-func return_pool_data(z *registrar, w http.ResponseWriter, r *http.Request, pool string) *pool_desc_response {
-	var d = gather_pool_desc(z.table, pool)
+func return_pool_data(z *registrar, w http.ResponseWriter, r *http.Request, pool string) *pool_data_response {
+	var d = gather_pool_data(z.table, pool)
 	assert_fatal(d != nil)
-	var pooldesc = copy_pool_desc_to_ui(d)
-	var rspn = &pool_desc_response{
+	var pooldata = copy_pool_data_to_ui(d)
+	var rspn = &pool_data_response{
 		response_common: response_common{
-			Status:       "success",
-			Reason:       nil,
-			X_csrf_token: "???",
-			Timestamp:    time.Now().Unix(),
+			Status:    "success",
+			Reason:    nil,
+			Timestamp: time.Now().Unix(),
 		},
-		Pool_desc: pooldesc,
+		Pool_data: pooldata,
 	}
 	return_json_repsonse(z, w, r, rspn)
 	return rspn
@@ -828,10 +831,9 @@ func return_error_response(z *registrar, w http.ResponseWriter, r *http.Request,
 	}
 	var rspn = &error_response{
 		response_common: response_common{
-			Status:       "error",
-			Reason:       m,
-			X_csrf_token: "???",
-			Timestamp:    time.Now().Unix(),
+			Status:    "error",
+			Reason:    m,
+			Timestamp: time.Now().Unix(),
 		},
 	}
 	var b1, err1 = json.Marshal(rspn)
@@ -895,6 +897,7 @@ func grant_access_with_error_return(z *registrar, w http.ResponseWriter, r *http
 	fmt.Println("r.RemoteAddr=", r.RemoteAddr)
 	fmt.Println("X-Real-Ip=", r.Header.Get("X-Real-Ip"))
 	fmt.Println("X-Remote-User=", r.Header.Get("X-Remote-User"))
+	fmt.Println("X-Csrf-Token=", r.Header.Get("X-Csrf-Token"))
 
 	if ensure_lens3_is_running(z.table) {
 		logger.errf("Reg() lens3 is not running")
@@ -933,7 +936,17 @@ func grant_access_with_error_return(z *registrar, w http.ResponseWriter, r *http
 		return nil
 	}
 
-	//csrf_protect.validate_csrf(r)
+	if !firstsession {
+		var ok = check_csrf_tokens(z, w, r, uid)
+		if !ok {
+			logger.warnf("Reg() Bad csrf tokens: uid=(%s)", uid)
+			return_error_response(z, w, r, http_status_401_unauthorized,
+				[][2]string{
+					message_Bad_csrf_tokens,
+				})
+			return nil
+		}
+	}
 
 	if pool == "" {
 		return u
@@ -951,8 +964,8 @@ func grant_access_with_error_return(z *registrar, w http.ResponseWriter, r *http
 		return nil
 	}
 
-	var pooldesc = get_pool(z.table, pool)
-	if pooldesc == nil {
+	var poolprop = get_pool(z.table, pool)
+	if poolprop == nil {
 		logger.debugf("Reg() No pool: uid=(%s) pool=(%s)", uid, pool)
 		return_error_response(z, w, r, http_status_401_unauthorized,
 			[][2]string{
@@ -961,7 +974,7 @@ func grant_access_with_error_return(z *registrar, w http.ResponseWriter, r *http
 			})
 		return nil
 	}
-	if pooldesc.Owner_uid != u.Uid {
+	if poolprop.Owner_uid != u.Uid {
 		logger.debugf("Reg() Not pool owner: uid=(%s) pool=(%s)", uid, pool)
 		return_error_response(z, w, r, http_status_401_unauthorized,
 			[][2]string{
@@ -1088,7 +1101,7 @@ func check_user_account(z *registrar, uid string, firstsession bool) *user_recor
 		Enabled:                    true,
 		Expiration_time:            expiration,
 		Check_terms_and_conditions: false,
-		Modification_time:          now,
+		Timestamp:                  now,
 	}
 	set_user_force(z.table, newuser)
 	return newuser
@@ -1115,9 +1128,34 @@ func check_frontend_proxy_trusted(z *registrar, proxy string) bool {
 	return false
 }
 
+func check_csrf_tokens(z *registrar, w http.ResponseWriter, r *http.Request, uid string) bool {
+	var v *csrf_token_record = get_csrf_token(z.table, uid)
+	var h = r.Header.Get("X-Csrf-Token")
+	if !(v != nil && h != "" && v.Csrf_token_h == h) {
+		fmt.Println("csrf h=", h, "v=", v)
+	}
+	return (v != nil && h != "" && v.Csrf_token_h == h)
+}
+
+func make_csrf_tokens(z *registrar, uid string) *csrf_token_record {
+	var conf = &z.Registrar
+	var now = time.Now().Unix()
+	var data = &csrf_token_record{
+		Csrf_token_c: generate_random_key(),
+		Csrf_token_h: generate_random_key(),
+		Timestamp:    now,
+	}
+	set_csrf_token(z.table, uid, data)
+	set_csrf_token_expiry(z.table, uid, int64(conf.Ui_session_timeout))
+	//var x = get_csrf_token(z.table, uid)
+	//fmt.Println("make_csrf_tokens=", x)
+
+	return data
+}
+
 func check_pool_owner__(t *keyval_table, uid string, pool string) bool {
-	var pooldesc = get_pool(t, pool)
-	if pooldesc != nil && pooldesc.Owner_uid == uid {
+	var poolprop = get_pool(t, pool)
+	if poolprop != nil && poolprop.Owner_uid == uid {
 		return true
 	} else {
 		return false
@@ -1351,8 +1389,8 @@ func copy_user_record_to_ui(z *registrar, u *user_record) *user_info_ui {
 	return v
 }
 
-func copy_pool_desc_to_ui(d *pool_desc) *pool_desc_ui {
-	var v = &pool_desc_ui{
+func copy_pool_data_to_ui(d *pool_data) *pool_data_ui {
+	var v = &pool_data_ui{
 		// POOL_RECORD
 		Pool:              d.pool_record.Pool,
 		Buckets_directory: d.Buckets_directory,
@@ -1361,8 +1399,8 @@ func copy_pool_desc_to_ui(d *pool_desc) *pool_desc_ui {
 		Probe_key:         d.Probe_key,
 		Online_status:     d.Online_status,
 		Expiration_time:   d.pool_record.Expiration_time,
-		Modification_time: d.pool_record.Modification_time,
-		// POOL_DESC
+		Timestamp:         d.pool_record.Timestamp,
+		// POOL_DATA
 		Buckets: copy_bucket_desc_to_ui(d.Buckets),
 		Secrets: copy_secret_desc_to_ui(d.Secrets),
 		// USER_RECORD
@@ -1378,10 +1416,10 @@ func copy_bucket_desc_to_ui(m []*bucket_record) []*bucket_desc_ui {
 	var buckets []*bucket_desc_ui
 	for _, d := range m {
 		var u = &bucket_desc_ui{
-			Pool:              d.Pool,
-			Bucket:            d.Bucket,
-			Bucket_policy:     d.Bucket_policy,
-			Modification_time: d.Modification_time,
+			Pool:          d.Pool,
+			Bucket:        d.Bucket,
+			Bucket_policy: d.Bucket_policy,
+			Timestamp:     d.Timestamp,
 		}
 		buckets = append(buckets, u)
 	}
@@ -1395,12 +1433,12 @@ func copy_secret_desc_to_ui(m []*secret_record) []*secret_desc_ui {
 			continue
 		}
 		var u = &secret_desc_ui{
-			Pool:              d.Pool,
-			Access_key:        d._access_key,
-			Secret_key:        d.Secret_key,
-			Secret_policy:     map_secret_policy_to_ui[d.Secret_policy],
-			Expiration_time:   d.Expiration_time,
-			Modification_time: d.Modification_time,
+			Pool:            d.Pool,
+			Access_key:      d._access_key,
+			Secret_key:      d.Secret_key,
+			Secret_policy:   map_secret_policy_to_ui[d.Secret_policy],
+			Expiration_time: d.Expiration_time,
+			Timestamp:       d.Timestamp,
 		}
 		secrets = append(secrets, u)
 	}
@@ -1437,11 +1475,11 @@ func find_owner_of_pool(z *registrar, pool string) string {
 	if pool == "" {
 		return "unknown-user"
 	}
-	var pooldesc = get_pool(z.table, pool)
-	if pooldesc == nil {
+	var poolprop = get_pool(z.table, pool)
+	if poolprop == nil {
 		return "unknown-user"
 	}
-	return pooldesc.Owner_uid
+	return poolprop.Owner_uid
 }
 
 func intern_ui_secret_policy(policy string) secret_policy {

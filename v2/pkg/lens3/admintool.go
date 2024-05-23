@@ -31,7 +31,7 @@ type cmd struct {
 type dump_data struct {
 	Confs []*lens3_conf  `json:"Confs"`
 	Users []*user_record `json:"Users"`
-	Pools []*pool_desc   `json:"Pools"`
+	Pools []*pool_data   `json:"Pools"`
 }
 
 var cmd_table = map[string]*cmd{}
@@ -104,9 +104,9 @@ func dump_db__(t *keyval_table) *dump_data {
 	// Collect pools:
 	var poollist = list_pools(t, "*")
 	//fmt.Println("poollist=", poollist)
-	var pools []*pool_desc
+	var pools []*pool_data
 	for _, pool := range poollist {
-		var i = gather_pool_desc(t, pool)
+		var i = gather_pool_data(t, pool)
 		//fmt.Println("pool=", i)
 		if i != nil {
 			pools = append(pools, i)
@@ -271,9 +271,9 @@ var cmd_list = []*cmd{
 			} else {
 				list = args[1:]
 			}
-			var descs []*pool_desc
+			var descs []*pool_data
 			for _, name := range list {
-				var d = gather_pool_desc(adm.table, name)
+				var d = gather_pool_data(adm.table, name)
 				if d == nil {
 					fmt.Printf("No pool found for {pid}")
 				} else {
@@ -332,9 +332,9 @@ var cmd_list = []*cmd{
 		run: func(adm *adm, args []string) {
 			fmt.Println("// dumping...")
 			var poollist = list_pools(adm.table, "*")
-			var pools []*pool_desc
+			var pools []*pool_data
 			for _, pool := range poollist {
-				var i = gather_pool_desc(adm.table, pool)
+				var i = gather_pool_data(adm.table, pool)
 				if i != nil {
 					pools = append(pools, i)
 				}

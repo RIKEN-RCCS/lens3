@@ -185,7 +185,7 @@ func generate_secret_key() string {
 	return random_string(secret_key_length)
 }
 
-func generate_pool_name() string {
+func generate_random_key() string {
 	var v1 = strconv.FormatUint(rand.Uint64(), 16)
 	var v2 = "0000000000000000" + v1
 	return v2[len(v2)-16:]

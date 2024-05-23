@@ -41,15 +41,16 @@ func run_registrar() {
 }
 
 type customer struct {
-	client   *http.Client
-	ep       string
-	user     *user.User
-	group    *user.Group
-	pool     string
-	buckets  []string
-	secrets  []string
-	response any
-	verbose  bool
+	client     *http.Client
+	ep         string
+	user       *user.User
+	group      *user.Group
+	csrf_token string
+	pool       string
+	buckets    []string
+	secrets    []string
+	response   any
+	verbose    bool
 }
 
 func run_client() {
@@ -69,13 +70,14 @@ func run_client() {
 	var client = &http.Client{}
 
 	var c = &customer{
-		client:  client,
-		ep:      "http://localhost:8004/",
-		user:    user1,
-		group:   group1,
-		pool:    "",
-		buckets: []string{},
-		verbose: false,
+		client:     client,
+		ep:         "http://localhost:8004/",
+		user:       user1,
+		group:      group1,
+		csrf_token: "",
+		pool:       "",
+		buckets:    []string{},
+		verbose:    false,
 	}
 
 	get_user_info(c, 200)
@@ -101,18 +103,18 @@ func consume_response(c *customer, opr string, rsp *http.Response) {
 	if err1 != nil {
 		panic(err1)
 	}
+	if c.verbose {
+		fmt.Println(opr, "client.Do() content=", string(content))
+	}
+
 	var data any
 	var err2 = json.Unmarshal(content, &data)
 	if err2 != nil {
 		panic(err2)
 	}
 	c.response = data
-	if c.verbose {
-		//fmt.Println(opr, "client.Do() content=", string(content))
-		fmt.Println(opr, "client.Do() content=", data)
-	}
 	if rsp.StatusCode != 200 {
-		var msg = get_in_string_map(c.response, "reason", "message")
+		var msg = get_string_in_string_map(c.response, "reason", "message")
 		fmt.Println("error=", msg)
 	}
 }
@@ -125,7 +127,7 @@ func check_expected_code(c *customer, opr string, rsp *http.Response, code int) 
 	}
 }
 
-func get_in_string_map(v1 any, keys ...string) string {
+func get_string_in_string_map(v1 any, keys ...string) string {
 	var vv = get_any_in_string_map(v1, keys...)
 	var v3, ok3 = vv.(string)
 	if !ok3 {
@@ -174,6 +176,10 @@ func get_user_info(c *customer, code int) {
 
 	if rsp.StatusCode == 200 {
 		fmt.Println(opr, "client.Do() content=", c.response)
+
+		var v1 = get_string_in_string_map(c.response, "x_csrf_token")
+		fmt.Println("csrf_token=", v1)
+		c.csrf_token = v1
 	}
 }
 
@@ -199,6 +205,7 @@ func make_pool(c *customer, dir string, code int) {
 	}
 	//req.Header.Add("X-Real-Ip", "localhost")
 	req.Header.Add("X-Remote-User", c.user.Name)
+	req.Header.Add("X-Csrf-Token", c.csrf_token)
 	var rsp, err3 = c.client.Do(req)
 	if err3 != nil {
 		panic(err3)
@@ -208,7 +215,7 @@ func make_pool(c *customer, dir string, code int) {
 	check_expected_code(c, opr, rsp, code)
 
 	if rsp.StatusCode == 200 {
-		var v1 = get_in_string_map(c.response, "pool_desc", "pool_name")
+		var v1 = get_string_in_string_map(c.response, "pool_desc", "pool_name")
 		fmt.Println("pool=", v1)
 		c.pool = v1
 	}
@@ -226,6 +233,7 @@ func remove_pool(c *customer, code int) {
 	}
 	//req.Header.Add("X-Real-Ip", "localhost")
 	req.Header.Add("X-Remote-User", c.user.Name)
+	req.Header.Add("X-Csrf-Token", c.csrf_token)
 	var rsp, err3 = c.client.Do(req)
 	if err3 != nil {
 		panic(err3)
@@ -251,6 +259,7 @@ func list_pool(c *customer, code int) {
 	}
 	//req.Header.Add("X-Real-Ip", "localhost")
 	req.Header.Add("X-Remote-User", c.user.Name)
+	req.Header.Add("X-Csrf-Token", c.csrf_token)
 	var rsp, err3 = c.client.Do(req)
 	if err3 != nil {
 		panic(err3)
@@ -286,6 +295,7 @@ func make_bucket(c *customer, bucket string, code int) {
 	}
 	//req.Header.Add("X-Real-Ip", "localhost")
 	req.Header.Add("X-Remote-User", c.user.Name)
+	req.Header.Add("X-Csrf-Token", c.csrf_token)
 	var rsp, err3 = c.client.Do(req)
 	if err3 != nil {
 		panic(err3)
@@ -293,6 +303,7 @@ func make_bucket(c *customer, bucket string, code int) {
 
 	consume_response(c, opr, rsp)
 	check_expected_code(c, opr, rsp, code)
+
 	if rsp.StatusCode == 200 {
 		fmt.Println(opr, "client.Do() content=", c.response)
 	}
@@ -311,6 +322,7 @@ func delete_bucket(c *customer, bucket string, code int) {
 	}
 	//req.Header.Add("X-Real-Ip", "localhost")
 	req.Header.Add("X-Remote-User", c.user.Name)
+	req.Header.Add("X-Csrf-Token", c.csrf_token)
 	var rsp, err3 = c.client.Do(req)
 	if err3 != nil {
 		panic(err3)
@@ -318,6 +330,7 @@ func delete_bucket(c *customer, bucket string, code int) {
 
 	consume_response(c, opr, rsp)
 	check_expected_code(c, opr, rsp, code)
+
 	if rsp.StatusCode == 200 {
 		fmt.Println(opr, "client.Do() content=", c.response)
 	}
@@ -344,6 +357,7 @@ func make_secret(c *customer, code int) {
 	}
 	//req.Header.Add("X-Real-Ip", "localhost")
 	req.Header.Add("X-Remote-User", c.user.Name)
+	req.Header.Add("X-Csrf-Token", c.csrf_token)
 	var rsp, err3 = c.client.Do(req)
 	if err3 != nil {
 		panic(err3)
@@ -351,6 +365,7 @@ func make_secret(c *customer, code int) {
 
 	consume_response(c, opr, rsp)
 	check_expected_code(c, opr, rsp, code)
+
 	if rsp.StatusCode == 200 {
 		var vv = get_any_in_string_map(c.response, "pool_desc", "secrets")
 		var v1, ok1 = vv.([]any)
@@ -359,7 +374,7 @@ func make_secret(c *customer, code int) {
 		}
 		var accesskeys []string
 		for _, accesskey := range v1 {
-			var k = get_in_string_map(accesskey, "access_key")
+			var k = get_string_in_string_map(accesskey, "access_key")
 			accesskeys = append(accesskeys, k)
 		}
 		c.secrets = accesskeys
@@ -379,6 +394,7 @@ func delete_secret(c *customer, secret string, code int) {
 	}
 	//req.Header.Add("X-Real-Ip", "localhost")
 	req.Header.Add("X-Remote-User", c.user.Name)
+	req.Header.Add("X-Csrf-Token", c.csrf_token)
 	var rsp, err3 = c.client.Do(req)
 	if err3 != nil {
 		panic(err3)
@@ -386,6 +402,7 @@ func delete_secret(c *customer, secret string, code int) {
 
 	consume_response(c, opr, rsp)
 	check_expected_code(c, opr, rsp, code)
+
 	if rsp.StatusCode == 200 {
 		fmt.Println(opr, "client.Do() content=", c.response)
 	}

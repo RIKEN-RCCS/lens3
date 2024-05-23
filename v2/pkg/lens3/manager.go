@@ -218,7 +218,7 @@ func start_manager(w *manager) {
 
 func start_backend_for_test(w *manager) backend {
 	fmt.Println("start_backend_for_test()")
-	//var pool = generate_pool_name()
+	//var pool = generate_random_key()
 	/*
 		var g = w.factory.make_backend("d4f0c4645fce5734")
 		var proc = g.get_super_part()
@@ -309,7 +309,7 @@ func stop_backend(w *manager, g backend) {
 // starting a backend.
 func start_backend_mutexed(w *manager, pool string) backend {
 	var now int64 = time.Now().Unix()
-	var ep = &manager_mutex_record{
+	var ep = &backend_mutex_record{
 		Mux_ep:     w.mux_ep,
 		Start_time: now,
 	}
@@ -330,8 +330,8 @@ func start_backend(w *manager, pool string) backend {
 	fmt.Println("start_backend()")
 	delete_backend_process(w.table, pool)
 
-	var desc = get_pool(w.table, pool)
-	if desc == nil {
+	var poolprop = get_pool(w.table, pool)
+	if poolprop == nil {
 		logger.warnf("start_backend() pool is missing: pool=%s", pool)
 		return nil
 	}
@@ -339,7 +339,7 @@ func start_backend(w *manager, pool string) backend {
 	var g = w.factory.make_backend(pool)
 	var proc *backend_process = g.get_super_part()
 	// Set proc.pool_record part.
-	proc.pool_record = *desc
+	proc.pool_record = *poolprop
 	// Set proc.backend_record part.
 	proc.Backend_ep = ""
 	proc.Backend_pid = 0
@@ -386,11 +386,11 @@ func start_backend(w *manager, pool string) backend {
 		g.establish()
 		go ping_server(w, g)
 
-		var desc = &proc.backend_record
+		var be = &proc.backend_record
 		fmt.Println("set_backend_process(1) ep=", proc.Backend_ep)
 		fmt.Println("proc.backend_record=")
-		print_in_json(desc)
-		set_backend_process(w.table, proc.Pool, desc)
+		print_in_json(be)
+		set_backend_process(w.table, proc.Pool, be)
 		return g
 	}
 

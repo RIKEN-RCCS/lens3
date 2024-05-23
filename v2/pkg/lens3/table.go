@@ -36,29 +36,57 @@ const limit_of_id_generation_loop = 30
 // to these prefixes.
 const (
 	db_conf_prefix       = "cf:"
-	db_user_info_prefix  = "uu:"
+	db_user_data_prefix  = "uu:"
 	db_user_claim_prefix = "um:"
 
-	db_pool_data_prefix = "po:"
+	db_pool_prop_prefix = "po:"
 	db_directory_prefix = "bd:"
 	db_pool_name_prefix = "px:"
 	db_secret_prefix    = "sx:"
 	db_bucket_prefix    = "bk:"
 
 	db_mux_ep_prefix           = "mu:"
-	db_manager_mutex_prefix    = "bx:"
+	db_backend_mutex_prefix    = "bx:"
 	db_backend_info_prefix     = "be:"
-	db_csrf_token_prefix       = "tk:"
+	db_csrf_token_prefix       = "ut:"
 	db_pool_state_prefix       = "ps:"
 	db_access_timestamp_prefix = "ts:"
 	db_user_timestamp_prefix   = "us:"
 	//db_backend_ep_prefix     = "ep:"
 )
 
+// DB numbers.
+const (
+	setting_db = 1
+	storage_db = 2
+	process_db = 3
+)
+
+var key_prefix_to_db_number = map[string]int{
+	db_conf_prefix:       setting_db,
+	db_user_data_prefix:  setting_db,
+	db_user_claim_prefix: setting_db,
+
+	db_pool_prop_prefix: storage_db,
+	db_directory_prefix: storage_db,
+	db_pool_name_prefix: storage_db,
+	db_secret_prefix:    storage_db,
+	db_bucket_prefix:    storage_db,
+
+	db_mux_ep_prefix:           process_db,
+	db_backend_mutex_prefix:    process_db,
+	db_backend_info_prefix:     process_db,
+	db_csrf_token_prefix:       process_db,
+	db_pool_state_prefix:       process_db,
+	db_access_timestamp_prefix: process_db,
+	db_user_timestamp_prefix:   process_db,
+	//db_backend_ep_prefix:       process_db,
+}
+
 // Records for configuration are defined in "conf.go".  They are
 // "cf:reg", "cf:mux", and "cf:mux:" + mux-name.
 
-// "uu:" + uid Entry (DB_USER_INFO_PREFIX).
+// "uu:" + uid Entry (DB_USER_DATA_PREFIX).
 type user_record struct {
 	Uid             string   `json:"uid"`
 	Claim           string   `json:"claim"`
@@ -67,7 +95,14 @@ type user_record struct {
 	Expiration_time int64    `json:"expiration_time"` // nonexist
 
 	Check_terms_and_conditions bool  `json:"check_terms_and_conditions"`
-	Modification_time          int64 `json:"modification_time"`
+	Timestamp                  int64 `json:"timestamp"`
+}
+
+// "ut:" + uid Entry (db_csrf_token_prefix).
+type csrf_token_record struct {
+	Csrf_token_c string `json:"csrf_token_c"`
+	Csrf_token_h string `json:"csrf_token_h"`
+	Timestamp    int64  `json:"timestamp"`
 }
 
 // "um:" + claim Entry (DB_USER_CLAIM_PREFIX).
@@ -77,10 +112,10 @@ type user_claim_record string
 type pool_mutex_record struct {
 	Owner_uid string `json:"owner"`
 
-	Modification_time int64 `json:"modification_time"`
+	Timestamp int64 `json:"timestamp"`
 }
 
-// "po:" + pool-name Entry (DB_POOL_DATA_PREFIX).
+// "po:" + pool-name Entry (DB_POOL_PROP_PREFIX).
 type pool_record struct {
 	Pool              string `json:"pool"`
 	Buckets_directory string `json:"buckets_directory"`
@@ -90,15 +125,15 @@ type pool_record struct {
 	Online_status     bool   `json:"online_status"`
 	Expiration_time   int64  `json:"expiration_time"`
 
-	Modification_time int64 `json:"modification_time"`
+	Timestamp int64 `json:"timestamp"`
 }
 
 // "bd:" + directory Entry (DB_DIRECTORY_PREFIX).
 // (key≡bucket_directory_record.Directory).
 type bucket_directory_record struct {
-	Pool              string `json:"pool"`
-	Directory         string `json:"directory"`
-	Modification_time int64  `json:"modification_time"`
+	Pool      string `json:"pool"`
+	Directory string `json:"directory"`
+	Timestamp int64  `json:"timestamp"`
 }
 
 // "bk:" + bucket Entry (DB_BUCKET_PREFIX).
@@ -109,7 +144,7 @@ type bucket_record struct {
 	Bucket_policy   bucket_policy `json:"bucket_policy"`
 	Expiration_time int64         `json:"expiration_time"` // nonexist
 
-	Modification_time int64 `json:"modification_time"`
+	Timestamp int64 `json:"timestamp"`
 }
 
 // "sx:" + secret Entry (DB_SECRET_PREFIX).  The _access_key field is
@@ -123,11 +158,11 @@ type secret_record struct {
 	//Internal_use    bool          `json:"internal_use"`
 	Expiration_time int64 `json:"expiration_time"`
 
-	Modification_time int64 `json:"modification_time"`
+	Timestamp int64 `json:"timestamp"`
 }
 
-// "bx:" + pool-name Entry (DB_MANAGER_MUTEX_PREFIX).
-type manager_mutex_record struct {
+// "bx:" + pool-name Entry (DB_BACKEND_MUTEX_PREFIX).
+type backend_mutex_record struct {
 	Mux_ep     string `json:"mux_ep"` // mux_host:mux_port
 	Start_time int64  `json:"start_time"`
 }
@@ -138,7 +173,7 @@ type pool_state_record struct {
 	State  pool_state  `json:"state"`
 	Reason pool_reason `json:"reason"`
 
-	Modification_time int64 `json:"modification_time"`
+	Timestamp int64 `json:"timestamp"`
 }
 
 // "be:" + pool-name Entry (DB_BACKEND_INFO_PREFIX).  A pair of
@@ -152,7 +187,7 @@ type backend_record struct {
 	Mux_ep      string `json:"mux_ep"`
 	Mux_pid     int    `json:"mux_pid"`
 
-	Modification_time int64 `json:"modification_time"`
+	Timestamp int64 `json:"timestamp"`
 }
 
 // "mu:" + mux-ep Entry (DB_MUX_EP_PREFIX).
@@ -160,13 +195,7 @@ type mux_record struct {
 	Mux_ep     string `json:"mux_ep"`
 	Start_time int64  `json:"start_time"`
 
-	Modification_time int64 `json:"modification_time"`
-}
-
-// "tn:" + uid Entry (DB_CSRF_TOKEN_PREFIX).
-type csrf_token_record struct {
-	Csrf_token        string `json:"csrf_token"`
-	Modification_time int64  `json:"modification_time"`
+	Timestamp int64 `json:"timestamp"`
 }
 
 // "ts:" + pool-name Entry (DB_ACCESS_TIMESTAMP_PREFIX).
@@ -174,6 +203,15 @@ type csrf_token_record struct {
 
 // "us:" + uid Entry (DB_USER_TIMESTAMP_PREFIX).
 // type int64
+
+type table_exc struct {
+	m string
+	e error
+}
+
+func (e *table_exc) Error() string {
+	return "table_exc:" + e.m
+}
 
 // BUCKET_POLICY is a public-access policy attached to a bucket.
 type bucket_policy string
@@ -216,39 +254,6 @@ type key_pair struct {
 type pool_directory struct {
 	pool      string
 	directory string
-}
-
-// DB numbers.
-const setting_db = 1
-const storage_db = 2
-const process_db = 3
-
-var db_name_to_number = map[string]int{
-	"setting": 1,
-	"storage": 2,
-	"process": 3,
-}
-
-var key_prefix_to_db_number = map[string]int{
-	db_conf_prefix:       setting_db,
-	db_user_info_prefix:  setting_db,
-	db_user_claim_prefix: setting_db,
-
-	db_pool_data_prefix: storage_db,
-	db_directory_prefix: storage_db,
-	db_pool_name_prefix: storage_db,
-	db_secret_prefix:    storage_db,
-	db_bucket_prefix:    storage_db,
-
-	db_mux_ep_prefix:        process_db,
-	db_manager_mutex_prefix: process_db,
-	db_backend_info_prefix:  process_db,
-	//db_backend_ep_prefix:       process_db,
-
-	db_csrf_token_prefix:       process_db,
-	db_pool_state_prefix:       process_db,
-	db_access_timestamp_prefix: process_db,
-	db_user_timestamp_prefix:   process_db,
 }
 
 // POOL_STATE is a state of a pool.
@@ -388,9 +393,10 @@ func scan_table(t *keyval_table, prefix string, target string) *db_key_iterator 
 }
 
 // LOAD_DATA fills a structure by json data in the keyval-db.  It
-// returns true or false if no entry is found.
-func load_db_data(v *redis.StringCmd, data any) bool {
-	var b, err1 = v.Bytes()
+// returns true or false if no entry is found.  A get with
+// err=redis.Nil means a non-exising entry.
+func load_db_data(w *redis.StringCmd, data any) bool {
+	var b, err1 = w.Bytes()
 	if err1 != nil {
 		if err1 == redis.Nil {
 			return false
@@ -430,6 +436,56 @@ func raise_when_db_fail(w any) {
 	}
 }
 
+func raise_on_set_error(w *redis.StatusCmd) {
+	var err = w.Err()
+	if err != nil {
+		raise(&table_exc{m: "set err", e: err})
+	}
+}
+
+func raise_on_setnx_error(w *redis.BoolCmd) {
+	var err = w.Err()
+	if err != nil {
+		raise(&table_exc{m: "setnx err", e: err})
+	}
+}
+
+// RAISE_ON_GET_ERROR raises on an error but a non-existing case.
+func raise_on_get_error(w *redis.StringCmd) {
+	var err = w.Err()
+	if err != nil && err != redis.Nil {
+		raise(&table_exc{m: "get err", e: err})
+	}
+}
+
+func check_on_del_failure(w *redis.IntCmd) bool {
+	var n, err = w.Result()
+	if err != nil {
+		raise(&table_exc{m: "del err", e: err})
+	}
+	return n == 1
+}
+
+func raise_on_del_failure(w *redis.IntCmd) {
+	var n, err = w.Result()
+	if err != nil {
+		raise(&table_exc{m: "del err", e: err})
+	}
+	if n != 1 {
+		raise(&table_exc{m: "del no entry"})
+	}
+}
+
+func raise_on_expire_failure(w *redis.BoolCmd) {
+	var ok, err = w.Result()
+	if err != nil {
+		raise(&table_exc{m: "expire err", e: err})
+	}
+	if !ok {
+		raise(&table_exc{m: "expire no entry"})
+	}
+}
+
 /* CONF */
 
 func set_conf(t *keyval_table, conf lens3_conf) {
@@ -442,7 +498,7 @@ func set_conf(t *keyval_table, conf lens3_conf) {
 		if !(sub == "mux" || (len(sub) >= 5 && sub[:4] == "mux:")) {
 			panic("bad conf; subject≠mux")
 		}
-		set_with_prefix(t, db_conf_prefix, sub, conf1)
+		db_set_with_prefix(t, db_conf_prefix, sub, conf1)
 		// var prefix = db_conf_prefix
 		// var db = t.key_prefix_to_db[prefix]
 		// var k1 = (db_conf_prefix + sub)
@@ -455,7 +511,7 @@ func set_conf(t *keyval_table, conf lens3_conf) {
 		if !(sub == "reg") {
 			panic("bad conf; subject≠reg")
 		}
-		set_with_prefix(t, db_conf_prefix, sub, conf1)
+		db_set_with_prefix(t, db_conf_prefix, sub, conf1)
 		// var prefix = db_conf_prefix
 		// var db = t.key_prefix_to_db[prefix]
 		// var k2 = (db_conf_prefix + sub)
@@ -469,7 +525,7 @@ func set_conf(t *keyval_table, conf lens3_conf) {
 }
 
 func delete_conf(t *keyval_table, sub string) {
-	delete_with_prefix(t, db_conf_prefix, sub)
+	db_del_with_prefix(t, db_conf_prefix, sub)
 	// var prefix = db_conf_prefix
 	// var db = t.key_prefix_to_db[prefix]
 	// var k = (prefix + sub)
@@ -504,7 +560,7 @@ func list_confs(t *keyval_table) []*lens3_conf {
 func get_mux_conf(t *keyval_table, sub string) *mux_conf {
 	assert_fatal(sub == "mux" || (len(sub) >= 5 && sub[:4] == "mux:"))
 	var data mux_conf
-	var ok = get_with_prefix(t, db_conf_prefix, sub, &data)
+	var ok = db_get_with_prefix(t, db_conf_prefix, sub, &data)
 	if ok {
 		check_mux_conf(&data)
 	}
@@ -526,7 +582,7 @@ func get_mux_conf(t *keyval_table, sub string) *mux_conf {
 func get_reg_conf(t *keyval_table, sub string) *reg_conf {
 	assert_fatal(sub == "reg")
 	var data reg_conf
-	var ok = get_with_prefix(t, db_conf_prefix, sub, &data)
+	var ok = db_get_with_prefix(t, db_conf_prefix, sub, &data)
 	if ok {
 		check_reg_conf(&data)
 	}
@@ -566,8 +622,8 @@ func add_user(t *keyval_table, uu *user_record) {
 func set_user_force(t *keyval_table, uu *user_record) {
 	var uid = uu.Uid
 	assert_fatal(uid != "")
-	set_with_prefix(t, db_user_info_prefix, uid, &uu)
-	// var prefix = db_user_info_prefix
+	db_set_with_prefix(t, db_user_data_prefix, uid, &uu)
+	// var prefix = db_user_data_prefix
 	// var db = t.key_prefix_to_db[prefix]
 	// var k1 = (prefix + uid)
 	// var v, err1 = json.Marshal(&uu)
@@ -577,16 +633,16 @@ func set_user_force(t *keyval_table, uu *user_record) {
 	var claim = uu.Claim
 	if claim != "" {
 		set_user_claim(t, claim, (*user_claim_record)(&uu.Uid))
-		//set_with_prefix(t, db_user_info_prefix, claim, &uu)
+		//db_set_with_prefix(t, db_user_data_prefix, claim, &uu)
 	}
 }
 
 // GET_USER gets a user by a uid.  It may return nil.
 func get_user(t *keyval_table, uid string) *user_record {
 	var data user_record
-	var ok = get_with_prefix(t, db_user_info_prefix, uid, &data)
+	var ok = db_get_with_prefix(t, db_user_data_prefix, uid, &data)
 	return ITE(ok, &data, nil)
-	// var prefix = db_user_info_prefix
+	// var prefix = db_user_data_prefix
 	// var db = t.key_prefix_to_db[prefix]
 	// var k = (prefix + uid)
 	// var w = db.Get(t.ctx, k)
@@ -605,8 +661,8 @@ func delete_user(t *keyval_table, uid string) {
 	if ui == nil {
 		return
 	}
-	delete_with_prefix(t, db_user_info_prefix, uid)
-	// var prefix = db_user_info_prefix
+	db_del_with_prefix(t, db_user_data_prefix, uid)
+	// var prefix = db_user_data_prefix
 	// var db = t.key_prefix_to_db[prefix]
 	// var k = (prefix + uid)
 	// var w = db.Del(t.ctx, k)
@@ -620,7 +676,7 @@ func delete_user(t *keyval_table, uid string) {
 
 // LIST_USERS lists all uid's.
 func list_users(t *keyval_table) []string {
-	var prefix = db_user_info_prefix
+	var prefix = db_user_data_prefix
 	var keyi = scan_table(t, prefix, "*")
 	var uu []string
 	for keyi.Next(t.ctx) {
@@ -630,7 +686,7 @@ func list_users(t *keyval_table) []string {
 }
 
 func set_user_claim(t *keyval_table, claim string, uid *user_claim_record) {
-	set_with_prefix(t, db_user_claim_prefix, claim, uid)
+	db_set_with_prefix(t, db_user_claim_prefix, claim, uid)
 	// var prefix = db_user_claim_prefix
 	// var db = t.key_prefix_to_db[prefix]
 	// var k = (prefix + claim)
@@ -644,7 +700,7 @@ func set_user_claim(t *keyval_table, claim string, uid *user_claim_record) {
 func get_user_claim(t *keyval_table, claim string) *user_claim_record {
 	assert_fatal(claim != "")
 	var data user_claim_record
-	var ok = get_with_prefix(t, db_user_claim_prefix, claim, &data)
+	var ok = db_get_with_prefix(t, db_user_claim_prefix, claim, &data)
 	return ITE(ok, &data, nil)
 	// var prefix = db_user_claim_prefix
 	// var db = t.key_prefix_to_db[prefix]
@@ -660,7 +716,7 @@ func get_user_claim(t *keyval_table, claim string) *user_claim_record {
 }
 
 func delete_user_claim(t *keyval_table, claim string) {
-	delete_with_prefix(t, db_user_claim_prefix, claim)
+	db_del_with_prefix(t, db_user_claim_prefix, claim)
 	// var prefix = db_user_claim_prefix
 	// var db = t.key_prefix_to_db[prefix]
 	// var k = (prefix + claim)
@@ -681,7 +737,7 @@ func clear_user_claim(t *keyval_table, uid string) {
 		if uid == string(*claiminguser) {
 			var k = (prefix + k)
 			var w = db.Del(t.ctx, k)
-			raise_when_db_fail(w.Err())
+			raise_on_del_failure(w)
 		}
 	}
 }
@@ -689,8 +745,8 @@ func clear_user_claim(t *keyval_table, uid string) {
 /* POOL */
 
 func set_pool(t *keyval_table, pool string, data *pool_record) {
-	set_with_prefix(t, db_pool_data_prefix, pool, data)
-	// var prefix = db_pool_data_prefix
+	db_set_with_prefix(t, db_pool_prop_prefix, pool, data)
+	// var prefix = db_pool_prop_prefix
 	// var db = t.key_prefix_to_db[prefix]
 	// var k = (prefix + pool)
 	// var v, err = json.Marshal(data)
@@ -701,9 +757,9 @@ func set_pool(t *keyval_table, pool string, data *pool_record) {
 
 func get_pool(t *keyval_table, pool string) *pool_record {
 	var data pool_record
-	var ok = get_with_prefix(t, db_pool_data_prefix, pool, &data)
+	var ok = db_get_with_prefix(t, db_pool_prop_prefix, pool, &data)
 	return ITE(ok, &data, nil)
-	// var prefix = db_pool_data_prefix
+	// var prefix = db_pool_prop_prefix
 	// var db = t.key_prefix_to_db[prefix]
 	// var k = (prefix + pool)
 	// var w = db.Get(t.ctx, k)
@@ -717,8 +773,8 @@ func get_pool(t *keyval_table, pool string) *pool_record {
 }
 
 func delete_pool(t *keyval_table, pool string) {
-	delete_with_prefix(t, db_pool_data_prefix, pool)
-	// var prefix = db_pool_data_prefix
+	db_del_with_prefix(t, db_pool_prop_prefix, pool)
+	// var prefix = db_pool_prop_prefix
 	// var db = t.key_prefix_to_db[prefix]
 	// var k = (prefix + pool)
 	// var w = db.Del(t.ctx, k)
@@ -728,7 +784,7 @@ func delete_pool(t *keyval_table, pool string) {
 // LIST_POOLS returns a list of all pool-names when the argument is
 // pool="*".  Or, it checks the existence of a pool.
 func list_pools(t *keyval_table, pool string) []string {
-	var prefix = db_pool_data_prefix
+	var prefix = db_pool_prop_prefix
 	var keyi = scan_table(t, prefix, pool)
 	var pools []string
 	for keyi.Next(t.ctx) {
@@ -742,25 +798,26 @@ func list_pools(t *keyval_table, pool string) []string {
 // the tuple 2nd, as (false,pool).  A returned pool can be "" due to a
 // race.
 func set_ex_buckets_directory(t *keyval_table, path string, dir *bucket_directory_record) (bool, string) {
-	var prefix = db_directory_prefix
-	var db = t.key_prefix_to_db[prefix]
-	var k = (prefix + path)
-	var v, err1 = json.Marshal(dir)
-	raise_when_marshaling_fail(err1)
-	var w = db.SetNX(t.ctx, k, v, db_no_expiration)
-	var ok, err2 = w.Result()
-	raise_when_db_fail(err2)
+	var ok = db_setnx_with_prefix(t, db_directory_prefix, path, dir)
+	// var prefix = db_directory_prefix
+	// var db = t.key_prefix_to_db[prefix]
+	// var k = (prefix + path)
+	// var v, err1 = json.Marshal(dir)
+	// raise_when_marshaling_fail(err1)
+	// var w = db.SetNX(t.ctx, k, v, db_no_expiration)
+	// raise_on_setnx_error(w)
+	// var ok, _ = w.Result()
 	if ok {
 		return true, ""
 	}
-	// Race, returns failure.
+	// Race, return failure.
 	var holder = get_buckets_directory(t, path)
 	return false, ITE(holder != nil, holder.Pool, "")
 }
 
 func get_buckets_directory(t *keyval_table, path string) *bucket_directory_record {
 	var data bucket_directory_record
-	var ok = get_with_prefix(t, db_directory_prefix, path, &data)
+	var ok = db_get_with_prefix(t, db_directory_prefix, path, &data)
 	return ITE(ok, &data, nil)
 	// var prefix = db_directory_prefix
 	// var db = t.key_prefix_to_db[prefix]
@@ -788,9 +845,9 @@ func find_buckets_directory_of_pool(t *keyval_table, pool string) string {
 	return ""
 }
 
-func delete_buckets_directory_unconditionally(t *keyval_table, path string) error {
-	var err = delete_with_prefix_ok(t, db_directory_prefix, path)
-	return err
+func delete_buckets_directory_unconditionally(t *keyval_table, path string) bool {
+	var ok = db_del_with_prefix_ok(t, db_directory_prefix, path)
+	return ok
 	// var prefix = db_directory_prefix
 	// var db = t.key_prefix_to_db[prefix]
 	// var k = (prefix + path)
@@ -819,22 +876,22 @@ func list_buckets_directories(t *keyval_table) []*pool_directory {
 func set_pool_state(t *keyval_table, pool string, state pool_state, reason pool_reason) {
 	var now int64 = time.Now().Unix()
 	var data = &pool_state_record{
-		State:             state,
-		Reason:            reason,
-		Modification_time: now,
+		State:     state,
+		Reason:    reason,
+		Timestamp: now,
 	}
 	set_pool_state_raw(t, pool, data)
 }
 
 func set_pool_state_raw(t *keyval_table, pool string, state *pool_state_record) {
-	set_with_prefix(t, db_pool_state_prefix, pool, state)
+	db_set_with_prefix(t, db_pool_state_prefix, pool, state)
 	// var prefix = db_pool_state_prefix
 	// var db = t.key_prefix_to_db[prefix]
 	// //var now int64 = time.Now().Unix()
 	// // var record = pool_state_record{
 	// // 	State:             state,
 	// // 	Reason:            reason,
-	// // 	Modification_time: now,
+	// // 	Timestamp: now,
 	// // }
 	// var k = (prefix + pool)
 	// var v, err = json.Marshal(state)
@@ -845,7 +902,7 @@ func set_pool_state_raw(t *keyval_table, pool string, state *pool_state_record) 
 
 func get_pool_state(t *keyval_table, pool string) *pool_state_record {
 	var data pool_state_record
-	var ok = get_with_prefix(t, db_pool_state_prefix, pool, &data)
+	var ok = db_get_with_prefix(t, db_pool_state_prefix, pool, &data)
 	return ITE(ok, &data, nil)
 	// var prefix = db_pool_state_prefix
 	// var db = t.key_prefix_to_db[prefix]
@@ -861,7 +918,7 @@ func get_pool_state(t *keyval_table, pool string) *pool_state_record {
 }
 
 func delete_pool_state(t *keyval_table, pool string) {
-	delete_with_prefix(t, db_pool_state_prefix, pool)
+	db_del_with_prefix(t, db_pool_state_prefix, pool)
 	// var prefix = db_pool_state_prefix
 	// var db = t.key_prefix_to_db[prefix]
 	// var k = (prefix + pool)
@@ -872,40 +929,42 @@ func delete_pool_state(t *keyval_table, pool string) {
 // SET_EX_MANAGER atomically sets a manager-mutex record.  It returns
 // OK or NG.  It returns an old record, but it can be null due to a
 // race (but practically never).
-func set_ex_manager(t *keyval_table, pool string, desc *manager_mutex_record) (bool, *manager_mutex_record) {
-	var prefix = db_manager_mutex_prefix
-	var db = t.key_prefix_to_db[prefix]
-	var k = (prefix + pool)
-	var v, err1 = json.Marshal(desc)
-	raise_when_marshaling_fail(err1)
-	var w = db.SetNX(t.ctx, k, v, db_no_expiration)
-	var ok, err2 = w.Result()
-	raise_when_db_fail(err2)
+func set_ex_manager(t *keyval_table, pool string, data *backend_mutex_record) (bool, *backend_mutex_record) {
+	var ok = db_setnx_with_prefix(t, db_backend_mutex_prefix, pool, data)
+	// var prefix = db_backend_mutex_prefix
+	// var db = t.key_prefix_to_db[prefix]
+	// var k = (prefix + pool)
+	// var v, err1 = json.Marshal(data)
+	// raise_when_marshaling_fail(err1)
+	// var w = db.SetNX(t.ctx, k, v, db_no_expiration)
+	// raise_on_setnx_error(w)
+	// var ok, _ = w.Result()
 	if ok {
 		return true, nil
 	}
-	// Race, returns failure.
+	// Race, return failure.
 	var holder = get_manager(t, pool)
 	return false, holder
 }
 
 func set_manager_expiry(t *keyval_table, pool string, timeout int64) {
-	var prefix = db_manager_mutex_prefix
-	var db = t.key_prefix_to_db[prefix]
-	var k = (prefix + pool)
-	var w = db.Expire(t.ctx, k, (time.Duration(timeout) * time.Second))
-	raise_when_db_fail(w.Err())
+	db_expire_with_prefix(t, db_backend_mutex_prefix, pool, timeout)
+	// var prefix = db_backend_mutex_prefix
+	// var db = t.key_prefix_to_db[prefix]
+	// var k = (prefix + pool)
+	// var w = db.Expire(t.ctx, k, time.Duration(timeout * time.Second))
+	// raise_on_expire_failure(w)
 }
 
-func get_manager(t *keyval_table, pool string) *manager_mutex_record {
-	var data manager_mutex_record
-	var ok = get_with_prefix(t, db_manager_mutex_prefix, pool, &data)
+func get_manager(t *keyval_table, pool string) *backend_mutex_record {
+	var data backend_mutex_record
+	var ok = db_get_with_prefix(t, db_backend_mutex_prefix, pool, &data)
 	return ITE(ok, &data, nil)
-	// var prefix = db_manager_mutex_prefix
+	// var prefix = db_backend_mutex_prefix
 	// var db = t.key_prefix_to_db[prefix]
 	// var k = (prefix + pool)
 	// var w = db.Get(t.ctx, k)
-	// var data manager_mutex_record
+	// var data backend_mutex_record
 	// var ok = load_db_data(w, &data)
 	// if ok {
 	// 	return &data
@@ -915,20 +974,20 @@ func get_manager(t *keyval_table, pool string) *manager_mutex_record {
 }
 
 func delete_manager(t *keyval_table, pool string) {
-	delete_with_prefix(t, db_manager_mutex_prefix, pool)
-	// var prefix = db_manager_mutex_prefix
+	db_del_with_prefix(t, db_backend_mutex_prefix, pool)
+	// var prefix = db_backend_mutex_prefix
 	// var db = t.key_prefix_to_db[prefix]
 	// var k = (prefix + pool)
 	// var w = db.Del(t.ctx, k)
 	// raise_when_db_fail(w.Err())
 }
 
-func set_backend_process(t *keyval_table, pool string, desc *backend_record) {
-	set_with_prefix(t, db_backend_info_prefix, pool, desc)
+func set_backend_process(t *keyval_table, pool string, data *backend_record) {
+	db_set_with_prefix(t, db_backend_info_prefix, pool, data)
 	// var prefix = db_backend_info_prefix
 	// var db = t.key_prefix_to_db[prefix]
 	// var k = (prefix + pool)
-	// var v, err = json.Marshal(desc)
+	// var v, err = json.Marshal(data)
 	// raise_when_marshaling_fail(err)
 	// var w = db.Set(t.ctx, k, v, db_no_expiration)
 	// raise_when_db_fail(w.Err())
@@ -936,7 +995,7 @@ func set_backend_process(t *keyval_table, pool string, desc *backend_record) {
 
 func get_backend_process(t *keyval_table, pool string) *backend_record {
 	var data backend_record
-	var ok = get_with_prefix(t, db_backend_info_prefix, pool, &data)
+	var ok = db_get_with_prefix(t, db_backend_info_prefix, pool, &data)
 	return ITE(ok, &data, nil)
 	// var prefix = db_backend_info_prefix
 	// var db = t.key_prefix_to_db[prefix]
@@ -952,7 +1011,7 @@ func get_backend_process(t *keyval_table, pool string) *backend_record {
 }
 
 func delete_backend_process(t *keyval_table, pool string) {
-	delete_with_prefix(t, db_backend_info_prefix, pool)
+	db_del_with_prefix(t, db_backend_info_prefix, pool)
 	// var prefix = db_backend_info_prefix
 	// var db = t.key_prefix_to_db[prefix]
 	// var k = (prefix + pool)
@@ -976,28 +1035,29 @@ func list_backend_processes(t *keyval_table, pool string) []*backend_record {
 	return procs
 }
 
-func set_mux_ep(t *keyval_table, mux_ep string, desc *mux_record) {
-	set_with_prefix(t, db_mux_ep_prefix, mux_ep, desc)
+func set_mux_ep(t *keyval_table, mux_ep string, data *mux_record) {
+	db_set_with_prefix(t, db_mux_ep_prefix, mux_ep, data)
 	// var prefix = db_mux_ep_prefix
 	// var db = t.key_prefix_to_db[prefix]
 	// var k = (prefix + mux_ep)
-	// var v, err = json.Marshal(desc)
+	// var v, err = json.Marshal(data)
 	// raise_when_marshaling_fail(err)
 	// var w = db.Set(t.ctx, k, v, db_no_expiration)
 	// raise_when_db_fail(w.Err())
 }
 
 func set_mux_ep_expiry(t *keyval_table, mux_ep string, timeout int64) {
-	var prefix = db_mux_ep_prefix
-	var db = t.key_prefix_to_db[prefix]
-	var k = (prefix + mux_ep)
-	var w = db.Expire(t.ctx, k, (time.Duration(timeout) * time.Second))
-	raise_when_db_fail(w.Err())
+	db_expire_with_prefix(t, db_mux_ep_prefix, mux_ep, timeout)
+	// var prefix = db_mux_ep_prefix
+	// var db = t.key_prefix_to_db[prefix]
+	// var k = (prefix + mux_ep)
+	// var w = db.Expire(t.ctx, k, (time.Duration(timeout) * time.Second))
+	// raise_when_db_fail(w.Err())
 }
 
 func get_mux_ep(t *keyval_table, mux_ep string) *mux_record {
 	var data mux_record
-	var ok = get_with_prefix(t, db_mux_ep_prefix, mux_ep, &data)
+	var ok = db_get_with_prefix(t, db_mux_ep_prefix, mux_ep, &data)
 	return ITE(ok, &data, nil)
 	// var prefix = db_mux_ep_prefix
 	// var db = t.key_prefix_to_db[prefix]
@@ -1013,7 +1073,7 @@ func get_mux_ep(t *keyval_table, mux_ep string) *mux_record {
 }
 
 func delete_mux_ep(t *keyval_table, mux_ep string) {
-	delete_with_prefix(t, db_mux_ep_prefix, mux_ep)
+	db_del_with_prefix(t, db_mux_ep_prefix, mux_ep)
 	// var prefix = db_mux_ep_prefix
 	// var db = t.key_prefix_to_db[prefix]
 	// var k = (prefix + mux_ep)
@@ -1039,26 +1099,27 @@ func list_mux_eps(t *keyval_table) []*mux_record {
 // SET_EX_BUCKET atomically sets a bucket.  It returns OK or NG.
 // On a failure, it returns a current owner in the tuple 2nd, as
 // (false,pool).  A returned pool can be "" due to a race.
-func set_ex_bucket(t *keyval_table, bucket string, desc *bucket_record) (bool, string) {
-	var prefix = db_bucket_prefix
-	var db = t.key_prefix_to_db[prefix]
-	var k = (prefix + bucket)
-	var v, err1 = json.Marshal(desc)
-	raise_when_marshaling_fail(err1)
-	var w = db.SetNX(t.ctx, k, v, db_no_expiration)
-	var ok, err2 = w.Result()
-	raise_when_db_fail(err2)
+func set_ex_bucket(t *keyval_table, bucket string, data *bucket_record) (bool, string) {
+	var ok = db_setnx_with_prefix(t, db_bucket_prefix, bucket, data)
+	// var prefix = db_bucket_prefix
+	// var db = t.key_prefix_to_db[prefix]
+	// var k = (prefix + bucket)
+	// var v, err1 = json.Marshal(data)
+	// raise_when_marshaling_fail(err1)
+	// var w = db.SetNX(t.ctx, k, v, db_no_expiration)
+	// raise_on_setnx_error(w)
+	// var ok, _ = w.Result()
 	if ok {
 		return true, ""
 	}
-	// Race, returns failure.
+	// Race, return failure.
 	var holder = get_bucket(t, bucket)
 	return false, ITE(holder != nil, holder.Pool, "")
 }
 
 func get_bucket(t *keyval_table, bucket string) *bucket_record {
 	var data bucket_record
-	var ok = get_with_prefix(t, db_bucket_prefix, bucket, &data)
+	var ok = db_get_with_prefix(t, db_bucket_prefix, bucket, &data)
 	return ITE(ok, &data, nil)
 	// var prefix = db_bucket_prefix
 	// var db = t.key_prefix_to_db[prefix]
@@ -1074,9 +1135,9 @@ func get_bucket(t *keyval_table, bucket string) *bucket_record {
 	// }
 }
 
-func delete_bucket_unconditionally(t *keyval_table, bucket string) error {
-	var err = delete_with_prefix_ok(t, db_bucket_prefix, bucket)
-	return err
+func delete_bucket_unconditionally(t *keyval_table, bucket string) bool {
+	var ok = db_del_with_prefix_ok(t, db_bucket_prefix, bucket)
+	return ok
 	// var prefix = db_bucket_prefix
 	// var db = t.key_prefix_to_db[prefix]
 	// var k = (prefix + bucket)
@@ -1103,58 +1164,9 @@ func list_buckets(t *keyval_table, pool string) []*bucket_record {
 	return descs
 }
 
-/*
-func set_backend_ep(t *keyval_table, pool string, ep string) {
-	var prefix = db_backend_ep_prefix
-	var db = t.key_prefix_to_db[prefix]
-	var k = (prefix + pool)
-	var v, err = json.Marshal(ep)
-	raise_when_marshaling_fail(err)
-	var w = db.Set(t.ctx, k, v, db_no_expiration)
-	raise_when_db_fail(w.Err())
-}
-
-func get_backend_ep(t *keyval_table, pool string) string {
-	var prefix = db_backend_ep_prefix
-	var db = t.key_prefix_to_db[prefix]
-	var k = (prefix + pool)
-	var w = db.Get(t.ctx, k)
-	var desc string
-	var ok = load_db_data(w, &desc)
-	if ok {
-		return desc
-	} else {
-		return ""
-	}
-}
-
-func delete_backend_ep(t *keyval_table, pool string) {
-	delete_with_prefix(t, db_backend_ep_prefix, pool)
-	// var prefix = db_backend_ep_prefix
-	// var db = t.key_prefix_to_db[prefix]
-	// var k = (prefix + pool)
-	// var w = db.Del(t.ctx, k)
-	// raise_when_db_fail(w.Err())
-}
-
-func list_backend_eps(t *keyval_table) []string {
-	var prefix = db_backend_ep_prefix
-	var keyi = scan_table(t, prefix, "*")
-	var descs []string
-	for keyi.Next(t.ctx) {
-		var ep = keyi.Key()
-		var d = get_backend_ep(t, ep)
-		if d != "" {
-			descs = append(descs, d)
-		}
-	}
-	return descs
-}
-*/
-
 func set_access_timestamp(t *keyval_table, pool string) {
 	var now int64 = time.Now().Unix()
-	set_with_prefix(t, db_access_timestamp_prefix, pool, now)
+	db_set_with_prefix(t, db_access_timestamp_prefix, pool, now)
 	// var prefix = db_access_timestamp_prefix
 	// var db = t.key_prefix_to_db[prefix]
 	// var k = (prefix + pool)
@@ -1167,7 +1179,7 @@ func set_access_timestamp(t *keyval_table, pool string) {
 
 func get_access_timestamp(t *keyval_table, pool string) int64 {
 	var data int64
-	var ok = get_with_prefix(t, db_access_timestamp_prefix, pool, &data)
+	var ok = db_get_with_prefix(t, db_access_timestamp_prefix, pool, &data)
 	return ITE(ok, data, 0)
 	// var prefix = db_access_timestamp_prefix
 	// var db = t.key_prefix_to_db[prefix]
@@ -1183,7 +1195,7 @@ func get_access_timestamp(t *keyval_table, pool string) int64 {
 }
 
 func delete_access_timestamp(t *keyval_table, pool string) {
-	delete_with_prefix(t, db_access_timestamp_prefix, pool)
+	db_del_with_prefix(t, db_access_timestamp_prefix, pool)
 	// var prefix = db_access_timestamp_prefix
 	// var db = t.key_prefix_to_db[prefix]
 	// var k = (prefix + pool)
@@ -1209,7 +1221,7 @@ func list_access_timestamps(t *keyval_table) []name_timestamp_pair {
 
 func set_user_timestamp(t *keyval_table, uid string) {
 	var now int64 = time.Now().Unix()
-	set_with_prefix(t, db_user_timestamp_prefix, uid, now)
+	db_set_with_prefix(t, db_user_timestamp_prefix, uid, now)
 	// var prefix = db_user_timestamp_prefix
 	// var db = t.key_prefix_to_db[prefix]
 	// var k = (prefix + uid)
@@ -1223,7 +1235,7 @@ func set_user_timestamp(t *keyval_table, uid string) {
 // It returns 0 on an internal db-access error.
 func get_user_timestamp(t *keyval_table, uid string) int64 {
 	var data int64
-	var ok = get_with_prefix(t, db_user_timestamp_prefix, uid, &data)
+	var ok = db_get_with_prefix(t, db_user_timestamp_prefix, uid, &data)
 	return ITE(ok, data, 0)
 	// var prefix = db_user_timestamp_prefix
 	// var db = t.key_prefix_to_db[prefix]
@@ -1239,7 +1251,7 @@ func get_user_timestamp(t *keyval_table, uid string) int64 {
 }
 
 func delete_user_timestamp(t *keyval_table, uid string) {
-	delete_with_prefix(t, db_user_timestamp_prefix, uid)
+	db_del_with_prefix(t, db_user_timestamp_prefix, uid)
 	// var prefix = db_user_timestamp_prefix
 	// var db = t.key_prefix_to_db[prefix]
 	// var k = (prefix + uid)
@@ -1265,19 +1277,19 @@ func list_user_timestamps(t *keyval_table) []name_timestamp_pair {
 
 // SET_WITH_UNIQUE_POOL_NAME makes a random unique id for a pool-name or an
 // access-key.
-func set_with_unique_pool_name(t *keyval_table, desc *pool_mutex_record) string {
+func set_with_unique_pool_name(t *keyval_table, data *pool_mutex_record) string {
 	var prefix = db_pool_name_prefix
-	var v, err = json.Marshal(desc)
+	var v, err = json.Marshal(data)
 	raise_when_marshaling_fail(err)
-	var s = set_with_unique_id_loop(t, prefix, v, generate_pool_name)
+	var s = set_with_unique_id_loop(t, prefix, v, generate_random_key)
 	return s
 }
 
 // SET_WITH_UNIQUE_SECRET_KEY makes a random unique id for a an
 // access-key.
-func set_with_unique_secret_key(t *keyval_table, desc *secret_record) string {
+func set_with_unique_secret_key(t *keyval_table, data *secret_record) string {
 	var prefix = db_secret_prefix
-	var v, err = json.Marshal(desc)
+	var v, err = json.Marshal(data)
 	raise_when_marshaling_fail(err)
 	var s = set_with_unique_id_loop(t, prefix, v, generate_access_key)
 	return s
@@ -1290,8 +1302,8 @@ func set_with_unique_id_loop(t *keyval_table, prefix string, v []byte, generator
 		var id = generator()
 		var k = (prefix + id)
 		var w = db.SetNX(t.ctx, k, v, db_no_expiration)
-		var ok, err2 = w.Result()
-		raise_when_db_fail(err2)
+		raise_on_setnx_error(w)
+		var ok, _ = w.Result()
 		if ok {
 			return id
 		}
@@ -1304,21 +1316,22 @@ func set_with_unique_id_loop(t *keyval_table, prefix string, v []byte, generator
 }
 
 // SET_EX_POOL_MUTEX is used in restoring database.
-func set_ex_pool_mutex(t *keyval_table, pool string, desc *pool_mutex_record) bool {
-	var prefix = db_pool_name_prefix
-	var db = t.key_prefix_to_db[prefix]
-	var k = (prefix + pool)
-	var v, err1 = json.Marshal(desc)
-	raise_when_marshaling_fail(err1)
-	var w = db.SetNX(t.ctx, k, v, db_no_expiration)
-	var ok, err2 = w.Result()
-	raise_when_db_fail(err2)
+func set_ex_pool_mutex(t *keyval_table, pool string, data *pool_mutex_record) bool {
+	var ok = db_setnx_with_prefix(t, db_pool_name_prefix, pool, data)
+	// var prefix = db_pool_name_prefix
+	// var db = t.key_prefix_to_db[prefix]
+	// var k = (prefix + pool)
+	// var v, err1 = json.Marshal(data)
+	// raise_when_marshaling_fail(err1)
+	// var w = db.SetNX(t.ctx, k, v, db_no_expiration)
+	// raise_on_setnx_error(w)
+	// var ok, _ = w.Result()
 	return ok
 }
 
 func get_pool_mutex(t *keyval_table, pool string) *pool_mutex_record {
 	var data pool_mutex_record
-	var ok = get_with_prefix(t, db_pool_name_prefix, pool, &data)
+	var ok = db_get_with_prefix(t, db_pool_name_prefix, pool, &data)
 	return ITE(ok, &data, nil)
 	// var prefix = db_pool_name_prefix
 	// var db = t.key_prefix_to_db[prefix]
@@ -1333,9 +1346,9 @@ func get_pool_mutex(t *keyval_table, pool string) *pool_mutex_record {
 	// }
 }
 
-func delete_pool_name_unconditionally(t *keyval_table, pool string) error {
-	var err = delete_with_prefix_ok(t, db_pool_name_prefix, pool)
-	return err
+func delete_pool_name_unconditionally(t *keyval_table, pool string) bool {
+	var ok = db_del_with_prefix_ok(t, db_pool_name_prefix, pool)
+	return ok
 	// var prefix = db_pool_name_prefix
 	// var db = t.key_prefix_to_db[prefix]
 	// var k = (prefix + pool)
@@ -1344,21 +1357,22 @@ func delete_pool_name_unconditionally(t *keyval_table, pool string) error {
 }
 
 // SET_EX_SECRET is used in restoring database.
-func set_ex_secret(t *keyval_table, key string, desc *secret_record) bool {
-	var prefix = db_secret_prefix
-	var db = t.key_prefix_to_db[prefix]
-	var k = (prefix + key)
-	var v, err1 = json.Marshal(desc)
-	raise_when_marshaling_fail(err1)
-	var w = db.SetNX(t.ctx, k, v, db_no_expiration)
-	var ok, err2 = w.Result()
-	raise_when_db_fail(err2)
+func set_ex_secret(t *keyval_table, key string, data *secret_record) bool {
+	var ok = db_setnx_with_prefix(t, db_secret_prefix, key, data)
+	// var prefix = db_secret_prefix
+	// var db = t.key_prefix_to_db[prefix]
+	// var k = (prefix + key)
+	// var v, err1 = json.Marshal(data)
+	// raise_when_marshaling_fail(err1)
+	// var w = db.SetNX(t.ctx, k, v, db_no_expiration)
+	// raise_on_setnx_error(w)
+	// var ok, _ = w.Result()
 	return ok
 }
 
 func get_secret(t *keyval_table, key string) *secret_record {
 	var data secret_record
-	var ok = get_with_prefix(t, db_secret_prefix, key, &data)
+	var ok = db_get_with_prefix(t, db_secret_prefix, key, &data)
 	return ITE(ok, &data, nil)
 	// var prefix = db_secret_prefix
 	// var db = t.key_prefix_to_db[prefix]
@@ -1375,9 +1389,9 @@ func get_secret(t *keyval_table, key string) *secret_record {
 }
 
 // DELETE_SECRET_KEY deletes a access-key, unconditionally.
-func delete_secret_key_unconditionally(t *keyval_table, key string) error {
-	var err = delete_with_prefix_ok(t, db_secret_prefix, key)
-	return err
+func delete_secret_key_unconditionally(t *keyval_table, key string) bool {
+	var ok = db_del_with_prefix_ok(t, db_secret_prefix, key)
+	return ok
 	// var prefix = db_secret_prefix
 	// var db = t.key_prefix_to_db[prefix]
 	// var k = (prefix + key)
@@ -1390,7 +1404,7 @@ func delete_secret_key__(t *keyval_table, key string) {
 	var db = t.key_prefix_to_db[prefix]
 	var k = (prefix + key)
 	var w = db.Del(t.ctx, k)
-	raise_when_db_fail(w.Err())
+	raise_on_del_failure(w)
 }
 
 // LIST_SECRETS_OF_POOL lists secrets (access-keys) of a pool.  It
@@ -1414,42 +1428,67 @@ func list_secrets_of_pool(t *keyval_table, pool string) []*secret_record {
 }
 
 func set_csrf_token(t *keyval_table, uid string, token *csrf_token_record) {
-	set_with_prefix(t, db_csrf_token_prefix, uid, token)
+	db_set_with_prefix(t, db_csrf_token_prefix, uid, token)
+}
+
+func set_csrf_token_expiry(t *keyval_table, uid string, timeout int64) {
+	db_expire_with_prefix(t, db_csrf_token_prefix, uid, timeout)
 }
 
 func get_csrf_token(t *keyval_table, uid string) *csrf_token_record {
 	var data csrf_token_record
-	var ok = get_with_prefix(t, db_csrf_token_prefix, uid, &data)
+	var ok = db_get_with_prefix(t, db_csrf_token_prefix, uid, &data)
 	return ITE(ok, &data, nil)
 }
 
-func set_with_prefix(t *keyval_table, prefix string, key string, val any) {
+func db_set_with_prefix(t *keyval_table, prefix string, key string, val any) {
 	var db = t.key_prefix_to_db[prefix]
 	var k = (prefix + key)
 	var v, err = json.Marshal(val)
 	raise_when_marshaling_fail(err)
 	var w = db.Set(t.ctx, k, v, db_no_expiration)
-	raise_when_db_fail(w.Err())
+	raise_on_set_error(w)
 }
 
-func get_with_prefix(t *keyval_table, prefix string, key string, val any) bool {
+func db_setnx_with_prefix(t *keyval_table, prefix string, key string, val any) bool {
+	var db = t.key_prefix_to_db[prefix]
+	var k = (prefix + key)
+	var v, err = json.Marshal(val)
+	raise_when_marshaling_fail(err)
+	var w = db.SetNX(t.ctx, k, v, db_no_expiration)
+	raise_on_setnx_error(w)
+	var ok, _ = w.Result()
+	return ok
+}
+
+func db_get_with_prefix(t *keyval_table, prefix string, key string, val any) bool {
 	var db = t.key_prefix_to_db[prefix]
 	var k = (prefix + key)
 	var w = db.Get(t.ctx, k)
+	raise_on_get_error(w)
 	var ok = load_db_data(w, val)
 	return ok
 }
 
-func delete_with_prefix(t *keyval_table, prefix string, key string) {
-	var err = delete_with_prefix_ok(t, prefix, key)
-	raise_when_db_fail(err)
+func db_expire_with_prefix(t *keyval_table, prefix string, key string, timeout int64) {
+	var db = t.key_prefix_to_db[prefix]
+	var k = (prefix + key)
+	var w = db.Expire(t.ctx, k, (time.Duration(timeout) * time.Second))
+	raise_on_expire_failure(w)
 }
 
-func delete_with_prefix_ok(t *keyval_table, prefix string, key string) error {
+func db_del_with_prefix(t *keyval_table, prefix string, key string) {
 	var db = t.key_prefix_to_db[prefix]
 	var k = (prefix + key)
 	var w = db.Del(t.ctx, k)
-	return w.Err()
+	raise_on_del_failure(w)
+}
+
+func db_del_with_prefix_ok(t *keyval_table, prefix string, key string) bool {
+	var db = t.key_prefix_to_db[prefix]
+	var k = (prefix + key)
+	var w = db.Del(t.ctx, k)
+	return check_on_del_failure(w)
 }
 
 // CLEAR-TABLES.
@@ -1500,8 +1539,8 @@ func set_db_raw(t *keyval_table, kv [2]string) {
 	if db == nil {
 		panic(fmt.Sprintf("keyval-db bad prefix (%s)", prefix))
 	}
-	var w1 = db.Set(t.ctx, kv[0], kv[1], db_no_expiration)
-	raise_when_db_fail(w1.Err())
+	var w = db.Set(t.ctx, kv[0], kv[1], db_no_expiration)
+	raise_on_set_error(w)
 }
 
 func adm_del_db_raw(t *keyval_table, key string) {

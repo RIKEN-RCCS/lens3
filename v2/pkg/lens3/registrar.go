@@ -1146,7 +1146,7 @@ func make_csrf_tokens(z *registrar, uid string) *csrf_token_record {
 		Timestamp:    now,
 	}
 	set_csrf_token(z.table, uid, data)
-	set_csrf_token_expiry(z.table, uid, int64(conf.Ui_session_timeout))
+	set_csrf_token_expiry(z.table, uid, int64(conf.Ui_session_duration))
 	//var x = get_csrf_token(z.table, uid)
 	//fmt.Println("make_csrf_tokens=", x)
 

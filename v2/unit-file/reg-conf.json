@@ -1,0 +1,38 @@
+{
+  "subject": "reg",
+  "version": "v1.2",
+  "aws_signature": "AWS4-HMAC-SHA256",
+  "registrar": {
+    "port": 8004,
+    "front_host": "localhost",
+    "trusted_proxy_list": [
+      "localhost"
+    ],
+    "base_path": "/lens3.sts",
+    "claim_uid_map": "id",
+    "user_approval": "allow",
+    "uid_allow_range_list": [[1,9999]],
+    "uid_block_range_list": [[1,99]],
+    "gid_drop_list": [74, 98],
+    "user_expiration_days": 365,
+    "backend": "minio",
+    "backend_command_timeout": 10,
+    "probe_access_timeout": 60,
+    "pool_expiration": 630720000,
+    "ui_session_duration": 1800,
+    "reg_access_log_file": "/tmp/lens3-reg-access-log"
+  },
+  "ui": {
+    "s3_url": "https://fgkvm-010-128-008-030.fdcs.r-ccs.riken.jp",
+    "footer_banner": "This site is operated by RIKEN R-CCS"
+  },
+  "minio": {
+    "minio": "/usr/local/bin/minio",
+    "mc": "/usr/local/bin/mc"
+  },
+  "log_file": "/tmp/lens3-reg-log",
+  "log_syslog": {
+    "facility": "LOCAL7",
+    "priority": "DEBUG"
+  }
+}

@@ -93,7 +93,7 @@ type registrar_conf struct {
 	Backend_command_timeout time_in_sec   `json:"backend_command_timeout"`
 	Probe_access_timeout    time_in_sec   `json:"probe_access_timeout"`
 	Pool_expiration         time_in_sec   `json:"pool_expiration"`
-	Ui_session_timeout      time_in_sec   `json:"ui_session_timeout"`
+	Ui_session_duration     time_in_sec   `json:"ui_session_duration"`
 	Reg_access_log_file     string        `json:"reg_access_log_file"`
 }
 

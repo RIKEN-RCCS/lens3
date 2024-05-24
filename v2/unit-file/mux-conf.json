@@ -1,0 +1,44 @@
+{
+  "subject": "mux",
+  "version": "v1.2",
+  "aws_signature": "AWS4-HMAC-SHA256",
+  "multiplexer": {
+    "port": 8003,
+    "front_host": "localhost",
+    "trusted_proxies": [
+      "localhost"
+    ],
+    "mux_ep_update_interval": 307,
+    "forwarding_timeout": 60,
+    "probe_access_timeout": 60,
+    "bad_response_delay": 1,
+    "busy_suspension_time": 180,
+    "mux_node_name": "localhost",
+    "backend": "minio",
+    "backend_command_timeout": 10,
+    "mux_access_log_file": "/tmp/lens3-mux-access-log"
+  },
+  "manager": {
+    "sudo": "/usr/bin/sudo",
+    "port_min": 9000,
+    "port_max": 9029,
+    "backend_awake_duration": 900,
+    "backend_setup_at_start": true,
+    "backend_start_timeout": 60,
+    "backend_setup_timeout": 60,
+    "backend_stop_timeout": 30,
+    "backend_command_timeout": 10,
+    "heartbeat_interval": 61,
+    "heartbeat_miss_tolerance": 3,
+    "heartbeat_timeout": 30
+  },
+  "minio": {
+    "minio": "/usr/local/bin/minio",
+    "mc": "/usr/local/bin/mc"
+  },
+  "log_file": "/tmp/lens3-mux-log",
+  "log_syslog": {
+    "facility": "LOCAL7",
+    "priority": "DEBUG"
+  }
+}

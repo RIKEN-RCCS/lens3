@@ -12,9 +12,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
-	// "strconv"
-	// "time"
+	"time"
 )
 
 type adm struct {
@@ -214,6 +214,21 @@ func print_db_entries(db *db_raw_iterator, title string) {
 	}
 }
 
+func show_unix_time(s string) {
+	var t1, err1 = time.Parse(time.DateTime, s)
+	if err1 == nil {
+		fmt.Printf("unix time of (%s) is (%v)\n", t1, t1.Unix())
+		return
+	}
+	var n, err2 = strconv.ParseInt(s, 10, 64)
+	if err2 == nil {
+		var t2 = time.Unix(n, 0)
+		fmt.Printf("unix time of (%s) is (%v)\n", t2, t2.Unix())
+		return
+	}
+	return
+}
+
 // (cmd_help cannot be in cmd_list, which makes a reference-cycle).
 func cmd_help(adm *adm, args []string) {
 	fmt.Println("List of commands:")
@@ -224,8 +239,8 @@ func cmd_help(adm *adm, args []string) {
 
 var cmd_list = []*cmd{
 	&cmd{
-		synopsis: "show-confs",
-		doc:      "Prints a list of conf data.",
+		synopsis: "show-conf",
+		doc:      "Prints all conf data in keyval-db.",
 		run: func(adm *adm, args []string) {
 			var conflist = list_confs(adm.table)
 			for _, e := range conflist {
@@ -287,7 +302,7 @@ var cmd_list = []*cmd{
 	},
 
 	&cmd{
-		synopsis: "show-buckets",
+		synopsis: "show-bucket",
 		doc:      "Prints all buckets.",
 		run: func(adm *adm, args []string) {
 			var bkts = list_buckets(adm.table, "")
@@ -309,8 +324,8 @@ var cmd_list = []*cmd{
 	},
 
 	&cmd{
-		synopsis: "dump-users file-name",
-		doc:      "Dumps confs, users and pools for restoring.",
+		synopsis: "dump-user file-name",
+		doc:      "Dumps users for restoring.",
 		run: func(adm *adm, args []string) {
 			fmt.Println("// dumping...")
 			//var record = dump_db(adm.table)
@@ -327,8 +342,8 @@ var cmd_list = []*cmd{
 	},
 
 	&cmd{
-		synopsis: "dump-pools file-name",
-		doc:      "Dumps confs, users and pools for restoring.",
+		synopsis: "dump-pool file-name",
+		doc:      "Dumps pools for restoring.",
 		run: func(adm *adm, args []string) {
 			fmt.Println("// dumping...")
 			var poollist = list_pools(adm.table, "*")
@@ -345,10 +360,12 @@ var cmd_list = []*cmd{
 
 	&cmd{
 		synopsis: "dump-db",
-		doc: `Dumps all keyval-db in raw form.  It is a repeatation of
-		a key and a value, where both are strings and a value is a
-		string of json data.  A value part is idented by four
-		whitespaces`,
+
+		doc: `Dumps all key-value pairs in keyval-db.  It is a
+		repeatation of key-value pairs, with a value part is idented
+		by four whitespaces.  Keys are strings and values are records
+		in json.`,
+
 		run: func(adm *adm, args []string) {
 			dump_db(adm.table)
 		},
@@ -356,10 +373,11 @@ var cmd_list = []*cmd{
 
 	&cmd{
 		synopsis: "restore-db file-name",
-		doc: `Restores key-value entries in the keyval-db from a file.
-		A file contains repeatation of a key and a value.  See outputs
-		from dump-db.  db-name is one of "setting", "storage",
-		"process", "routing", or "monokey".`,
+
+		doc: `Restores key-value entries in keyval-db from a file.  A
+		file should contain a repeatation of key-value pairs.  See the
+		doc on dump-db about the output format.`,
+
 		run: func(adm *adm, args []string) {
 			restore_db(adm.table, args[1])
 		},
@@ -378,6 +396,14 @@ var cmd_list = []*cmd{
 		doc:      `Removes everything in the keyval-db.`,
 		run: func(adm *adm, args []string) {
 			wipe_out_db(adm.table, args[1])
+		},
+	},
+
+	&cmd{
+		synopsis: "show-unix-time 'yyyy-mm-dd hh:mm:ss' or int64",
+		doc:      `Converts time in int64.`,
+		run: func(adm *adm, args []string) {
+			show_unix_time(args[1])
 		},
 	},
 }

@@ -29,6 +29,7 @@ type keyval_table struct {
 	process          *redis.Client
 	ctx              context.Context
 	key_prefix_to_db map[string]*redis.Client
+	db_name_to_db    map[string]*redis.Client
 }
 
 const limit_of_id_generation_loop = 30
@@ -332,6 +333,7 @@ func make_table(conf db_conf) *keyval_table {
 		storage:          storage,
 		process:          process,
 		key_prefix_to_db: make(map[string]*redis.Client),
+		db_name_to_db:    make(map[string]*redis.Client),
 	}
 	for k, i := range key_prefix_to_db_number {
 		switch i {
@@ -345,6 +347,9 @@ func make_table(conf db_conf) *keyval_table {
 			panic("internal")
 		}
 	}
+	t.db_name_to_db["setting"] = t.setting
+	t.db_name_to_db["storage"] = t.storage
+	t.db_name_to_db["process"] = t.process
 
 	// Wait for a keyval-db.
 
@@ -1149,18 +1154,15 @@ func clear_db(t *keyval_table, db *redis.Client, prefix string) {
 	}
 }
 
-func db_raw_table(t *keyval_table, dbname string) *redis.Client {
-	switch dbname {
-	case "setting":
-		return t.setting
-	case "storage":
-		return t.storage
-	case "process":
-		return t.process
-	default:
-		log.Panic("bad db-name", dbname)
+// DB_RAW_TABLE returns a keyval-db for a db-name: {"setting",
+// "storage", "process"}.
+func db_raw_table(t *keyval_table, name string) *redis.Client {
+	var db, ok = t.db_name_to_db[name]
+	if !ok {
+		log.Panic("bad db-name", name)
 		return nil
 	}
+	return db
 }
 
 // SET_DB_RAW sets key-value in the keyval-db intact.
@@ -1187,10 +1189,11 @@ func adm_del_db_raw(t *keyval_table, key string) {
 	//	var w *redis.IntCmd = db.Del(t.ctx, key)
 	//	raise_when_db_fail(w.Err())
 	//}
-	for _, db := range t.key_prefix_to_db {
+	for name, db := range t.db_name_to_db {
 		var w *redis.IntCmd = db.Del(t.ctx, key)
-		if w.Err() == nil {
-			fmt.Println("deleted")
+		var n, err = w.Result()
+		if err == nil && n == 1 {
+			fmt.Printf("deleted in %s db\n", name)
 		}
 	}
 }

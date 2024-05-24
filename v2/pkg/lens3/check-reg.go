@@ -43,6 +43,7 @@ func run_registrar() {
 type customer struct {
 	client     *http.Client
 	ep         string
+	uid string
 	user       *user.User
 	group      *user.Group
 	csrf_token string
@@ -72,6 +73,7 @@ func run_client() {
 	var c = &customer{
 		client:     client,
 		ep:         "http://localhost:8004/",
+		uid: user1.Username,
 		user:       user1,
 		group:      group1,
 		csrf_token: "",
@@ -165,7 +167,7 @@ func get_user_info(c *customer, code int) {
 		panic(err2)
 	}
 	//req.Header.Add("X-Real-Ip", "localhost")
-	req.Header.Add("X-Remote-User", c.user.Name)
+	req.Header.Add("X-Remote-User", c.uid)
 	var rsp, err3 = c.client.Do(req)
 	if err3 != nil {
 		panic(err3)
@@ -204,7 +206,7 @@ func make_pool(c *customer, dir string, code int) {
 		panic(err2)
 	}
 	//req.Header.Add("X-Real-Ip", "localhost")
-	req.Header.Add("X-Remote-User", c.user.Name)
+	req.Header.Add("X-Remote-User", c.uid)
 	req.Header.Add("X-Csrf-Token", c.csrf_token)
 	var rsp, err3 = c.client.Do(req)
 	if err3 != nil {
@@ -232,7 +234,7 @@ func remove_pool(c *customer, code int) {
 		panic(err2)
 	}
 	//req.Header.Add("X-Real-Ip", "localhost")
-	req.Header.Add("X-Remote-User", c.user.Name)
+	req.Header.Add("X-Remote-User", c.uid)
 	req.Header.Add("X-Csrf-Token", c.csrf_token)
 	var rsp, err3 = c.client.Do(req)
 	if err3 != nil {
@@ -258,7 +260,7 @@ func list_pool(c *customer, code int) {
 		panic(err2)
 	}
 	//req.Header.Add("X-Real-Ip", "localhost")
-	req.Header.Add("X-Remote-User", c.user.Name)
+	req.Header.Add("X-Remote-User", c.uid)
 	req.Header.Add("X-Csrf-Token", c.csrf_token)
 	var rsp, err3 = c.client.Do(req)
 	if err3 != nil {
@@ -294,7 +296,7 @@ func make_bucket(c *customer, bucket string, code int) {
 		panic(err2)
 	}
 	//req.Header.Add("X-Real-Ip", "localhost")
-	req.Header.Add("X-Remote-User", c.user.Name)
+	req.Header.Add("X-Remote-User", c.uid)
 	req.Header.Add("X-Csrf-Token", c.csrf_token)
 	var rsp, err3 = c.client.Do(req)
 	if err3 != nil {
@@ -321,7 +323,7 @@ func delete_bucket(c *customer, bucket string, code int) {
 		panic(err2)
 	}
 	//req.Header.Add("X-Real-Ip", "localhost")
-	req.Header.Add("X-Remote-User", c.user.Name)
+	req.Header.Add("X-Remote-User", c.uid)
 	req.Header.Add("X-Csrf-Token", c.csrf_token)
 	var rsp, err3 = c.client.Do(req)
 	if err3 != nil {
@@ -356,7 +358,7 @@ func make_secret(c *customer, code int) {
 		panic(err2)
 	}
 	//req.Header.Add("X-Real-Ip", "localhost")
-	req.Header.Add("X-Remote-User", c.user.Name)
+	req.Header.Add("X-Remote-User", c.uid)
 	req.Header.Add("X-Csrf-Token", c.csrf_token)
 	var rsp, err3 = c.client.Do(req)
 	if err3 != nil {
@@ -393,7 +395,7 @@ func delete_secret(c *customer, secret string, code int) {
 		panic(err2)
 	}
 	//req.Header.Add("X-Real-Ip", "localhost")
-	req.Header.Add("X-Remote-User", c.user.Name)
+	req.Header.Add("X-Remote-User", c.uid)
 	req.Header.Add("X-Csrf-Token", c.csrf_token)
 	var rsp, err3 = c.client.Do(req)
 	if err3 != nil {

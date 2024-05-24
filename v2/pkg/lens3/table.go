@@ -5,8 +5,9 @@
 
 package lens3
 
-// A table is accessed like a single database, while consists of a set
-// of three databases to easy manual inspection in the keyval-db.
+// A table makes typed records from/to json in the keyval-db.  A table
+// consists of a set of three databases to easy manual inspection in
+// the keyval-db.
 
 import (
 	// This is by "go-redis/v8".  Use "go-redis/v8" for Redis-6, or
@@ -357,75 +358,6 @@ func make_table(conf db_conf) *keyval_table {
 			time.Sleep(30 * time.Second)
 		}
 	}
-}
-
-// DB_KEY_ITERATOR is a scanner, also containing a length of a
-// key-prefix.  It removes a key-prefix from a key while iterating.
-type db_key_iterator struct {
-	prefix_length int
-	i             *redis.ScanIterator
-}
-
-func (keyi *db_key_iterator) Err() error {
-	return keyi.i.Err()
-}
-
-func (keyi *db_key_iterator) Next(ctx context.Context) bool {
-	return keyi.i.Next(ctx)
-}
-
-func (keyi *db_key_iterator) Key() string {
-	//CHECK-STRING-LENGTH
-	var k = keyi.i.Val()
-	return k[keyi.prefix_length:]
-}
-
-// SCAN_TABLE returns an iterator of keys for a prefix+target pattern,
-// where a target is "*" for a wildcard.  It drops the prefix from the
-// returned keys.  Note a null-ness check is always necessary when
-// getting a value, because a deletion can intervene scanning keys and
-// getting values.
-func scan_table(t *keyval_table, prefix string, target string) *db_key_iterator {
-	var db = t.key_prefix_to_db[prefix]
-	var pattern = prefix + target
-	var prefix_length = len(prefix)
-	var ki = db_key_iterator{
-		prefix_length,
-		db.Scan(t.ctx, 0, pattern, 0).Iterator()}
-	return &ki
-}
-
-// LOAD_DATA fills a structure by json data in the keyval-db.  It
-// returns true or false about an entry is found.  Note that a get
-// with err=redis.Nil means a non-exising entry.
-func load_db_data(w *redis.StringCmd, data any) bool {
-	var b, err1 = w.Bytes()
-	if err1 != nil {
-		if err1 == redis.Nil {
-			return false
-		} else {
-			// NEVER: An error condition should have been raised.
-			panic(err1)
-		}
-	}
-
-	// if false {
-	// 	switch s := data.(type) {
-	// 	case *string:
-	// 		*s = string(b)
-	// 		return true
-	// 	}
-	// }
-
-	var r = bytes.NewReader(b)
-	var d = json.NewDecoder(r)
-	d.DisallowUnknownFields()
-	var err2 = d.Decode(data)
-	if err2 != nil {
-		logger.errf("Bad json data in the keyval-db: %v", err2)
-		raise(&table_exc{m: "json-unmarshal errs", e: err2})
-	}
-	return true
 }
 
 func raise_on_marshaling_error(err error) {
@@ -1121,6 +1053,76 @@ func db_del_with_prefix_ok(t *keyval_table, prefix string, key string) bool {
 	var k = (prefix + key)
 	var w = db.Del(t.ctx, k)
 	return check_on_del_failure(w)
+}
+
+// LOAD_DATA fills a structure by json data in the keyval-db.  It
+// returns true or false about an entry is found.  Note that a get
+// with err=redis.Nil means a non-exising entry.
+func load_db_data(w *redis.StringCmd, data any) bool {
+	var b, err1 = w.Bytes()
+	if err1 != nil {
+		if err1 == redis.Nil {
+			return false
+		} else {
+			// NEVER: An error condition should have been raised.
+			panic(err1)
+		}
+	}
+
+	// if false {
+	// 	switch s := data.(type) {
+	// 	case *string:
+	// 		*s = string(b)
+	// 		return true
+	// 	}
+	// }
+
+	var r = bytes.NewReader(b)
+	var d = json.NewDecoder(r)
+	d.DisallowUnknownFields()
+	var err2 = d.Decode(data)
+	if err2 != nil {
+		logger.errf("Bad json data in the keyval-db: %v", err2)
+		raise(&table_exc{m: "json-unmarshal errs", e: err2})
+	}
+	return true
+}
+
+// SCAN_TABLE returns an iterator of keys for a prefix+target pattern,
+// where a target is "*" for a wildcard.  It drops the prefix from the
+// returned keys.  Note that a null-ness check is always necessary
+// when getting a value, because a deletion can intervene scanning
+// keys and getting values.
+func scan_table(t *keyval_table, prefix string, target string) *db_key_iterator {
+	var db = t.key_prefix_to_db[prefix]
+	var pattern = prefix + target
+	var prefix_length = len(prefix)
+	var ki = db_key_iterator{
+		prefix_length,
+		db.Scan(t.ctx, 0, pattern, 0).Iterator(),
+	}
+	return &ki
+}
+
+// DB_KEY_ITERATOR is a scanner, also containing a length of a
+// key-prefix.  It removes a key-prefix from a key while iterating.
+type db_key_iterator struct {
+	prefix_length int
+	i             *redis.ScanIterator
+}
+
+func (keyi *db_key_iterator) Err() error {
+	return keyi.i.Err()
+}
+
+func (keyi *db_key_iterator) Next(ctx context.Context) bool {
+	return keyi.i.Next(ctx)
+}
+
+func (keyi *db_key_iterator) Key() string {
+	//CHECK-STRING-LENGTH
+	var k = keyi.i.Val()
+	return k[keyi.prefix_length:]
 }
 
 // CLEAR-TABLES.

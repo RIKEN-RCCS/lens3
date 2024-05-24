@@ -43,7 +43,7 @@ func run_registrar() {
 type customer struct {
 	client     *http.Client
 	ep         string
-	uid string
+	uid        string
 	user       *user.User
 	group      *user.Group
 	csrf_token string
@@ -73,7 +73,7 @@ func run_client() {
 	var c = &customer{
 		client:     client,
 		ep:         "http://localhost:8004/",
-		uid: user1.Username,
+		uid:        user1.Username,
 		user:       user1,
 		group:      group1,
 		csrf_token: "",

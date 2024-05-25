@@ -214,16 +214,25 @@ func print_db_entries(db *db_raw_iterator, title string) {
 	}
 }
 
-func show_unix_time(s string) {
-	var t1, err1 = time.Parse(time.DateTime, s)
+func show_unix_time(s1 string) {
+	// To accept a dateTtime format as the date_time format.
+	var s2 = strings.Replace(s1, "T", " ", 1)
+
+	var t1, err1 = time.Parse(time.DateTime, s2)
 	if err1 == nil {
 		fmt.Printf("unix time of (%s) is (%v)\n", t1, t1.Unix())
 		return
 	}
-	var n, err2 = strconv.ParseInt(s, 10, 64)
+	var t2, err2 = time.Parse(time.DateOnly, s2)
 	if err2 == nil {
-		var t2 = time.Unix(n, 0)
 		fmt.Printf("unix time of (%s) is (%v)\n", t2, t2.Unix())
+		return
+	}
+
+	var n, err3 = strconv.ParseInt(s2, 10, 64)
+	if err3 == nil {
+		var t3 = time.Unix(n, 0)
+		fmt.Printf("unix time of (%s) is (%v)\n", t3, t3.Unix())
 		return
 	}
 	return
@@ -317,9 +326,11 @@ var cmd_list = []*cmd{
 		doc:      "Prints all buckets-directories.",
 		run: func(adm *adm, args []string) {
 			var dirs = list_buckets_directories(adm.table)
-			for _, x := range dirs {
-				print_in_json(x)
-			}
+			print_in_json(dirs)
+			// for _, x := range dirs {
+			// 	print_in_json(x)
+			// 	//fmt.Printf("%v\n", x)
+			// }
 		},
 	},
 

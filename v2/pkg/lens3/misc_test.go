@@ -29,14 +29,13 @@ func Test_misc(t *testing.T) {
 	//test_pipe_timeout()
 	//test_get_lines()
 
-	//start_service_for_test()
-
 	// check_type_switch_on_nil()
 	// test_minimal_environ()
 
 	// check_json()
 
-	run_registrar()
+	// run_registrar()
+	run_service()
 }
 
 func test_minimal_environ() {

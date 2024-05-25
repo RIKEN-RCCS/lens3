@@ -36,7 +36,7 @@ func start_service_for_test() {
 	configure_multiplexer(m, t, muxconf)
 
 	var w = &the_manager
-	configure_manager(w, t, m, muxconf)
+	configure_manager(w, m, t, muxconf)
 	go start_manager(w)
 
 	var z = &the_registrar

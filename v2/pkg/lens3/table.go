@@ -256,7 +256,7 @@ type key_pair struct {
 }
 
 // POOL_DIRECTORY is returned by list_buckets_directories()
-type pool_directory struct {
+type pool_directory__ struct {
 	pool      string
 	directory string
 }
@@ -656,18 +656,20 @@ func delete_buckets_directory_unconditionally(t *keyval_table, path string) bool
 }
 
 // LIST_BUCKETS_DIRECTORIES returns a list of all buckets-directories.
-func list_buckets_directories(t *keyval_table) []*pool_directory {
+func list_buckets_directories(t *keyval_table) []*bucket_directory_record {
 	var prefix = db_directory_prefix
 	var keyi = scan_table(t, prefix, "*")
-	var bkts []*pool_directory
+	//var bkts []*pool_directory
+	var bkts []*bucket_directory_record
 	for keyi.Next(t.ctx) {
 		var path = keyi.Key()
 		var dir = get_buckets_directory(t, path)
 		if dir != nil {
-			bkts = append(bkts, &pool_directory{
-				pool:      dir.Pool,
-				directory: path,
-			})
+			bkts = append(bkts, dir)
+			// bkts = append(bkts, &pool_directory{
+			// 	pool:      dir.Pool,
+			// 	directory: path,
+			// })
 		}
 	}
 	return bkts

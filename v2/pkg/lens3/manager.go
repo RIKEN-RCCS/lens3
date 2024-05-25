@@ -181,7 +181,7 @@ const (
 	start_failed
 )
 
-func configure_manager(w *manager, t *keyval_table, m *multiplexer, conf *mux_conf) {
+func configure_manager(w *manager, m *multiplexer, t *keyval_table, conf *mux_conf) {
 	w.table = t
 	w.manager_conf = conf.Manager
 

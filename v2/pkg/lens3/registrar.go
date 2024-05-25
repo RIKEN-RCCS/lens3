@@ -894,10 +894,10 @@ func grant_access_with_error_return(z *registrar, w http.ResponseWriter, r *http
 	var conf = &z.Registrar
 	_ = conf
 
-	fmt.Println("r.RemoteAddr=", r.RemoteAddr)
-	fmt.Println("X-Real-Ip=", r.Header.Get("X-Real-Ip"))
-	fmt.Println("X-Remote-User=", r.Header.Get("X-Remote-User"))
-	fmt.Println("X-Csrf-Token=", r.Header.Get("X-Csrf-Token"))
+	fmt.Println(";; r.RemoteAddr=", r.RemoteAddr)
+	fmt.Println(";; X-Real-Ip=", r.Header.Get("X-Real-Ip"))
+	fmt.Println(";; X-Remote-User=", r.Header.Get("X-Remote-User"))
+	fmt.Println(";; X-Csrf-Token=", r.Header.Get("X-Csrf-Token"))
 
 	if ensure_lens3_is_running(z.table) {
 		logger.errf("Reg() lens3 is not running")

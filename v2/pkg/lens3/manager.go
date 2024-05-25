@@ -59,6 +59,8 @@ import (
 type manager struct {
 	table *keyval_table
 
+	mux *multiplexer
+
 	// MUX_EP and MUX_PID are about a process that a multiplexer and a
 	// manager run in.
 	mux_ep  string
@@ -78,6 +80,7 @@ type manager struct {
 	// ENVIRON holds a copy of the minimal list of environs.
 	environ []string
 
+	conf *mux_conf
 	//backend_conf
 	manager_conf
 }
@@ -181,9 +184,11 @@ const (
 	start_failed
 )
 
-func configure_manager(w *manager, m *multiplexer, t *keyval_table, conf *mux_conf) {
+func configure_manager(w *manager, m *multiplexer, t *keyval_table, c *mux_conf) {
 	w.table = t
-	w.manager_conf = conf.Manager
+	w.mux = m
+	w.conf = c
+	w.manager_conf = c.Manager
 
 	w.watch_gap_minimal = 10
 	w.stabilize_wait_ms = 1000
@@ -196,7 +201,7 @@ func configure_manager(w *manager, m *multiplexer, t *keyval_table, conf *mux_co
 	w.mux_pid = m.mux_pid
 
 	w.factory = the_backend_minio_factory
-	w.factory.configure(conf)
+	w.factory.configure(c)
 }
 
 func manager_main() {
@@ -204,7 +209,7 @@ func manager_main() {
 }
 
 func start_manager(w *manager) {
-	fmt.Println("start_manager() w=", w)
+	logger.infof("Mux(%s) start manager service", w.mux.ep)
 
 	//w.table = t
 	//w.manager_conf = *conf

@@ -63,6 +63,8 @@ type Conf_header struct {
 
 type time_in_sec int64
 
+// NOTE: Trusted_proxy_list should include the fontend proxies and the
+// Mux hosts.
 type multiplexer_conf struct {
 	Port                    int          `json:"port"`
 	Front_host              string       `json:"front_host"`
@@ -87,6 +89,7 @@ type registrar_conf struct {
 	User_approval           user_approval `json:"user_approval"`
 	Uid_allow_range_list    [][2]int      `json:"uid_allow_range_list"`
 	Uid_block_range_list    [][2]int      `json:"uid_block_range_list"`
+	Gid_drop_range_list     [][2]int      `json:"gid_drop_range_list"`
 	Gid_drop_list           []int         `json:"gid_drop_list"`
 	User_expiration_days    int           `json:"user_expiration_days"`
 	Backend                 backend_name  `json:"backend"`
@@ -322,6 +325,7 @@ func check_registrar_entry(e registrar_conf) {
 		"User_approval",
 		// "Uid_allow_range_list",
 		// "Uid_block_range_list",
+		// "Gid_drop_range_list",
 		// "Gid_drop_list",
 		// "User_expiration_days",
 		"Backend",

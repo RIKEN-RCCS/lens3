@@ -94,7 +94,7 @@ type user_record struct {
 	Claim           string   `json:"claim"`
 	Groups          []string `json:"groups"`
 	Enabled         bool     `json:"enabled"`
-	Expiration_time int64    `json:"expiration_time"` // nonexist
+	Expiration_time int64    `json:"expiration_time"`
 
 	Check_terms_and_conditions bool  `json:"check_terms_and_conditions"`
 	Timestamp                  int64 `json:"timestamp"`
@@ -116,8 +116,7 @@ type user_claim_record struct {
 // "px:" + pool-name Entry (DB_POOL_NAME_PREFIX).
 type pool_mutex_record struct {
 	Owner_uid string `json:"owner"`
-
-	Timestamp int64 `json:"timestamp"`
+	Timestamp int64  `json:"timestamp"`
 }
 
 // "po:" + pool-name Entry (DB_POOL_PROP_PREFIX).
@@ -129,8 +128,7 @@ type pool_record struct {
 	Probe_key         string `json:"probe_key"`
 	Online_status     bool   `json:"online_status"`
 	Expiration_time   int64  `json:"expiration_time"`
-
-	Timestamp int64 `json:"timestamp"`
+	Timestamp         int64  `json:"timestamp"`
 }
 
 // "bd:" + directory Entry (DB_DIRECTORY_PREFIX).
@@ -147,9 +145,8 @@ type bucket_record struct {
 	Pool            string        `json:"pool"`
 	Bucket          string        `json:"bucket"`
 	Bucket_policy   bucket_policy `json:"bucket_policy"`
-	Expiration_time int64         `json:"expiration_time"` // nonexist
-
-	Timestamp int64 `json:"timestamp"`
+	Expiration_time int64         `json:"expiration_time"`
+	Timestamp       int64         `json:"timestamp"`
 }
 
 // "sx:" + secret Entry (DB_SECRET_PREFIX).  The _access_key field is
@@ -162,8 +159,7 @@ type secret_record struct {
 	Secret_policy secret_policy `json:"secret_policy"`
 	//Internal_use    bool          `json:"internal_use"`
 	Expiration_time int64 `json:"expiration_time"`
-
-	Timestamp int64 `json:"timestamp"`
+	Timestamp       int64 `json:"timestamp"`
 }
 
 // "bx:" + pool-name Entry (DB_BACKEND_MUTEX_PREFIX).
@@ -174,11 +170,10 @@ type backend_mutex_record struct {
 
 // "ps:" + pool-name Entry (DB_POOL_STATE_PREFIX).
 type pool_state_record struct {
-	Pool   string      `json:"pool"`
-	State  pool_state  `json:"state"`
-	Reason pool_reason `json:"reason"`
-
-	Timestamp int64 `json:"timestamp"`
+	Pool      string      `json:"pool"`
+	State     pool_state  `json:"state"`
+	Reason    pool_reason `json:"reason"`
+	Timestamp int64       `json:"timestamp"`
 }
 
 // "be:" + pool-name Entry (DB_BACKEND_INFO_PREFIX).  A pair of
@@ -191,16 +186,14 @@ type backend_record struct {
 	Root_secret string `json:"root_secret"`
 	Mux_ep      string `json:"mux_ep"`
 	Mux_pid     int    `json:"mux_pid"`
-
-	Timestamp int64 `json:"timestamp"`
+	Timestamp   int64  `json:"timestamp"`
 }
 
 // "mu:" + mux-ep Entry (DB_MUX_EP_PREFIX).
 type mux_record struct {
 	Mux_ep     string `json:"mux_ep"`
 	Start_time int64  `json:"start_time"`
-
-	Timestamp int64 `json:"timestamp"`
+	Timestamp  int64  `json:"timestamp"`
 }
 
 // "ts:" + pool-name Entry (DB_ACCESS_TIMESTAMP_PREFIX).
@@ -356,7 +349,7 @@ func make_table(conf db_conf) *keyval_table {
 	for {
 		var s = t.setting.Ping(t.ctx)
 		if s.Err() == nil {
-			log.Print("Connected to a keyval-db.")
+			logger.debugf("Connected to the keyval-db ep=(%s)", ep)
 			return t
 		} else {
 			log.Print("Connection to a keyval-db failed (sleeping).")

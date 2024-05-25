@@ -49,7 +49,7 @@ import (
 )
 
 // S3V4_AUTHORIZATION is Authorization header entries.
-type s3v4_authorization struct {
+type authorization_s3v4 struct {
 	credential    [5]string
 	signedheaders []string
 	signature     string
@@ -75,7 +75,7 @@ func check_credential_in_request(verbose bool, q *http.Request, keypair [2]strin
 		//fmt.Println("*** empty authorization=", auth1)
 		return false
 	}
-	var auth_passed s3v4_authorization = scan_aws_authorization(auth1)
+	var auth_passed authorization_s3v4 = scan_aws_authorization(auth1)
 	if auth_passed.signature == "" {
 		//fmt.Println("*** bad auth=", auth1)
 		return false
@@ -130,7 +130,7 @@ func check_credential_in_request(verbose bool, q *http.Request, keypair [2]strin
 	}
 
 	var auth2 = r.Header.Get("Authorization")
-	var auth_forged s3v4_authorization = scan_aws_authorization(auth2)
+	var auth_forged authorization_s3v4 = scan_aws_authorization(auth2)
 
 	if verbose && auth_passed.signature != auth_forged.signature {
 		logger.debugf("Mux() Bad signature"+
@@ -197,8 +197,8 @@ func sign_by_backend_credential(r *http.Request, proc *backend_record) {
 // header.  It accepts an emtpy string.  On failure, it returns one
 // with the signature field as "".  Returned keys in SignedHeaders are
 // canonicalized.
-func scan_aws_authorization(auth string) s3v4_authorization {
-	var bad = s3v4_authorization{}
+func scan_aws_authorization(auth string) authorization_s3v4 {
+	var bad = authorization_s3v4{}
 	if auth == "" {
 		return bad
 	}
@@ -224,7 +224,7 @@ func scan_aws_authorization(auth string) s3v4_authorization {
 		//fmt.Println("*** bad auth entries", auth)
 		return bad
 	}
-	var v = s3v4_authorization{}
+	var v = authorization_s3v4{}
 	for _, kv := range slots {
 		switch kv[0] {
 		case "Credential":

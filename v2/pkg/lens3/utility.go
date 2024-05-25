@@ -26,6 +26,7 @@ import (
 	"reflect"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -42,15 +43,17 @@ func ITE[T any](c bool, e1 T, e2 T) T {
 }
 
 const (
-	http_status_400_bad_request  int = 400
-	http_status_401_unauthorized int = 401
-	http_status_403_forbidden    int = 403
-	http_status_404_not_found    int = 404
+	http_200_OK int = 200
 
-	http_status_500_internal_server_error int = 500
-	http_status_503_service_unavailable   int = 503
+	http_400_bad_request  int = 400
+	http_401_unauthorized int = 401
+	http_403_forbidden    int = 403
+	http_404_not_found    int = 404
 
-	http_status_601_unanalyzable int = 601
+	http_500_internal_server_error int = 500
+	http_503_service_unavailable   int = 503
+
+	http_601_unanalyzable int = 601
 )
 
 type Fatal struct {
@@ -97,8 +100,8 @@ type reg_error_exc struct {
 }
 
 type proxy_exc struct {
-	code int
-	m    string
+	code    int
+	message string
 }
 
 func (e *termination_exc) Error() string {
@@ -110,14 +113,14 @@ func (e *reg_error_exc) Error() string {
 }
 
 func (e *proxy_exc) Error() string {
-	return "proxy_exc:" + e.m
+	return "proxy_exc:" + e.message
 }
 
-func proxy_error(code int, s string) error {
-	return &proxy_exc{
-		code: code,
-		m:    s,
-	}
+func mux_err(code int, s string) {
+	raise(&proxy_exc{
+		code:    code,
+		message: s,
+	})
 }
 
 func handle() any {
@@ -326,26 +329,27 @@ func minimal_environ() []string {
 	return filtered
 }
 
+func convert_hosts_to_addrs(hosts []string) []net.IP {
+	var addrs []net.IP
+	for _, h := range hosts {
+		var ips, err1 = net.LookupIP(h)
+		if err1 != nil {
+			logger.warnf("net.LookupIP(%s) fails: err=(%v)", h, err1)
+			continue
+		}
+		addrs = append(addrs, ips...)
+	}
+	return addrs
+}
+
 // MAKE_TYPICAL_IP_ADDRESS makes IP address strings comparable.  It
 // drops the hex part.  (Returned strings do not conform RFC-5952).
-func make_typical_ip_address(ip string) string {
+func make_typical_ip_address__(ip string) string {
 	if strings.HasPrefix(ip, "::ffff:") {
 		return ip[7:]
 	} else {
 		return ip
 	}
-}
-
-// GET_IP_ADDRESSES returns a list of addresses for the host name,
-// which are formatted for equality comparison.
-func get_ip_addresses(hostname string) []string {
-	var ips1, err1 = net.LookupHost(hostname)
-	assert_fatal(err1 == nil)
-	var ips2 []string
-	for _, ip := range ips1 {
-		ips2 = append(ips2, make_typical_ip_address(ip))
-	}
-	return string_sort(ips2)
 }
 
 var bucket_naming_good_re = regexp.MustCompile(`^[a-z0-9-]{3,63}$`)
@@ -423,7 +427,7 @@ func check_fields_filled_loop(v reflect.Value) bool {
 
 // CHECK_INT_IN_RANGES checks int v is in any of ranges, lb≤v≤ub for
 // [lb,ub] (lower/upper-bounds inclusive).
-func check_int_in_ranges(v int, pairs [][2]int) bool {
+func check_int_in_ranges(pairs [][2]int, v int) bool {
 	for _, lbub := range pairs {
 		if lbub[0] <= v && v < lbub[1] {
 			return true
@@ -443,4 +447,27 @@ func check_stream_eof(is io.Reader) error {
 	} else {
 		return ITE(err2 != nil, err2, garbage_in_input_stream_error)
 	}
+}
+
+func check_frontend_proxy_trusted(trusted []net.IP, peer string) bool {
+	if peer == "" {
+		logger.warnf("Bad frontend proxy: ep=(%s)", peer)
+		return false
+	}
+	var host, _, err1 = net.SplitHostPort(peer)
+	if err1 != nil {
+		logger.warnf("Bad frontend proxy ep=(%s): err=(%v)", peer, err1)
+		return false
+	}
+	var ips, err2 = net.LookupIP(host)
+	if err2 != nil {
+		logger.warnf("net.LookupIP(%s) failed: err=(%v)", host, err2)
+		return false
+	}
+	for _, ip := range ips {
+		if slices.IndexFunc(trusted, ip.Equal) != -1 {
+			return true
+		}
+	}
+	return false
 }

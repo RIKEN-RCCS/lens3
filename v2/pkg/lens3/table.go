@@ -139,8 +139,8 @@ type bucket_directory_record struct {
 	Timestamp int64  `json:"timestamp"`
 }
 
-// "bk:" + bucket Entry (DB_BUCKET_PREFIX).
-// (key≡bucket_record.Bucket).
+// "bk:" + bucket Entry (DB_BUCKET_PREFIX).  The name field, Bucket,
+// is the same as the key as: (key≡bucket_record.Bucket).
 type bucket_record struct {
 	Pool            string        `json:"pool"`
 	Bucket          string        `json:"bucket"`
@@ -149,12 +149,11 @@ type bucket_record struct {
 	Timestamp       int64         `json:"timestamp"`
 }
 
-// "sx:" + secret Entry (DB_SECRET_PREFIX).  The _access_key field is
-// not stored in the keyval-db, but it is restored as
-// (key≡secret_record._access_key).
+// "sx:" + secret Entry (DB_SECRET_PREFIX).  The Access_key field is
+// the same as the key as: (key≡secret_record.Access_key).
 type secret_record struct {
 	Pool          string        `json:"pool"`
-	_access_key   string        `json:"-"`
+	Access_key    string        `json:"access_key"`
 	Secret_key    string        `json:"secret_key"`
 	Secret_policy secret_policy `json:"secret_policy"`
 	//Internal_use    bool          `json:"internal_use"`
@@ -645,7 +644,7 @@ func find_buckets_directory_of_pool(t *keyval_table, pool string) string {
 }
 
 func delete_buckets_directory_unconditionally(t *keyval_table, path string) bool {
-	var ok = db_del_with_prefix_ok(t, db_directory_prefix, path)
+	var ok = db_del_with_prefix(t, db_directory_prefix, path)
 	return ok
 }
 
@@ -803,7 +802,7 @@ func get_bucket(t *keyval_table, bucket string) *bucket_record {
 }
 
 func delete_bucket_unconditionally(t *keyval_table, bucket string) bool {
-	var ok = db_del_with_prefix_ok(t, db_bucket_prefix, bucket)
+	var ok = db_del_with_prefix(t, db_bucket_prefix, bucket)
 	return ok
 }
 
@@ -893,27 +892,31 @@ func list_user_timestamps(t *keyval_table) []name_timestamp_pair {
 // access-key.
 func set_with_unique_pool_name(t *keyval_table, data *pool_mutex_record) string {
 	var prefix = db_pool_name_prefix
-	var v, err = json.Marshal(data)
-	raise_on_marshaling_error(err)
-	var s = set_with_unique_id_loop(t, prefix, v, generate_random_key)
+	var s = set_with_unique_id_loop(t, prefix, data, generate_random_key)
 	return s
 }
 
 // SET_WITH_UNIQUE_SECRET_KEY makes a random unique id for a an
-// access-key.
+// access-key.  The generator function assigns a new access-key in
+// each loop.
 func set_with_unique_secret_key(t *keyval_table, data *secret_record) string {
+	var generator = func() string {
+		var id = generate_access_key()
+		data.Access_key = id
+		return id
+	}
 	var prefix = db_secret_prefix
-	var v, err = json.Marshal(data)
-	raise_on_marshaling_error(err)
-	var s = set_with_unique_id_loop(t, prefix, v, generate_access_key)
+	var s = set_with_unique_id_loop(t, prefix, data, generator)
 	return s
 }
 
-func set_with_unique_id_loop(t *keyval_table, prefix string, v []byte, generator func() string) string {
+func set_with_unique_id_loop(t *keyval_table, prefix string, data any, generator func() string) string {
 	var db = t.key_prefix_to_db[prefix]
 	var counter = 0
 	for {
 		var id = generator()
+		var v, err = json.Marshal(data)
+		raise_on_marshaling_error(err)
 		var k = (prefix + id)
 		var w = db.SetNX(t.ctx, k, v, db_no_expiration)
 		raise_on_setnx_error(w)
@@ -942,7 +945,7 @@ func get_pool_mutex(t *keyval_table, pool string) *pool_mutex_record {
 }
 
 func delete_pool_name_unconditionally(t *keyval_table, pool string) bool {
-	var ok = db_del_with_prefix_ok(t, db_pool_name_prefix, pool)
+	var ok = db_del_with_prefix(t, db_pool_name_prefix, pool)
 	return ok
 }
 
@@ -960,7 +963,7 @@ func get_secret(t *keyval_table, key string) *secret_record {
 
 // DELETE_SECRET_KEY deletes a access-key, unconditionally.
 func delete_secret_key_unconditionally(t *keyval_table, key string) bool {
-	var ok = db_del_with_prefix_ok(t, db_secret_prefix, key)
+	var ok = db_del_with_prefix(t, db_secret_prefix, key)
 	return ok
 }
 
@@ -986,7 +989,7 @@ func list_secrets_of_pool(t *keyval_table, pool string) []*secret_record {
 			// Race.  It is not an error.
 			continue
 		}
-		d._access_key = key
+		d.Access_key = key
 		descs = append(descs, d)
 	}
 	return descs
@@ -1042,18 +1045,20 @@ func db_expire_with_prefix(t *keyval_table, prefix string, key string, timeout i
 	raise_on_expire_failure(w)
 }
 
-func db_del_with_prefix(t *keyval_table, prefix string, key string) {
-	var db = t.key_prefix_to_db[prefix]
-	var k = (prefix + key)
-	var w = db.Del(t.ctx, k)
-	raise_on_del_failure(w)
-}
-
-func db_del_with_prefix_ok(t *keyval_table, prefix string, key string) bool {
+// DB_DEL_WITH_PREFIX returns OK/NG, but usually, failure is ignored.
+func db_del_with_prefix(t *keyval_table, prefix string, key string) bool {
 	var db = t.key_prefix_to_db[prefix]
 	var k = (prefix + key)
 	var w = db.Del(t.ctx, k)
 	return check_on_del_failure(w)
+}
+
+// DB_DEL_WITH_PREFIX raises, when delete failed.
+func db_del_with_prefix_raise(t *keyval_table, prefix string, key string) {
+	var db = t.key_prefix_to_db[prefix]
+	var k = (prefix + key)
+	var w = db.Del(t.ctx, k)
+	raise_on_del_failure(w)
 }
 
 // LOAD_DATA fills a structure by json data in the keyval-db.  It

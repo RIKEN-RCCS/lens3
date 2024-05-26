@@ -1,6 +1,6 @@
 {
   "subject": "reg",
-  "version": "v1.2",
+  "version": "v2.1",
   "aws_signature": "AWS4-HMAC-SHA256",
   "registrar": {
     "port": 8004,
@@ -16,16 +16,18 @@
     "gid_drop_range_list": [[1, 999]],
     "gid_drop_list": [50000],
     "user_expiration_days": 365,
+    "pool_expiration_days": 365,
+    "bucket_expiration_days": 365,
+    "secret_expiration_days": 365,
     "backend": "minio",
     "backend_command_timeout": 10,
     "probe_access_timeout": 60,
-    "pool_expiration": 630720000,
     "ui_session_duration": 1800,
     "reg_access_log_file": "/tmp/lens3-reg-access-log"
   },
   "ui": {
-    "s3_url": "https://fgkvm-010-128-008-030.fdcs.r-ccs.riken.jp",
-    "footer_banner": "This site is operated by RIKEN R-CCS"
+    "s3_url": "https://lens3.exmaple.com",
+    "footer_banner": "This site is operated by exmaple.com"
   },
   "minio": {
     "minio": "/usr/local/bin/minio",

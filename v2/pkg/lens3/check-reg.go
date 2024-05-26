@@ -22,7 +22,7 @@ import (
 	//"testing"
 )
 
-func run_registrar() {
+func run_registrar(n int) {
 	var dbconf = read_db_conf("conf.json")
 	var t = make_table(dbconf)
 	var muxconf = get_mux_conf(t, "mux")
@@ -40,7 +40,14 @@ func run_registrar() {
 
 	time.Sleep(1 * time.Second)
 
-	run_dummy_reg_client()
+	switch n {
+	case 1:
+		run_dummy_reg_client()
+	case 2:
+		run_dummy_reg_client_leaving_pool()
+	default:
+		run_dummy_reg_client()
+	}
 }
 
 type reg_customer struct {
@@ -99,7 +106,7 @@ func run_dummy_reg_client() {
 	remove_pool(c, 200)
 }
 
-func run_dummy_reg_client_for_mux_client() {
+func run_dummy_reg_client_leaving_pool() {
 	fmt.Println("reg client run...")
 
 	var user1, err1 = user.Current()

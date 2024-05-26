@@ -1,11 +1,11 @@
 {
   "subject": "mux",
-  "version": "v1.2",
+  "version": "v2.1",
   "aws_signature": "AWS4-HMAC-SHA256",
   "multiplexer": {
     "port": 8003,
     "front_host": "localhost",
-    "trusted_proxies": [
+    "trusted_proxy_list": [
       "localhost"
     ],
     "mux_ep_update_interval": 307,

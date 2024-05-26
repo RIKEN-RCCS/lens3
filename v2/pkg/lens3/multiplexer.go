@@ -24,7 +24,7 @@ import (
 	"log"
 	//"os"
 	"net"
-	"os/user"
+	//"os/user"
 	//"maps"
 	"net/http"
 	"net/http/httputil"
@@ -37,8 +37,7 @@ import (
 	//"runtime"
 )
 
-// MULTIPLEXER is a single object, "the_multiplexer".  It is
-// with threads of a child process reaper.
+// MULTIPLEXER is a single object, "the_multiplexer".
 type multiplexer struct {
 	// EP is a listening port of Mux.
 	ep      string
@@ -151,7 +150,7 @@ func start_multiplexer(m *multiplexer) {
 	logger.infof("Mux(%s) start service", m.ep)
 	for {
 		var err2 = http.ListenAndServe(m.ep, proxy2)
-		logger.infof("Mux(%s) ListenAndServe() done err=%v", m.ep, err2)
+		logger.infof("Mux(%s) ListenAndServe() done err=(%v)", m.ep, err2)
 		log.Fatal(err2)
 	}
 }
@@ -162,6 +161,7 @@ func start_multiplexer(m *multiplexer) {
 func proxy_request_rewriter(m *multiplexer) func(r *httputil.ProxyRequest) {
 	return func(r *httputil.ProxyRequest) {
 		var x = r.In.Header["lens3-be"]
+		//fmt.Printf("r.In.Header=%#v\n", r.In.Header)
 		assert_fatal(len(x) == 2)
 		var pool, ep = x[0], x[1]
 		delete(r.In.Header, "lens3-be")
@@ -196,6 +196,9 @@ func proxy_request_rewriter(m *multiplexer) func(r *httputil.ProxyRequest) {
 // It passes the request to the next forwarding proxy.
 func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Printf("*** r.Header.Get(Remote_Addr)=%#v\n", r.Header.Get("Remote_Addr"))
+		fmt.Printf("*** r.RemoteAddr=%#v\n", r.RemoteAddr)
+
 		if !ensure_frontend_proxy_trusted(m, w, r) {
 			return
 		}
@@ -206,6 +209,8 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 			return_mux_response_by_error(m, w, r, err1)
 			return
 		}
+
+		fmt.Println("*** AHO#1", authenticated)
 
 		switch {
 		case bucket == nil && authenticated == nil:
@@ -221,10 +226,10 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 				})
 			return
 		case bucket != nil && authenticated == nil:
-			serve_authenticated_access(m, w, r, bucket, authenticated, proxy)
+			serve_anonymous_access(m, w, r, bucket, proxy)
 			return
 		case bucket != nil && authenticated != nil:
-			serve_anonymous_access(m, w, r, bucket, proxy)
+			serve_authenticated_access(m, w, r, bucket, authenticated, proxy)
 			return
 		default:
 			panic_never()
@@ -233,6 +238,7 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 }
 
 func serve_authenticated_access(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record, secret *secret_record, proxy http.Handler) {
+	fmt.Println("*** AHO#2")
 	assert_fatal(bucket != nil && secret != nil)
 	var now int64 = time.Now().Unix()
 	if !ensure_bucket_owner(m, w, r, bucket, secret) {
@@ -241,26 +247,30 @@ func serve_authenticated_access(m *multiplexer, w http.ResponseWriter, r *http.R
 	if !ensure_bucket_not_expired(m, w, r, bucket, now) {
 		return
 	}
+	fmt.Println("*** AHO#2-2")
 	var prop *pool_record = ensure_pool_existence(m, w, r, bucket.Pool)
 	if prop == nil {
 		return
 	}
-	if !ensure_user_is_active(m.table, prop.Owner_uid) {
+	fmt.Println("*** AHO#2-3")
+	if !ensure_user_is_active(m, w, r, prop.Owner_uid) {
 		return
 	}
+	fmt.Println("*** AHO#2-4")
 	//awake_suspended_pool()
-	if !ensure_pool_state(m.table, prop.Pool) {
+	if !ensure_pool_state(m, w, r, prop.Pool) {
 		return
 	}
 	if !ensure_permission_by_secret(m, w, r, secret) {
 		return
 	}
-
+	fmt.Println("*** AHO#2-4")
 	forward_access(m, w, r, bucket.Pool, proxy)
 }
 
 func serve_anonymous_access(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record, proxy http.Handler) {
-	proxy.ServeHTTP(w, r)
+	fmt.Println("*** AHO#3")
+	assert_fatal(bucket != nil)
 	var now int64 = time.Now().Unix()
 	if !ensure_bucket_not_expired(m, w, r, bucket, now) {
 		return
@@ -269,11 +279,11 @@ func serve_anonymous_access(m *multiplexer, w http.ResponseWriter, r *http.Reque
 	if prop == nil {
 		return
 	}
-	if !ensure_user_is_active(m.table, prop.Owner_uid) {
+	if !ensure_user_is_active(m, w, r, prop.Owner_uid) {
 		return
 	}
 	//awake_suspended_pool()
-	if !ensure_pool_state(m.table, prop.Pool) {
+	if !ensure_pool_state(m, w, r, prop.Pool) {
 		return
 	}
 	if !ensure_permission_by_bucket(m, w, r, bucket) {
@@ -287,6 +297,7 @@ func serve_anonymous_access(m *multiplexer, w http.ResponseWriter, r *http.Reque
 // A TIMESTAMP EARLIER BEFORE STARTING A BACKEND.  It is to avoid a
 // race the start and stop of a backend.
 func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, pool string, proxy http.Handler) {
+	fmt.Println("*** AHO#4")
 
 	// Start a backend.
 
@@ -312,6 +323,8 @@ func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, pool
 		return
 	}
 
+	fmt.Println("*** AHO#5")
+
 	logger.debugf("Mux(pool=%s) backend=(%v)", pool, be2)
 
 	// Replace an authorization header.
@@ -328,6 +341,9 @@ func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, pool
 // Header.  It returns a secret_record or nil.
 func check_authenticated(m *multiplexer, r *http.Request) *secret_record {
 	var header = r.Header.Get("Authorization")
+
+	//fmt.Println("*** AHO#6", header)
+
 	var a2 authorization_s3v4 = scan_aws_authorization(header)
 	if a2.signature == "" {
 		return nil
@@ -337,17 +353,21 @@ func check_authenticated(m *multiplexer, r *http.Request) *secret_record {
 	if secret == nil {
 		return nil
 	}
-	assert_fatal(secret._access_key == key)
+
+	//fmt.Println("*** AHO#7", secret)
+
+	assert_fatal(secret.Access_key == key)
 	var keypair = [2]string{key, secret.Secret_key}
-	var ok = check_credential_in_request(m.verbose, r, keypair)
+	var ok, reason = check_credential_in_request(m.verbose, r, keypair)
 	if !ok {
+		logger.debugf("Mux(%s) bad credential: (%s)", m.ep, reason)
 		return nil
 	}
 	return secret
 }
 
 // ENSURE_LENS3_IS_RUNNING checks if any Muxs are running.
-func ensure_lens3_is_running(t *keyval_table) bool {
+func ensure_lens3_is_running__(t *keyval_table) bool {
 	var muxs = list_mux_eps(t)
 	return len(muxs) > 0
 }
@@ -366,27 +386,15 @@ func ensure_pool_existence(m *multiplexer, w http.ResponseWriter, r *http.Reques
 	return prop
 }
 
-func ensure_user_is_active(t *keyval_table, uid string) bool {
-	var ui = get_user(t, uid)
-	var now int64 = time.Now().Unix()
-	if ui != nil {
+func ensure_user_is_active(m *multiplexer, w http.ResponseWriter, r *http.Request, uid string) bool {
+	var ok, reason = check_user_is_active(m.table, uid)
+	if !ok {
+		return_mux_response(m, w, r, http_401_unauthorized,
+			[][2]string{
+				reason,
+			})
 		return false
 	}
-	if !ui.Enabled || ui.Expiration_time < now {
-		return false
-	}
-
-	var _, err1 = user.Lookup(uid)
-	if err1 != nil {
-		switch err1.(type) {
-		case user.UnknownUserError:
-		default:
-		}
-		logger.warnf("user.Lookup(%s) fails: err=(%v)", uid, err1)
-		return false
-	}
-	// (uu.Uid : string, uu.Gid : string)
-
 	return true
 }
 
@@ -403,7 +411,6 @@ func ensure_frontend_proxy_trusted(m *multiplexer, w http.ResponseWriter, r *htt
 			[][2]string{
 				message_Bad_proxy_configuration,
 			})
-		log_access(r, http_500_internal_server_error)
 		return false
 	}
 	return true
@@ -456,7 +463,7 @@ func ensure_bucket_owner(m *multiplexer, w http.ResponseWriter, r *http.Request,
 	return true
 }
 
-func ensure_pool_state(t *keyval_table, pool string) bool {
+func ensure_pool_state(m *multiplexer, w http.ResponseWriter, r *http.Request, pool string) bool {
 	var reject_initial_state = false
 	//AHOAHOAHO var state, _ = update_pool_state(t, pool, permitted)
 	var state = pool_state_INITIAL //AHOAHOAHO
@@ -464,16 +471,36 @@ func ensure_pool_state(t *keyval_table, pool string) bool {
 	case pool_state_INITIAL:
 		if reject_initial_state {
 			logger.errf("Mux(pool=%s) is in initial state.", pool)
-			raise(reg_error(403, "Pool is in initial state"))
+			//raise(reg_error(403, "Pool is in initial state"))
+			return_mux_response(m, w, r, http_500_internal_server_error,
+				[][2]string{
+					message_pool_not_ready,
+				})
+			return false
 		}
 	case pool_state_READY:
 		// Skip.
 	case pool_state_SUSPENDED:
-		raise(reg_error(503, "Pool suspended"))
+		//raise(reg_error(503, "Pool suspended"))
+		return_mux_response(m, w, r, http_503_service_unavailable,
+			[][2]string{
+				message_pool_suspended,
+			})
+		return false
 	case pool_state_DISABLED:
-		raise(reg_error(403, "Pool disabled"))
+		//raise(reg_error(403, "Pool disabled"))
+		return_mux_response(m, w, r, http_403_forbidden,
+			[][2]string{
+				message_pool_disabled,
+			})
+		return false
 	case pool_state_INOPERABLE:
-		raise(reg_error(403, "Pool inoperable"))
+		//raise(reg_error(403, "Pool inoperable"))
+		return_mux_response(m, w, r, http_500_internal_server_error,
+			[][2]string{
+				message_pool_inoperable,
+			})
+		return false
 	default:
 		assert_fatal(false)
 	}

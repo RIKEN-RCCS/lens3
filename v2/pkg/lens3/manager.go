@@ -56,22 +56,22 @@ import (
 	//"testing"
 )
 
+// MANAGER is a single object, "the_manager".  It is with threads of a
+// child process reaper.
 type manager struct {
 	table *keyval_table
 
-	mux *multiplexer
+	multiplexer *multiplexer
 
-	// MUX_EP and MUX_PID are about a process that a multiplexer and a
-	// manager run in.
-	mux_ep  string
-	mux_pid int
+	// MUX_EP is a copy of multiplexer.mux_ep.
+	mux_ep string
 
 	// BE factory is to make a backend.
 	factory backend_factory
 
 	// PROCESSES maps an os.Pid (int) to a backend record.
 	process map[int]backend
-	// MUTEX protects the processes map.
+	// MUTEX protects accesses to the processes map.
 	mutex sync.Mutex
 
 	// CH_SIG is a channel to receive SIGCHLD.
@@ -186,9 +186,11 @@ const (
 
 func configure_manager(w *manager, m *multiplexer, t *keyval_table, c *mux_conf) {
 	w.table = t
-	w.mux = m
+	w.multiplexer = m
 	w.conf = c
 	w.manager_conf = c.Manager
+
+	w.process = make(map[int]backend)
 
 	w.watch_gap_minimal = 10
 	w.stabilize_wait_ms = 1000
@@ -198,7 +200,6 @@ func configure_manager(w *manager, m *multiplexer, t *keyval_table, c *mux_conf)
 	w.environ = minimal_environ()
 
 	w.mux_ep = m.mux_ep
-	w.mux_pid = m.mux_pid
 
 	w.factory = the_backend_minio_factory
 	w.factory.configure(c)
@@ -209,7 +210,7 @@ func manager_main() {
 }
 
 func start_manager(w *manager) {
-	logger.infof("Mux(%s) start manager service", w.mux.ep)
+	logger.infof("Mux(%s) start manager", w.multiplexer.ep)
 
 	//w.table = t
 	//w.manager_conf = *conf
@@ -241,14 +242,14 @@ func start_backend_for_test(w *manager) backend {
 		proc.Backend_pid = 0
 		proc.Root_access = generate_access_key()
 		proc.Root_secret = generate_secret_key()
-		proc.Mux_ep = w.mux_ep
-		proc.Mux_pid = w.mux_pid
+		proc.Mux_ep = w.multiplexer.mux_ep
+		proc.Mux_pid = w.multiplexer.mux_pid
 
 		proc.verbose = true
 		proc.environ = &w.environ
 	*/
 
-	var g = start_backend(w, "d4f0c4645fce5734")
+	var g = start_backend_in_mutexed(w, "d4f0c4645fce5734")
 	if g == nil {
 		fmt.Println("START_BACKEND() FAILED")
 		os.Exit(1)
@@ -309,10 +310,10 @@ func stop_backend(w *manager, g backend) {
 	}
 }
 
-// START_BACKEND_MUTEXED mutexes among all threads in all distributed
+// START_BACKEND mutexes among all threads in all distributed
 // processes of multiplexers, choosing one who takes the control of
 // starting a backend.
-func start_backend_mutexed(w *manager, pool string) backend {
+func start_backend(w *manager, pool string) backend {
 	var now int64 = time.Now().Unix()
 	var ep = &backend_mutex_record{
 		Mux_ep:     w.mux_ep,
@@ -326,14 +327,14 @@ func start_backend_mutexed(w *manager, pool string) backend {
 		}
 		return nil
 	} else {
-		var be2 = start_backend(w, pool)
+		var be2 = start_backend_in_mutexed(w, pool)
 		return be2
 	}
 }
 
-func start_backend(w *manager, pool string) backend {
+func start_backend_in_mutexed(w *manager, pool string) backend {
 	fmt.Println("start_backend()")
-	delete_backend_process(w.table, pool)
+	//delete_backend_process(w.table, pool)
 
 	var poolprop = get_pool(w.table, pool)
 	if poolprop == nil {
@@ -350,8 +351,8 @@ func start_backend(w *manager, pool string) backend {
 	proc.Backend_pid = 0
 	proc.Root_access = generate_access_key()
 	proc.Root_secret = generate_secret_key()
-	proc.Mux_ep = w.mux_ep
-	proc.Mux_pid = w.mux_pid
+	proc.Mux_ep = w.multiplexer.mux_ep
+	proc.Mux_pid = w.multiplexer.mux_pid
 
 	proc.verbose = true
 	proc.environ = &w.environ
@@ -647,7 +648,7 @@ func wait_for_backend_come_up(g backend) start_result {
 				case start_ongoing:
 					// Skip.
 				case start_started:
-					fmt.Println("*SERVER COME UP*")
+					fmt.Println("*** SERVER COME UP")
 					return st1
 				case start_to_retry:
 					return st1

@@ -12,7 +12,7 @@ vet::
 	go vet
 
 test::
-	go test -run Test_misc
+	go test -run Test_mux
 
 build-race::
 	go build -race

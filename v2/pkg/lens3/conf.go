@@ -92,10 +92,12 @@ type registrar_conf struct {
 	Gid_drop_range_list     [][2]int      `json:"gid_drop_range_list"`
 	Gid_drop_list           []int         `json:"gid_drop_list"`
 	User_expiration_days    int           `json:"user_expiration_days"`
+	Pool_expiration_days    int           `json:"pool_expiration_days"`
+	Bucket_expiration_days  int           `json:"bucket_expiration_days"`
+	Secret_expiration_days  int           `json:"secret_expiration_days"`
 	Backend                 backend_name  `json:"backend"`
 	Backend_command_timeout time_in_sec   `json:"backend_command_timeout"`
 	Probe_access_timeout    time_in_sec   `json:"probe_access_timeout"`
-	Pool_expiration         time_in_sec   `json:"pool_expiration"`
 	Ui_session_duration     time_in_sec   `json:"ui_session_duration"`
 	Reg_access_log_file     string        `json:"reg_access_log_file"`
 }
@@ -327,11 +329,13 @@ func check_registrar_entry(e registrar_conf) {
 		// "Uid_block_range_list",
 		// "Gid_drop_range_list",
 		// "Gid_drop_list",
-		// "User_expiration_days",
+		"User_expiration_days",
+		"Pool_expiration_days",
+		"Bucket_expiration_days",
+		"Secret_expiration_days",
 		"Backend",
 		"Backend_command_timeout",
 		"Probe_access_timeout",
-		"Pool_expiration",
 		"Reg_access_log_file",
 	} {
 		check_field_required_and_positive(e, slot)

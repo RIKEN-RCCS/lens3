@@ -21,6 +21,7 @@ import (
 	"time"
 	// "runtime"
 	// "slices"
+	"os/user"
 )
 
 type pool_data struct {
@@ -141,7 +142,7 @@ func update_pool_state(t *keyval_table, pool string, permitted user_approval) (p
 	}
 
 	var uid = desc.Owner_uid
-	var active = ensure_user_is_active(t, uid)
+	var active, _ = check_user_is_active(t, uid)
 	if !active {
 		set_pool_state(t, pool, pool_state_DISABLED, state.Reason)
 		return pool_state_DISABLED, pool_reason_USER_INACTIVE
@@ -168,4 +169,29 @@ func update_pool_state(t *keyval_table, pool string, permitted user_approval) (p
 		set_pool_state(t, pool, pool_state_DISABLED, reason)
 		return pool_state_DISABLED, reason
 	}
+}
+
+func check_user_is_active(t *keyval_table, uid string) (bool, error_message) {
+	var now int64 = time.Now().Unix()
+	var ui = get_user(t, uid)
+	if ui == nil {
+		logger.warnf("User not found: user=(%s)", uid)
+		return false, message_user_not_registered
+	}
+	if !ui.Enabled || ui.Expiration_time < now {
+		return false, message_user_disabled
+	}
+
+	var _, err1 = user.Lookup(uid)
+	if err1 != nil {
+		switch err1.(type) {
+		case user.UnknownUserError:
+		default:
+		}
+		logger.warnf("user.Lookup(%s) fails: err=(%v)", uid, err1)
+		return false, message_no_user_account
+	}
+	// (uu.Uid : string, uu.Gid : string)
+
+	return true, error_message{}
 }

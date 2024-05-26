@@ -33,20 +33,19 @@ func run_service() {
 	configure_multiplexer(m, w, t, muxconf)
 	configure_manager(w, m, t, muxconf)
 	go start_manager(w)
-	go start_multiplexer(m)
 
 	var z = &the_registrar
 	configure_registrar(z, t, regconf)
 	go start_registrar(z)
 
-	time.Sleep(1 * time.Second)
-
 	//run_dummy_reg_client_for_mux_client()
+	go run_dummy_mux_client()
 
-	run_dummy_mux_client()
+	start_multiplexer(m)
 }
 
 func run_dummy_mux_client() {
+	time.Sleep(1 * time.Second)
 	fmt.Println("mux client run...")
 
 	//var g = start_backend_for_test(w)

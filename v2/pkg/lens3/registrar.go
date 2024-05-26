@@ -79,19 +79,20 @@ type registrar struct {
 	//registrar_conf
 }
 
+const reg_api_version = "v1.2"
+
 type response_to_ui interface{ response_union() }
 
 func (*pool_data_response) response_union() {}
 func (*user_info_response) response_union() {}
 
-// ???_RESPONSE is a json format of a response to UI.  See the
-// function set_pool_data() in "v1/ui/src/lens3c.ts".  Status is
-// "success" or "error".
+// RESPONSE is a json format of a response to UI.  See the function
+// set_pool_data() in "v1/ui/src/lens3c.ts".  Status is "success" or
+// "error".
 type response_common struct {
 	Status    string            `json:"status"`
 	Reason    map[string]string `json:"reason"`
 	Timestamp int64             `json:"time"`
-	//X_csrf_token string            `json:"x_csrf_token"`
 }
 
 type success_response struct {
@@ -151,7 +152,7 @@ type secret_desc_ui struct {
 }
 
 type user_info_ui struct {
-	Reg_version   string   `json:"api_version"`
+	Api_version   string   `json:"api_version"`
 	Uid           string   `json:"uid"`
 	Groups        []string `json:"groups"`
 	Lens3_version string   `json:"lens3_version"`
@@ -212,8 +213,8 @@ var map_secret_policy_to_ui = map[secret_policy]string{
 	secret_policy_WO: secret_policy_ui_WO,
 }
 
-// REG_MESSAGE is an extra error message returned to UI on errors.
-type reg_message [][2]string
+// REG_ERROR_MESSAGE is an extra error message returned to UI on errors.
+type reg_error_message [][2]string
 
 func configure_registrar(z *registrar, t *keyval_table, c *reg_conf) {
 	z.table = t
@@ -453,7 +454,7 @@ func list_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 		logger.errf("Reg() multiple pools with the same id (pool=%s)",
 			pool)
 		return_reg_error_response(z, w, r, http_500_internal_server_error,
-			message_internal_error)
+			[][2]string{message_internal_error})
 		return nil
 	}
 
@@ -474,6 +475,7 @@ func list_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 
 func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request) *pool_data_response {
 	var opr = "make-pool"
+
 	var u = grant_access_with_error_return(z, w, r, "", false)
 	if u == nil {
 		return nil
@@ -515,15 +517,18 @@ func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 		return nil
 	}
 
+	var conf = &z.Registrar
+	assert_fatal(conf.Pool_expiration_days > 0)
+	var days = conf.Pool_expiration_days
+	var expiration = time.Now().AddDate(0, 0, days).Unix()
+
 	// Register secret for probing.
 
-	var expiration = z.determine_expiration_time
 	var secret = &secret_record{
-		Pool:          pool,
-		_access_key:   "",
-		Secret_key:    generate_secret_key(),
-		Secret_policy: secret_policy_internal_use,
-		//Internal_use:      true,
+		Pool:            pool,
+		Access_key:      "",
+		Secret_key:      generate_secret_key(),
+		Secret_policy:   secret_policy_internal_use,
 		Expiration_time: expiration,
 		Timestamp:       now,
 	}
@@ -543,6 +548,7 @@ func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 	}
 	set_pool(z.table, pool, newpool)
 	set_pool_state(z.table, pool, pool_state_INITIAL, pool_reason_NORMAL)
+
 	var rspn = return_pool_data(z, w, r, pool)
 	return rspn
 }
@@ -594,7 +600,7 @@ func delete_pool_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 
 	for _, k := range d.Secrets {
 		assert_fatal(k.Pool == pool)
-		var ok = delete_secret_key_unconditionally(z.table, k._access_key)
+		var ok = delete_secret_key_unconditionally(z.table, k.Access_key)
 		if !ok {
 			logger.infof("delete_secret_key failed (ignored)")
 		}
@@ -620,6 +626,7 @@ func delete_pool_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 
 func make_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request, pool string) *pool_data_response {
 	var opr = "make-bucket"
+
 	var u = grant_access_with_error_return(z, w, r, pool, false)
 	if u == nil {
 		return nil
@@ -630,20 +637,24 @@ func make_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 		&args, check_make_bucket_arguments) {
 		return nil
 	}
-	var bucket = args.Bucket
+	var name = args.Bucket
 	var policy = intern_ui_bucket_policy(args.Bucket_policy)
 	assert_fatal(policy != "")
 
+	var conf = &z.Registrar
+	assert_fatal(conf.Bucket_expiration_days > 0)
+	var days = conf.Bucket_expiration_days
+	var expiration = time.Now().AddDate(0, 0, days).Unix()
+
 	var now int64 = time.Now().Unix()
-	var expiration = z.determine_expiration_time
-	var desc = &bucket_record{
+	var bucket = &bucket_record{
 		Pool:            pool,
-		Bucket:          bucket,
+		Bucket:          name,
 		Bucket_policy:   policy,
 		Expiration_time: expiration,
 		Timestamp:       now,
 	}
-	var ok1, holder = set_ex_bucket(z.table, bucket, desc)
+	var ok1, holder = set_ex_bucket(z.table, name, bucket)
 	if !ok1 {
 		var owner = find_owner_of_pool(z, holder)
 		return_reg_error_response(z, w, r, http_400_bad_request,
@@ -700,12 +711,11 @@ func make_secret_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 	}
 	var policy = intern_ui_secret_policy(args.Secret_policy)
 	assert_fatal(policy != "")
-
-	var expiration = z.determine_expiration_time
+	var expiration = args.Expiration_time
 	var now = time.Now().Unix()
 	var secret = &secret_record{
 		Pool:            pool,
-		_access_key:     "",
+		Access_key:      "",
 		Secret_key:      generate_secret_key(),
 		Secret_policy:   policy,
 		Expiration_time: expiration,
@@ -848,7 +858,7 @@ func grant_access_with_error_return(z *registrar, w http.ResponseWriter, r *http
 	fmt.Println(";; X-Remote-User=", r.Header.Get("X-Remote-User"))
 	fmt.Println(";; X-Csrf-Token=", r.Header.Get("X-Csrf-Token"))
 
-	if ensure_lens3_is_running(z.table) {
+	if check_lens3_is_running(z.table) {
 		logger.errf("Reg() lens3 is not running")
 		return_reg_error_response(z, w, r, http_500_internal_server_error,
 			[][2]string{
@@ -933,22 +943,29 @@ func grant_access_with_error_return(z *registrar, w http.ResponseWriter, r *http
 		return nil
 	}
 
-	var check_pool_state = false //AHOAHOAHO
-	if pool != "" && check_pool_state {
-		if ensure_pool_state(z.table, pool) {
+	var DO_CHECK_POOL_STATE = false //AHOAHOAHO
+	if pool != "" && DO_CHECK_POOL_STATE {
+		if !check_pool_state(z.table, pool) {
 			//return nil
 		}
 	}
 	return u
 }
 
+// CHECK_LENS3_IS_RUNNING checks if any Muxs are running.
+func check_lens3_is_running(t *keyval_table) bool {
+	var muxs = list_mux_eps(t)
+	return len(muxs) > 0
+}
+
 // CHECK_USER_ACCOUNT checks the user account is active.  It may
 // register a new user record, when it is the first session under
 // default-allow setting (i.e., conf.User_approval=allow).
 func check_user_account(z *registrar, uid string, firstsession bool) *user_record {
+	var conf = &z.Registrar
+
 	// Reject unregistered users.
 
-	var conf = &z.Registrar
 	var approving = (conf.User_approval == user_default_allow && firstsession)
 	var ui = get_user(z.table, uid)
 	if !approving && ui == nil {
@@ -1043,8 +1060,8 @@ func check_user_account(z *registrar, uid string, firstsession bool) *user_recor
 
 	// It doesn't care races...
 
-	var days = ITE(conf.User_expiration_days != 0,
-		conf.User_expiration_days, 365)
+	assert_fatal(conf.User_expiration_days > 0)
+	var days = conf.User_expiration_days
 	var expiration = time.Now().AddDate(0, 0, days).Unix()
 	var newuser = &user_record{
 		Uid:                        uid,
@@ -1084,6 +1101,34 @@ func make_csrf_tokens(z *registrar, uid string) *csrf_token_record {
 	return data
 }
 
+func check_pool_state(t *keyval_table, pool string) bool {
+	var reject_initial_state = false
+	//AHOAHOAHO var state, _ = update_pool_state(t, pool, permitted)
+	var state = pool_state_INITIAL //AHOAHOAHO
+	switch state {
+	case pool_state_INITIAL:
+		if reject_initial_state {
+			logger.errf("Mux(pool=%s) is in initial state.", pool)
+			//raise(reg_error(403, "Pool is in initial state"))
+			return false
+		}
+	case pool_state_READY:
+		// Skip.
+	case pool_state_SUSPENDED:
+		//raise(reg_error(503, "Pool suspended"))
+		return false
+	case pool_state_DISABLED:
+		//raise(reg_error(403, "Pool disabled"))
+		return false
+	case pool_state_INOPERABLE:
+		//raise(reg_error(403, "Pool inoperable"))
+		return false
+	default:
+		assert_fatal(false)
+	}
+	return true
+}
+
 func check_pool_owner__(t *keyval_table, uid string, pool string) bool {
 	var poolprop = get_pool(t, pool)
 	if poolprop != nil && poolprop.Owner_uid == uid {
@@ -1096,7 +1141,7 @@ func check_pool_owner__(t *keyval_table, uid string, pool string) bool {
 // CHECK_MAKE_POOL_ARGUMENTS checks the entires of buckets_directory
 // and owner_gid.  It normalizes the path of a buckets-directory (in
 // the posix sense).
-func check_make_pool_arguments(z *registrar, u *user_record, pool string, data any) reg_message {
+func check_make_pool_arguments(z *registrar, u *user_record, pool string, data any) reg_error_message {
 	var args, ok = data.(*make_pool_arguments)
 	if !ok {
 		panic("(internal)")
@@ -1105,7 +1150,7 @@ func check_make_pool_arguments(z *registrar, u *user_record, pool string, data a
 	var bd = args.Buckets_directory
 	var path = filepath.Clean(bd)
 	if !filepath.IsAbs(path) {
-		return reg_message{
+		return reg_error_message{
 			message_Bad_buckets_directory,
 			{"path", bd},
 		}
@@ -1115,7 +1160,7 @@ func check_make_pool_arguments(z *registrar, u *user_record, pool string, data a
 	var groups = u.Groups
 	var gid = args.Owner_gid
 	if slices.Index(groups, gid) == -1 {
-		return reg_message{
+		return reg_error_message{
 			message_Bad_group,
 			{"group", gid},
 		}
@@ -1123,21 +1168,21 @@ func check_make_pool_arguments(z *registrar, u *user_record, pool string, data a
 	return nil
 }
 
-func check_make_bucket_arguments(z *registrar, u *user_record, pool string, data any) reg_message {
+func check_make_bucket_arguments(z *registrar, u *user_record, pool string, data any) reg_error_message {
 	var args, ok = data.(*make_bucket_arguments)
 	if !ok {
 		panic("(internal)")
 	}
 	// Check Bucket.
 	if !check_bucket_naming(args.Bucket) {
-		return reg_message{
+		return reg_error_message{
 			message_Bad_bucket,
 			{"bucket", args.Bucket},
 		}
 	}
 	// Check Bucket_policy.
 	if slices.Index(bucket_policy_ui_list, args.Bucket_policy) == -1 {
-		return reg_message{
+		return reg_error_message{
 			message_Bad_policy,
 			{"policy", args.Bucket_policy},
 		}
@@ -1145,24 +1190,26 @@ func check_make_bucket_arguments(z *registrar, u *user_record, pool string, data
 	return nil
 }
 
-func check_make_secret_arguments(z *registrar, u *user_record, pool string, data any) reg_message {
+func check_make_secret_arguments(z *registrar, u *user_record, pool string, data any) reg_error_message {
 	var args, ok = data.(*make_secret_arguments)
 	if !ok {
 		panic("(internal)")
 	}
 	// Check Secret_policy.
 	if slices.Index(secret_policy_ui_list, args.Secret_policy) == -1 {
-		return reg_message{
+		return reg_error_message{
 			message_Bad_policy,
 			{"policy", args.Secret_policy},
 		}
 	}
-	// Check Expiration_time. int64  `json:"expiration_time"`
-	var now = time.Now()
+	// Check Expiration_time.
+	var conf = &z.Registrar
+	assert_fatal(conf.Secret_expiration_days > 0)
+	var days = conf.Secret_expiration_days
 	var e = time.Unix(args.Expiration_time, 0)
-	var days = 365
+	var now = time.Now()
 	if !(e.After(now.AddDate(0, 0, -1)) && e.Before(now.AddDate(0, 0, days))) {
-		return reg_message{
+		return reg_error_message{
 			message_Bad_expiration,
 			{"expiration", e.Format(time.DateOnly)},
 		}
@@ -1259,7 +1306,7 @@ func check_secret_owner_with_error_return(z *registrar, w http.ResponseWriter, r
 	return true
 }
 
-type checker_fn func(z *registrar, u *user_record, pool string, data any) reg_message
+type checker_fn func(z *registrar, u *user_record, pool string, data any) reg_error_message
 
 func decode_request_body_with_error_return(z *registrar, w http.ResponseWriter, r *http.Request, u *user_record, pool string, opr string, data any, check checker_fn) bool {
 	var ok1 = decode_request_body(z, r, data)
@@ -1310,7 +1357,7 @@ func map_claim_to_uid(z *registrar, x_remote_user string) string {
 
 func copy_user_record_to_ui(z *registrar, u *user_record) *user_info_ui {
 	var v = &user_info_ui{
-		Reg_version:   z.Version,
+		Api_version:   reg_api_version,
 		Uid:           u.Uid,
 		Groups:        u.Groups,
 		Lens3_version: lens3_version,
@@ -1365,7 +1412,7 @@ func copy_secret_desc_to_ui(m []*secret_record) []*secret_desc_ui {
 		}
 		var u = &secret_desc_ui{
 			Pool:            d.Pool,
-			Access_key:      d._access_key,
+			Access_key:      d.Access_key,
 			Secret_key:      d.Secret_key,
 			Secret_policy:   map_secret_policy_to_ui[d.Secret_policy],
 			Expiration_time: d.Expiration_time,
@@ -1443,8 +1490,8 @@ func intern_ui_bucket_policy(policy string) bucket_policy {
 
 func extend_user_expiration_time(z *registrar, ui *user_record) {
 	var conf = &z.Registrar
-	var days = ITE(conf.User_expiration_days != 0,
-		conf.User_expiration_days, 365)
+	assert_fatal(conf.User_expiration_days > 0)
+	var days = conf.User_expiration_days
 	var expiration = time.Now().AddDate(0, 0, days).Unix()
 	if ui.Expiration_time < expiration {
 		ui.Expiration_time = expiration

@@ -68,17 +68,18 @@ var required_headers = [3]string{
 const s3v4_authorization_method = "AWS4-HMAC-SHA256"
 
 // CHECK_CREDENTIAL_IN_REQUEST checks the sign in an http request.  It
-// once signs a request using AWS SDK, and compares results.
-func check_credential_in_request(verbose bool, q *http.Request, keypair [2]string) bool {
+// once signs a request using AWS SDK, and compares results.  It
+// returns OK/NG and a simple reason.
+func check_credential_in_request(verbose bool, q *http.Request, keypair [2]string) (bool, string) {
 	var auth1 = q.Header.Get("Authorization")
 	if auth1 == "" {
 		//fmt.Println("*** empty authorization=", auth1)
-		return false
+		return false, "no-auth"
 	}
 	var auth_passed authorization_s3v4 = scan_aws_authorization(auth1)
 	if auth_passed.signature == "" {
 		//fmt.Println("*** bad auth=", auth1)
-		return false
+		return false, "bad-auth"
 	}
 
 	var service = auth_passed.credential[3]
@@ -87,7 +88,7 @@ func check_credential_in_request(verbose bool, q *http.Request, keypair [2]strin
 	var date, errx = time.Parse(time.RFC3339, datestring)
 	if errx != nil {
 		//fmt.Println("*** bad date=", auth_passed)
-		return false
+		return false, "bad-date"
 	}
 
 	var r = *q
@@ -101,6 +102,7 @@ func check_credential_in_request(verbose bool, q *http.Request, keypair [2]strin
 	if slices.Index(auth_passed.signedheaders, "Content-Length") == -1 {
 		r.ContentLength = -1
 	}
+
 	fmt.Println("*** r.Host=", r.Host)
 
 	var credentials = aws.Credentials{
@@ -126,7 +128,7 @@ func check_credential_in_request(verbose bool, q *http.Request, keypair [2]strin
 	var err1 = s.SignHTTP(ctx, credentials, &r,
 		hash, service, region, date)
 	if err1 != nil {
-		fmt.Println("Signer.SignHTTP()", err1)
+		logger.debugf("Mux() signer.SignHTTP()=%v", err1)
 	}
 
 	var auth2 = r.Header.Get("Authorization")
@@ -137,7 +139,7 @@ func check_credential_in_request(verbose bool, q *http.Request, keypair [2]strin
 			" passed-request=%v forged-request=%v", q, r)
 	}
 
-	return auth_passed.signature == auth_forged.signature
+	return auth_passed.signature == auth_forged.signature, ""
 }
 
 // SIGN_BY_BACKEND_CREDENTIAL replaces an authorization header in an

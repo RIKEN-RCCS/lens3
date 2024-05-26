@@ -38,6 +38,14 @@ func Test_misc(t *testing.T) {
 	run_service()
 }
 
+func Test_reg(t *testing.T) {
+	run_registrar(2)
+}
+
+func Test_mux(t *testing.T) {
+	run_service()
+}
+
 func test_minimal_environ() {
 	// runtime.GOMAXPROCS(runtime.NumCPU())
 

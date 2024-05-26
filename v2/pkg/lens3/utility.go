@@ -42,20 +42,6 @@ func ITE[T any](c bool, e1 T, e2 T) T {
 	}
 }
 
-const (
-	http_200_OK int = 200
-
-	http_400_bad_request  int = 400
-	http_401_unauthorized int = 401
-	http_403_forbidden    int = 403
-	http_404_not_found    int = 404
-
-	http_500_internal_server_error int = 500
-	http_503_service_unavailable   int = 503
-
-	http_601_unanalyzable int = 601
-)
-
 type Fatal struct {
 	Err error
 }

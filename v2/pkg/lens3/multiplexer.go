@@ -41,7 +41,8 @@ import (
 // with threads of a child process reaper.
 type multiplexer struct {
 	// EP is a listening port of Mux.
-	ep string
+	ep      string
+	manager *manager
 
 	verbose bool
 
@@ -100,34 +101,9 @@ const (
 	empty_payload_hash_sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 )
 
-var (
-	message_backend_not_running = [2]string{
-		"message", "Backend not running"}
-
-	message_bad_signature = [2]string{
-		"message", "Bad signature"}
-	message_not_authenticated = [2]string{
-		"message", "Not authenticated"}
-
-	message_no_bucket_name = [2]string{
-		"message", "No bucket name"}
-	message_bad_bucket_name = [2]string{
-		"message", "Bad bucket name"}
-	message_no_named_bucket = [2]string{
-		"message", "No named bucket"}
-
-	message_bucket_expired = [2]string{
-		"message", "Bucket expired"}
-
-	message_bucket_listing_forbidden = [2]string{
-		"message", "Bucket listing forbidden"}
-
-	message_bad_pool = [2]string{
-		"message", "Bad pool"}
-)
-
-func configure_multiplexer(m *multiplexer, t *keyval_table, c *mux_conf) {
+func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, c *mux_conf) {
 	m.table = t
+	m.manager = w
 	m.conf = c
 	m.verbose = true
 	//m.multiplexer_conf = conf.Multiplexer
@@ -170,40 +146,45 @@ func start_multiplexer(m *multiplexer) {
 	var proxy1 = httputil.ReverseProxy{
 		Rewrite: proxy_request_rewriter(m),
 	}
-	var proxy2 = make_forwarding_proxy(m, &proxy1)
-	var proxy3 = make_checker_proxy(m, proxy2)
+	var proxy2 = make_checker_proxy(m, &proxy1)
 
 	logger.infof("Mux(%s) start service", m.ep)
 	for {
-		var err2 = http.ListenAndServe(m.ep, proxy3)
+		var err2 = http.ListenAndServe(m.ep, proxy2)
 		logger.infof("Mux(%s) ListenAndServe() done err=%v", m.ep, err2)
 		log.Fatal(err2)
 	}
 }
 
 // PROXY_REQUEST_REWRITER is a function set in ReverseProxy.Rewriter.
-// It receives forwarding information from a forwarding-proxy via a
-// http header field "lens3-pool".
+// It receives forwarding information from a forwarding-proxy via the
+// http header "lens3-be".
 func proxy_request_rewriter(m *multiplexer) func(r *httputil.ProxyRequest) {
 	return func(r *httputil.ProxyRequest) {
-		var x = r.In.Header["lens3-pool"]
-		assert_fatal(len(x) == 1)
-		var pool = x[0]
-		delete(r.In.Header, "lens3-pool")
-		delete(r.Out.Header, "lens3-pool")
-		var be = get_backend_process(m.table, pool)
-		if be == nil {
-			logger.debug("Mux({pool}).")
-			raise(&proxy_exc{http_404_not_found, "pool non-exist"})
-		}
-		fmt.Println("*** POOL=", pool, " BE=", be)
+		var x = r.In.Header["lens3-be"]
+		assert_fatal(len(x) == 2)
+		var pool, ep = x[0], x[1]
+		delete(r.In.Header, "lens3-be")
+		delete(r.Out.Header, "lens3-be")
+
+		// var be = get_backend_process(m.table, pool)
+		// if be == nil {
+		// 	logger.debug("Mux({pool}).")
+		// 	raise(&proxy_exc{http_404_not_found, "pool non-exist"})
+		// }
+
+		fmt.Println("*** POOL=", pool, "to", "ep=", ep)
 		//var g = m.pool[pool]
 		//var proc = g.get_super_part()
-		var url1, err1 = url.Parse("http://" + be.Backend_ep)
+
+		var url1, err1 = url.Parse("http://" + ep)
 		if err1 != nil {
-			logger.debugf("Mux(pool=%s) bad backend url: err=(%v)", pool, err1)
+			logger.debugf("Mux(pool=%s) bad backend ep: ep=(%s), err=(%v)",
+				pool, ep, err1)
 			raise(&proxy_exc{http_500_internal_server_error,
-				"bad url"})
+				[][2]string{
+					message_bad_backend_ep,
+				}})
 		}
 		fmt.Println("*** URL=", url1)
 		r.SetURL(url1)
@@ -215,120 +196,131 @@ func proxy_request_rewriter(m *multiplexer) func(r *httputil.ProxyRequest) {
 // It passes the request to the next forwarding proxy.
 func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
-		//var g = m.pool["mMwfyMzLwOlb8QLYANRM"]
-		//var proc = g.get_super_part()
-		//var proc = get_backend_process(m.table, "mMwfyMzLwOlb8QLYANRM")
-		//fmt.Println("*** POOL=", pool)
-
 		if !ensure_frontend_proxy_trusted(m, w, r) {
 			return
 		}
 
-		// A bucket-name can be "".
-
-		var bucket = ensure_bucket_in_path(m, w, r)
 		var authenticated = check_authenticated(m, r)
+		var bucket, err1 = check_bucket_in_path(m, w, r)
+		if err1 != nil {
+			return_mux_response_by_error(m, w, r, err1)
+			return
+		}
 
 		switch {
 		case bucket == nil && authenticated == nil:
-			return_mux_error_response(m, w, r, http_400_bad_request,
+			return_mux_response(m, w, r, http_400_bad_request,
 				[][2]string{
 					message_no_bucket_name,
 				})
 			return
 		case bucket == nil && authenticated != nil:
-			return_mux_error_response(m, w, r, http_403_forbidden,
+			return_mux_response(m, w, r, http_403_forbidden,
 				[][2]string{
 					message_bucket_listing_forbidden,
 				})
 			return
 		case bucket != nil && authenticated == nil:
 			serve_authenticated_access(m, w, r, bucket, authenticated, proxy)
+			return
 		case bucket != nil && authenticated != nil:
 			serve_anonymous_access(m, w, r, bucket, proxy)
+			return
 		default:
-			panic("(intenal(")
+			panic_never()
 		}
-
-		var now int64 = time.Now().Unix()
-		if !ensure_bucket_not_expired(m, w, r, bucket, now) {
-			return
-		}
-
-		if !ensure_bucket_policy(m, w, r, bucket, authenticated) {
-			return
-		}
-
-		proxy.ServeHTTP(w, r)
-	})
-}
-
-// MAKE_FORWARDING_PROXY makes a filter that signs the request with a
-// backend credential and passes it to the next handler proxy.  It
-// passes information to the next handler via an http header
-// "lens3-pool".  See proxy_request_rewriter().
-func make_forwarding_proxy(m *multiplexer, proxy http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var pool = "d4f0c4645fce5734"
-		//var pool = generate_random_key()
-		var desc = get_backend_process(m.table, pool)
-		logger.debugf("Mux(pool=%s) backend=%v.", pool, desc)
-		if desc == nil {
-			http.Error(w, "BAD", http_500_internal_server_error)
-			raise(&proxy_exc{http_500_internal_server_error,
-				"backend_not_running"})
-		}
-
-		var uid = "AHOAHOAHO"
-
-		//http.Error(w, "ERROR!", http.StatusMethodNotAllowed)
-		ensure_pool_state(m.table, pool)
-		ensure_user_is_active(m.table, uid)
-		ensure_secret_owner(m, r)
-		//logger.error(("Mux ({m._mux_host}) Got a request from" +
-		//	" untrusted proxy or unknonwn Mux: {peer_addr};" +
-		//	" Check configuration"))
-
-		/* Replace an authorization header. */
-
-		sign_by_backend_credential(r, desc)
-
-		r.Header["lens3-pool"] = []string{pool}
-		proxy.ServeHTTP(w, r)
 	})
 }
 
 func serve_authenticated_access(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record, secret *secret_record, proxy http.Handler) {
 	assert_fatal(bucket != nil && secret != nil)
-
+	var now int64 = time.Now().Unix()
 	if !ensure_bucket_owner(m, w, r, bucket, secret) {
 		return
 	}
-
-	if !check_permission_by_secret(m, w, r, secret) {
+	if !ensure_bucket_not_expired(m, w, r, bucket, now) {
 		return
 	}
-
-	var prop *pool_record = get_pool(m.table, bucket.Pool)
+	var prop *pool_record = ensure_pool_existence(m, w, r, bucket.Pool)
 	if prop == nil {
-		return_mux_error_response(m, w, r, http_404_not_found,
-			[][2]string{
-				message_bad_pool,
-			})
 		return
 	}
 	if !ensure_user_is_active(m.table, prop.Owner_uid) {
 		return
 	}
+	//awake_suspended_pool()
 	if !ensure_pool_state(m.table, prop.Pool) {
 		return
 	}
+	if !ensure_permission_by_secret(m, w, r, secret) {
+		return
+	}
 
-	proxy.ServeHTTP(w, r)
+	forward_access(m, w, r, bucket.Pool, proxy)
 }
 
 func serve_anonymous_access(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record, proxy http.Handler) {
+	proxy.ServeHTTP(w, r)
+	var now int64 = time.Now().Unix()
+	if !ensure_bucket_not_expired(m, w, r, bucket, now) {
+		return
+	}
+	var prop *pool_record = ensure_pool_existence(m, w, r, bucket.Pool)
+	if prop == nil {
+		return
+	}
+	if !ensure_user_is_active(m.table, prop.Owner_uid) {
+		return
+	}
+	//awake_suspended_pool()
+	if !ensure_pool_state(m.table, prop.Pool) {
+		return
+	}
+	if !ensure_permission_by_bucket(m, w, r, bucket) {
+		return
+	}
+
+	forward_access(m, w, r, bucket.Pool, proxy)
+}
+
+// FORWARD_ACCESS forwards a granted access to a backend.  IT UPDATES
+// A TIMESTAMP EARLIER BEFORE STARTING A BACKEND.  It is to avoid a
+// race the start and stop of a backend.
+func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, pool string, proxy http.Handler) {
+
+	// Start a backend.
+
+	set_access_timestamp(m.table, pool)
+
+	var be1 = get_backend_process(m.table, pool)
+	if be1 == nil {
+		var proc = start_backend(m.manager, pool)
+		if proc == nil {
+			return_mux_response(m, w, r, http_500_internal_server_error,
+				[][2]string{
+					message_cannot_start_backend,
+				})
+			return
+		}
+	}
+	var be2 = get_backend_process(m.table, pool)
+	if be2 == nil {
+		return_mux_response(m, w, r, http_500_internal_server_error,
+			[][2]string{
+				message_backend_not_running,
+			})
+		return
+	}
+
+	logger.debugf("Mux(pool=%s) backend=(%v)", pool, be2)
+
+	// Replace an authorization header.
+
+	sign_by_backend_credential(r, be2)
+
+	// Tell the endpoint to httputil.ReverseProxy.
+
+	r.Header["lens3-be"] = []string{pool, be2.Backend_ep}
 	proxy.ServeHTTP(w, r)
 }
 
@@ -354,47 +346,24 @@ func check_authenticated(m *multiplexer, r *http.Request) *secret_record {
 	return secret
 }
 
-// (ensure_mux_is_running) ENSURE_LENS3_IS_RUNNING checks if any Muxs
-// are running.
+// ENSURE_LENS3_IS_RUNNING checks if any Muxs are running.
 func ensure_lens3_is_running(t *keyval_table) bool {
 	var muxs = list_mux_eps(t)
 	return len(muxs) > 0
 }
 
-func check_permission_by_secret(m *multiplexer, w http.ResponseWriter, r *http.Request, secret *secret_record) bool {
-	var method string = r.Method
-	var policy = secret.Secret_policy
-	var policyset []secret_policy
-	switch method {
-	case "GET":
-		policyset = []secret_policy{secret_policy_RW, secret_policy_RO}
-	case "PUT":
-		policyset = []secret_policy{secret_policy_RW, secret_policy_WO}
-	case "POST":
-		policyset = []secret_policy{secret_policy_RW, secret_policy_WO}
-	default:
-		logger.warnf("Mux(%s) http unknown method: method=(%s)", m.ep, method)
-		policyset = []secret_policy{}
+// ENSURE_POOL_EXISTENCE checks the pool exists.  It should never fail.
+// It is inconsistent if a bucket exists but a pool does not.
+func ensure_pool_existence(m *multiplexer, w http.ResponseWriter, r *http.Request, pool string) *pool_record {
+	var prop *pool_record = get_pool(m.table, pool)
+	if prop == nil {
+		return_mux_response(m, w, r, http_404_not_found,
+			[][2]string{
+				message_nonexisting_pool,
+			})
+		return nil
 	}
-	return slices.Contains(policyset, policy)
-}
-
-func check_permission_by_bucket(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record) bool {
-	var method string = r.Method
-	var policy = bucket.Bucket_policy
-	var set []bucket_policy
-	switch method {
-	case "GET":
-		set = []bucket_policy{bucket_policy_PUBLIC, bucket_policy_DOWNLOAD}
-	case "PUT":
-		set = []bucket_policy{bucket_policy_PUBLIC, bucket_policy_UPLOAD}
-	case "POST":
-		set = []bucket_policy{bucket_policy_PUBLIC, bucket_policy_UPLOAD}
-	default:
-		logger.warnf("Mux(%s) http unknown method: method=(%s)", m.ep, method)
-		set = []bucket_policy{}
-	}
-	return slices.Contains(set, policy)
+	return prop
 }
 
 func ensure_user_is_active(t *keyval_table, uid string) bool {
@@ -430,47 +399,44 @@ func ensure_frontend_proxy_trusted(m *multiplexer, w http.ResponseWriter, r *htt
 	if !check_frontend_proxy_trusted(m.trusted_proxies, peer) {
 		logger.errf("Mux(%s) frontend proxy is untrusted: ep=(%v)",
 			m.ep, peer)
-		return_mux_error_response(m, w, r, http_500_internal_server_error,
+		return_mux_response(m, w, r, http_500_internal_server_error,
 			[][2]string{
 				message_Bad_proxy_configuration,
 			})
+		log_access(r, http_500_internal_server_error)
 		return false
 	}
 	return true
 }
 
-func ensure_bucket_in_path(m *multiplexer, w http.ResponseWriter, r *http.Request) *bucket_record {
+// CHECK_BUCKET_IN_PATH gets a bucket-record for the bucket-name in
+// the path.  It returns a proxy_exc as error.  It returns (nil,nil)
+// if no bucket part in the path.
+func check_bucket_in_path(m *multiplexer, w http.ResponseWriter, r *http.Request) (*bucket_record, error) {
 	var bucketname, err1 = pick_bucket_in_path(m, r)
 	if err1 != nil {
-		switch e1 := err1.(type) {
-		case *proxy_exc:
-			return_mux_error_response(m, w, r, e1.code,
-				[][2]string{
-					{"message", e1.message},
-				})
-			return nil
-		default:
-			raise(err1)
-		}
+		return nil, err1
 	}
-	if bucketname != "" {
-		var bucket = get_bucket(m.table, bucketname)
-		if bucket == nil {
-			return_mux_error_response(m, w, r, http_404_not_found,
-				[][2]string{
-					message_no_named_bucket,
-				})
-			return nil
-		}
-		return bucket
-	} else {
-		return nil
+	if bucketname == "" {
+		return nil, nil
 	}
+	// assert_fatal(bucketname != "")
+	var bucket = get_bucket(m.table, bucketname)
+	if bucket == nil {
+		var err2 = &proxy_exc{
+			http_404_not_found,
+			[][2]string{
+				message_no_named_bucket,
+			},
+		}
+		return nil, err2
+	}
+	return bucket, nil
 }
 
 func ensure_bucket_not_expired(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record, now int64) bool {
 	if bucket.Expiration_time < now {
-		return_mux_error_response(m, w, r, http_400_bad_request,
+		return_mux_response(m, w, r, http_400_bad_request,
 			[][2]string{
 				message_bucket_expired,
 			})
@@ -479,39 +445,14 @@ func ensure_bucket_not_expired(m *multiplexer, w http.ResponseWriter, r *http.Re
 	return true
 }
 
-// ENSURE_BUCKET_POLICY performs a weak check that a bucket accepts
-// any public access or an access has an access-key.
-func ensure_bucket_policy(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record, secret *secret_record) bool {
-	if bucket.Bucket_policy != bucket_policy_NONE && secret == nil {
-		return true
-	} else {
-		return_mux_error_response(m, w, r, http_401_unauthorized,
-			[][2]string{
-				message_not_authenticated,
-			})
-		return false
-	}
-}
-
 func ensure_bucket_owner(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record, secret *secret_record) bool {
 	if bucket.Pool != secret.Pool {
-		return_mux_error_response(m, w, r, http_401_unauthorized,
+		return_mux_response(m, w, r, http_401_unauthorized,
 			[][2]string{
-				message_not_authenticated,
+				message_not_authorized,
 			})
 		return false
 	}
-	return true
-}
-
-func ensure_secret_owner(m *multiplexer, r *http.Request) bool {
-	/*
-		    u = tables.get_user(user_id)
-		    assert u is not None
-		    if not u.get("enabled") {
-		        raise Reg_Error(403, (f"User disabled: {user_id}"))
-			}
-	*/
 	return true
 }
 
@@ -539,22 +480,56 @@ func ensure_pool_state(t *keyval_table, pool string) bool {
 	return true
 }
 
-func return_mux_error_response(m *multiplexer, w http.ResponseWriter, r *http.Request, code int, reason [][2]string) {
-	var msg = map[string]string{}
-	for _, kv := range reason {
-		msg[kv[0]] = kv[1]
+func ensure_permission_by_secret(m *multiplexer, w http.ResponseWriter, r *http.Request, secret *secret_record) bool {
+	var method string = r.Method
+	var policy = secret.Secret_policy
+	var set []secret_policy
+	switch method {
+	case "GET":
+		set = []secret_policy{secret_policy_RW, secret_policy_RO}
+	case "PUT":
+		set = []secret_policy{secret_policy_RW, secret_policy_WO}
+	case "POST":
+		set = []secret_policy{secret_policy_RW, secret_policy_WO}
+	default:
+		logger.warnf("Mux(%s) http unknown method: method=(%s)", m.ep, method)
+		set = []secret_policy{}
 	}
-	var rspn = &error_response{
-		response_common: response_common{
-			Status:    "error",
-			Reason:    msg,
-			Timestamp: time.Now().Unix(),
-		},
+	var ok = slices.Contains(set, policy)
+	if !ok {
+		return_mux_response(m, w, r, http_403_forbidden,
+			[][2]string{
+				message_no_permission,
+			})
+		return false
 	}
-	var b1, err1 = json.Marshal(rspn)
-	assert_fatal(err1 == nil)
-	http.Error(w, string(b1), code)
-	log_access(code, r)
+	return true
+}
+
+func ensure_permission_by_bucket(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record) bool {
+	var method string = r.Method
+	var policy = bucket.Bucket_policy
+	var set []bucket_policy
+	switch method {
+	case "GET":
+		set = []bucket_policy{bucket_policy_RW, bucket_policy_RO}
+	case "PUT":
+		set = []bucket_policy{bucket_policy_RW, bucket_policy_WO}
+	case "POST":
+		set = []bucket_policy{bucket_policy_RW, bucket_policy_WO}
+	default:
+		logger.warnf("Mux(%s) http unknown method: method=(%s)", m.ep, method)
+		set = []bucket_policy{}
+	}
+	var ok = slices.Contains(set, policy)
+	if !ok {
+		return_mux_response(m, w, r, http_403_forbidden,
+			[][2]string{
+				message_no_permission,
+			})
+		return false
+	}
+	return true
 }
 
 // PICK_BUCKET_IN_PATH returns a bucket name in a request or "" when a
@@ -572,11 +547,42 @@ func pick_bucket_in_path(m *multiplexer, r *http.Request) (string, error) {
 		return "", nil
 	}
 	if !check_bucket_naming(bucket) {
-		var err = &proxy_exc{
+		var err1 = &proxy_exc{
 			http_400_bad_request,
-			message_bad_bucket_name[1],
+			[][2]string{
+				message_bad_bucket_name,
+			},
 		}
-		return bucket, err
+		return bucket, err1
 	}
 	return bucket, nil
+}
+
+func return_mux_response(m *multiplexer, w http.ResponseWriter, r *http.Request, code int, message [][2]string) {
+	var msg = map[string]string{}
+	for _, kv := range message {
+		msg[kv[0]] = kv[1]
+	}
+	var rspn = &error_response{
+		response_common: response_common{
+			Status:    "error",
+			Reason:    msg,
+			Timestamp: time.Now().Unix(),
+		},
+	}
+	var b1, err1 = json.Marshal(rspn)
+	assert_fatal(err1 == nil)
+	http.Error(w, string(b1), code)
+	log_access(r, code)
+}
+
+func return_mux_response_by_error(m *multiplexer, w http.ResponseWriter, r *http.Request, err error) {
+	switch err2 := err.(type) {
+	case *proxy_exc:
+		return_mux_response(m, w, r, err2.code, err2.message)
+	default:
+		logger.errf("Mux(%s) (interanl) unexpected error: err=(%v)",
+			m.ep, err)
+		raise(err)
+	}
 }

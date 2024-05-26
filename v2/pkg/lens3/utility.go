@@ -81,6 +81,10 @@ func assert_never(m string) {
 	panic(m)
 }
 
+func panic_never() {
+	panic("(interal)")
+}
+
 // FATAL_ERROR is a panic argument to stop the service as recover()
 // does not handle this.  Usage:panic(&fatal_error{"message string"}).
 type fatal_error struct {
@@ -101,7 +105,7 @@ type reg_error_exc struct {
 
 type proxy_exc struct {
 	code    int
-	message string
+	message [][2]string
 }
 
 func (e *termination_exc) Error() string {
@@ -113,13 +117,13 @@ func (e *reg_error_exc) Error() string {
 }
 
 func (e *proxy_exc) Error() string {
-	return "proxy_exc:" + e.message
+	return fmt.Sprintf("proxy_exc: %v", e.message)
 }
 
 func mux_err(code int, s string) {
 	raise(&proxy_exc{
 		code:    code,
-		message: s,
+		message: [][2]string{{"message", s}},
 	})
 }
 

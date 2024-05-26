@@ -33,9 +33,8 @@ func start_service_for_test() {
 	var regconf = get_reg_conf(t, "reg")
 
 	var m = &the_multiplexer
-	configure_multiplexer(m, t, muxconf)
-
 	var w = &the_manager
+	configure_multiplexer(m, w, t, muxconf)
 	configure_manager(w, m, t, muxconf)
 	go start_manager(w)
 

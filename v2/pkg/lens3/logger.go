@@ -82,6 +82,6 @@ func (w *log_writer) debug(m string) error {
 	return nil
 }
 
-func log_access(code int, r *http.Request) {
+func log_access(r *http.Request, code int) {
 	logger.infof("access code=%d", code)
 }

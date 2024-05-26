@@ -211,14 +211,15 @@ func (e *table_exc) Error() string {
 	return "table_exc:" + e.m
 }
 
-// BUCKET_POLICY is a public-access policy attached to a bucket.
+// BUCKET_POLICY is a public-access policy attached to a bucket.  "rw"
+// is PUBLIC, "ro" is DOWNLOAD, and "wo" is UPLOAD.
 type bucket_policy string
 
 const (
-	bucket_policy_NONE     bucket_policy = "none"
-	bucket_policy_UPLOAD   bucket_policy = "upload"
-	bucket_policy_DOWNLOAD bucket_policy = "download"
-	bucket_policy_PUBLIC   bucket_policy = "public"
+	bucket_policy_RW   bucket_policy = "rw"
+	bucket_policy_RO   bucket_policy = "ro"
+	bucket_policy_WO   bucket_policy = "wo"
+	bucket_policy_NONE bucket_policy = "none"
 )
 
 // SECRET_POLICY is a policy attached to an access-key.

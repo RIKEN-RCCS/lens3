@@ -181,17 +181,17 @@ var the_registrar = registrar{}
 var err_body_not_allowed = errors.New("http: request method or response status code does not allow body")
 
 const (
-	bucket_policy_ui_NONE     string = "none"
-	bucket_policy_ui_UPLOAD   string = "upload"
-	bucket_policy_ui_DOWNLOAD string = "download"
-	bucket_policy_ui_PUBLIC   string = "public"
+	bucket_policy_ui_NONE string = "none"
+	bucket_policy_ui_WO   string = "upload"
+	bucket_policy_ui_RO   string = "download"
+	bucket_policy_ui_RW   string = "public"
 )
 
 var bucket_policy_ui_list = []string{
 	bucket_policy_ui_NONE,
-	bucket_policy_ui_UPLOAD,
-	bucket_policy_ui_DOWNLOAD,
-	bucket_policy_ui_PUBLIC,
+	bucket_policy_ui_WO,
+	bucket_policy_ui_RO,
+	bucket_policy_ui_RW,
 }
 
 const (
@@ -214,55 +214,6 @@ var map_secret_policy_to_ui = map[secret_policy]string{
 
 // REG_MESSAGE is an extra error message returned to UI on errors.
 type reg_message [][2]string
-
-var (
-	message_internal_error = [][2]string{{"message", "(internal)"}}
-)
-
-var (
-	message_Lens3_not_running = [2]string{
-		"message", "Lens3 is not running"}
-	message_Bad_proxy_configuration = [2]string{
-		"message", "Bad proxy configuration"}
-	message_Bad_user_account = [2]string{
-		"message", "Missing or bad user_account"}
-	message_Bad_csrf_tokens = [2]string{
-		"message", "Missing or bad csrf-tokens"}
-	message_No_pool = [2]string{
-		"message", "No pool"}
-	message_No_bucket = [2]string{
-		"message", "No bucket"}
-	message_No_secret = [2]string{
-		"message", "No secret"}
-	message_Not_pool_owner = [2]string{
-		"message", "Not pool owner"}
-	message_Not_bucket_owner = [2]string{
-		"message", "Not bucket owner"}
-	message_Not_secret_owner = [2]string{
-		"message", "Not secret owner"}
-	message_Arguments_not_empty = [2]string{
-		"message", "Arguments not empty"}
-	message_Bad_body_encoding = [2]string{
-		"message", "Bad body encoding"}
-	message_Bad_group = [2]string{
-		"message", "Bad group"}
-	message_Bad_pool = [2]string{
-		"message", "Bad pool"}
-	message_Bad_buckets_directory = [2]string{
-		"message", "Buckets-directory is not absolute"}
-	message_Bad_bucket = [2]string{
-		"message", "Bad bucket"}
-	message_Bad_secret = [2]string{
-		"message", "Bad secret"}
-	message_Bad_policy = [2]string{
-		"message", "Bad policy"}
-	message_Bad_expiration = [2]string{
-		"message", "Bad expiration"}
-	message_Bucket_already_taken = [2]string{
-		"message", "Bucket already taken"}
-	message_Buckets_directory_already_taken = [2]string{
-		"message", "Buckets directory already taken"}
-)
 
 func configure_registrar(z *registrar, t *keyval_table, c *reg_conf) {
 	z.table = t
@@ -398,13 +349,19 @@ func start_registrar(z *registrar) {
 
 func handle_proxy_exc(z *registrar, w http.ResponseWriter, r *http.Request) {
 	var x = recover()
-	switch e := x.(type) {
+	switch err1 := x.(type) {
 	case nil:
 	case *proxy_exc:
-		fmt.Println("RECOVER!", e)
-		http.Error(w, e.message, e.code)
+		fmt.Println("RECOVER!", err1)
+		var msg = map[string]string{}
+		for _, kv := range err1.message {
+			msg[kv[0]] = kv[1]
+		}
+		var b1, err2 = json.Marshal(msg)
+		assert_fatal(err2 == nil)
+		http.Error(w, string(b1), err1.code)
 	default:
-		fmt.Println("TRAP unhandled panic", e)
+		fmt.Println("TRAP unhandled panic", err1)
 		fmt.Println("stacktrace:\n" + string(debug.Stack()))
 		http.Error(w, "BAD", http_500_internal_server_error)
 	}
@@ -812,7 +769,7 @@ func return_json_repsonse(z *registrar, w http.ResponseWriter, r *http.Request, 
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	io.WriteString(w, string(v1))
-	log_access(200, r)
+	log_access(r, http_200_OK)
 	return
 }
 
@@ -831,7 +788,7 @@ func return_reg_error_response(z *registrar, w http.ResponseWriter, r *http.Requ
 	var b1, err1 = json.Marshal(rspn)
 	assert_fatal(err1 == nil)
 	http.Error(w, string(b1), code)
-	log_access(code, r)
+	log_access(r, code)
 }
 
 // VALIDATE_SESSION validates a session early.
@@ -1473,12 +1430,12 @@ func intern_ui_bucket_policy(policy string) bucket_policy {
 	switch policy {
 	case bucket_policy_ui_NONE:
 		return bucket_policy_NONE
-	case bucket_policy_ui_UPLOAD:
-		return bucket_policy_UPLOAD
-	case bucket_policy_ui_DOWNLOAD:
-		return bucket_policy_DOWNLOAD
-	case bucket_policy_ui_PUBLIC:
-		return bucket_policy_PUBLIC
+	case bucket_policy_ui_WO:
+		return bucket_policy_WO
+	case bucket_policy_ui_RO:
+		return bucket_policy_RO
+	case bucket_policy_ui_RW:
+		return bucket_policy_RW
 	default:
 		return ""
 	}

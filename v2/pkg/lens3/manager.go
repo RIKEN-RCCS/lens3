@@ -210,7 +210,7 @@ func manager_main() {
 }
 
 func start_manager(w *manager) {
-	logger.infof("Mux(%s) start manager", w.multiplexer.ep)
+	logger.infof("Mux(%s) start manager", w.multiplexer.mux_ep)
 
 	//w.table = t
 	//w.manager_conf = *conf

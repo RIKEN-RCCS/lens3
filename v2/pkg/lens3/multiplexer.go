@@ -39,8 +39,8 @@ import (
 
 // MULTIPLEXER is a single object, "the_multiplexer".
 type multiplexer struct {
-	// EP is a listening port of Mux.
-	ep      string
+	// EP_PORT is a listening port of Mux (":port").
+	ep_port string
 	manager *manager
 
 	verbose bool
@@ -114,7 +114,7 @@ func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, c *mux_c
 		host = h
 	}
 	var port = conf.Port
-	m.ep = net.JoinHostPort("", strconv.Itoa(port))
+	m.ep_port = net.JoinHostPort("", strconv.Itoa(port))
 	m.mux_ep = net.JoinHostPort(host, strconv.Itoa(port))
 	m.mux_pid = os.Getpid()
 
@@ -124,7 +124,7 @@ func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, c *mux_c
 	conf.Front_host = "localhost"
 
 	var addrs []net.IP = convert_hosts_to_addrs(conf.Trusted_proxy_list)
-	logger.debugf("Mux(%s) trusted_proxies=(%v)", m.ep, addrs)
+	logger.debugf("Mux(%s) trusted_proxies=(%v)", m.mux_ep, addrs)
 	if len(addrs) == 0 {
 		panic("No trusted proxies")
 	}
@@ -139,10 +139,10 @@ func start_multiplexer(m *multiplexer) {
 	}
 	var proxy2 = make_checker_proxy(m, &proxy1)
 
-	logger.infof("Mux(%s) start service", m.ep)
+	logger.infof("Mux(%s) start service", m.mux_ep)
 	for {
-		var err2 = http.ListenAndServe(m.ep, proxy2)
-		logger.infof("Mux(%s) ListenAndServe() done err=(%v)", m.ep, err2)
+		var err2 = http.ListenAndServe(m.ep_port, proxy2)
+		logger.infof("Mux(%s) ListenAndServe() done err=(%v)", m.mux_ep, err2)
 		log.Fatal(err2)
 	}
 }
@@ -352,19 +352,31 @@ func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, be *
 func serve_internal_access(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record, secret *secret_record) {
 	assert_fatal(secret != nil)
 	logger.debugf("Mux(%s) serve_internal_access: pool=(%s)",
-		m.ep, secret.Pool)
+		m.mux_ep, secret.Pool)
 
 	// REJECT REQUESTS FROM THE OUTSIDE.
 
 	//var peer = r.Header.Get("Remote_Addr")
 	//var peer = r.RemoteAddr
 
+	var pool = secret.Pool
+	var prop *pool_record = ensure_pool_existence(m, w, r, pool)
+	if prop == nil {
+		return
+	}
+	if !ensure_user_is_active(m, w, r, prop.Owner_uid) {
+		return
+	}
+	if !ensure_pool_state(m, w, r, prop.Pool) {
+		return
+	}
+
 	var be = ensure_backend_running(m, w, r, secret.Pool)
 	if be == nil {
 		return
 	}
 
-	make_absent_buckets_in_backend(m, w, r, bucket, secret)
+	make_absent_buckets_in_backend(m, w, r, prop, secret)
 }
 
 // CHECK_AUTHENTICATED checks the signature in an AWS Authorization
@@ -379,7 +391,8 @@ func check_authenticated(m *multiplexer, r *http.Request) (*secret_record, *prox
 	var key string = auth.credential[0]
 	var secret *secret_record = get_secret(m.table, key)
 	if secret == nil {
-		logger.infof("Mux(%s) unknown credential: access-key=(%s)", m.ep, key)
+		logger.infof("Mux(%s) unknown credential: access-key=(%s)",
+			m.mux_ep, key)
 		var err1 = &proxy_exc{
 			http_401_unauthorized,
 			[][2]string{
@@ -393,7 +406,7 @@ func check_authenticated(m *multiplexer, r *http.Request) (*secret_record, *prox
 	var ok, reason = check_credential_in_request(r, keypair)
 	if !ok {
 		logger.infof("Mux(%s) bad credential, (%s): access-key=(%s)",
-			m.ep, reason, key)
+			m.mux_ep, reason, key)
 		var err2 = &proxy_exc{
 			http_401_unauthorized,
 			[][2]string{
@@ -473,7 +486,7 @@ func ensure_frontend_proxy_trusted(m *multiplexer, w http.ResponseWriter, r *htt
 	var peer = r.RemoteAddr
 	if !check_frontend_proxy_trusted(m.trusted_proxies, peer) {
 		logger.errf("Mux(%s) frontend proxy is untrusted: ep=(%v)",
-			m.ep, peer)
+			m.mux_ep, peer)
 		return_mux_response(m, w, r, http_500_internal_server_error,
 			[][2]string{
 				message_Bad_proxy_configuration,
@@ -590,7 +603,8 @@ func ensure_permission_by_secret(m *multiplexer, w http.ResponseWriter, r *http.
 	case "DELETE":
 		set = []secret_policy{secret_policy_RW, secret_policy_WO}
 	default:
-		logger.warnf("Mux(%s) http unknown method: method=(%s)", m.ep, method)
+		logger.warnf("Mux(%s) http unknown method: method=(%s)",
+			m.mux_ep, method)
 		set = []secret_policy{}
 	}
 	var ok = slices.Contains(set, policy)
@@ -620,7 +634,7 @@ func ensure_permission_by_bucket(m *multiplexer, w http.ResponseWriter, r *http.
 	case "DELETE":
 		set = []bucket_policy{bucket_policy_RW, bucket_policy_WO}
 	default:
-		logger.warnf("Mux(%s) http unknown method: method=(%s)", m.ep, method)
+		logger.warnf("Mux(%s) http unknown method: method=(%s)", m.mux_ep, method)
 		set = []bucket_policy{}
 	}
 	var ok = slices.Contains(set, policy)
@@ -658,14 +672,34 @@ func pick_bucket_in_path(m *multiplexer, r *http.Request) (string, *proxy_exc) {
 	return bucket, nil
 }
 
-func make_absent_buckets_in_backend(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record, secret *secret_record) {
-	var pool = secret.Pool
+func make_absent_buckets_in_backend(m *multiplexer, w http.ResponseWriter, r *http.Request, prop *pool_record, secret *secret_record) {
+	var pool = prop.Pool
+
+	var buckets_needed = gather_buckets(m.table, pool)
+
 	var be = get_backend(m.table, pool)
 	if be == nil {
+		logger.warnf("Mux(%s) backend not running for probing: pool=(%s)",
+			m.mux_ep, pool)
 		return
 	}
-	var bkts = list_buckets_in_backend(m, be)
-	fmt.Println("list_buckets_in_backend=", bkts)
+	var buckets_exsting = list_buckets_in_backend(m, be)
+	fmt.Println("list_buckets_in_backend=", buckets_exsting)
+
+	var now int64 = time.Now().Unix()
+	for _, b := range buckets_needed {
+		if slices.Contains(buckets_exsting, b.Bucket) {
+			continue
+		}
+		if b.Expiration_time < now {
+			continue
+		}
+
+		logger.debugf("Making a bucket in backend: pool=(%s), bucket=(%s)",
+			b.Pool, b.Bucket)
+
+		make_bucket_in_backend(m, be, b)
+	}
 }
 
 func return_mux_response(m *multiplexer, w http.ResponseWriter, r *http.Request, code int, message [][2]string) {
@@ -692,7 +726,7 @@ func return_mux_response_by_error(m *multiplexer, w http.ResponseWriter, r *http
 		return_mux_response(m, w, r, err2.code, err2.message)
 	default:
 		logger.errf("Mux(%s) (interanl) unexpected error: err=(%v)",
-			m.ep, err)
+			m.mux_ep, err)
 		raise(err)
 	}
 }

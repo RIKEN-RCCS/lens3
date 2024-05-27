@@ -11,7 +11,7 @@ import (
 	"context"
 	//"io"
 	//"log"
-	"os"
+	//"os"
 	//"net"
 	//"maps"
 	//"net/http"
@@ -20,7 +20,7 @@ import (
 	//"regexp"
 	//"slices"
 	//"strings"
-	//"time"
+	"time"
 	//"runtime"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -63,7 +63,11 @@ func list_buckets_in_backend(m *multiplexer, be *backend_record) []string {
 		UsePathStyle: true,
 	}
 	var client *s3.Client = s3.New(options)
-	var ctx = context.Background()
+
+	//var ctx = context.Background()
+	var timeout = 1000 * time.Millisecond
+	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
+	defer cancel()
 	var v, err1 = client.ListBuckets(ctx,
 		&s3.ListBucketsInput{})
 	if err1 != nil {
@@ -81,30 +85,32 @@ func list_buckets_in_backend(m *multiplexer, be *backend_record) []string {
 	return bkts
 }
 
-func make_bucket_in_backend(z *registrar, pool string, args *make_bucket_arguments) bool {
+func make_bucket_in_backend(m *multiplexer, be *backend_record, bucket *bucket_record) bool {
+	var session = ""
+	var beurl = "http://" + be.Backend_ep
 	var provider = credentials.NewStaticCredentialsProvider(
-		"key",
-		"secret",
-		"session")
+		be.Root_access, be.Root_secret, session)
 	var options = s3.Options{
-		BaseEndpoint: aws.String("http://localhost:9001/"),
+		BaseEndpoint: aws.String(beurl),
 		Credentials:  provider,
 		Region:       "us-east-1",
 		UsePathStyle: true,
 	}
 	var client *s3.Client = s3.New(options)
 
-	var ctx = context.Background()
-	var bo, err1 = client.CreateBucket(ctx,
+	// var ctx = context.Background()
+	var timeout = 1000 * time.Millisecond
+	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	var v, err1 = client.CreateBucket(ctx,
 		&s3.CreateBucketInput{
-			Bucket: aws.String("bucket"),
+			Bucket: aws.String(bucket.Bucket),
 		})
-	_ = bo
-
 	if err1 != nil {
-		fmt.Printf("Unable to create bucket %q, %v", "bucket", err1)
-		os.Exit(1)
+		logger.errf("Make a bucket in backend failed: bucket=(%s), err=(%v)",
+			bucket.Bucket, err1)
+		return false
 	}
-
+	fmt.Println("CreateBucket()=", v)
 	return true
 }

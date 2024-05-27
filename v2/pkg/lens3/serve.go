@@ -49,11 +49,11 @@ func start_service_for_test() {
 		var proc = g.get_super_part()
 		//var pool = proc.Pool
 
-		var desc = &proc.backend_record
-		fmt.Println("set_backend_process(2) ep=", proc.Backend_ep)
+		var be = proc.be
+		fmt.Println("set_backend(2) ep=", proc.be.Backend_ep)
 		fmt.Println("proc.backend_record=")
-		print_in_json(desc)
-		set_backend_process(w.table, proc.Pool, desc)
+		print_in_json(be)
+		set_backend(w.table, proc.Pool, be)
 		//var proc = g.get_super_part()
 		//m.pool[proc.pool] = g
 		//time.Sleep(30 * time.Second)

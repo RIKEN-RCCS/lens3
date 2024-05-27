@@ -27,19 +27,23 @@ var (
 )
 
 var (
-	message_backend_not_running = error_message{
-		"message", "Backend not running"}
-	message_bad_backend_ep = error_message{
-		"message", "Bad backend ep"}
-	message_cannot_start_backend = error_message{
-		"message", "Cannot start backend"}
-
 	message_bad_signature = error_message{
 		"message", "Bad signature"}
 	message_not_authenticated = error_message{
 		"message", "Not authenticated"}
 	message_not_authorized = error_message{
 		"message", "Not authorized"}
+	message_unknown_credential = error_message{
+		"message", "Unknown credential"}
+	message_bad_credential = error_message{
+		"message", "Bad credential"}
+
+	message_backend_not_running = error_message{
+		"message", "Backend not running"}
+	message_bad_backend_ep = error_message{
+		"message", "Bad backend ep"}
+	message_cannot_start_backend = error_message{
+		"message", "Cannot start backend"}
 
 	message_no_bucket_name = error_message{
 		"message", "No bucket name"}

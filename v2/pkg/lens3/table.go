@@ -88,7 +88,8 @@ var key_prefix_to_db_number = map[string]int{
 // Records for configuration are defined in "conf.go".  They are
 // "cf:reg", "cf:mux", and "cf:mux:" + mux-name.
 
-// "uu:" + uid Entry (DB_USER_DATA_PREFIX).
+// "uu:" + uid Entry (DB_USER_DATA_PREFIX).  Constraint:
+// (key≡user_record.Uid).
 type user_record struct {
 	Uid             string   `json:"uid"`
 	Claim           string   `json:"claim"`
@@ -120,6 +121,7 @@ type pool_mutex_record struct {
 }
 
 // "po:" + pool-name Entry (DB_POOL_PROP_PREFIX).
+// Constraint: (key≡pool_record.Pool).
 type pool_record struct {
 	Pool              string `json:"pool"`
 	Buckets_directory string `json:"buckets_directory"`
@@ -131,7 +133,7 @@ type pool_record struct {
 	Timestamp         int64  `json:"timestamp"`
 }
 
-// "bd:" + directory Entry (DB_DIRECTORY_PREFIX).
+// "bd:" + directory Entry (DB_DIRECTORY_PREFIX).  Constraint:
 // (key≡bucket_directory_record.Directory).
 type bucket_directory_record struct {
 	Pool      string `json:"pool"`
@@ -139,8 +141,8 @@ type bucket_directory_record struct {
 	Timestamp int64  `json:"timestamp"`
 }
 
-// "bk:" + bucket Entry (DB_BUCKET_PREFIX).  The name field, Bucket,
-// is the same as the key as: (key≡bucket_record.Bucket).
+// "bk:" + bucket Entry (DB_BUCKET_PREFIX).  Constraint:
+// (key≡bucket_record.Bucket).
 type bucket_record struct {
 	Pool            string        `json:"pool"`
 	Bucket          string        `json:"bucket"`
@@ -149,8 +151,8 @@ type bucket_record struct {
 	Timestamp       int64         `json:"timestamp"`
 }
 
-// "sx:" + secret Entry (DB_SECRET_PREFIX).  The Access_key field is
-// the same as the key as: (key≡secret_record.Access_key).
+// "sx:" + secret Entry (DB_SECRET_PREFIX).  Constraint:
+// (key≡secret_record.Access_key).
 type secret_record struct {
 	Pool          string        `json:"pool"`
 	Access_key    string        `json:"access_key"`
@@ -167,7 +169,8 @@ type backend_mutex_record struct {
 	Start_time int64  `json:"start_time"`
 }
 
-// "ps:" + pool-name Entry (DB_POOL_STATE_PREFIX).
+// "ps:" + pool-name Entry (DB_POOL_STATE_PREFIX).  Constraint:
+// (key≡pool_state_record.Pool).
 type pool_state_record struct {
 	Pool      string      `json:"pool"`
 	State     pool_state  `json:"state"`
@@ -177,8 +180,9 @@ type pool_state_record struct {
 
 // "be:" + pool-name Entry (DB_BACKEND_INFO_PREFIX).  A pair of
 // root_access and root_secret is a credential for accessing a
-// backend.
+// backend.  Constraint: (key≡backend_record.Pool).
 type backend_record struct {
+	Pool        string `json:"pool"`
 	Backend_ep  string `json:"backend_ep"`
 	Backend_pid int    `json:"backend_pid"`
 	Root_access string `json:"root_access"`
@@ -188,7 +192,8 @@ type backend_record struct {
 	Timestamp   int64  `json:"timestamp"`
 }
 
-// "mu:" + mux-ep Entry (DB_MUX_EP_PREFIX).
+// "mu:" + mux-ep Entry (DB_MUX_EP_PREFIX).  Constraint:
+// (key≡mux_record.Mux_ep).
 type mux_record struct {
 	Mux_ep     string `json:"mux_ep"`
 	Start_time int64  `json:"start_time"`
@@ -225,10 +230,10 @@ const (
 type secret_policy string
 
 const (
-	secret_policy_RW           secret_policy = "rw"
-	secret_policy_RO           secret_policy = "ro"
-	secret_policy_WO           secret_policy = "wo"
-	secret_policy_internal_use secret_policy = "internal-use"
+	secret_policy_RW              secret_policy = "rw"
+	secret_policy_RO              secret_policy = "ro"
+	secret_policy_WO              secret_policy = "wo"
+	secret_policy_internal_access secret_policy = "internal-access"
 )
 
 type name_timestamp_pair struct {
@@ -585,6 +590,7 @@ func clear_user_claim(t *keyval_table, uid string) {
 /* POOL */
 
 func set_pool(t *keyval_table, pool string, data *pool_record) {
+	assert_fatal(data.Pool == pool)
 	db_set_with_prefix(t, db_pool_prop_prefix, pool, data)
 }
 
@@ -615,6 +621,7 @@ func list_pools(t *keyval_table, pool string) []string {
 // the tuple 2nd, as (false,pool).  A returned pool can be "" due to a
 // race.
 func set_ex_buckets_directory(t *keyval_table, path string, dir *bucket_directory_record) (bool, string) {
+	assert_fatal(dir.Directory == path)
 	var ok = db_setnx_with_prefix(t, db_directory_prefix, path, dir)
 	if ok {
 		return true, ""
@@ -671,6 +678,7 @@ func list_buckets_directories(t *keyval_table) []*bucket_directory_record {
 func set_pool_state(t *keyval_table, pool string, state pool_state, reason pool_reason) {
 	var now int64 = time.Now().Unix()
 	var data = &pool_state_record{
+		Pool:      pool,
 		State:     state,
 		Reason:    reason,
 		Timestamp: now,
@@ -719,29 +727,29 @@ func delete_manager(t *keyval_table, pool string) {
 	db_del_with_prefix(t, db_backend_mutex_prefix, pool)
 }
 
-func set_backend_process(t *keyval_table, pool string, data *backend_record) {
+func set_backend(t *keyval_table, pool string, data *backend_record) {
+	assert_fatal(data.Pool == pool)
 	db_set_with_prefix(t, db_backend_info_prefix, pool, data)
 }
 
-func get_backend_process(t *keyval_table, pool string) *backend_record {
+func get_backend(t *keyval_table, pool string) *backend_record {
 	var data backend_record
 	var ok = db_get_with_prefix(t, db_backend_info_prefix, pool, &data)
 	return ITE(ok, &data, nil)
 }
 
-func delete_backend_process(t *keyval_table, pool string) {
+func delete_backend(t *keyval_table, pool string) {
 	db_del_with_prefix(t, db_backend_info_prefix, pool)
 }
 
-// LIST_BACKEND_PROCESSESS returns a list of all currently running
-// servers.
-func list_backend_processes(t *keyval_table, pool string) []*backend_record {
+// LIST_BACKENDS returns a list of all currently running backends.
+func list_backends(t *keyval_table, pool string) []*backend_record {
 	var prefix = db_backend_info_prefix
 	var ki = scan_table(t, prefix, pool)
 	var procs []*backend_record
 	for ki.Next(t.ctx) {
 		var id = ki.Key()
-		var p = get_backend_process(t, id)
+		var p = get_backend(t, id)
 		if p != nil {
 			procs = append(procs, p)
 		}
@@ -750,6 +758,7 @@ func list_backend_processes(t *keyval_table, pool string) []*backend_record {
 }
 
 func set_mux_ep(t *keyval_table, mux_ep string, data *mux_record) {
+	assert_fatal(data.Mux_ep == mux_ep)
 	db_set_with_prefix(t, db_mux_ep_prefix, mux_ep, data)
 }
 
@@ -786,6 +795,7 @@ func list_mux_eps(t *keyval_table) []*mux_record {
 // On a failure, it returns a current owner in the tuple 2nd, as
 // (false,pool).  A returned pool can be "" due to a race.
 func set_ex_bucket(t *keyval_table, bucket string, data *bucket_record) (bool, string) {
+	assert_fatal(data.Bucket == bucket)
 	var ok = db_setnx_with_prefix(t, db_bucket_prefix, bucket, data)
 	if ok {
 		return true, ""

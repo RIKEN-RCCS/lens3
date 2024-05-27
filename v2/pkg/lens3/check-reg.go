@@ -88,7 +88,7 @@ func run_dummy_reg_client() {
 		csrf_token: "",
 		pool:       "",
 		buckets:    []string{},
-		verbose:    false,
+		verbose:    true,
 	}
 
 	get_user_info(c, 200)

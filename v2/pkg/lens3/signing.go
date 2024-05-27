@@ -68,17 +68,17 @@ var required_headers = [3]string{
 const s3v4_authorization_method = "AWS4-HMAC-SHA256"
 
 // CHECK_CREDENTIAL_IN_REQUEST checks the sign in an http request.  It
-// once signs a request using AWS SDK, and compares results.  It
-// returns OK/NG and a simple reason.
-func check_credential_in_request(verbose bool, q *http.Request, keypair [2]string) (bool, string) {
-	var auth1 = q.Header.Get("Authorization")
-	if auth1 == "" {
-		//fmt.Println("*** empty authorization=", auth1)
+// returns OK/NG and a simple reason.  It once signs a request (after
+// copying) using AWS SDK, and compares the result.
+func check_credential_in_request(q *http.Request, keypair [2]string) (bool, string) {
+	var header1 = q.Header.Get("Authorization")
+	if header1 == "" {
+		//fmt.Println("*** empty authorization=", header1)
 		return false, "no-auth"
 	}
-	var auth_passed authorization_s3v4 = scan_aws_authorization(auth1)
+	var auth_passed authorization_s3v4 = scan_aws_authorization(header1)
 	if auth_passed.signature == "" {
-		//fmt.Println("*** bad auth=", auth1)
+		//fmt.Println("*** bad auth=", header1)
 		return false, "bad-auth"
 	}
 
@@ -90,6 +90,8 @@ func check_credential_in_request(verbose bool, q *http.Request, keypair [2]strin
 		//fmt.Println("*** bad date=", auth_passed)
 		return false, "bad-date"
 	}
+
+	// Copy the request.  Note that Golang's copy is shallow.
 
 	var r = *q
 	r.Header = maps.Clone(q.Header)
@@ -128,23 +130,23 @@ func check_credential_in_request(verbose bool, q *http.Request, keypair [2]strin
 	var err1 = s.SignHTTP(ctx, credentials, &r,
 		hash, service, region, date)
 	if err1 != nil {
-		logger.debugf("Mux() signer.SignHTTP()=%v", err1)
+		logger.infof("Mux() signer.SignHTTP() failed: err=(%v)", err1)
+		return false, "bad-sign"
 	}
 
-	var auth2 = r.Header.Get("Authorization")
-	var auth_forged authorization_s3v4 = scan_aws_authorization(auth2)
+	var header2 = r.Header.Get("Authorization")
+	var auth_forged authorization_s3v4 = scan_aws_authorization(header2)
 
-	if verbose && auth_passed.signature != auth_forged.signature {
-		logger.debugf("Mux() Bad signature"+
-			" passed-request=%v forged-request=%v", q, r)
+	var ok = auth_passed.signature == auth_forged.signature
+	if !ok {
+		return false, "bad-sign"
 	}
-
-	return auth_passed.signature == auth_forged.signature, ""
+	return true, ""
 }
 
 // SIGN_BY_BACKEND_CREDENTIAL replaces an authorization header in an
 // http request for the backend.
-func sign_by_backend_credential(r *http.Request, proc *backend_record) {
+func sign_by_backend_credential(r *http.Request, be *backend_record) {
 	if false {
 		fmt.Println("r.Host(1)=", r.Host)
 		fmt.Println("r.Header(1)=", r.Header)
@@ -154,13 +156,13 @@ func sign_by_backend_credential(r *http.Request, proc *backend_record) {
 		fmt.Println("x-amz-content-sha256(1)=", a2)
 	}
 
-	fmt.Println("*** proc.Backend_ep=", proc.Backend_ep)
+	fmt.Println("*** be.Backend_ep=", be.Backend_ep)
 
 	//r.Header.Del("Accept-Encoding")
-	r.Host = proc.Backend_ep
+	r.Host = be.Backend_ep
 	var credentials = aws.Credentials{
-		AccessKeyID:     proc.Root_access,
-		SecretAccessKey: proc.Root_secret,
+		AccessKeyID:     be.Root_access,
+		SecretAccessKey: be.Root_secret,
 		//SessionToken string
 		//Source string
 		//CanExpire bool

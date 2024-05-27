@@ -39,14 +39,13 @@ func run_service() {
 	go start_registrar(z)
 
 	//run_dummy_reg_client_for_mux_client()
-	go run_dummy_mux_client()
+	go run_dummy_mux_client(m)
 
 	start_multiplexer(m)
 }
 
-func run_dummy_mux_client() {
+func run_dummy_mux_client(m *multiplexer) {
 	time.Sleep(1 * time.Second)
-	fmt.Println("mux client run...")
 
 	//var g = start_backend_for_test(w)
 	//var proc = g.get_super_part()
@@ -55,12 +54,19 @@ func run_dummy_mux_client() {
 	//var desc = &proc.backend_record
 	fmt.Println("proc.backend_record=")
 	//print_in_json(desc)
-	//set_backend_process(w.table, proc.Pool, desc)
+	//set_backend(w.table, proc.Pool, desc)
 	//var proc = g.get_super_part()
 	//m.pool[proc.pool] = g
 	//time.Sleep(30 * time.Second)
 	//start_dummy_proxy(m)
 
-	time.Sleep(15 * time.Second)
+	fmt.Println("MUX CLIENT RUN...")
 
+	var pool = "b26089c45be8635d"
+	var prop = get_pool(m.table, pool)
+	var secret = get_secret(m.table, prop.Probe_key)
+	var err1 = probe_access_mux(m, m.mux_ep, secret)
+	fmt.Println("err=", err1)
+
+	time.Sleep(15 * time.Second)
 }

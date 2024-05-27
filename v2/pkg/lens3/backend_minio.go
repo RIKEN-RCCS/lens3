@@ -87,6 +87,7 @@ var the_backend_minio_factory = &backend_minio_conf{}
 func (fa *backend_minio_conf) make_backend(pool string) backend {
 	var g = &backend_minio{}
 	g.Pool = pool
+	g.be = nil
 	g.manager_conf = &the_manager.manager_conf
 	g.backend_minio_conf = the_backend_minio_factory
 	runtime.SetFinalizer(g, finalize_backend_minio)
@@ -128,8 +129,8 @@ func (proc *backend_minio) make_command_line(address string, directory string) b
 		"--json", "--anonymous", "server",
 		"--address", address, directory}
 	var envs = []string{
-		fmt.Sprintf("MINIO_ROOT_USER=%s", proc.Root_access),
-		fmt.Sprintf("MINIO_ROOT_PASSWORD=%s", proc.Root_secret),
+		fmt.Sprintf("MINIO_ROOT_USER=%s", proc.be.Root_access),
+		fmt.Sprintf("MINIO_ROOT_PASSWORD=%s", proc.be.Root_secret),
 		fmt.Sprintf("MINIO_BROWSER=%s", "off"),
 	}
 	return backend_command{argv, envs}
@@ -219,7 +220,8 @@ func (g *backend_minio) heartbeat() int {
 		g.heartbeat_client = &http.Client{
 			Timeout: timeout,
 		}
-		g.heartbeat_url = fmt.Sprintf("http://%s/minio/health/live", proc.Backend_ep)
+		var ep = proc.be.Backend_ep
+		g.heartbeat_url = fmt.Sprintf("http://%s/minio/health/live", ep)
 		g.failure_message = fmt.Sprintf("Mux(pool=%s)"+
 			" Heartbeating MinIO failed: urlopen error,"+
 			" url=(%s);", proc.Pool, g.heartbeat_url)
@@ -407,7 +409,7 @@ func execute_mc_cmd(g *backend_minio, name string, command []string) mc_result {
 func mc_alias_set(g *backend_minio) mc_result {
 	assert_fatal(g.mc_alias == "" && g.mc_config_dir == "")
 	var rnd = strings.ToLower(random_string(12))
-	var url = fmt.Sprintf("http://%s", g.Backend_ep)
+	var url = fmt.Sprintf("http://%s", g.be.Backend_ep)
 	//g.mc_config_dir = tempfile.TemporaryDirectory()
 	var dir, err1 = os.MkdirTemp("", "lens3-mc-")
 	if err1 != nil {
@@ -418,7 +420,7 @@ func mc_alias_set(g *backend_minio) mc_result {
 	g.mc_alias = fmt.Sprintf("pool-%s-%s", g.Pool, rnd)
 	var v1 = execute_mc_cmd(g, "alias_set",
 		[]string{"alias", "set", g.mc_alias, url,
-			g.Root_access, g.Root_secret,
+			g.be.Root_access, g.be.Root_secret,
 			"--api", "S3v4"})
 	if v1.values == nil {
 		g.mc_alias = ""

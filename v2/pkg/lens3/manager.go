@@ -125,7 +125,7 @@ type backend interface {
 // configuration "manager_conf" is shared with the manager".
 type backend_process struct {
 	pool_record
-	backend_record
+	be *backend_record
 
 	verbose bool
 
@@ -225,29 +225,6 @@ func start_manager(w *manager) {
 func start_backend_for_test(w *manager) backend {
 	fmt.Println("start_backend_for_test()")
 	//var pool = generate_random_key()
-	/*
-		var g = w.factory.make_backend("d4f0c4645fce5734")
-		var proc = g.get_super_part()
-
-		var u, err4 = user.Current()
-		assert_fatal(err4 == nil)
-		proc.Owner_uid = "#" + u.Uid
-		proc.Owner_gid = "#" + u.Gid
-		proc.Buckets_directory = u.HomeDir + "/pool-x"
-		proc.Probe_key = generate_access_key()
-		proc.Online_status = true
-		proc.Expiration_time = 0
-
-		proc.Backend_ep = ""
-		proc.Backend_pid = 0
-		proc.Root_access = generate_access_key()
-		proc.Root_secret = generate_secret_key()
-		proc.Mux_ep = w.multiplexer.mux_ep
-		proc.Mux_pid = w.multiplexer.mux_pid
-
-		proc.verbose = true
-		proc.environ = &w.environ
-	*/
 
 	var g = start_backend_in_mutexed(w, "d4f0c4645fce5734")
 	if g == nil {
@@ -311,8 +288,8 @@ func stop_backend(w *manager, g backend) {
 }
 
 // START_BACKEND mutexes among all threads in all distributed
-// processes of multiplexers, choosing one who takes the control of
-// starting a backend.
+// processes of multiplexers, for choosing one who takes the control
+// of starting a backend.
 func start_backend(w *manager, pool string) backend {
 	var now int64 = time.Now().Unix()
 	var ep = &backend_mutex_record{
@@ -334,7 +311,7 @@ func start_backend(w *manager, pool string) backend {
 
 func start_backend_in_mutexed(w *manager, pool string) backend {
 	fmt.Println("start_backend()")
-	//delete_backend_process(w.table, pool)
+	//delete_backend(w.table, pool)
 
 	var poolprop = get_pool(w.table, pool)
 	if poolprop == nil {
@@ -344,15 +321,19 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 
 	var g = w.factory.make_backend(pool)
 	var proc *backend_process = g.get_super_part()
-	// Set proc.pool_record part.
+	// Set the proc.pool_record part.
 	proc.pool_record = *poolprop
-	// Set proc.backend_record part.
-	proc.Backend_ep = ""
-	proc.Backend_pid = 0
-	proc.Root_access = generate_access_key()
-	proc.Root_secret = generate_secret_key()
-	proc.Mux_ep = w.multiplexer.mux_ep
-	proc.Mux_pid = w.multiplexer.mux_pid
+	// Set the proc.backend_record part.
+	proc.be = &backend_record{
+		Pool:        pool,
+		Backend_ep:  "",
+		Backend_pid: 0,
+		Root_access: generate_access_key(),
+		Root_secret: generate_secret_key(),
+		Mux_ep:      w.multiplexer.mux_ep,
+		Mux_pid:     w.multiplexer.mux_pid,
+		Timestamp:   0,
+	}
 
 	proc.verbose = true
 	proc.environ = &w.environ
@@ -392,11 +373,16 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 		g.establish()
 		go ping_server(w, g)
 
-		var be = &proc.backend_record
-		fmt.Println("set_backend_process(1) ep=", proc.Backend_ep)
-		fmt.Println("proc.backend_record=")
-		print_in_json(be)
-		set_backend_process(w.table, proc.Pool, be)
+		if true {
+			var be = proc.be
+			fmt.Println("set_backend(1) ep=", proc.be.Backend_ep)
+			fmt.Println("proc.backend_record=")
+			print_in_json(be)
+		}
+
+		var now int64 = time.Now().Unix()
+		proc.be.Timestamp = now
+		set_backend(w.table, proc.Pool, proc.be)
 		return g
 	}
 
@@ -419,7 +405,7 @@ func wait_for_backend_by_race(w *manager, pool string) *backend_record {
 		(time.Duration(w.Backend_start_timeout) * time.Second) +
 			(time.Duration(w.Backend_setup_timeout) * time.Second))
 	for time.Now().Compare(limit) < 0 {
-		var be1 = get_backend_process(w.table, pool)
+		var be1 = get_backend(w.table, pool)
 		if be1 != nil {
 			return be1
 		}
@@ -435,7 +421,7 @@ func wait_for_backend_by_race(w *manager, pool string) *backend_record {
 // LIST_PORTS_AVAILABLE lists ports available.  It drops the ports
 // used by backends running on this same host locally.
 func list_ports_available(w *manager) []int {
-	var bes = list_backend_processes(w.table, "*")
+	var bes = list_backends(w.table, "*")
 	var used []int
 	for _, be := range bes {
 		if be.Mux_ep == w.mux_ep {
@@ -472,12 +458,12 @@ func try_start_backend(w *manager, g backend, port int) start_result {
 	if err1 != nil {
 		panic(err1)
 	}
-	proc.Backend_ep = net.JoinHostPort(thishost, strconv.Itoa(port))
-	fmt.Printf("try_start_backend(ep=%s)\n", proc.Backend_ep)
+	proc.be.Backend_ep = net.JoinHostPort(thishost, strconv.Itoa(port))
+	fmt.Printf("try_start_backend(ep=%s)\n", proc.be.Backend_ep)
 
 	var user = proc.Owner_uid
 	var group = proc.Owner_gid
-	var address = proc.Backend_ep
+	var address = proc.be.Backend_ep
 	var directory = proc.Buckets_directory
 	var command = g.make_command_line(address, directory)
 	var sudo_argv = []string{
@@ -525,7 +511,7 @@ func try_start_backend(w *manager, g backend, port int) start_result {
 		}
 	}
 
-	proc.Backend_pid = cmd.Process.Pid
+	proc.be.Backend_pid = cmd.Process.Pid
 	var r1 = wait_for_backend_come_up(g)
 	fmt.Println("DONE state=", r1.start_state, r1.message)
 

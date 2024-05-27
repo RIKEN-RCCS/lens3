@@ -84,12 +84,6 @@ type multiplexer struct {
 	//multiplexer_conf
 }
 
-// type backend_proxy struct {
-// 	backend
-// 	multiplexer
-// 	client *http.Client
-// }
-
 // THE_MULTIPLEXER is the single multiplexer instance.
 var the_multiplexer = multiplexer{
 	//pool: make(map[string]backend),
@@ -137,11 +131,9 @@ func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, c *mux_c
 	m.trusted_proxies = addrs
 }
 
+// MEMO: ReverseProxy <: Handler as it implements ServeHTTP().
 func start_multiplexer(m *multiplexer) {
 	fmt.Println("start_multiplexer()")
-
-	// MEMO: ReverseProxy <: Handler as it implements ServeHTTP().
-
 	var proxy1 = httputil.ReverseProxy{
 		Rewrite: proxy_request_rewriter(m),
 	}
@@ -155,8 +147,8 @@ func start_multiplexer(m *multiplexer) {
 	}
 }
 
-// PROXY_REQUEST_REWRITER is a function set in ReverseProxy.Rewriter.
-// It receives forwarding information from a forwarding-proxy via the
+// PROXY_REQUEST_REWRITER is a function in ReverseProxy.Rewriter.  It
+// receives forwarding information from a forwarding-proxy via the
 // http header "lens3-be".
 func proxy_request_rewriter(m *multiplexer) func(r *httputil.ProxyRequest) {
 	return func(r *httputil.ProxyRequest) {
@@ -167,7 +159,7 @@ func proxy_request_rewriter(m *multiplexer) func(r *httputil.ProxyRequest) {
 		delete(r.In.Header, "lens3-be")
 		delete(r.Out.Header, "lens3-be")
 
-		// var be = get_backend_process(m.table, pool)
+		// var be = get_backend(m.table, pool)
 		// if be == nil {
 		// 	logger.debug("Mux({pool}).")
 		// 	raise(&proxy_exc{http_404_not_found, "pool non-exist"})
@@ -203,16 +195,23 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 			return
 		}
 
-		var authenticated = check_authenticated(m, r)
-		var bucket, err1 = check_bucket_in_path(m, w, r)
+		var authenticated, err1 = check_authenticated(m, r)
 		if err1 != nil {
 			return_mux_response_by_error(m, w, r, err1)
 			return
 		}
+		var bucket, err2 = check_bucket_in_path(m, w, r)
+		if err2 != nil {
+			return_mux_response_by_error(m, w, r, err2)
+			return
+		}
 
-		fmt.Println("*** AHO#1", authenticated)
+		fmt.Println("*** secret=", authenticated)
 
 		switch {
+		case authenticated != nil && authenticated.Secret_policy == secret_policy_internal_access:
+			serve_internal_access(m, w, r, bucket, authenticated)
+			return
 		case bucket == nil && authenticated == nil:
 			return_mux_response(m, w, r, http_400_bad_request,
 				[][2]string{
@@ -265,7 +264,13 @@ func serve_authenticated_access(m *multiplexer, w http.ResponseWriter, r *http.R
 		return
 	}
 	fmt.Println("*** AHO#2-4")
-	forward_access(m, w, r, bucket.Pool, proxy)
+
+	var be = ensure_backend_running(m, w, r, bucket.Pool)
+	if be == nil {
+		return
+	}
+
+	forward_access(m, w, r, be, proxy)
 }
 
 func serve_anonymous_access(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record, proxy http.Handler) {
@@ -290,20 +295,129 @@ func serve_anonymous_access(m *multiplexer, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	forward_access(m, w, r, bucket.Pool, proxy)
+	var be = ensure_backend_running(m, w, r, bucket.Pool)
+	if be == nil {
+		return
+	}
+
+	forward_access(m, w, r, be, proxy)
 }
 
-// FORWARD_ACCESS forwards a granted access to a backend.  IT UPDATES
-// A TIMESTAMP EARLIER BEFORE STARTING A BACKEND.  It is to avoid a
-// race the start and stop of a backend.
-func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, pool string, proxy http.Handler) {
+// FORWARD_ACCESS forwards a granted access to a backend.
+func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, be *backend_record, proxy http.Handler) {
 	fmt.Println("*** AHO#4")
 
 	// Start a backend.
 
+	/*
+		set_access_timestamp(m.table, pool)
+
+		var be1 = get_backend(m.table, pool)
+		if be1 == nil {
+			var proc = start_backend(m.manager, pool)
+			if proc == nil {
+				return_mux_response(m, w, r, http_500_internal_server_error,
+					[][2]string{
+						message_cannot_start_backend,
+					})
+				return
+			}
+		}
+		var be2 = get_backend(m.table, pool)
+		if be2 == nil {
+			return_mux_response(m, w, r, http_500_internal_server_error,
+				[][2]string{
+					message_backend_not_running,
+				})
+			return
+		}
+
+		fmt.Println("*** AHO#5")
+
+		logger.debugf("Mux(pool=%s) backend=(%v)", pool, be2)
+	*/
+
+	// Replace an authorization header.
+
+	sign_by_backend_credential(r, be)
+
+	// Tell the endpoint to httputil.ReverseProxy.
+
+	r.Header["lens3-be"] = []string{be.Pool, be.Backend_ep}
+	proxy.ServeHTTP(w, r)
+}
+
+// SERVE_INTERNAL_ACCESS handles requests from Register or other
+// Multiplexers.
+func serve_internal_access(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record, secret *secret_record) {
+	assert_fatal(secret != nil)
+	logger.debugf("Mux(%s) serve_internal_access: pool=(%s)",
+		m.ep, secret.Pool)
+
+	// REJECT REQUESTS FROM THE OUTSIDE.
+
+	//var peer = r.Header.Get("Remote_Addr")
+	//var peer = r.RemoteAddr
+
+	var be = ensure_backend_running(m, w, r, secret.Pool)
+	if be == nil {
+		return
+	}
+
+	make_absent_buckets_in_backend(m, w, r, bucket, secret)
+}
+
+// CHECK_AUTHENTICATED checks the signature in an AWS Authorization
+// Header.  It returns a secret_record or nil.  It may return
+// (nil,nil) when an authorization header is missing.
+func check_authenticated(m *multiplexer, r *http.Request) (*secret_record, *proxy_exc) {
+	var header = r.Header.Get("Authorization")
+	var auth authorization_s3v4 = scan_aws_authorization(header)
+	if auth.signature == "" {
+		return nil, nil
+	}
+	var key string = auth.credential[0]
+	var secret *secret_record = get_secret(m.table, key)
+	if secret == nil {
+		logger.infof("Mux(%s) unknown credential: access-key=(%s)", m.ep, key)
+		var err1 = &proxy_exc{
+			http_401_unauthorized,
+			[][2]string{
+				message_unknown_credential,
+			},
+		}
+		return nil, err1
+	}
+	assert_fatal(secret.Access_key == key)
+	var keypair = [2]string{key, secret.Secret_key}
+	var ok, reason = check_credential_in_request(r, keypair)
+	if !ok {
+		logger.infof("Mux(%s) bad credential, (%s): access-key=(%s)",
+			m.ep, reason, key)
+		var err2 = &proxy_exc{
+			http_401_unauthorized,
+			[][2]string{
+				message_bad_credential,
+			},
+		}
+		return nil, err2
+	}
+	return secret, nil
+}
+
+// ENSURE_LENS3_IS_RUNNING checks if any Muxs are running.
+func ensure_lens3_is_running__(t *keyval_table) bool {
+	var muxs = list_mux_eps(t)
+	return len(muxs) > 0
+}
+
+// ENSURE_BACKEND_RUNNING starts a backend if not running.  It updates
+// a timestamp earlier before starting a backend.  It is to avoid a
+// race in the start and stop of a backend.
+func ensure_backend_running(m *multiplexer, w http.ResponseWriter, r *http.Request, pool string) *backend_record {
 	set_access_timestamp(m.table, pool)
 
-	var be1 = get_backend_process(m.table, pool)
+	var be1 = get_backend(m.table, pool)
 	if be1 == nil {
 		var proc = start_backend(m.manager, pool)
 		if proc == nil {
@@ -311,65 +425,18 @@ func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, pool
 				[][2]string{
 					message_cannot_start_backend,
 				})
-			return
+			return nil
 		}
 	}
-	var be2 = get_backend_process(m.table, pool)
+	var be2 = get_backend(m.table, pool)
 	if be2 == nil {
 		return_mux_response(m, w, r, http_500_internal_server_error,
 			[][2]string{
 				message_backend_not_running,
 			})
-		return
-	}
-
-	fmt.Println("*** AHO#5")
-
-	logger.debugf("Mux(pool=%s) backend=(%v)", pool, be2)
-
-	// Replace an authorization header.
-
-	sign_by_backend_credential(r, be2)
-
-	// Tell the endpoint to httputil.ReverseProxy.
-
-	r.Header["lens3-be"] = []string{pool, be2.Backend_ep}
-	proxy.ServeHTTP(w, r)
-}
-
-// CHECK_AUTHENTICATED checks the signature in an AWS Authorization
-// Header.  It returns a secret_record or nil.
-func check_authenticated(m *multiplexer, r *http.Request) *secret_record {
-	var header = r.Header.Get("Authorization")
-
-	//fmt.Println("*** AHO#6", header)
-
-	var a2 authorization_s3v4 = scan_aws_authorization(header)
-	if a2.signature == "" {
 		return nil
 	}
-	var key string = a2.credential[0]
-	var secret *secret_record = get_secret(m.table, key)
-	if secret == nil {
-		return nil
-	}
-
-	//fmt.Println("*** AHO#7", secret)
-
-	assert_fatal(secret.Access_key == key)
-	var keypair = [2]string{key, secret.Secret_key}
-	var ok, reason = check_credential_in_request(m.verbose, r, keypair)
-	if !ok {
-		logger.debugf("Mux(%s) bad credential: (%s)", m.ep, reason)
-		return nil
-	}
-	return secret
-}
-
-// ENSURE_LENS3_IS_RUNNING checks if any Muxs are running.
-func ensure_lens3_is_running__(t *keyval_table) bool {
-	var muxs = list_mux_eps(t)
-	return len(muxs) > 0
+	return be2
 }
 
 // ENSURE_POOL_EXISTENCE checks the pool exists.  It should never fail.
@@ -416,10 +483,10 @@ func ensure_frontend_proxy_trusted(m *multiplexer, w http.ResponseWriter, r *htt
 	return true
 }
 
-// CHECK_BUCKET_IN_PATH gets a bucket-record for the bucket-name in
-// the path.  It returns a proxy_exc as error.  It returns (nil,nil)
-// if no bucket part in the path.
-func check_bucket_in_path(m *multiplexer, w http.ResponseWriter, r *http.Request) (*bucket_record, error) {
+// CHECK_BUCKET_IN_PATH returns a bucket record for the name in the
+// path.  It may return (nil,nil) if a bucket name is missing in the
+// path.  It returns a proxy_exc as an error.
+func check_bucket_in_path(m *multiplexer, w http.ResponseWriter, r *http.Request) (*bucket_record, *proxy_exc) {
 	var bucketname, err1 = pick_bucket_in_path(m, r)
 	if err1 != nil {
 		return nil, err1
@@ -512,11 +579,15 @@ func ensure_permission_by_secret(m *multiplexer, w http.ResponseWriter, r *http.
 	var policy = secret.Secret_policy
 	var set []secret_policy
 	switch method {
+	case "HEAD":
+		fallthrough
 	case "GET":
 		set = []secret_policy{secret_policy_RW, secret_policy_RO}
 	case "PUT":
-		set = []secret_policy{secret_policy_RW, secret_policy_WO}
+		fallthrough
 	case "POST":
+		fallthrough
+	case "DELETE":
 		set = []secret_policy{secret_policy_RW, secret_policy_WO}
 	default:
 		logger.warnf("Mux(%s) http unknown method: method=(%s)", m.ep, method)
@@ -538,11 +609,15 @@ func ensure_permission_by_bucket(m *multiplexer, w http.ResponseWriter, r *http.
 	var policy = bucket.Bucket_policy
 	var set []bucket_policy
 	switch method {
+	case "HEAD":
+		fallthrough
 	case "GET":
 		set = []bucket_policy{bucket_policy_RW, bucket_policy_RO}
 	case "PUT":
-		set = []bucket_policy{bucket_policy_RW, bucket_policy_WO}
+		fallthrough
 	case "POST":
+		fallthrough
+	case "DELETE":
 		set = []bucket_policy{bucket_policy_RW, bucket_policy_WO}
 	default:
 		logger.warnf("Mux(%s) http unknown method: method=(%s)", m.ep, method)
@@ -560,14 +635,12 @@ func ensure_permission_by_bucket(m *multiplexer, w http.ResponseWriter, r *http.
 }
 
 // PICK_BUCKET_IN_PATH returns a bucket name in a request or "" when a
-// bucket part is missing.  It may return an error.
-func pick_bucket_in_path(m *multiplexer, r *http.Request) (string, error) {
+// bucket name is missing.  It may return an error.
+func pick_bucket_in_path(m *multiplexer, r *http.Request) (string, *proxy_exc) {
 	var u1 = r.URL
 	var path = strings.Split(u1.EscapedPath(), "/")
 	if len(path) >= 2 && path[0] != "" {
 		return "", nil
-		//raise(&proxy_exc{http_400_bad_request,
-		//no_bucket_name_in_url})
 	}
 	var bucket = path[1]
 	if bucket == "" {
@@ -583,6 +656,16 @@ func pick_bucket_in_path(m *multiplexer, r *http.Request) (string, error) {
 		return bucket, err1
 	}
 	return bucket, nil
+}
+
+func make_absent_buckets_in_backend(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record, secret *secret_record) {
+	var pool = secret.Pool
+	var be = get_backend(m.table, pool)
+	if be == nil {
+		return
+	}
+	var bkts = list_buckets_in_backend(m, be)
+	fmt.Println("list_buckets_in_backend=", bkts)
 }
 
 func return_mux_response(m *multiplexer, w http.ResponseWriter, r *http.Request, code int, message [][2]string) {

@@ -528,7 +528,7 @@ func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 		Pool:            pool,
 		Access_key:      "",
 		Secret_key:      generate_secret_key(),
-		Secret_policy:   secret_policy_internal_use,
+		Secret_policy:   secret_policy_internal_access,
 		Expiration_time: expiration,
 		Timestamp:       now,
 	}
@@ -1407,7 +1407,7 @@ func copy_bucket_desc_to_ui(m []*bucket_record) []*bucket_desc_ui {
 func copy_secret_desc_to_ui(m []*secret_record) []*secret_desc_ui {
 	var secrets []*secret_desc_ui
 	for _, d := range m {
-		if d.Secret_policy == secret_policy_internal_use {
+		if d.Secret_policy == secret_policy_internal_access {
 			continue
 		}
 		var u = &secret_desc_ui{

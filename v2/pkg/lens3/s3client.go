@@ -20,6 +20,7 @@ import (
 	//"regexp"
 	//"slices"
 	//"strings"
+	"math/rand/v2"
 	"time"
 	//"runtime"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -27,7 +28,25 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-func probe_access_mux(m *multiplexer, ep string, secret *secret_record) error {
+// PROBE_ACCESS_MUX accesses a Mux with a probe-key.  It chooses one
+// Mux randomly.
+func probe_access_mux(t *keyval_table, pool string) error {
+	var eps []*mux_record = list_mux_eps(t)
+	if len(eps) == 0 {
+		return fmt.Errorf("No Mux running")
+	}
+	var i = rand.IntN(len(eps))
+	var ep = eps[i].Mux_ep
+
+	var prop = get_pool(t, pool)
+	if prop == nil {
+		return fmt.Errorf("Pool not found: pool=(%s)", pool)
+	}
+	var secret = get_secret(t, prop.Probe_key)
+	if secret == nil {
+		return fmt.Errorf("Probe-key not found: pool=(%s)", pool)
+	}
+
 	var session = ""
 	var muxurl = "http://" + ep
 	var provider = credentials.NewStaticCredentialsProvider(

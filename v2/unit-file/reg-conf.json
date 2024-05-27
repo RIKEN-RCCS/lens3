@@ -22,6 +22,7 @@
     "backend": "minio",
     "backend_command_timeout": 10,
     "probe_access_timeout": 60,
+    "postpone_probe_access": false,
     "ui_session_duration": 1800,
     "reg_access_log_file": "/tmp/lens3-reg-access-log"
   },

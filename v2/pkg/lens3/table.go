@@ -89,12 +89,14 @@ var key_prefix_to_db_number = map[string]int{
 // "cf:reg", "cf:mux", and "cf:mux:" + mux-name.
 
 // "uu:" + uid Entry (DB_USER_DATA_PREFIX).  Constraint:
-// (key≡user_record.Uid).
+// (key≡user_record.Uid).  An ephemeral marker is on, when a user is
+// added automatically at an access to the registrar.
 type user_record struct {
 	Uid             string   `json:"uid"`
 	Claim           string   `json:"claim"`
 	Groups          []string `json:"groups"`
 	Enabled         bool     `json:"enabled"`
+	Ephemeral       bool     `json:"ephemeral"`
 	Expiration_time int64    `json:"expiration_time"`
 
 	Check_terms_and_conditions bool  `json:"check_terms_and_conditions"`

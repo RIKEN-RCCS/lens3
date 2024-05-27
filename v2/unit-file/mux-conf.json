@@ -11,8 +11,8 @@
     "mux_ep_update_interval": 307,
     "forwarding_timeout": 60,
     "probe_access_timeout": 60,
-    "bad_response_delay": 1,
     "busy_suspension_time": 180,
+    "error_response_delay_ms": 1000,
     "mux_node_name": "localhost",
     "backend": "minio",
     "backend_command_timeout": 10,
@@ -23,14 +23,14 @@
     "port_min": 9000,
     "port_max": 9029,
     "backend_awake_duration": 900,
-    "backend_setup_at_start": true,
     "backend_start_timeout": 60,
-    "backend_setup_timeout": 60,
     "backend_stop_timeout": 30,
+    "backend_setup_timeout": 60,
     "backend_command_timeout": 10,
+    "backend_no_setup_at_start": false,
     "heartbeat_interval": 61,
-    "heartbeat_miss_tolerance": 3,
-    "heartbeat_timeout": 30
+    "heartbeat_timeout": 30,
+    "heartbeat_miss_tolerance": 3
   },
   "minio": {
     "minio": "/usr/local/bin/minio",

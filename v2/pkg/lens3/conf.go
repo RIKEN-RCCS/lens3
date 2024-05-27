@@ -61,8 +61,6 @@ type Conf_header struct {
 	Aws_signature string `json:"aws_signature"`
 }
 
-type time_in_sec int64
-
 // NOTE: Trusted_proxy_list should include the fontend proxies and the
 // Mux hosts.
 type multiplexer_conf struct {
@@ -72,8 +70,8 @@ type multiplexer_conf struct {
 	Mux_ep_update_interval  time_in_sec  `json:"mux_ep_update_interval"`
 	Forwarding_timeout      time_in_sec  `json:"forwarding_timeout"`
 	Probe_access_timeout    time_in_sec  `json:"probe_access_timeout"`
-	Bad_response_delay      time_in_sec  `json:"bad_response_delay"`
 	Busy_suspension_time    time_in_sec  `json:"busy_suspension_time"`
+	Error_response_delay_ms time_in_sec  `json:"error_response_delay_ms"`
 	Mux_node_name           string       `json:"mux_node_name"`
 	Backend                 backend_name `json:"backend"`
 	Backend_command_timeout time_in_sec  `json:"backend_command_timeout"`
@@ -98,9 +96,51 @@ type registrar_conf struct {
 	Backend                 backend_name  `json:"backend"`
 	Backend_command_timeout time_in_sec   `json:"backend_command_timeout"`
 	Probe_access_timeout    time_in_sec   `json:"probe_access_timeout"`
+	Postpone_probe_access   bool          `json:"postpone_probe_access"`
 	Ui_session_duration     time_in_sec   `json:"ui_session_duration"`
 	Reg_access_log_file     string        `json:"reg_access_log_file"`
 }
+
+type manager_conf struct {
+	Sudo                      string      `json:"sudo"`
+	Port_min                  int         `json:"port_min"`
+	Port_max                  int         `json:"port_max"`
+	Backend_awake_duration    time_in_sec `json:"backend_awake_duration"`
+	Backend_start_timeout     time_in_sec `json:"backend_start_timeout"`
+	Backend_stop_timeout      time_in_sec `json:"backend_stop_timeout"`
+	Backend_setup_timeout     time_in_sec `json:"backend_setup_timeout"`
+	Backend_command_timeout   time_in_sec `json:"backend_command_timeout"`
+	Backend_no_setup_at_start bool        `json:"backend_no_setup_at_start"`
+	Heartbeat_interval        time_in_sec `json:"heartbeat_interval"`
+	Heartbeat_timeout         time_in_sec `json:"heartbeat_timeout"`
+	Heartbeat_miss_tolerance  int         `json:"heartbeat_miss_tolerance"`
+
+	watch_gap_minimal  time_in_sec
+	stabilize_wait_ms  time_in_sec
+	manager_expiration time_in_sec
+}
+
+type minio_conf struct {
+	Minio string `json:"minio"`
+	Mc    string `json:"mc"`
+}
+
+type rclone_conf struct {
+	Minio string `json:"minio"`
+	Mc    string `json:"mc"`
+}
+
+type UI_conf struct {
+	S3_url        string `json:"s3_url"`
+	Footer_banner string `json:"footer_banner"`
+}
+
+type syslog_conf struct {
+	Facility string `json:"facility"`
+	Priority string `json:"priority"`
+}
+
+type time_in_sec int64
 
 type claim_uid_map string
 
@@ -132,45 +172,6 @@ const (
 var backend_list = []backend_name{
 	backend_name_minio,
 	backend_name_rclone,
-}
-
-type manager_conf struct {
-	Sudo                     string      `json:"sudo"`
-	Port_min                 int         `json:"port_min"`
-	Port_max                 int         `json:"port_max"`
-	Backend_awake_duration   time_in_sec `json:"backend_awake_duration"`
-	Backend_setup_at_start   bool        `json:"backend_setup_at_start"`
-	Backend_start_timeout    time_in_sec `json:"backend_start_timeout"`
-	Backend_setup_timeout    time_in_sec `json:"backend_setup_timeout"`
-	Backend_stop_timeout     time_in_sec `json:"backend_stop_timeout"`
-	Backend_command_timeout  time_in_sec `json:"backend_command_timeout"`
-	Heartbeat_interval       time_in_sec `json:"heartbeat_interval"`
-	Heartbeat_miss_tolerance int         `json:"heartbeat_miss_tolerance"`
-	Heartbeat_timeout        time_in_sec `json:"heartbeat_timeout"`
-
-	watch_gap_minimal  time_in_sec
-	stabilize_wait_ms  time_in_sec
-	manager_expiration time_in_sec
-}
-
-type minio_conf struct {
-	Minio string `json:"minio"`
-	Mc    string `json:"mc"`
-}
-
-type rclone_conf struct {
-	Minio string `json:"minio"`
-	Mc    string `json:"mc"`
-}
-
-type UI_conf struct {
-	S3_url        string `json:"s3_url"`
-	Footer_banner string `json:"footer_banner"`
-}
-
-type syslog_conf struct {
-	Facility string `json:"facility"`
-	Priority string `json:"priority"`
 }
 
 const bad_message = "Bad json conf-file."
@@ -303,7 +304,7 @@ func check_multiplexer_entry(e multiplexer_conf) {
 		"Mux_ep_update_interval",
 		"Forwarding_timeout",
 		"Probe_access_timeout",
-		"Bad_response_delay",
+		"Error_response_delay_ms",
 		"Busy_suspension_time",
 		//"Mux_node_name",
 		"Backend",
@@ -336,6 +337,8 @@ func check_registrar_entry(e registrar_conf) {
 		"Backend",
 		"Backend_command_timeout",
 		"Probe_access_timeout",
+		"Postpone_probe_access",
+		"Ui_session_duration",
 		"Reg_access_log_file",
 	} {
 		check_field_required_and_positive(e, slot)
@@ -354,11 +357,11 @@ func check_manager_entry(e manager_conf) {
 		"Port_min",
 		"Port_max",
 		"Backend_awake_duration",
-		"Backend_setup_at_start",
 		"Backend_start_timeout",
 		"Backend_setup_timeout",
 		"Backend_stop_timeout",
 		"Backend_command_timeout",
+		"Backend_no_setup_at_start",
 		"Heartbeat_interval",
 		"Heartbeat_miss_tolerance",
 		"Heartbeat_timeout",
@@ -416,7 +419,7 @@ func check_syslog_entry(e syslog_conf) {
 // 		e.Mux_ep_update_interval > 0 &&
 // 		e.Forwarding_timeout > 0 &&
 // 		e.Probe_access_timeout > 0 &&
-// 		e.Bad_response_delay > 0 &&
+// 		e.Error_response_delay_ms > 0 &&
 // 		e.Busy_suspension_time > 0 &&
 // 		//e.Mux_node_name
 // 		e.Backend != "" &&

@@ -177,6 +177,13 @@ func remove_db_entry(t *keyval_table, key string) {
 	adm_del_db_raw(t, key)
 }
 
+func probe_mux(t *keyval_table, pool string) {
+	var err1 = probe_access_mux(t, pool)
+	if err1 != nil {
+		fmt.Println(err1)
+	}
+}
+
 func wipe_out_db(t *keyval_table, everything string) {
 	if everything == "everything" {
 		clear_everything(t)
@@ -399,6 +406,15 @@ var cmd_list = []*cmd{
 		doc:      `Removes an entry in the keyval-db by a key.`,
 		run: func(adm *adm, args []string) {
 			remove_db_entry(adm.table, args[1])
+		},
+	},
+
+	&cmd{
+		synopsis: "probe-mux pool",
+		doc: `Accesses one Mux for probing a pool.  It starts a
+		backend.`,
+		run: func(adm *adm, args []string) {
+			probe_mux(adm.table, args[1])
 		},
 	},
 

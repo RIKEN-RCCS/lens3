@@ -38,6 +38,7 @@ import (
 	//"log"
 	"net"
 	//"maps"
+	//"math/rand/v2"
 	"net/http"
 	//"net/http/httputil"
 	//"net/url"
@@ -62,7 +63,8 @@ var efs1 embed.FS
 var efs2 embed.FS
 
 type registrar struct {
-	ep string
+	// EP_PORT is a listening port of Reg (":port").
+	ep_port string
 
 	verbose bool
 
@@ -222,10 +224,10 @@ func configure_registrar(z *registrar, t *keyval_table, c *reg_conf) {
 	z.verbose = true
 
 	var conf = &z.Registrar
-	z.ep = net.JoinHostPort("", strconv.Itoa(conf.Port))
+	z.ep_port = net.JoinHostPort("", strconv.Itoa(conf.Port))
 
 	var addrs []net.IP = convert_hosts_to_addrs(conf.Trusted_proxy_list)
-	logger.debugf("Reg(%s) trusted_proxies=(%v)", z.ep, addrs)
+	logger.debugf("Reg(%s) trusted_proxies=(%v)", z.ep_port, addrs)
 	if len(addrs) == 0 {
 		panic("No trusted proxies")
 	}
@@ -237,7 +239,7 @@ func start_registrar(z *registrar) {
 	//var conf = &z.Registrar
 	z.router = http.NewServeMux()
 	z.server = &http.Server{
-		Addr:    z.ep,
+		Addr:    z.ep_port,
 		Handler: z.router,
 	}
 
@@ -341,10 +343,10 @@ func start_registrar(z *registrar) {
 		var _ = delete_secret_and_return_response(z, w, r, pool, secret)
 	})
 
-	logger.infof("Reg(%s) start service", z.ep)
+	logger.infof("Reg(%s) start service", z.ep_port)
 	for {
 		var err1 = z.server.ListenAndServe()
-		logger.infof("Reg(%s) ListenAndServe() done err=%v", z.ep, err1)
+		logger.infof("Reg(%s) ListenAndServe() done err=%v", z.ep_port, err1)
 	}
 }
 
@@ -393,8 +395,11 @@ func return_file(z *registrar, w http.ResponseWriter, r *http.Request, path stri
 	return &data1
 }
 
-// A "/user-info" request is assumed as the first request and it
-// initializes the CSRF state.
+// RETURN_USER_INFO returns a response for GET "/user-info".  This
+// request is assumed as the first request, and it initializes the
+// CSRF state.  It makes a list of groups when a user was added
+// automatically, because groups may change from time to time.  The
+// groups may be empty.
 func return_user_info(z *registrar, w http.ResponseWriter, r *http.Request) *user_info_response {
 	var opr = "user-info"
 	var u = grant_access_with_error_return(z, w, r, "", true)
@@ -405,7 +410,14 @@ func return_user_info(z *registrar, w http.ResponseWriter, r *http.Request) *use
 		return nil
 	}
 
-	var info = copy_user_record_to_ui(z, u)
+	var groups []string
+	if !u.Ephemeral {
+		groups = u.Groups
+	} else {
+		groups = list_groups_of_user(z, u.Uid)
+	}
+
+	var info = copy_user_record_to_ui(z, u, groups)
 	var csrf = make_csrf_tokens(z, u.Uid)
 	var now = time.Now().Unix()
 	var rspn = &user_info_response{
@@ -665,7 +677,11 @@ func make_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 		return nil
 	}
 
-	// MAKE BUCKET IN THE BACKEND.
+	// Make the bucket in the backend.  It ignores all errors.
+
+	if !conf.Postpone_probe_access {
+		var _ = probe_access_mux(z.table, pool)
+	}
 
 	var rspn = return_pool_data(z, w, r, pool)
 	return rspn
@@ -801,51 +817,6 @@ func return_reg_error_response(z *registrar, w http.ResponseWriter, r *http.Requ
 	log_access(r, code)
 }
 
-// VALIDATE_SESSION validates a session early.
-func validate_session(z *registrar, w http.ResponseWriter, r *http.Request, agent http.Handler) {
-	//	peer_addr = make_typical_ip_address(str(request.client.host))
-	//	x_remote_user = request.headers.get("X-REMOTE-USER")
-	//	user_id = _reg.map_claim_to_uid(x_remote_user)
-	//	client = request.headers.get("X-REAL-IP")
-	//	access_synopsis = [client, user_id, request.method, request.url]
-	//	now = int(time.time())
-	//	if peer_addr not in _reg.trusted_proxies {
-	//		logger.error(f"Untrusted proxy: proxy={peer_addr};"
-	//			f" Check trusted_proxies in configuration")
-	//		body = {"status": "error",
-	//			"reason": f"Configuration error (call administrator)",
-	//			"time": str(now)}
-	//		code = status.HTTP_403_FORBIDDEN
-	//		log_access(f"{code}", *access_synopsis)
-	//		time.sleep(_reg._bad_response_delay)
-	//		response = JSONResponse(status_code=code, content=body)
-	//		return response
-	//	}
-	//	if not _reg.check_user_is_registered(user_id) {
-	//		logger.error(f"Access by an unregistered user:"
-	//			f" uid={user_id}, x_remote_user={x_remote_user}")
-	//		body = {"status": "error",
-	//			"reason": f"Unregistered user: user={user_id}",
-	//			"time": str(now)}
-	//		code = status.HTTP_401_UNAUTHORIZED
-	//		log_access(f"{code}", *access_synopsis)
-	//		time.sleep(_reg._bad_response_delay)
-	//		response = JSONResponse(status_code=code, content=body)
-	//		return response
-	//	}
-	//	response = await call_next(request)
-	//	return response
-	//    except Exception as e {
-	//        m = rephrase_exception_message(e)
-	//        logger.error(f"Reg GOT AN UNHANDLED EXCEPTION: ({m})",
-	//			exc_info=True)
-	//        time.sleep(_reg._bad_response_delay)
-	//        response = _make_status_500_response(m)
-	//        return response
-	//	}
-	agent.ServeHTTP(w, r)
-}
-
 // GRANT_ACCESS_WITH_ERROR_RETURN checks an access to a pool by a user
 // is granted.  It returns a user record on success.  It does not
 // check the pool-state on deleting a pool.
@@ -960,27 +931,25 @@ func check_lens3_is_running(t *keyval_table) bool {
 
 // CHECK_USER_ACCOUNT checks the user account is active.  It may
 // register a new user record, when it is the first session under
-// default-allow setting (i.e., conf.User_approval=allow).
+// default-allow setting (that is, conf.User_approval=allow).
 func check_user_account(z *registrar, uid string, firstsession bool) *user_record {
 	var conf = &z.Registrar
 
 	// Reject unregistered users.
 
 	var approving = (conf.User_approval == user_default_allow && firstsession)
-	var ui = get_user(z.table, uid)
-	if !approving && ui == nil {
+	var u1 = get_user(z.table, uid)
+	if !approving && u1 == nil {
 		return nil
 	}
 
-	// Reject users without local accounts.  It is weird,
+	// Reject users without local accounts.  It is weird as
 	// authenticated users without local accounts.
 
 	var uu, err1 = user.Lookup(uid)
+	_ = uu
 	if err1 != nil {
-		switch err1.(type) {
-		case user.UnknownUserError:
-		default:
-		}
+		// (type of err1 : user.UnknownUserError).
 		logger.errf("Reg() user.Lookup(%s) fails: err=(%v)", uid, err1)
 		return nil
 	}
@@ -988,23 +957,39 @@ func check_user_account(z *registrar, uid string, firstsession bool) *user_recor
 	// Check if the user is enabled.
 
 	var now int64 = time.Now().Unix()
-	if ui != nil {
-		if !ui.Enabled || ui.Expiration_time < now {
+	if u1 != nil {
+		if !u1.Enabled || u1.Expiration_time < now {
 			return nil
 		} else {
-			extend_user_expiration_time(z, ui)
-			return ui
+			extend_user_expiration_time(z, u1)
+			return u1
 		}
 	}
 
 	// Regiter a new user record.
 
-	assert_fatal(ui == nil && approving)
+	var u2 = register_new_user(z, uid, firstsession)
+	return u2
+}
+
+// REGISTER_NEW_USER registers a user at an access to the registrar.
+// It checks the unix account.  The new record has empty groups.
+func register_new_user(z *registrar, uid string, firstsession bool) *user_record {
+	var conf = &z.Registrar
+	var approving = (conf.User_approval == user_default_allow && firstsession)
+	assert_fatal(approving)
 
 	if conf.Claim_uid_map == claim_uid_map_map {
 		logger.errf("Reg() configuration error:"+
 			" user_approval=%s claim_uid_map=%s",
 			conf.User_approval, conf.Claim_uid_map)
+		return nil
+	}
+
+	var uu, err1 = user.Lookup(uid)
+	if err1 != nil {
+		// (err1 : user.UnknownUserError)
+		logger.errf("Reg() user.Lookup(%s) fails: err=(%v)", uid, err1)
 		return nil
 	}
 
@@ -1025,32 +1010,8 @@ func check_user_account(z *registrar, uid string, firstsession bool) *user_recor
 		return nil
 	}
 
-	var gids, err3 = uu.GroupIds()
-	if err3 != nil {
-		logger.errf("Reg() user.GroupIds(%s) failed: err=(%v)", uid, err3)
-		return nil
-	}
-	var groups []string
-	for _, g1 := range gids {
-		var gid_n, err3 = strconv.Atoi(g1)
-		if err3 != nil {
-			logger.errf("Reg() user.GroupIds(%s) returns non-numeric gid=(%s)",
-				uid, g1)
-			continue
-		}
-		if check_int_in_ranges(conf.Gid_drop_range_list, gid_n) {
-			continue
-		}
-		if slices.Index(conf.Gid_drop_list, gid_n) != -1 {
-			continue
-		}
-		var gr, err4 = user.LookupGroupId(g1)
-		if err4 != nil {
-			logger.errf("user.LookupGroupId(%s) failed: err=(%v)", g1, err4)
-			continue
-		}
-		groups = append(groups, gr.Name)
-	}
+	var groups = list_groups_of_user(z, uid)
+
 	if len(groups) == 0 {
 		logger.infof("no groups for a new user: uid=(%s)", uid)
 		return nil
@@ -1063,11 +1024,13 @@ func check_user_account(z *registrar, uid string, firstsession bool) *user_recor
 	assert_fatal(conf.User_expiration_days > 0)
 	var days = conf.User_expiration_days
 	var expiration = time.Now().AddDate(0, 0, days).Unix()
+	var now int64 = time.Now().Unix()
 	var newuser = &user_record{
 		Uid:                        uid,
 		Claim:                      "",
-		Groups:                     groups,
+		Groups:                     []string{},
 		Enabled:                    true,
+		Ephemeral:                  true,
 		Expiration_time:            expiration,
 		Check_terms_and_conditions: false,
 		Timestamp:                  now,
@@ -1355,11 +1318,11 @@ func map_claim_to_uid(z *registrar, x_remote_user string) string {
 	return x_remote_user
 }
 
-func copy_user_record_to_ui(z *registrar, u *user_record) *user_info_ui {
+func copy_user_record_to_ui(z *registrar, u *user_record, groups []string) *user_info_ui {
 	var v = &user_info_ui{
 		Api_version:   reg_api_version,
 		Uid:           u.Uid,
-		Groups:        u.Groups,
+		Groups:        groups,
 		Lens3_version: lens3_version,
 		S3_url:        z.UI.S3_url,
 		Footer_banner: z.UI.Footer_banner,
@@ -1488,16 +1451,51 @@ func intern_ui_bucket_policy(policy string) bucket_policy {
 	}
 }
 
-func extend_user_expiration_time(z *registrar, ui *user_record) {
+func extend_user_expiration_time(z *registrar, u *user_record) {
 	var conf = &z.Registrar
 	assert_fatal(conf.User_expiration_days > 0)
 	var days = conf.User_expiration_days
 	var expiration = time.Now().AddDate(0, 0, days).Unix()
-	if ui.Expiration_time < expiration {
-		ui.Expiration_time = expiration
+	if u.Expiration_time < expiration {
+		u.Expiration_time = expiration
 	}
-	set_user_force(z.table, ui)
+	set_user_force(z.table, u)
 }
 
-//(rtoken, stoken) = csrf_protect.generate_csrf_tokens()
-//csrf_protect.set_csrf_cookie(stoken, response)
+func list_groups_of_user(z *registrar, uid string) []string {
+	var conf = &z.Registrar
+
+	var uu, err1 = user.Lookup(uid)
+	if err1 != nil {
+		// (err1 : user.UnknownUserError)
+		logger.errf("Reg() user.Lookup(%s) fails: err=(%v)", uid, err1)
+		return nil
+	}
+	var gids, err2 = uu.GroupIds()
+	if err2 != nil {
+		logger.errf("Reg() user.GroupIds(%s) failed: err=(%v)", uid, err2)
+		return nil
+	}
+	var groups []string
+	for _, g1 := range gids {
+		var gid_n, err3 = strconv.Atoi(g1)
+		if err3 != nil {
+			logger.errf("Reg() user.GroupIds(%s) returns non-numeric gid=(%s)",
+				uid, g1)
+			continue
+		}
+		if check_int_in_ranges(conf.Gid_drop_range_list, gid_n) {
+			continue
+		}
+		if slices.Index(conf.Gid_drop_list, gid_n) != -1 {
+			continue
+		}
+		var gr, err4 = user.LookupGroupId(g1)
+		if err4 != nil {
+			logger.errf("user.LookupGroupId(%s) failed: err=(%v)", g1, err4)
+			continue
+		}
+		groups = append(groups, gr.Name)
+	}
+	return groups
+}

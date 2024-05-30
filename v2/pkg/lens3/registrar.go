@@ -343,7 +343,7 @@ func start_registrar(z *registrar) {
 		var _ = delete_secret_and_return_response(z, w, r, pool, secret)
 	})
 
-	logger.infof("Reg(%s) start service", z.ep_port)
+	logger.infof("Reg(%s) Start Reg", z.ep_port)
 	for {
 		var err1 = z.server.ListenAndServe()
 		logger.infof("Reg(%s) ListenAndServe() done err=%v", z.ep_port, err1)
@@ -1109,7 +1109,9 @@ func check_make_pool_arguments(z *registrar, u *user_record, pool string, data a
 	if !ok {
 		panic("(internal)")
 	}
+
 	// Check bucket-directory path.
+
 	var bd = args.Buckets_directory
 	var path = filepath.Clean(bd)
 	if !filepath.IsAbs(path) {
@@ -1119,8 +1121,15 @@ func check_make_pool_arguments(z *registrar, u *user_record, pool string, data a
 		}
 	}
 	args.Buckets_directory = path
+
 	// Check GID.  UID is not in the arguments.
-	var groups = u.Groups
+
+	var groups []string
+	if u.Ephemeral {
+		groups = list_groups_of_user(z, u.Uid)
+	} else {
+		groups = u.Groups
+	}
 	var gid = args.Owner_gid
 	if slices.Index(groups, gid) == -1 {
 		return reg_error_message{

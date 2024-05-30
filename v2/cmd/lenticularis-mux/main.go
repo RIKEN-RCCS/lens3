@@ -1,4 +1,4 @@
-/* lens3-admin command. */
+/* lenticularis-mux service. */
 
 package main
 
@@ -7,5 +7,5 @@ import (
 )
 
 func main() {
-	lens3.Run_lens3_admin()
+	lens3.Run_lenticularis_mux()
 }

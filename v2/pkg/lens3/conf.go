@@ -107,16 +107,17 @@ type manager_conf struct {
 	Port_max                  int         `json:"port_max"`
 	Backend_awake_duration    time_in_sec `json:"backend_awake_duration"`
 	Backend_start_timeout     time_in_sec `json:"backend_start_timeout"`
-	Backend_stop_timeout      time_in_sec `json:"backend_stop_timeout"`
 	Backend_setup_timeout     time_in_sec `json:"backend_setup_timeout"`
 	Backend_command_timeout   time_in_sec `json:"backend_command_timeout"`
+	Backend_stop_timeout      time_in_sec `json:"backend_stop_timeout"`
 	Backend_no_setup_at_start bool        `json:"backend_no_setup_at_start"`
 	Heartbeat_interval        time_in_sec `json:"heartbeat_interval"`
 	Heartbeat_timeout         time_in_sec `json:"heartbeat_timeout"`
 	Heartbeat_miss_tolerance  int         `json:"heartbeat_miss_tolerance"`
+	backend_stabilize_ms      time_in_sec
+	backend_linger_ms         time_in_sec
 
 	watch_gap_minimal  time_in_sec
-	stabilize_wait_ms  time_in_sec
 	manager_expiration time_in_sec
 }
 

@@ -7,6 +7,7 @@ package lens3
 
 import (
 	"bytes"
+	"errors"
 	//"encoding/json"
 	"context"
 	"fmt"
@@ -44,7 +45,7 @@ type backend_minio struct {
 
 	heartbeat_client *http.Client
 	heartbeat_url    string
-	failure_message  string
+	//failure_message  string
 
 	mc_alias      string
 	mc_config_dir string
@@ -72,23 +73,15 @@ type backend_minio_conf struct {
 	//minio_watch_gap_minimal time.Duration
 }
 
-type keyval = map[string]interface{}
-
-type minio_message_ struct {
-	level   string
-	errKind string
-	time    string
-	message string
-	//"error": {"message":, "source":}
-}
-
 var the_backend_minio_factory = &backend_minio_conf{}
 
 func (fa *backend_minio_conf) make_backend(pool string) backend {
 	var g = &backend_minio{}
+	// Set the super part.
 	g.Pool = pool
 	g.be = nil
 	g.manager_conf = &the_manager.manager_conf
+	// Set the local part.
 	g.backend_minio_conf = the_backend_minio_factory
 	runtime.SetFinalizer(g, finalize_backend_minio)
 	return g
@@ -186,25 +179,21 @@ func (g *backend_minio) check_startup(outerr int, ss []string) start_result {
 	}
 }
 
-func (g *backend_minio) establish() {
+func (g *backend_minio) establish() error {
 	fmt.Println("minio.establish()")
-	var _ = mc_alias_set(g)
+	var v1 = minio_mc_alias_set(g)
+	return v1.err
 }
 
-// SHUTDOWN stops a server.  It first tries MC admin-service-stop,
-// then tries ...
+// SHUTDOWN stops a server using MC admin-service-stop.
 func (g *backend_minio) shutdown() error {
-	fmt.Println("minio.shutdown()")
+	//fmt.Println("minio.shutdown()")
 	var proc = g.get_super_part()
-
-	logger.debugf("Mux(pool=%s) stopping MinIO: %v.",
+	logger.debugf("Mux(minio) Stopping MinIO: pool=(%s) process=(%v).",
 		proc.Pool, proc)
 	//assert_fatal(g.mc_alias != nil)
-	//defer mc_alias_remove(svr)
-	var v1 = mc_admin_service_stop(g)
-	if v1.values != nil {
-	}
-	return nil
+	var v1 = minio_mc_admin_service_stop(g)
+	return v1.err
 }
 
 // HEARTBEAT http-gets the path "/minio/health/live" and returns an
@@ -214,39 +203,36 @@ func (g *backend_minio) heartbeat() int {
 	var proc = g.get_super_part()
 
 	if g.heartbeat_client == nil {
-		//fmt.Println("minio.heartbeat(1) proc=", proc)
 		var timeout = (time.Duration(proc.Heartbeat_timeout) * time.Second)
-		//fmt.Println("minio.heartbeat(2) proc=", proc)
 		g.heartbeat_client = &http.Client{
 			Timeout: timeout,
 		}
 		var ep = proc.be.Backend_ep
 		g.heartbeat_url = fmt.Sprintf("http://%s/minio/health/live", ep)
-		g.failure_message = fmt.Sprintf("Mux(pool=%s)"+
-			" Heartbeating MinIO failed: urlopen error,"+
-			" url=(%s);", proc.Pool, g.heartbeat_url)
 	}
 
 	var c = g.heartbeat_client
 	var rsp, err1 = c.Get(g.heartbeat_url)
 	if err1 != nil {
-		logger.debugf("Mux(pool=%s) Heartbeat MinIO failed: %s.\n",
-			proc.Pool, err1)
-		return 500
+		logger.debugf("Mux(minio) Heartbeat failed (http.Client.Get()):"+
+			" pool=(%s) err=(%v)", proc.Pool, err1)
+		return http_500_internal_server_error
 	}
 	defer rsp.Body.Close()
 	var _, err2 = io.ReadAll(rsp.Body)
 	if err2 != nil {
+		logger.infof("Mux(minio) Heartbeat failed (io.ReadAll()):"+
+			" pool=(%s) err=(%v)", proc.Pool, err2)
 		panic(err2)
 	}
-	//fmt.Println("heartbeat code=", rsp.StatusCode)
-	//fmt.Println("heartbeat msg=", m)
 	if proc.verbose {
-		logger.debugf("Mux(pool=%s) Heartbeat MinIO: count=%d code=%d.",
+		logger.debugf("Mux(minio) Heartbeat: pool=(%s) count=%d code=%d",
 			proc.Pool, proc.heartbeat_misses, rsp.StatusCode)
 	}
 	return rsp.StatusCode
 }
+
+// *** MC-COMMANDS ***
 
 // FIND_ONE searches in a list for one satisfies f.  It returns a
 // boolean and the first satisfying one if it exists.
@@ -273,32 +259,14 @@ func has_expected_response(m map[string]interface{}) bool {
 	return strings.HasPrefix(s, minio_expected_response)
 }
 
-func clean_tmp() {
-	var d = os.TempDir()
-	var pattern = fmt.Sprintf("%s/lens3-mc-*", d)
-	var matches, err1 = filepath.Glob(pattern)
-	assert_fatal(err1 != nil)
-	// (err1 == nil || err1 == filepath.ErrBadPattern)
-	for _, p := range matches {
-		logger.debugf("Mux() Clean by os.RemoveAll(%s).", p)
-		var err2 = os.RemoveAll(p)
-		if err2 != nil {
-			// (err2 : *os.PathError)
-			fmt.Print("os.RemoveAll=", err2)
-		}
-	}
-}
-
-// *** MC-COMMANDS ***
-
-// MC_RESULT is a decoding of an output of a MC-command.  On an error, a
-// values field is nil and a cause code is set.
-type mc_result struct {
+// MINIO_MC_RESULT is a decoding of an output of a MC-command.  On an
+// error, it returns {nil,error}.
+type minio_mc_result struct {
 	values []map[string]any
-	cause  string
+	err    error
 }
 
-// SIMPLIFY_MC_MESSAGE returns a 2-tuple {[value,...], ""} on success,
+// SIMPLIFY_MINIO_MC_MESSAGE returns a 2-tuple {[value,...], ""} on success,
 // or {nil, error-cause} on failure.  It extracts a message part from
 // an error message.  MC-command may return zero or more values as
 // separate json records.  An empty output is a proper success.  Each
@@ -308,12 +276,12 @@ type mc_result struct {
 // "error/cause/error/Code" slot will be a keyword of useful
 // information if it exists.  A returned 2-tuple may have a whole
 // message instead of a cause-code if the slot is missing.
-func simplify_mc_message(s []byte) mc_result {
+func simplify_minio_mc_message(s []byte) *minio_mc_result {
 	var mm, ok = decode_json([]string{string(s)})
 	if !ok {
-		logger.err("Mux() json-decode failed")
-		var msg1 = fmt.Sprintf("MC-command returned a bad json: (%s)", s)
-		return mc_result{nil, msg1}
+		logger.err("Mux(minio) json decode failed")
+		var err1 = fmt.Errorf("MC-command returned a bad json: (%s)", s)
+		return &minio_mc_result{nil, err1}
 	}
 
 	for _, m := range mm {
@@ -322,29 +290,29 @@ func simplify_mc_message(s []byte) mc_result {
 			// Skip.
 		case "error":
 			if len(mm) != 1 {
-				logger.warnf("Mux() MC-command with multiple errors: (%v)", mm)
+				logger.warnf("Mux(minio) MC-command with multiple errors: (%v)", mm)
 			}
 			var m1 = get_string(m, "error", "cause", "error", "Code")
 			if m1 != "" {
-				return mc_result{nil, m1}
+				return &minio_mc_result{nil, errors.New(m1)}
 			}
 			var m2 = get_string(m, "error", "message")
 			if m2 != "" {
-				return mc_result{nil, m2}
+				return &minio_mc_result{nil, errors.New(m2)}
 			}
-			return mc_result{nil, fmt.Sprintf("%s", m)}
+			return &minio_mc_result{nil, fmt.Errorf("%s", m)}
 		default:
 			// Unknown status.
-			return mc_result{nil, fmt.Sprintf("%s", m)}
+			return &minio_mc_result{nil, fmt.Errorf("%s", m)}
 		}
 	}
-	return mc_result{mm, ""}
+	return &minio_mc_result{mm, nil}
 }
 
-// EXECUTE_MC_CMD runs an MC-command command and checks its output.
+// EXECUTE_MINIO_MC_CMD runs an MC-command command and checks its output.
 // Note that a timeout kills the process by SIGKILL.  MEMO: Timeout of
 // context returns "context.deadlineExceededError".
-func execute_mc_cmd(g *backend_minio, name string, command []string) mc_result {
+func execute_minio_mc_cmd(g *backend_minio, name string, command []string) *minio_mc_result {
 	//var proc = g.get_super_part()
 	assert_fatal(g.mc_alias != "" && g.mc_config_dir != "")
 	var argv = append([]string{
@@ -363,85 +331,102 @@ func execute_mc_cmd(g *backend_minio, name string, command []string) mc_result {
 	cmd.Env = *g.environ
 	var err1 = cmd.Run()
 	fmt.Println("cmd.Run()=", err1)
-	switch err := err1.(type) {
+	switch err2 := err1.(type) {
 	case nil:
 		// OK.
 	case *exec.ExitError:
 		// Not successful.
-		var status = err.ProcessState.ExitCode()
-		logger.errf(("Mux(pool=) MC-command failed:" +
-			" cmd=%v; exit=%d error=(%v) stdout=(%s) stderr=(%s)"),
-			argv, status, err, outb.String(), errb.String())
+		var status = err2.ProcessState.ExitCode()
+		logger.errf("Mux(minio) MC-command failed:"+
+			" cmd=(%v) exit=%d error=(%v) stdout=(%s) stderr=(%s)",
+			argv, status, err2, outb.String(), errb.String())
 	default:
 		fmt.Printf("cmd.Run()=%T %v", err1, err1)
-		logger.errf(("Mux(pool=) MC-command failed:" +
-			" cmd=%v; error=(%v) stdout=(%s) stderr=(%s)"),
-			argv, err, outb.String(), errb.String())
+		logger.errf("Mux(minio) MC-command failed:"+
+			" cmd=(%v) error=(%v) stdout=(%s) stderr=(%s)",
+			argv, err1, outb.String(), errb.String())
 	}
 	var wstatus = cmd.ProcessState.ExitCode()
 	if g.verbose {
-		logger.debugf(("Mux(pool=) MC-command done:" +
-			" cmd=%v; status=%v stdout=(%s) stderr=(%s)"),
+		logger.debugf("Mux(minio) MC-command done:"+
+			" cmd=(%v) status=%v stdout=(%s) stderr=(%s)",
 			argv, wstatus, outb.String(), errb.String())
 	}
 	if wstatus == -1 {
-		logger.errf(("Mux(pool=) MC-command unfinished:" +
-			" cmd=%v; stdout=(%s) stderr=(%s)"),
+		logger.errf("Mux(minio) MC-command unfinished:"+
+			" cmd=(%v) stdout=(%s) stderr=(%s)",
 			argv, outb.String(), errb.String())
-		var msg2 = fmt.Sprintf("MC-command unfinished: (%s)", outb.String())
-		return mc_result{nil, msg2}
+		var err3 = fmt.Errorf("MC-command unfinished: (%s)", outb.String())
+		return &minio_mc_result{nil, err3}
 	}
-	var v1 = simplify_mc_message(outb.Bytes())
-	if v1.values != nil {
+	var v1 = simplify_minio_mc_message(outb.Bytes())
+	if v1.err == nil {
 		if g.verbose {
-			logger.debugf("Mux(pool=) MC-command OK: cmd=%v", command)
+			logger.debugf("Mux(minio) MC-command OK: cmd=%v", command)
 		} else {
-			logger.debugf("Mux(pool=) MC-command OK: cmd=%s", name)
+			logger.debugf("Mux(minio) MC-command OK: cmd=%s", name)
 		}
 	} else {
-		logger.errf(("Mux(pool=) MC-command failed:" +
-			" cmd=%v; error=%v stdout=(%v) stderr=(%v)"),
-			argv, v1.cause, outb, errb)
+		logger.errf("Mux(minio) MC-command failed:"+
+			" cmd=(%v) error=(%v) stdout=(%v) stderr=(%v)",
+			argv, v1.err, outb, errb)
 	}
 	return v1
 }
 
-func mc_alias_set(g *backend_minio) mc_result {
+func minio_mc_alias_set(g *backend_minio) *minio_mc_result {
 	assert_fatal(g.mc_alias == "" && g.mc_config_dir == "")
 	var rnd = strings.ToLower(random_string(12))
 	var url = fmt.Sprintf("http://%s", g.be.Backend_ep)
 	//g.mc_config_dir = tempfile.TemporaryDirectory()
 	var dir, err1 = os.MkdirTemp("", "lens3-mc-")
 	if err1 != nil {
-		logger.errf("Mux(pool=) %s", err1)
-		return mc_result{nil, err1.Error()}
+		logger.errf("Mux(minio) os.MkdirTemp() failed: err=(%v)", err1)
+		return &minio_mc_result{nil, err1}
 	}
-	g.mc_config_dir = dir
 	g.mc_alias = fmt.Sprintf("pool-%s-%s", g.Pool, rnd)
-	var v1 = execute_mc_cmd(g, "alias_set",
+	g.mc_config_dir = dir
+	var v1 = execute_minio_mc_cmd(g, "alias_set",
 		[]string{"alias", "set", g.mc_alias, url,
 			g.be.Root_access, g.be.Root_secret,
 			"--api", "S3v4"})
-	if v1.values == nil {
+	if v1.err != nil {
 		g.mc_alias = ""
 		g.mc_config_dir = ""
 	}
 	return v1
 }
 
-func mc_alias_remove(g *backend_minio) mc_result {
+func minio_mc_alias_remove(g *backend_minio) *minio_mc_result {
 	assert_fatal(g.mc_alias != "" && g.mc_config_dir != "")
-	var v1 = execute_mc_cmd(g, "alias_remove",
+	var v1 = execute_minio_mc_cmd(g, "alias_remove",
 		[]string{"alias", "remove", g.mc_alias})
-	if v1.values == nil {
+	if v1.err == nil {
 		g.mc_alias = ""
 		g.mc_config_dir = ""
 	}
 	return v1
 }
 
-func mc_admin_service_stop(g *backend_minio) mc_result {
-	var v1 = execute_mc_cmd(g, "admin_service_stop",
+func minio_mc_admin_service_stop(g *backend_minio) *minio_mc_result {
+	var v1 = execute_minio_mc_cmd(g, "admin_service_stop",
 		[]string{"admin", "service", "stop", g.mc_alias})
 	return v1
+}
+
+func clean_tmp() {
+	var d = os.TempDir()
+	var pattern = fmt.Sprintf("%s/lens3-mc-*", d)
+	var matches, err1 = filepath.Glob(pattern)
+	assert_fatal(err1 != nil)
+	// (err1 == nil || err1 == filepath.ErrBadPattern)
+	for _, p := range matches {
+		logger.debugf("Mux(minio) Clean by os.RemoveAll(%s)", p)
+		var err2 = os.RemoveAll(p)
+		if err2 != nil {
+			// (err2 : *os.PathError).
+			logger.warnf("Mux(minio) os.RemoveAll(%s) failed: err=(%v)",
+				p, err2)
+		}
+	}
 }

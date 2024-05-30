@@ -23,25 +23,29 @@ import (
 )
 
 func run_service() {
-	var dbconf = read_db_conf("conf.json")
-	var t = make_table(dbconf)
-	var muxconf = get_mux_conf(t, "mux")
-	var regconf = get_reg_conf(t, "reg")
+	/*
+		var dbconf = read_db_conf("conf.json")
+		var t = make_table(dbconf)
+		var muxconf = get_mux_conf(t, "mux")
+		var regconf = get_reg_conf(t, "reg")
 
-	var m = &the_multiplexer
-	var w = &the_manager
-	configure_multiplexer(m, w, t, muxconf)
-	configure_manager(w, m, t, muxconf)
-	go start_manager(w)
+		var m = &the_multiplexer
+		var w = &the_manager
+		configure_multiplexer(m, w, t, muxconf)
+		configure_manager(w, m, t, muxconf)
+		//go start_manager(w)
 
-	var z = &the_registrar
-	configure_registrar(z, t, regconf)
-	go start_registrar(z)
+		var z = &the_registrar
+		configure_registrar(z, t, regconf)
+		go start_registrar(z)
+		start_multiplexer(m)
+	*/
+
+	go start_service("conf.json", []string{"reg", "mux"})
 
 	//run_dummy_reg_client_for_mux_client()
-	go run_dummy_mux_client(m)
-
-	start_multiplexer(m)
+	var m = &the_multiplexer
+	run_dummy_mux_client(m)
 }
 
 func run_dummy_mux_client(m *multiplexer) {
@@ -52,7 +56,7 @@ func run_dummy_mux_client(m *multiplexer) {
 	//var pool = proc.Pool
 
 	//var desc = &proc.backend_record
-	fmt.Println("proc.backend_record=")
+	//fmt.Println("proc.backend_record=")
 	//print_in_json(desc)
 	//set_backend(w.table, proc.Pool, desc)
 	//var proc = g.get_super_part()
@@ -60,11 +64,13 @@ func run_dummy_mux_client(m *multiplexer) {
 	//time.Sleep(30 * time.Second)
 	//start_dummy_proxy(m)
 
+	fmt.Println("")
 	fmt.Println("MUX CLIENT RUN...")
+	fmt.Println("")
 
-	var pool = "b26089c45be8635d"
+	var pool = "163a54e4c746633e"
 	var err1 = probe_access_mux(m.table, pool)
 	fmt.Println("err=", err1)
 
-	time.Sleep(15 * time.Second)
+	time.Sleep(150 * time.Second)
 }

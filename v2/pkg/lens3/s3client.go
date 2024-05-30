@@ -29,15 +29,8 @@ import (
 )
 
 // PROBE_ACCESS_MUX accesses a Mux with a probe-key.  It chooses one
-// Mux randomly.
+// under which a backend is running, or randomly.
 func probe_access_mux(t *keyval_table, pool string) error {
-	var eps []*mux_record = list_mux_eps(t)
-	if len(eps) == 0 {
-		return fmt.Errorf("No Mux running")
-	}
-	var i = rand.IntN(len(eps))
-	var ep = eps[i].Mux_ep
-
 	var prop = get_pool(t, pool)
 	if prop == nil {
 		return fmt.Errorf("Pool not found: pool=(%s)", pool)
@@ -45,6 +38,19 @@ func probe_access_mux(t *keyval_table, pool string) error {
 	var secret = get_secret(t, prop.Probe_key)
 	if secret == nil {
 		return fmt.Errorf("Probe-key not found: pool=(%s)", pool)
+	}
+
+	var ep string
+	var be1 = get_backend(t, pool)
+	if be1 != nil {
+		ep = be1.Mux_ep
+	} else {
+		var eps []*mux_record = list_mux_eps(t)
+		if len(eps) == 0 {
+			return fmt.Errorf("No Mux running")
+		}
+		var i = rand.IntN(len(eps))
+		ep = eps[i].Mux_ep
 	}
 
 	var session = ""

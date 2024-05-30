@@ -17,6 +17,11 @@ import (
 	"time"
 )
 
+func Run_lens3_admin() {
+	make_adm_command_table()
+	adm_toplevel()
+}
+
 type adm struct {
 	dbconf db_conf
 	table  *keyval_table
@@ -36,11 +41,6 @@ type dump_data struct {
 
 var cmd_table = map[string]*cmd{}
 
-func Run() {
-	make_adm_command_table()
-	adm_toplevel()
-}
-
 func make_adm_command_table() {
 	for _, cmd := range cmd_list {
 		var p = strings.Index(cmd.synopsis, " ")
@@ -52,14 +52,10 @@ func make_adm_command_table() {
 
 func adm_toplevel() {
 	//os.Args[...]
-	var conf = flag.String("conf", "conf.json",
-		"A file name of keyval-db connection info.")
-	var yes = flag.Bool("yes", false, "force critical action")
-	var everything = flag.Bool("everything", false, "do all")
+	var confpath = flag.String("c", "conf.json",
+		"A file containing keyval-db connection info.")
 	var debug = flag.Bool("debug", false, "debug")
-	_ = conf
-	_ = yes
-	_ = everything
+	_ = confpath
 	_ = debug
 	flag.Parse()
 
@@ -69,8 +65,8 @@ func adm_toplevel() {
 		return
 	}
 
-	assert_fatal(conf != nil)
-	var dbconf = read_db_conf(*conf)
+	assert_fatal(confpath != nil)
+	var dbconf = read_db_conf(*confpath)
 	//fmt.Println(dbconf)
 	var t = make_table(dbconf)
 	_ = t

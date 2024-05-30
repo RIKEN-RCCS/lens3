@@ -26,6 +26,7 @@ import (
 	"net"
 	//"os/user"
 	//"maps"
+	"math/rand/v2"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -134,14 +135,20 @@ func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, c *mux_c
 // MEMO: ReverseProxy <: Handler as it implements ServeHTTP().
 func start_multiplexer(m *multiplexer) {
 	fmt.Println("start_multiplexer()")
+
+	go mux_periodic_work(m)
+
 	var proxy1 = httputil.ReverseProxy{
 		Rewrite: proxy_request_rewriter(m),
 	}
 	var proxy2 = make_checker_proxy(m, &proxy1)
 
-	logger.infof("Mux(%s) start service", m.mux_ep)
+	logger.infof("Mux(%s) Start Mux", m.mux_ep)
 	for {
 		var err2 = http.ListenAndServe(m.ep_port, proxy2)
+		//var server = &http.Server{Addr: m.ep_port,
+		//	Handler: proxy2,
+		//}
 		logger.infof("Mux(%s) ListenAndServe() done err=(%v)", m.mux_ep, err2)
 		log.Fatal(err2)
 	}
@@ -728,5 +735,32 @@ func return_mux_response_by_error(m *multiplexer, w http.ResponseWriter, r *http
 		logger.errf("Mux(%s) (interanl) unexpected error: err=(%v)",
 			m.mux_ep, err)
 		raise(err)
+	}
+}
+
+func mux_periodic_work(m *multiplexer) {
+	var conf = &m.conf.Multiplexer
+	logger.debugf("Mux(%s) Periodic work started", m.mux_ep)
+
+	var now int64 = time.Now().Unix()
+	var mux = &mux_record{
+		Mux_ep:     m.mux_ep,
+		Start_time: now,
+		Timestamp:  now,
+	}
+
+	var interval = int64(conf.Mux_ep_update_interval)
+	var expiry int64 = 3 * interval
+	assert_fatal(interval >= 10)
+	//time.Sleep(1 * time.Second)
+	for {
+		if m.verbose {
+			logger.debugf("Mux(%s) Update Mux-ep periodically", m.mux_ep)
+		}
+		mux.Timestamp = time.Now().Unix()
+		set_mux_ep(m.table, m.mux_ep, mux)
+		set_mux_ep_expiry(m.table, m.mux_ep, expiry)
+		var jitter = rand.Int64N(interval / 8)
+		time.Sleep(time.Duration(interval+jitter) * time.Second)
 	}
 }

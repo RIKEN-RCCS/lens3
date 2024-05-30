@@ -135,6 +135,35 @@ type pool_record struct {
 	Timestamp         int64  `json:"timestamp"`
 }
 
+// "bx:" + pool-name Entry (DB_BACKEND_MUTEX_PREFIX).
+type backend_mutex_record struct {
+	Mux_ep     string `json:"mux_ep"`
+	Start_time int64  `json:"start_time"`
+}
+
+// "ps:" + pool-name Entry (DB_POOL_STATE_PREFIX).  Constraint:
+// (key≡pool_state_record.Pool).
+type pool_state_record struct {
+	Pool      string      `json:"pool"`
+	State     pool_state  `json:"state"`
+	Reason    pool_reason `json:"reason"`
+	Timestamp int64       `json:"timestamp"`
+}
+
+// "be:" + pool-name Entry (DB_BACKEND_INFO_PREFIX).  A pair of
+// root_access and root_secret is a credential for accessing a
+// backend.  Constraint: (key≡backend_record.Pool).
+type backend_record struct {
+	Pool        string `json:"pool"`
+	Backend_ep  string `json:"backend_ep"`
+	Backend_pid int    `json:"backend_pid"`
+	Root_access string `json:"root_access"`
+	Root_secret string `json:"root_secret"`
+	Mux_ep      string `json:"mux_ep"`
+	Mux_pid     int    `json:"mux_pid"`
+	Timestamp   int64  `json:"timestamp"`
+}
+
 // "bd:" + directory Entry (DB_DIRECTORY_PREFIX).  Constraint:
 // (key≡bucket_directory_record.Directory).
 type bucket_directory_record struct {
@@ -163,35 +192,6 @@ type secret_record struct {
 	//Internal_use    bool          `json:"internal_use"`
 	Expiration_time int64 `json:"expiration_time"`
 	Timestamp       int64 `json:"timestamp"`
-}
-
-// "bx:" + pool-name Entry (DB_BACKEND_MUTEX_PREFIX).
-type backend_mutex_record struct {
-	Mux_ep     string `json:"mux_ep"` // mux_host:mux_port
-	Start_time int64  `json:"start_time"`
-}
-
-// "ps:" + pool-name Entry (DB_POOL_STATE_PREFIX).  Constraint:
-// (key≡pool_state_record.Pool).
-type pool_state_record struct {
-	Pool      string      `json:"pool"`
-	State     pool_state  `json:"state"`
-	Reason    pool_reason `json:"reason"`
-	Timestamp int64       `json:"timestamp"`
-}
-
-// "be:" + pool-name Entry (DB_BACKEND_INFO_PREFIX).  A pair of
-// root_access and root_secret is a credential for accessing a
-// backend.  Constraint: (key≡backend_record.Pool).
-type backend_record struct {
-	Pool        string `json:"pool"`
-	Backend_ep  string `json:"backend_ep"`
-	Backend_pid int    `json:"backend_pid"`
-	Root_access string `json:"root_access"`
-	Root_secret string `json:"root_secret"`
-	Mux_ep      string `json:"mux_ep"`
-	Mux_pid     int    `json:"mux_pid"`
-	Timestamp   int64  `json:"timestamp"`
 }
 
 // "mu:" + mux-ep Entry (DB_MUX_EP_PREFIX).  Constraint:
@@ -702,30 +702,30 @@ func delete_pool_state(t *keyval_table, pool string) {
 	db_del_with_prefix(t, db_pool_state_prefix, pool)
 }
 
-// SET_EX_MANAGER atomically sets a manager-mutex record.  It returns
-// OK or NG.  It returns an old record, but it can be null due to a
-// race (but practically never).
-func set_ex_manager(t *keyval_table, pool string, data *backend_mutex_record) (bool, *backend_mutex_record) {
+// SET_EX_MANAGER atomically sets an exclusion for a backend.  It
+// returns OK or NG.  It tries to return an old record, but it can be
+// null due to a race (but practically never).
+func set_ex_backend_exclusion(t *keyval_table, pool string, data *backend_mutex_record) (bool, *backend_mutex_record) {
 	var ok = db_setnx_with_prefix(t, db_backend_mutex_prefix, pool, data)
 	if ok {
 		return true, nil
 	}
 	// Race, return failure.
-	var holder = get_manager(t, pool)
+	var holder = get_backend_exclusion(t, pool)
 	return false, holder
 }
 
-func set_manager_expiry(t *keyval_table, pool string, timeout int64) {
+func set_manager_expiry__(t *keyval_table, pool string, timeout int64) {
 	db_expire_with_prefix(t, db_backend_mutex_prefix, pool, timeout)
 }
 
-func get_manager(t *keyval_table, pool string) *backend_mutex_record {
+func get_backend_exclusion(t *keyval_table, pool string) *backend_mutex_record {
 	var data backend_mutex_record
 	var ok = db_get_with_prefix(t, db_backend_mutex_prefix, pool, &data)
 	return ITE(ok, &data, nil)
 }
 
-func delete_manager(t *keyval_table, pool string) {
+func delete_backend_exclusion(t *keyval_table, pool string) {
 	db_del_with_prefix(t, db_backend_mutex_prefix, pool)
 }
 
@@ -745,6 +745,7 @@ func delete_backend(t *keyval_table, pool string) {
 }
 
 // LIST_BACKENDS returns a list of all currently running backends.
+// Use "*" for pool.
 func list_backends(t *keyval_table, pool string) []*backend_record {
 	var prefix = db_backend_info_prefix
 	var ki = scan_table(t, prefix, pool)

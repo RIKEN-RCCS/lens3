@@ -38,7 +38,7 @@ import (
 	"time"
 	//"reflect"
 	//"io"
-	"os"
+	//"os"
 	"os/exec"
 	//"os/signal"
 	"math/rand/v2"
@@ -78,15 +78,11 @@ type manager struct {
 	// MUTEX protects accesses to the processes list.
 	mutex sync.Mutex
 
-	// CH_QUIT is to inform stopping the manager by closing.  Every
-	// thread shall quit.
-	ch_quit chan vacuous
-
-	// CH_SIG is a channel to receive SIGCHLD.
-	ch_sig chan os.Signal
-
 	// ENVIRON holds a copy of the minimal list of environs.
 	environ []string
+
+	// CH_QUIT is to receive quitting notification.
+	ch_quit chan vacuous
 
 	conf *mux_conf
 	//backend_conf
@@ -140,11 +136,11 @@ type backend_process struct {
 	// ENVIRON is the shared one in the_manager.
 	environ *[]string
 
-	// The followings {cmd,ch_stdio,ch_shutdown_backend} are set when
+	// The followings {cmd,ch_stdio,ch_terminate_backend} are set when
 	// starting a backend.
-	cmd                 *exec.Cmd
-	ch_stdio            chan stdio_message
-	ch_shutdown_backend chan vacuous
+	cmd                  *exec.Cmd
+	ch_stdio             chan stdio_message
+	ch_terminate_backend chan vacuous
 
 	heartbeat_misses int
 
@@ -191,9 +187,10 @@ const (
 	start_failed
 )
 
-func configure_manager(w *manager, m *multiplexer, t *keyval_table, c *mux_conf) {
+func configure_manager(w *manager, m *multiplexer, t *keyval_table, q chan vacuous, c *mux_conf) {
 	w.table = t
 	w.multiplexer = m
+	w.ch_quit = q
 	w.conf = c
 	w.manager_conf = c.Manager
 
@@ -227,7 +224,7 @@ func stop_running_backends(w *manager) {
 	}()
 
 	for _, g := range processes {
-		stop_backend(w, g)
+		terminate_backend(w, g)
 	}
 
 	if w.ch_quit != nil {
@@ -241,9 +238,9 @@ func stop_running_backends(w *manager) {
 // of starting a backend.
 func start_backend(w *manager, pool string) backend {
 	var now int64 = time.Now().Unix()
-	var ep = &backend_mutex_record{
-		Mux_ep:     w.mux_ep,
-		Start_time: now,
+	var ep = &backend_exclusion_record{
+		Mux_ep:    w.mux_ep,
+		Timestamp: now,
 	}
 	var ok, _ = set_ex_backend_exclusion(w.table, pool, ep)
 	if !ok {
@@ -253,6 +250,8 @@ func start_backend(w *manager, pool string) backend {
 		}
 		return nil
 	} else {
+		var expiry int64 = int64(3 * w.Backend_start_timeout)
+		set_backend_exclusion_expiry(w.table, pool, expiry)
 		var be2 = start_backend_in_mutexed(w, pool)
 		return be2
 	}
@@ -262,6 +261,7 @@ func start_backend(w *manager, pool string) backend {
 func start_backend_in_mutexed(w *manager, pool string) backend {
 	//fmt.Println("start_backend()")
 	//delete_backend(w.table, pool)
+	defer delete_backend_exclusion(w.table, pool)
 
 	var poolprop = get_pool(w.table, pool)
 	if poolprop == nil {
@@ -289,13 +289,13 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 	proc.verbose = true
 	proc.environ = &w.environ
 
-	// The followings are set when starting a backend.
+	// The following fields are set in starting a backend.
 
 	// proc.cmd
 	// proc.ch_stdio
-	// proc.ch_shutdown_backend
+	// proc.ch_terminate_backend
 
-	var available_ports = list_ports_available(w)
+	var available_ports = list_available_ports(w)
 
 	fmt.Printf("start_backend() proc=%v ports=%v\n", proc, available_ports)
 
@@ -331,7 +331,7 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 		if !ok {
 			logger.warnf("Mux() Starting a backend failed"+
 				" because manager is in shutdown: pool=(%s)", pool)
-			stop_backend(w, g)
+			terminate_backend(w, g)
 			return nil
 		}
 
@@ -359,8 +359,8 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 
 	// All ports are tried and failed.
 
-	logger.warnf("Mux(pool=%s) Starting a backend SUSPENDED: %s",
-		pool, " (all ports used)")
+	logger.warnf("Mux() Starting a backend SUSPENDED (no ports): pool=(%s)",
+		pool)
 	var state = pool_state_SUSPENDED
 	var reason = pool_reason_BACKEND_BUSY
 	set_pool_state(w.table, pool, state, reason)
@@ -419,7 +419,7 @@ func try_start_backend(w *manager, g backend, port int) start_result {
 
 	proc.cmd = cmd
 	proc.ch_stdio = make(chan stdio_message)
-	proc.ch_shutdown_backend = make(chan vacuous)
+	proc.ch_terminate_backend = make(chan vacuous)
 
 	start_disgorging_stdio(proc)
 
@@ -550,30 +550,30 @@ func wait_for_backend_by_race(w *manager, pool string) *backend_record {
 	return nil
 }
 
-// STOP_BACKEND tells the pinger thread to shutdown the backend.
-func stop_backend(w *manager, g backend) {
+// TERMINATE_BACKEND tells the pinger thread to shutdown the backend.
+func terminate_backend(w *manager, g backend) {
 	var proc = g.get_super_part()
-	if proc.ch_shutdown_backend != nil {
-		close(proc.ch_shutdown_backend)
-		proc.ch_shutdown_backend = nil
+	if proc.ch_terminate_backend != nil {
+		close(proc.ch_terminate_backend)
+		proc.ch_terminate_backend = nil
 	}
 }
 
-// PING_BACKEND performs heartbeating.  It shutdown the backend and
-// waits for the child process finishes, when it is instructed to stop
-// the backend.  Note that it uses a copy of proc.ch_shutdown_backend
+// PING_BACKEND performs heartbeating.  It will shutdown the backend,
+// either when heartbeating fails or it is instructed to stop the
+// backend.  Note that it uses a copy of proc.ch_terminate_backend
 // here, because the field will be set null after closing.
 func ping_backend(w *manager, g backend) {
 	var proc = g.get_super_part()
-	var ch_shutdown = proc.ch_shutdown_backend
+	var ch_terminate = proc.ch_terminate_backend
 	var duration = (time.Duration(w.Backend_awake_duration) * time.Second)
 	proc.heartbeat_misses = 0
 	for {
 		var ok1 bool
 		select {
-		case _, ok1 = <-ch_shutdown:
+		case _, ok1 = <-ch_terminate:
 			assert_fatal(!ok1)
-			fmt.Println("*** CH_SHUTDOWN CLOSED")
+			fmt.Println("*** CH_TERMINATE CLOSED")
 			break
 		default:
 		}
@@ -607,18 +607,16 @@ func ping_backend(w *manager, g backend) {
 		}
 	}
 	shutdown_backend(w, g)
-	wait_child_process(w, g)
+	wait4_child_process(w, g)
 }
 
-// SHUTDOWN_BACKEND calls backend's shutdown().  Note that there is a race
-// in an exclusion of starting a backend.  It is necessary to delete
-// first an exclusion, then a backend record.  Also, there is another
-// race in checking a backend record and stopping a backend.  That is,
-// it would send a request to a backend that is going to be shutdown.
-// It sleeps a short time to avoid the race, assuming all requests are
-// finished while sleeping.
+// SHUTDOWN_BACKEND calls backend's shutdown().  Note that there is a
+// race in checking a backend existence and stopping a backend.  That
+// is, it would be possible some requests are sent to a backend while
+// it is going to be shutdown.  It waits for a short time to avoid the
+// race, assuming all requests are finished in the wait.
 func shutdown_backend(w *manager, g backend) {
-	fmt.Println("stop_backend()")
+	fmt.Println("shutdown_backend()")
 	var proc = g.get_super_part()
 
 	delete_backend_exclusion(w.table, proc.Pool)
@@ -636,7 +634,7 @@ func shutdown_backend(w *manager, g backend) {
 	}
 	var err2 = proc.cmd.Cancel()
 	if err2 != nil {
-		logger.errf(("Mux() Backend cmd.Cancel() failed: pool=(%s) err=(%v)"),
+		logger.infof(("Mux() Backend cmd.Cancel() failed: pool=(%s) err=(%v)"),
 			proc.Pool, err2)
 	}
 }
@@ -710,9 +708,10 @@ func drain_start_messages_to_log(pool string, outs []string, errs []string) {
 	}
 }
 
-// LIST_PORTS_AVAILABLE lists ports available.  It drops the ports
-// used by backends running on this same host locally.
-func list_ports_available(w *manager) []int {
+// LIST_AVAILABLE_PORTS lists ports available.  It drops the ports
+// used by backends running on this host locally.  It randomizes the
+// order of the entries.
+func list_available_ports(w *manager) []int {
 	var bes = list_backends_under_manager(w)
 	var used []int
 	for _, be := range bes {
@@ -750,7 +749,7 @@ func list_backends_under_manager(w *manager) []*backend_record {
 	return list
 }
 
-func wait_child_process(w *manager, g backend) {
+func wait4_child_process(w *manager, g backend) {
 	var proc = g.get_super_part()
 	var pid = proc.cmd.Process.Pid
 	//var pid = proc.be.Backend_pid
@@ -772,11 +771,11 @@ func wait_child_process(w *manager, g backend) {
 			continue
 		}
 		if wpid == 0 {
-			logger.warnf("wait4() failed: errno=%s",
+			logger.warnf("Mux() wait4() failed: errno=%s",
 				unix.ErrnoName(unix.ECHILD))
 			continue
 		}
-		logger.debugf("wait4() pid=%d status=%d rusage=(%#v)",
+		logger.debugf("Mux() wait4() returns pid=%d status=%d rusage=(%#v)",
 			wpid, wstatus, rusage)
 		break
 	}

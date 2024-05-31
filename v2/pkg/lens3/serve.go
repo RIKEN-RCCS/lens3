@@ -24,7 +24,7 @@ import (
 	"golang.org/x/sys/unix"
 	//"syscall"
 	"strings"
-	//"time"
+	"time"
 	//"runtime"
 )
 
@@ -81,6 +81,7 @@ func Run_lenticularis_mux() {
 		fmt.Println("Lens3", lens3_version)
 		os.Exit(0)
 	}
+
 	//fmt.Println("services=", services)
 	start_service(*flag_conf, services)
 }
@@ -98,16 +99,15 @@ func start_service(confpath string, services []string) {
 	var dbconf = read_db_conf(confpath)
 	var t = make_table(dbconf)
 
-	var ch_quit = make(chan bool)
-	var ch_sig = make(chan os.Signal, 1)
-	handle_unix_signals(t, ch_quit, ch_sig)
+	var ch_quit = make(chan vacuous)
+	handle_unix_signals(t, ch_quit)
 
 	for i, service := range services {
 		var run_on_main_thread = (i == len(services)-1)
 		if service == "reg" {
 			var regconf = get_reg_conf(t, service)
 			var z = &the_registrar
-			configure_registrar(z, t, regconf)
+			configure_registrar(z, t, ch_quit, regconf)
 			if run_on_main_thread {
 				start_registrar(z)
 			} else {
@@ -118,8 +118,8 @@ func start_service(confpath string, services []string) {
 			var muxconf = get_mux_conf(t, service)
 			var m = &the_multiplexer
 			var w = &the_manager
-			configure_multiplexer(m, w, t, muxconf)
-			configure_manager(w, m, t, muxconf)
+			configure_multiplexer(m, w, t, ch_quit, muxconf)
+			configure_manager(w, m, t, ch_quit, muxconf)
 			defer w.factory.clean_at_exit()
 			if run_on_main_thread {
 				start_multiplexer(m)
@@ -130,7 +130,9 @@ func start_service(confpath string, services []string) {
 	}
 }
 
-func handle_unix_signals(t *keyval_table, ch_quit chan bool, ch_sig chan os.Signal) {
+func handle_unix_signals(t *keyval_table, ch_quit chan vacuous) {
+	var ch_sig = make(chan os.Signal, 1)
+
 	var pid = os.Getpid()
 	var pgid, err1 = unix.Getpgid(0)
 	if err1 != nil {
@@ -145,17 +147,21 @@ func handle_unix_signals(t *keyval_table, ch_quit chan bool, ch_sig chan os.Sign
 			switch signal {
 			case unix.SIGINT:
 				fmt.Println("SIGINT")
-				// (Graceful killing here).
-				fmt.Printf("killing by pgid=%d\n", pgid)
-				unix.Kill(-pgid, unix.SIGTERM)
-				close(ch_quit)
+				break
 			case unix.SIGTERM:
 				fmt.Println("SIGTERM")
-				os.Exit(0)
+				break
 			case unix.SIGHUP:
 				fmt.Println("SIGHUP")
-				os.Exit(0)
+				break
 			}
 		}
+		// (Graceful killing here).
+		close(ch_quit)
+		time.Sleep(100 * time.Millisecond)
+		fmt.Printf("killing by pgid=%d\n", pgid)
+		unix.Kill(-pgid, unix.SIGTERM)
+		time.Sleep(100 * time.Millisecond)
+		os.Exit(0)
 	}()
 }

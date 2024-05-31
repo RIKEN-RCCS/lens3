@@ -77,6 +77,8 @@ type registrar struct {
 
 	trusted_proxies []net.IP
 
+	ch_quit chan vacuous
+
 	*reg_conf
 	//registrar_conf
 }
@@ -218,8 +220,9 @@ var map_secret_policy_to_ui = map[secret_policy]string{
 // REG_ERROR_MESSAGE is an extra error message returned to UI on errors.
 type reg_error_message [][2]string
 
-func configure_registrar(z *registrar, t *keyval_table, c *reg_conf) {
+func configure_registrar(z *registrar, t *keyval_table, q chan vacuous, c *reg_conf) {
 	z.table = t
+	z.ch_quit = q
 	z.reg_conf = c
 	z.verbose = true
 

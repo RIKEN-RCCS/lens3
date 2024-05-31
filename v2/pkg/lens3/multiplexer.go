@@ -53,33 +53,13 @@ type multiplexer struct {
 	mux_ep  string
 	mux_pid int
 
-	// BE factory is to make a backend.
-	//be backend_factory
-
-	// POOL maps a POOL-ID to a process record.
-	//pool map[string]backend
-
-	// PROC maps a PID to a process record.  PID is int in "os".
-	//proc map[int]backend
-
-	// CH_SIG is a channel to receive SIGCHLD.
-	//ch_sig chan os.Signal
-
-	// CLIENT accesses backend servers.
-	// client http.Client
-
-	//proxy *backend_proxy
-
 	// MUX_ADDRS is a sorted list of ip adrresses.
 	mux_addrs []string
-	// mux_addrs = m.list_mux_ip_addresses()
-
-	// UNKNOW FIELDS OF Multiplexer_conf.
-	// front_host_ip?
-	// periodic_work_interval?
-	// mux_expiry?
 
 	trusted_proxies []net.IP
+
+	// CH_QUIT is to receive quitting notification.
+	ch_quit chan vacuous
 
 	conf *mux_conf
 	//multiplexer_conf
@@ -95,10 +75,11 @@ const (
 	empty_payload_hash_sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 )
 
-func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, c *mux_conf) {
+func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, q chan vacuous, c *mux_conf) {
 	m.table = t
 	m.manager = w
 	m.conf = c
+	m.ch_quit = q
 	m.verbose = true
 	//m.multiplexer_conf = conf.Multiplexer
 

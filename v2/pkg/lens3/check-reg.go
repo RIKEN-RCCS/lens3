@@ -30,7 +30,7 @@ func run_registrar(n int) {
 	_ = muxconf
 
 	var z = &the_registrar
-	configure_registrar(z, t, regconf)
+	configure_registrar(z, t, nil, regconf)
 
 	fmt.Println("now+365=", time.Now().AddDate(0, 0, 30).Unix())
 

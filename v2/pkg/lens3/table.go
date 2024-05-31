@@ -24,12 +24,12 @@ import (
 )
 
 type keyval_table struct {
-	setting          *redis.Client
-	storage          *redis.Client
-	process          *redis.Client
-	ctx              context.Context
-	key_prefix_to_db map[string]*redis.Client
-	db_name_to_db    map[string]*redis.Client
+	setting       *redis.Client
+	storage       *redis.Client
+	process       *redis.Client
+	ctx           context.Context
+	prefix_to_db  map[string]*redis.Client
+	db_name_to_db map[string]*redis.Client
 }
 
 const limit_of_id_generation_loop = 30
@@ -47,13 +47,13 @@ const (
 	db_secret_prefix    = "sx:"
 	db_bucket_prefix    = "bk:"
 
-	db_mux_ep_prefix           = "mu:"
-	db_backend_mutex_prefix    = "bx:"
-	db_backend_info_prefix     = "be:"
-	db_csrf_token_prefix       = "ut:"
-	db_pool_state_prefix       = "ps:"
-	db_access_timestamp_prefix = "ts:"
-	db_user_timestamp_prefix   = "us:"
+	db_mux_ep_prefix            = "mu:"
+	db_backend_exclusion_prefix = "bx:"
+	db_backend_data_prefix      = "be:"
+	db_csrf_token_prefix        = "ut:"
+	db_pool_state_prefix        = "ps:"
+	db_access_timestamp_prefix  = "ts:"
+	db_user_timestamp_prefix    = "us:"
 	//db_backend_ep_prefix     = "ep:"
 )
 
@@ -64,7 +64,7 @@ const (
 	process_db = 3
 )
 
-var key_prefix_to_db_number = map[string]int{
+var prefix_to_db_number_assignment = map[string]int{
 	db_conf_prefix:       setting_db,
 	db_user_data_prefix:  setting_db,
 	db_user_claim_prefix: setting_db,
@@ -75,13 +75,13 @@ var key_prefix_to_db_number = map[string]int{
 	db_secret_prefix:    storage_db,
 	db_bucket_prefix:    storage_db,
 
-	db_mux_ep_prefix:           process_db,
-	db_backend_mutex_prefix:    process_db,
-	db_backend_info_prefix:     process_db,
-	db_csrf_token_prefix:       process_db,
-	db_pool_state_prefix:       process_db,
-	db_access_timestamp_prefix: process_db,
-	db_user_timestamp_prefix:   process_db,
+	db_mux_ep_prefix:            process_db,
+	db_backend_exclusion_prefix: process_db,
+	db_backend_data_prefix:      process_db,
+	db_csrf_token_prefix:        process_db,
+	db_pool_state_prefix:        process_db,
+	db_access_timestamp_prefix:  process_db,
+	db_user_timestamp_prefix:    process_db,
 	//db_backend_ep_prefix:       process_db,
 }
 
@@ -135,10 +135,11 @@ type pool_record struct {
 	Timestamp         int64  `json:"timestamp"`
 }
 
-// "bx:" + pool-name Entry (DB_BACKEND_MUTEX_PREFIX).
-type backend_mutex_record struct {
-	Mux_ep     string `json:"mux_ep"`
-	Start_time int64  `json:"start_time"`
+// "bx:" + pool-name Entry (DB_BACKEND_EXCLUSION_PREFIX).  This entry
+// is a temporarily created mutex to run a single backend.
+type backend_exclusion_record struct {
+	Mux_ep    string `json:"mux_ep"`
+	Timestamp int64  `json:"timestamp"`
 }
 
 // "ps:" + pool-name Entry (DB_POOL_STATE_PREFIX).  Constraint:
@@ -150,9 +151,10 @@ type pool_state_record struct {
 	Timestamp int64       `json:"timestamp"`
 }
 
-// "be:" + pool-name Entry (DB_BACKEND_INFO_PREFIX).  A pair of
+// "be:" + pool-name Entry (DB_BACKEND_DATA_PREFIX).  A pair of
 // root_access and root_secret is a credential for accessing a
-// backend.  Constraint: (key≡backend_record.Pool).
+// backend.  Timestamp is a start time.  Constraint:
+// (key≡backend_record.Pool).
 type backend_record struct {
 	Pool        string `json:"pool"`
 	Backend_ep  string `json:"backend_ep"`
@@ -328,21 +330,21 @@ func make_table(conf db_conf) *keyval_table {
 		DB:       process_db,
 	})
 	var t = &keyval_table{
-		ctx:              context.Background(),
-		setting:          setting,
-		storage:          storage,
-		process:          process,
-		key_prefix_to_db: make(map[string]*redis.Client),
-		db_name_to_db:    make(map[string]*redis.Client),
+		ctx:           context.Background(),
+		setting:       setting,
+		storage:       storage,
+		process:       process,
+		prefix_to_db:  make(map[string]*redis.Client),
+		db_name_to_db: make(map[string]*redis.Client),
 	}
-	for k, i := range key_prefix_to_db_number {
+	for k, i := range prefix_to_db_number_assignment {
 		switch i {
 		case setting_db:
-			t.key_prefix_to_db[k] = setting
+			t.prefix_to_db[k] = setting
 		case storage_db:
-			t.key_prefix_to_db[k] = storage
+			t.prefix_to_db[k] = storage
 		case process_db:
-			t.key_prefix_to_db[k] = process
+			t.prefix_to_db[k] = process
 		default:
 			panic("internal")
 		}
@@ -576,7 +578,7 @@ func delete_user_claim(t *keyval_table, claim string) {
 // deleting a claim entry).
 func clear_user_claim(t *keyval_table, uid string) {
 	var prefix = db_user_claim_prefix
-	var db = t.key_prefix_to_db[prefix]
+	var db = t.prefix_to_db[prefix]
 	var keyi = scan_table(t, prefix, "*")
 	for keyi.Next(t.ctx) {
 		var k = keyi.Key()
@@ -705,8 +707,8 @@ func delete_pool_state(t *keyval_table, pool string) {
 // SET_EX_MANAGER atomically sets an exclusion for a backend.  It
 // returns OK or NG.  It tries to return an old record, but it can be
 // null due to a race (but practically never).
-func set_ex_backend_exclusion(t *keyval_table, pool string, data *backend_mutex_record) (bool, *backend_mutex_record) {
-	var ok = db_setnx_with_prefix(t, db_backend_mutex_prefix, pool, data)
+func set_ex_backend_exclusion(t *keyval_table, pool string, data *backend_exclusion_record) (bool, *backend_exclusion_record) {
+	var ok = db_setnx_with_prefix(t, db_backend_exclusion_prefix, pool, data)
 	if ok {
 		return true, nil
 	}
@@ -715,39 +717,39 @@ func set_ex_backend_exclusion(t *keyval_table, pool string, data *backend_mutex_
 	return false, holder
 }
 
-func set_manager_expiry__(t *keyval_table, pool string, timeout int64) {
-	db_expire_with_prefix(t, db_backend_mutex_prefix, pool, timeout)
+func set_backend_exclusion_expiry(t *keyval_table, pool string, timeout int64) {
+	db_expire_with_prefix(t, db_backend_exclusion_prefix, pool, timeout)
 }
 
-func get_backend_exclusion(t *keyval_table, pool string) *backend_mutex_record {
-	var data backend_mutex_record
-	var ok = db_get_with_prefix(t, db_backend_mutex_prefix, pool, &data)
+func get_backend_exclusion(t *keyval_table, pool string) *backend_exclusion_record {
+	var data backend_exclusion_record
+	var ok = db_get_with_prefix(t, db_backend_exclusion_prefix, pool, &data)
 	return ITE(ok, &data, nil)
 }
 
 func delete_backend_exclusion(t *keyval_table, pool string) {
-	db_del_with_prefix(t, db_backend_mutex_prefix, pool)
+	db_del_with_prefix(t, db_backend_exclusion_prefix, pool)
 }
 
 func set_backend(t *keyval_table, pool string, data *backend_record) {
 	assert_fatal(data.Pool == pool)
-	db_set_with_prefix(t, db_backend_info_prefix, pool, data)
+	db_set_with_prefix(t, db_backend_data_prefix, pool, data)
 }
 
 func get_backend(t *keyval_table, pool string) *backend_record {
 	var data backend_record
-	var ok = db_get_with_prefix(t, db_backend_info_prefix, pool, &data)
+	var ok = db_get_with_prefix(t, db_backend_data_prefix, pool, &data)
 	return ITE(ok, &data, nil)
 }
 
 func delete_backend(t *keyval_table, pool string) {
-	db_del_with_prefix(t, db_backend_info_prefix, pool)
+	db_del_with_prefix(t, db_backend_data_prefix, pool)
 }
 
 // LIST_BACKENDS returns a list of all currently running backends.
 // Use "*" for pool.
 func list_backends(t *keyval_table, pool string) []*backend_record {
-	var prefix = db_backend_info_prefix
+	var prefix = db_backend_data_prefix
 	var ki = scan_table(t, prefix, pool)
 	var procs []*backend_record
 	for ki.Next(t.ctx) {
@@ -924,7 +926,7 @@ func set_with_unique_secret_key(t *keyval_table, data *secret_record) string {
 }
 
 func set_with_unique_id_loop(t *keyval_table, prefix string, data any, generator func() string) string {
-	var db = t.key_prefix_to_db[prefix]
+	var db = t.prefix_to_db[prefix]
 	var counter = 0
 	for {
 		var id = generator()
@@ -982,7 +984,7 @@ func delete_secret_key_unconditionally(t *keyval_table, key string) bool {
 
 func delete_secret_key__(t *keyval_table, key string) {
 	var prefix = db_secret_prefix
-	var db = t.key_prefix_to_db[prefix]
+	var db = t.prefix_to_db[prefix]
 	var k = (prefix + key)
 	var w = db.Del(t.ctx, k)
 	raise_on_del_failure(w)
@@ -1023,7 +1025,7 @@ func get_csrf_token(t *keyval_table, uid string) *csrf_token_record {
 }
 
 func db_set_with_prefix(t *keyval_table, prefix string, key string, val any) {
-	var db = t.key_prefix_to_db[prefix]
+	var db = t.prefix_to_db[prefix]
 	var k = (prefix + key)
 	var v, err = json.Marshal(val)
 	raise_on_marshaling_error(err)
@@ -1032,7 +1034,7 @@ func db_set_with_prefix(t *keyval_table, prefix string, key string, val any) {
 }
 
 func db_setnx_with_prefix(t *keyval_table, prefix string, key string, val any) bool {
-	var db = t.key_prefix_to_db[prefix]
+	var db = t.prefix_to_db[prefix]
 	var k = (prefix + key)
 	var v, err = json.Marshal(val)
 	raise_on_marshaling_error(err)
@@ -1043,7 +1045,7 @@ func db_setnx_with_prefix(t *keyval_table, prefix string, key string, val any) b
 }
 
 func db_get_with_prefix(t *keyval_table, prefix string, key string, val any) bool {
-	var db = t.key_prefix_to_db[prefix]
+	var db = t.prefix_to_db[prefix]
 	var k = (prefix + key)
 	var w = db.Get(t.ctx, k)
 	raise_on_get_error(w)
@@ -1052,7 +1054,7 @@ func db_get_with_prefix(t *keyval_table, prefix string, key string, val any) boo
 }
 
 func db_expire_with_prefix(t *keyval_table, prefix string, key string, timeout int64) {
-	var db = t.key_prefix_to_db[prefix]
+	var db = t.prefix_to_db[prefix]
 	var k = (prefix + key)
 	var w = db.Expire(t.ctx, k, (time.Duration(timeout) * time.Second))
 	raise_on_expire_failure(w)
@@ -1060,7 +1062,7 @@ func db_expire_with_prefix(t *keyval_table, prefix string, key string, timeout i
 
 // DB_DEL_WITH_PREFIX returns OK/NG, but usually, failure is ignored.
 func db_del_with_prefix(t *keyval_table, prefix string, key string) bool {
-	var db = t.key_prefix_to_db[prefix]
+	var db = t.prefix_to_db[prefix]
 	var k = (prefix + key)
 	var w = db.Del(t.ctx, k)
 	return check_on_del_failure(w)
@@ -1068,7 +1070,7 @@ func db_del_with_prefix(t *keyval_table, prefix string, key string) bool {
 
 // DB_DEL_WITH_PREFIX raises, when delete failed.
 func db_del_with_prefix_raise(t *keyval_table, prefix string, key string) {
-	var db = t.key_prefix_to_db[prefix]
+	var db = t.prefix_to_db[prefix]
 	var k = (prefix + key)
 	var w = db.Del(t.ctx, k)
 	raise_on_del_failure(w)
@@ -1113,7 +1115,7 @@ func load_db_data(w *redis.StringCmd, data any) bool {
 // when getting a value, because a deletion can intervene scanning
 // keys and getting values.
 func scan_table(t *keyval_table, prefix string, target string) *db_key_iterator {
-	var db = t.key_prefix_to_db[prefix]
+	var db = t.prefix_to_db[prefix]
 	var pattern = prefix + target
 	var prefix_length = len(prefix)
 	var ki = db_key_iterator{
@@ -1149,7 +1151,7 @@ func (keyi *db_key_iterator) Key() string {
 // CLEAR_EVERYTHING clears the keyval-db.  It leaves entries except
 // entres of confs.
 func clear_everything(t *keyval_table) {
-	for prefix, db := range t.key_prefix_to_db {
+	for prefix, db := range t.prefix_to_db {
 		if prefix == db_conf_prefix {
 			continue
 		}
@@ -1185,7 +1187,7 @@ func set_db_raw(t *keyval_table, kv [2]string) {
 		panic("keyval empty")
 	}
 	var prefix = kv[0][:3]
-	var db = t.key_prefix_to_db[prefix]
+	var db = t.prefix_to_db[prefix]
 	if db == nil {
 		panic(fmt.Sprintf("keyval-db bad prefix (%s)", prefix))
 	}
@@ -1198,7 +1200,7 @@ func adm_del_db_raw(t *keyval_table, key string) {
 		panic("keyl empty")
 	}
 	//var prefix = key[:3]
-	//var db = t.key_prefix_to_db[prefix]
+	//var db = t.prefix_to_db[prefix]
 	//if db != nil {
 	//	var w *redis.IntCmd = db.Del(t.ctx, key)
 	//	raise_when_db_fail(w.Err())

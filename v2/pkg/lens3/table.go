@@ -502,21 +502,10 @@ func add_user(t *keyval_table, u *user_record) {
 	var claim = u.Claim
 	if claim != "" {
 		var claiminguser = get_user_claim(t, claim)
-		if claiminguser.Uid != uid {
+		if claiminguser != nil && claiminguser.Uid != uid {
 			var err2 = fmt.Errorf("A claim for {uid} conflicts with {xid}")
 			panic(err2)
 		}
-	}
-	set_user_force(t, u)
-}
-
-// (Use add_user() instead).
-func set_user_force(t *keyval_table, u *user_record) {
-	var uid = u.Uid
-	assert_fatal(uid != "")
-	db_set_with_prefix(t, db_user_data_prefix, uid, &u)
-	var claim = u.Claim
-	if claim != "" {
 		var now int64 = time.Now().Unix()
 		var data = &user_claim_record{
 			Uid:       u.Uid,
@@ -524,6 +513,14 @@ func set_user_force(t *keyval_table, u *user_record) {
 		}
 		set_user_claim(t, claim, data)
 	}
+	set_user_raw(t, u)
+}
+
+// (Use add_user() instead).
+func set_user_raw(t *keyval_table, u *user_record) {
+	var uid = u.Uid
+	assert_fatal(uid != "")
+	db_set_with_prefix(t, db_user_data_prefix, uid, &u)
 }
 
 // GET_USER gets a user by a uid.  It may return nil.

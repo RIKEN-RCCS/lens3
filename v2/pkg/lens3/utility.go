@@ -376,6 +376,18 @@ func check_pool_naming(name string) bool {
 	return pool_naming_good_re.MatchString(name)
 }
 
+var user_naming_good_re = regexp.MustCompile(`^[a-z_][-a-z0-9_.]{0,31}$`)
+
+func check_user_naming(name string) bool {
+	return user_naming_good_re.MatchString(name)
+}
+
+var claim_string_good_re = regexp.MustCompile(`^[-_a-zA-Z0-9.:@%]{0,256}$`)
+
+func check_claim_string(claim string) bool {
+	return claim_string_good_re.MatchString(claim)
+}
+
 // CHECK_FIELDS_FILLED checks if all fields of a structure is
 // non-zero, recursively.  It assumes no pointers.
 func check_fields_filled(data any) bool {

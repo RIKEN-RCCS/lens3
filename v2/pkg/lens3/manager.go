@@ -80,13 +80,12 @@ type manager struct {
 	environ []string
 
 	// CH_QUIT is to receive quitting notification.
-	ch_quit_service chan vacuous
+	ch_quit_service <-chan vacuous
 
 	// MUTEX protects accesses to the processes list.
 	mutex sync.Mutex
 
 	conf *mux_conf
-	//backend_conf
 	manager_conf
 }
 

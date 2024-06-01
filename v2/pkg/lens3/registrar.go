@@ -70,17 +70,14 @@ type registrar struct {
 
 	table *keyval_table
 
-	server *http.Server
-	router *http.ServeMux
-
-	determine_expiration_time int64
-
 	trusted_proxies []net.IP
 
-	ch_quit_service chan vacuous
+	// CH_QUIT is to receive quitting notification.
+	ch_quit_service <-chan vacuous
+
+	server *http.Server
 
 	*reg_conf
-	//registrar_conf
 }
 
 const reg_api_version = "v1.2"
@@ -240,15 +237,15 @@ func configure_registrar(z *registrar, t *keyval_table, q chan vacuous, c *reg_c
 func start_registrar(z *registrar) {
 	//fmt.Println("start_registrar() z=", z)
 	//var conf = &z.Registrar
-	z.router = http.NewServeMux()
+	var router = http.NewServeMux()
 	z.server = &http.Server{
 		Addr:    z.ep_port,
-		Handler: z.router,
+		Handler: router,
 	}
 
 	// Root "/" requests are redirected.
 
-	z.router.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
 		fmt.Println("Reg.GET /")
 		logger.debug("Reg.GET /")
@@ -266,38 +263,38 @@ func start_registrar(z *registrar) {
 		http.Redirect(w, r, "./ui/index.html", http.StatusSeeOther)
 	})
 
-	z.router.HandleFunc("GET /ui/index.html", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("GET /ui/index.html", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
 		var _ = return_ui_script(z, w, r, "ui/index.html")
 	})
 
-	z.router.HandleFunc("GET /ui2/index.html", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("GET /ui2/index.html", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
 		var _ = return_ui_script(z, w, r, "ui2/index.html")
 	})
 
-	z.router.HandleFunc("GET /ui/", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("GET /ui/", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
 		var _ = return_file(z, w, r, r.URL.Path, &efs1)
 	})
 
-	z.router.HandleFunc("GET /ui2/", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("GET /ui2/", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
 		var _ = return_file(z, w, r, r.URL.Path, &efs2)
 	})
 
-	z.router.HandleFunc("GET /user-info", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("GET /user-info", func(w http.ResponseWriter, r *http.Request) {
 		logger.debug("Reg.GET /user-info")
 		defer handle_registrar_exc(z, w, r)
 		var _ = return_user_info(z, w, r)
 	})
 
-	z.router.HandleFunc("GET /pool", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("GET /pool", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
 		var _ = list_pool_and_return_response(z, w, r, "")
 	})
 
-	z.router.HandleFunc("GET /pool/{pool}", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("GET /pool/{pool}", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
 		var pool = r.PathValue("pool")
 		var _ = list_pool_and_return_response(z, w, r, pool)
@@ -305,12 +302,12 @@ func start_registrar(z *registrar) {
 
 	// A POST request makes a pool.
 
-	z.router.HandleFunc("POST /pool", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("POST /pool", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
 		var _ = make_pool_and_return_response(z, w, r)
 	})
 
-	z.router.HandleFunc("DELETE /pool/{pool}", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("DELETE /pool/{pool}", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
 		var pool = r.PathValue("pool")
 		var _ = delete_pool_and_return_response(z, w, r, pool)
@@ -318,13 +315,13 @@ func start_registrar(z *registrar) {
 
 	// A PUT request makes a bucket.
 
-	z.router.HandleFunc("PUT /pool/{pool}/bucket", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("PUT /pool/{pool}/bucket", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
 		var pool = r.PathValue("pool")
 		var _ = make_bucket_and_return_response(z, w, r, pool)
 	})
 
-	z.router.HandleFunc("DELETE /pool/{pool}/bucket/{bucket}", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("DELETE /pool/{pool}/bucket/{bucket}", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
 		var pool = r.PathValue("pool")
 		var bucket = r.PathValue("bucket")
@@ -333,13 +330,13 @@ func start_registrar(z *registrar) {
 
 	// A POST request makes a secret.
 
-	z.router.HandleFunc("POST /pool/{pool}/secret", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("POST /pool/{pool}/secret", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
 		var pool = r.PathValue("pool")
 		var _ = make_secret_and_return_response(z, w, r, pool)
 	})
 
-	z.router.HandleFunc("DELETE /pool/{pool}/secret/{secret}", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("DELETE /pool/{pool}/secret/{secret}", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
 		var pool = r.PathValue("pool")
 		var secret = r.PathValue("secret")
@@ -347,10 +344,9 @@ func start_registrar(z *registrar) {
 	})
 
 	logger.infof("Reg(%s) Start Reg", z.ep_port)
-	for {
-		var err1 = z.server.ListenAndServe()
-		logger.infof("Reg(%s) ListenAndServe() done err=%v", z.ep_port, err1)
-	}
+	var err1 = z.server.ListenAndServe()
+	logger.infof("Reg(%s) http.Server.ListenAndServe() done err=%v",
+		z.ep_port, err1)
 }
 
 func handle_registrar_exc(z *registrar, w http.ResponseWriter, r *http.Request) {
@@ -1038,7 +1034,7 @@ func register_new_user(z *registrar, uid string, firstsession bool) *user_record
 		Check_terms_and_conditions: false,
 		Timestamp:                  now,
 	}
-	set_user_force(z.table, newuser)
+	set_user_raw(z.table, newuser)
 	return newuser
 }
 
@@ -1476,7 +1472,7 @@ func extend_user_expiration_time(z *registrar, u *user_record) {
 	if u.Expiration_time < expiration {
 		u.Expiration_time = expiration
 	}
-	set_user_force(z.table, u)
+	set_user_raw(z.table, u)
 }
 
 func list_groups_of_user(z *registrar, uid string) []string {

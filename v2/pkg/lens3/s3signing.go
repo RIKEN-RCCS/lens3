@@ -7,22 +7,21 @@ package lens3
 
 // An AWS S3 V4 authorization header ("Authorization=") starts with a
 // keyword "AWS4-HMAC-SHA256", and consists of three subentries
-// separated by "," and zero or more blanks.  A "Credential=" subentry
-// is a five fields separated by "/" as
-// KEY/DATE/REGION/SERVICE/TYPE_OF_USAGE, with DATE="yyyymmdd",
-// SERVICE="s3", and TYPE_OF_USAGE="aws4_request".  A "SignedHeaders="
-// subentry is a list of header keys separated by ";" as
+// separated by "," with zero or more blanks.  A "Credential="
+// subentry is a five fields separated by "/" as
+// KEY/DATE/REGION/SERVICE/USAGE, with DATE="yyyymmdd", SERVICE="s3",
+// and USAGE="aws4_request".  A "SignedHeaders=" subentry is a list of
+// header keys separated by ";" as
 // "host;x-amz-content-sha256;x-amz-date".  A "Signature=" subentry is
 // a string.
 //
 // Authorization header looks like:
-//
-//	Authorization="AWS4-HMAC-SHA256
-//	Credential={key}/20240511/us-east-1/s3/aws4_request,
-//	SignedHeaders=host;x-amz-content-sha256;x-amz-date,
-//	Signature={signature}"
+//	 Authorization=
+//   "AWS4-HMAC-SHA256 Credential={key}/20240511/us-east-1/s3/aws4_request,
+//	 SignedHeaders=host;x-amz-content-sha256;x-amz-date,
+//	 Signature={signature}"
 
-// Some reference documents:
+// Some reference documents are:
 //   https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html
 //   https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-auth-using-authorization-header.html
 //   https://docs.aws.amazon.com/AmazonS3/latest/API/RESTCommonRequestHeaders.html
@@ -72,6 +71,7 @@ const s3v4_authorization_method = "AWS4-HMAC-SHA256"
 // copying) using AWS SDK, and compares the result.
 func check_credential_in_request(q *http.Request, keypair [2]string) (bool, string) {
 	var header1 = q.Header.Get("Authorization")
+	fmt.Println("*** authorization=", header1)
 	if header1 == "" {
 		//fmt.Println("*** empty authorization=", header1)
 		return false, "no-auth"

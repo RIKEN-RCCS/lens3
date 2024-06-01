@@ -22,7 +22,7 @@ import (
 	"runtime/debug"
 	//"io"
 	"encoding/json"
-	"log"
+	//"log"
 	//"os"
 	"net"
 	//"os/user"
@@ -60,10 +60,11 @@ type multiplexer struct {
 	trusted_proxies []net.IP
 
 	// CH_QUIT is to receive quitting notification.
-	ch_quit_service chan vacuous
+	ch_quit_service <-chan vacuous
+
+	server *http.Server
 
 	conf *mux_conf
-	//multiplexer_conf
 }
 
 // THE_MULTIPLEXER is the single multiplexer instance.
@@ -124,16 +125,16 @@ func start_multiplexer(m *multiplexer) {
 		Rewrite: proxy_request_rewriter(m),
 	}
 	var proxy2 = make_checker_proxy(m, &proxy1)
+	m.server = &http.Server{
+		Addr:    m.ep_port,
+		Handler: proxy2,
+	}
 
 	logger.infof("Mux(%s) Start Mux", m.mux_ep)
-	for {
-		var err2 = http.ListenAndServe(m.ep_port, proxy2)
-		//var server = &http.Server{Addr: m.ep_port,
-		//	Handler: proxy2,
-		//}
-		logger.infof("Mux(%s) ListenAndServe() done err=(%v)", m.mux_ep, err2)
-		log.Fatal(err2)
-	}
+	// var err2 = http.ListenAndServe(m.ep_port, proxy2)
+	var err2 = m.server.ListenAndServe()
+	logger.infof("Mux(%s) http.Server.ListenAndServe() done err=(%v)",
+		m.mux_ep, err2)
 }
 
 // PROXY_REQUEST_REWRITER is a function in ReverseProxy.Rewriter.  It

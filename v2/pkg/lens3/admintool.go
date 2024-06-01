@@ -7,9 +7,11 @@ package lens3
 
 import (
 	"bufio"
+	"encoding/csv"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"strconv"
@@ -85,6 +87,138 @@ func adm_toplevel() {
 	subcmd.run(adm, args)
 }
 
+func show_user(t *keyval_table, filename string) {
+	var userlist = list_users(t)
+	var users []*user_record
+	for _, uid := range userlist {
+		var i = get_user(t, uid)
+		if i != nil {
+			users = append(users, i)
+		}
+	}
+
+	// var w1, err1 = os.Create(filename)
+	// if err1 != nil {
+	// 	log.Panicf("Open a file (%s) failed: err=(%v).\n",
+	// 		filename, err1)
+	// }
+	// defer w1.Close()
+
+	var e = csv.NewWriter(os.Stdout)
+	defer e.Flush()
+
+	for _, u := range users {
+		if u.Ephemeral {
+			continue
+		}
+		var fields = []string{"ADD", u.Uid, u.Claim}
+		fields = append(fields, u.Groups...)
+		var err2 = e.Write(fields)
+		if err2 != nil {
+			log.Panicf("Writing csv entry failed: err=(%v).\n", err2)
+		}
+	}
+
+	var disables []string
+	for _, u := range users {
+		if u.Ephemeral || u.Enabled {
+			continue
+		}
+		disables = append(disables, u.Uid)
+	}
+	if len(disables) > 0 {
+		var fields = append([]string{"DISABLE"}, disables...)
+		var err3 = e.Write(fields)
+		if err3 != nil {
+			log.Panicf("Writing csv entry failed: err=(%v).\n", err3)
+		}
+	}
+}
+
+func load_user(t *keyval_table, filename string) {
+	var r1, err1 = os.Open(filename)
+	if err1 != nil {
+		log.Panicf("Open a file (%s) failed: err=(%v).\n",
+			filename, err1)
+	}
+	defer r1.Close()
+	var e = csv.NewReader(r1)
+	// Set variable of number of columns.
+	e.FieldsPerRecord = -1
+	var users, err2 = e.ReadAll()
+	if err2 != nil {
+		log.Panicf("Reading csv entry failed: err=(%v).\n", err2)
+	}
+	for _, record := range users {
+		switch record[0] {
+		case "ADD":
+			// ADD,uid,claim,group,...
+			var groupok = func() bool {
+				for _, g := range record[3:] {
+					if !check_user_naming(g) {
+						return false
+					}
+				}
+				return true
+			}()
+			if !(len(record) >= 4) ||
+				!check_user_naming(record[1]) ||
+				!check_claim_string(record[2]) ||
+				!groupok {
+				log.Panicf("Bad user ADD entry: (%v).\n", record)
+			}
+			//.Unix()
+			var years = 10
+			var expiration = time.Now().AddDate(years, 0, 0).Unix()
+			var now int64 = time.Now().Unix()
+			var u = &user_record{
+				Uid:                        record[1],
+				Claim:                      record[2],
+				Groups:                     record[3:],
+				Enabled:                    true,
+				Ephemeral:                  false,
+				Expiration_time:            expiration,
+				Check_terms_and_conditions: false,
+				Timestamp:                  now,
+			}
+			add_user(t, u)
+		case "DELETE", "ENABLE", "DISABLE":
+			// DELETE,uid,...
+			// ENABLE,uid,...
+			// DISABLE,uid,...
+			var op = record[0]
+			var ok = func() bool {
+				for _, n := range record[1:] {
+					if !check_user_naming(n) {
+						return false
+					}
+				}
+				return true
+			}()
+			if !ok {
+				log.Panicf("Bad user %s entry: (%v).\n", op, record)
+			}
+			for _, n := range record[1:] {
+				var u = get_user(t, n)
+				if u == nil {
+					log.Printf("Unknown user (%s) in %s entry\n", n, op)
+					continue
+				}
+				switch op {
+				case "DELETE":
+					delete_user(t, n)
+				case "ENABLE", "DISABLE":
+					u.Enabled = (op == "ENABLE")
+					add_user(t, u)
+				}
+			}
+		default:
+			var op = record[0]
+			log.Panicf("Bad user %s entry: (%v).\n", op, record)
+		}
+	}
+}
+
 // DUMP_DB returns a record of confs, users, and pools for restoring.
 func dump_db__(t *keyval_table) *dump_data {
 	// Collect confs:
@@ -127,12 +261,18 @@ func print_in_json(x any) {
 }
 
 func dump_in_json_to_file(filename string, users any) {
-	var w1, err1 = os.Create(filename)
-	if err1 != nil {
-		log.Panicf("Open a file (%s) failed: err=(%v).\n",
-			filename, err1)
+	var w1 io.Writer
+	if filename != "" {
+		var w2, err1 = os.Create(filename)
+		if err1 != nil {
+			log.Panicf("Open a file (%s) failed: err=(%v).\n",
+				filename, err1)
+		}
+		defer w2.Close()
+		w1 = w2
+	} else {
+		w1 = os.Stdout
 	}
-	defer w1.Close()
 	var e = json.NewEncoder(w1)
 	e.SetIndent("", "    ")
 	var err2 = e.Encode(users)
@@ -253,7 +393,7 @@ func cmd_help(adm *adm, args []string) {
 var cmd_list = []*cmd{
 	&cmd{
 		synopsis: "show-conf",
-		doc:      "Prints all conf data in keyval-db.",
+		doc:      `Prints all conf data in keyval-db.`,
 		run: func(adm *adm, args []string) {
 			var conflist = list_confs(adm.table)
 			for _, e := range conflist {
@@ -281,8 +421,8 @@ var cmd_list = []*cmd{
 	},
 
 	&cmd{
-		synopsis: "load-conf file-name",
-		doc:      "Loads a conf file (json) in keyval-db.",
+		synopsis: "load-conf file-name.json",
+		doc:      `Loads a conf file (json) in keyval-db.`,
 		run: func(adm *adm, args []string) {
 			var conf = read_conf(args[1])
 			set_conf(adm.table, conf)
@@ -290,8 +430,38 @@ var cmd_list = []*cmd{
 	},
 
 	&cmd{
+		synopsis: "show-user",
+
+		doc: `Prints users in csv format.  It lists ADD rows first,
+        and then a DISABLE row.`,
+
+		run: func(adm *adm, args []string) {
+			show_user(adm.table, "")
+		},
+	},
+
+	&cmd{
+		synopsis: "load-user file-name.csv",
+
+		doc: `Loads users in csv format.  It adds or deletes users as
+        in the list.  It reads rows starting with one of: "ADD",
+        "DELETE", "ENABLE", or "DISABLE".  Add rows are:
+        ADD,uid,claim,group,... (the rest is a group list).  The claim
+        is an X-Remote-User key or empty.  A group list needs at least
+        one entry.  Adding a row overwrites the old one, but keeps an
+        enabled state.  DELETE, ENABLE and DISABLE take rows of a uid
+        list: DELETE,uid,...  It processes all add rows first, then
+        the delete rows, enable rows, and disable rows in this order.
+        Do not put spaces around a comma or trailing commas in csv.`,
+
+		run: func(adm *adm, args []string) {
+			load_user(adm.table, args[1])
+		},
+	},
+
+	&cmd{
 		synopsis: "show-pool [pool-name ...]",
-		doc:      "Prints pools.  It shows all pools without arguments.",
+		doc:      `Prints pools.  It shows all pools without arguments.`,
 		run: func(adm *adm, args []string) {
 			var list []string
 			if len(args) == 1 {
@@ -316,7 +486,7 @@ var cmd_list = []*cmd{
 
 	&cmd{
 		synopsis: "show-bucket",
-		doc:      "Prints all buckets.",
+		doc:      `Prints all buckets.`,
 		run: func(adm *adm, args []string) {
 			var bkts = list_buckets(adm.table, "")
 			//for _, x := range bkts {
@@ -327,7 +497,7 @@ var cmd_list = []*cmd{
 
 	&cmd{
 		synopsis: "show-directory",
-		doc:      "Prints all buckets-directories.",
+		doc:      `Prints all buckets-directories.`,
 		run: func(adm *adm, args []string) {
 			var dirs = list_buckets_directories(adm.table)
 			print_in_json(dirs)
@@ -339,11 +509,10 @@ var cmd_list = []*cmd{
 	},
 
 	&cmd{
-		synopsis: "dump-user file-name",
-		doc:      "Dumps users for restoring.",
+		synopsis: "dump-user [file-name.json]",
+		doc:      `Dumps users for restoring.`,
 		run: func(adm *adm, args []string) {
-			fmt.Println("// dumping...")
-			//var record = dump_db(adm.table)
+			//fmt.Println("// dumping...")
 			var userlist = list_users(adm.table)
 			var users []*user_record
 			for _, uid := range userlist {
@@ -352,15 +521,21 @@ var cmd_list = []*cmd{
 					users = append(users, i)
 				}
 			}
-			dump_in_json_to_file(args[1], users)
+			var filename string
+			if len(args) == 1 {
+				filename = ""
+			} else {
+				filename = args[1]
+			}
+			dump_in_json_to_file(filename, users)
 		},
 	},
 
 	&cmd{
-		synopsis: "dump-pool file-name",
-		doc:      "Dumps pools for restoring.",
+		synopsis: "dump-pool [file-name.json]",
+		doc:      `Dumps pools for restoring.`,
 		run: func(adm *adm, args []string) {
-			fmt.Println("// dumping...")
+			//fmt.Println("// dumping...")
 			var poollist = list_pools(adm.table, "*")
 			var poolprops []*pool_prop
 			for _, pool := range poollist {
@@ -369,7 +544,13 @@ var cmd_list = []*cmd{
 					poolprops = append(poolprops, i)
 				}
 			}
-			dump_in_json_to_file(args[1], poolprops)
+			var filename string
+			if len(args) == 1 {
+				filename = ""
+			} else {
+				filename = args[1]
+			}
+			dump_in_json_to_file(filename, poolprops)
 		},
 	},
 
@@ -387,7 +568,7 @@ var cmd_list = []*cmd{
 	},
 
 	&cmd{
-		synopsis: "restore-db file-name",
+		synopsis: "restore-db file-name.txt",
 
 		doc: `Restores key-value entries in keyval-db from a file.  A
 		file should contain a repeatation of key-value pairs.  See the

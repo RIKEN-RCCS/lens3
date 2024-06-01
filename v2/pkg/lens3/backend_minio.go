@@ -167,7 +167,7 @@ func (d *backend_minio) check_startup(outerr int, ss []string) start_result {
 	if expected1 {
 		assert_fatal(m2 != nil)
 		var msg = get_string(m2, "message")
-		fmt.Println("EXPECTED=", msg)
+		fmt.Println("*** EXPECTED=", msg)
 		return start_result{
 			start_state: start_started,
 			message:     msg,
@@ -189,8 +189,8 @@ func (d *backend_minio) establish() error {
 func (d *backend_minio) shutdown() error {
 	//fmt.Println("minio.shutdown()")
 	var proc = d.get_super_part()
-	logger.debugf("Mux(minio) Stopping MinIO: pool=(%s) process=(%v).",
-		proc.Pool, proc)
+	logger.debugf("Mux(minio) Stopping MinIO: pool=(%s) pid=%d",
+		proc.Pool, proc.cmd.Process.Pid)
 	//assert_fatal(d.mc_alias != nil)
 	var v1 = minio_mc_admin_service_stop(d)
 	return v1.err
@@ -224,10 +224,6 @@ func (d *backend_minio) heartbeat() int {
 		logger.infof("Mux(minio) Heartbeat failed (io.ReadAll()):"+
 			" pool=(%s) err=(%v)", proc.Pool, err2)
 		panic(err2)
-	}
-	if proc.verbose {
-		logger.debugf("Mux(minio) Heartbeat: pool=(%s) count=%d code=%d",
-			proc.Pool, proc.heartbeat_misses, rsp.StatusCode)
 	}
 	return rsp.StatusCode
 }
@@ -330,7 +326,7 @@ func execute_minio_mc_cmd(d *backend_minio, name string, command []string) *mini
 	cmd.Stderr = &errb
 	cmd.Env = *d.environ
 	var err1 = cmd.Run()
-	fmt.Println("cmd.Run()=", err1)
+	//fmt.Println("cmd.Run()=", err1)
 	switch err2 := err1.(type) {
 	case nil:
 		// OK.
@@ -341,7 +337,7 @@ func execute_minio_mc_cmd(d *backend_minio, name string, command []string) *mini
 			" cmd=(%v) exit=%d error=(%v) stdout=(%s) stderr=(%s)",
 			argv, status, err2, outb.String(), errb.String())
 	default:
-		fmt.Printf("cmd.Run()=%T %v", err1, err1)
+		//fmt.Printf("cmd.Run()=%T %v", err1, err1)
 		logger.errf("Mux(minio) MC-command failed:"+
 			" cmd=(%v) error=(%v) stdout=(%s) stderr=(%s)",
 			argv, err1, outb.String(), errb.String())
@@ -362,9 +358,9 @@ func execute_minio_mc_cmd(d *backend_minio, name string, command []string) *mini
 	var v1 = simplify_minio_mc_message(outb.Bytes())
 	if v1.err == nil {
 		if d.verbose {
-			logger.debugf("Mux(minio) MC-command OK: cmd=%v", command)
+			logger.debugf("Mux(minio) MC-command OK: cmd=(%v)", command)
 		} else {
-			logger.debugf("Mux(minio) MC-command OK: cmd=%s", name)
+			logger.debugf("Mux(minio) MC-command OK: cmd=(%s)", name)
 		}
 	} else {
 		logger.errf("Mux(minio) MC-command failed:"+

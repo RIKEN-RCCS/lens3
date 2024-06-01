@@ -70,7 +70,7 @@ func run_dummy_mux_client(m *multiplexer) {
 
 	var pool = "09f7b267c97308bc"
 	var err1 = probe_access_mux(m.table, pool)
-	fmt.Println("err=", err1)
+	fmt.Println("check-mux err=", err1)
 
 	time.Sleep(150 * time.Second)
 }

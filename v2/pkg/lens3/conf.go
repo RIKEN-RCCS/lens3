@@ -178,11 +178,11 @@ var backend_list = []backend_name{
 const bad_message = "Bad json conf-file."
 
 // READ_DB_CONF reads a conf-file for the keyval table.
-func read_db_conf(file string) db_conf {
-	file = "conf.json"
-	var b1, err1 = os.ReadFile(file)
+func read_db_conf(filepath string) db_conf {
+	var b1, err1 = os.ReadFile(filepath)
 	if err1 != nil {
-		log.Panicf("Reading a conf-file failed: file=%s, error=%v", file, err1)
+		log.Panicf("Reading a conf-file failed: file=(%s), err=(%v)",
+			filepath, err1)
 	}
 	var b2 = bytes.NewReader(b1)
 	var d = json.NewDecoder(b2)

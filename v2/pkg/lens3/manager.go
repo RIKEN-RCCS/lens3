@@ -73,16 +73,17 @@ type manager struct {
 
 	// PROCESS holds a list of backends.  It is emptied, when the
 	// manager is in shutdown.
-	process              []backend
+	process              map[string]backend
 	shutdown_in_progress bool
-	// MUTEX protects accesses to the processes list.
-	mutex sync.Mutex
 
 	// ENVIRON holds a copy of the minimal list of environs.
 	environ []string
 
 	// CH_QUIT is to receive quitting notification.
 	ch_quit_service chan vacuous
+
+	// MUTEX protects accesses to the processes list.
+	mutex sync.Mutex
 
 	conf *mux_conf
 	//backend_conf
@@ -136,13 +137,16 @@ type backend_process struct {
 	// ENVIRON is the shared one in the_manager.
 	environ *[]string
 
-	// The followings {cmd,ch_stdio,ch_quit_backend} are set when
-	// starting a backend.
+	// The following fields {cmd,ch_stdio,ch_quit_backend} are set
+	// when starting a backend.
 	cmd             *exec.Cmd
 	ch_stdio        chan stdio_message
 	ch_quit_backend chan vacuous
 
 	heartbeat_misses int
+
+	// MUTEX protects accesses to the ch_quit_backend.
+	mutex sync.Mutex
 
 	//*backend_conf
 	*manager_conf
@@ -193,6 +197,7 @@ func configure_manager(w *manager, m *multiplexer, t *keyval_table, q chan vacuo
 	w.ch_quit_service = q
 	w.conf = c
 	w.manager_conf = c.Manager
+	w.process = make(map[string]backend)
 
 	w.backend_stabilize_ms = 10
 	w.backend_linger_ms = 10
@@ -210,9 +215,7 @@ func configure_manager(w *manager, m *multiplexer, t *keyval_table, q chan vacuo
 }
 
 func stop_running_backends(w *manager) {
-	//var bes = list_backends_under_manager(w)
-
-	var processes []backend
+	var processes map[string]backend
 	func() {
 		w.mutex.Lock()
 		defer w.mutex.Unlock()
@@ -220,9 +223,9 @@ func stop_running_backends(w *manager) {
 		w.process = nil
 		w.shutdown_in_progress = true
 	}()
-
-	for _, g := range processes {
-		command_to_stop_backend(w, g)
+	//var bes = list_backends_under_manager(w)
+	for _, d := range processes {
+		tell_stop_backend(w, d)
 	}
 }
 
@@ -294,7 +297,9 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 
 	var available_ports = list_available_ports(w)
 
-	fmt.Printf("start_backend() proc=%v ports=%v\n", proc, available_ports)
+	if proc.verbose {
+		fmt.Printf("start_backend() ports=%v\n", available_ports)
+	}
 
 	for _, port := range available_ports {
 		var r1 = try_start_backend(w, d, port)
@@ -319,16 +324,16 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 			w.mutex.Lock()
 			defer w.mutex.Unlock()
 			if !w.shutdown_in_progress {
-				w.process = append(w.process, d)
+				w.process[pool] = d
 				ok = true
 			} else {
 				ok = false
 			}
 		}()
 		if !ok {
-			logger.warnf("Mux() Starting a backend failed"+
-				" because manager is in shutdown: pool=(%s)", pool)
-			command_to_stop_backend(w, d)
+			logger.warnf("Mux(pool=%s) Starting a backend failed: %s",
+				pool, "manager is in shutdown")
+			tell_stop_backend(w, d)
 			return nil
 		}
 
@@ -340,13 +345,6 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 
 		d.establish()
 		go ping_backend(w, d)
-
-		if true {
-			var be = proc.be
-			fmt.Println("set_backend(1) ep=", proc.be.Backend_ep)
-			fmt.Println("proc.backend_record=")
-			print_in_json(be)
-		}
 
 		var now int64 = time.Now().Unix()
 		proc.be.Timestamp = now
@@ -368,20 +366,22 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 // timeout.  A message from the server is one that indicates a
 // success/failure.  Note that it changes a cancel function from
 // SIGKILL to SIGTERM to make it work with sudo.
-func try_start_backend(w *manager, g backend, port int) start_result {
-	var proc = g.get_super_part()
+func try_start_backend(w *manager, d backend, port int) start_result {
+	var proc = d.get_super_part()
 	var thishost, _, err1 = net.SplitHostPort(w.mux_ep)
 	if err1 != nil {
 		panic(err1)
 	}
 	proc.be.Backend_ep = net.JoinHostPort(thishost, strconv.Itoa(port))
-	fmt.Printf("try_start_backend(ep=%s)\n", proc.be.Backend_ep)
+	if proc.verbose {
+		fmt.Printf("try_start_backend(ep=%s)\n", proc.be.Backend_ep)
+	}
 
 	var user = proc.Owner_uid
 	var group = proc.Owner_gid
 	var address = proc.be.Backend_ep
 	var directory = proc.Buckets_directory
-	var command = g.make_command_line(address, directory)
+	var command = d.make_command_line(address, directory)
 	var sudo_argv = []string{
 		w.Sudo,
 		"-n",
@@ -390,7 +390,7 @@ func try_start_backend(w *manager, g backend, port int) start_result {
 	var argv = append(sudo_argv, command.argv...)
 	var envs = append(w.environ, command.envs...)
 
-	logger.debugf("Mux(pool=%s) Run a backend: argv=%v.", proc.Pool, argv)
+	logger.debugf("Mux(pool=%s) Run a backend: argv=%v", proc.Pool, argv)
 	// logger.debugf("Mux(pool=%s) Run a server: argv=%v; envs=%v.",
 	// proc.pool, argv, envs)
 
@@ -430,8 +430,8 @@ func try_start_backend(w *manager, g backend, port int) start_result {
 	}
 
 	proc.be.Backend_pid = cmd.Process.Pid
-	var r1 = wait_for_backend_come_up(g)
-	fmt.Println("DONE state=", r1.start_state, r1.message)
+	var r1 = wait_for_backend_come_up(d)
+	fmt.Println("*** DONE state=", r1.start_state, r1.message)
 
 	assert_fatal(r1.start_state != start_ongoing)
 
@@ -443,8 +443,8 @@ func try_start_backend(w *manager, g backend, port int) start_result {
 // many messages, (4) reaches a timeout, (5) closes both
 // stdout+stderr.  It returns STARTED/TO_RETRY/FAILED.  It reads the
 // stdio channel as much as available.
-func wait_for_backend_come_up(g backend) start_result {
-	var proc *backend_process = g.get_super_part()
+func wait_for_backend_come_up(d backend) start_result {
+	var proc *backend_process = d.get_super_part()
 	// fmt.Printf("WAIT_FOR_BACKEND_COME_UP() svr=%T proc=%T\n", svr, proc)
 
 	var msg_stdout []string
@@ -496,7 +496,7 @@ func wait_for_backend_come_up(g backend) start_result {
 				break
 			}
 			if messages_on_stdout {
-				var st1 = g.check_startup(on_stdout, msg_stdout)
+				var st1 = d.check_startup(on_stdout, msg_stdout)
 				switch st1.start_state {
 				case start_ongoing:
 					// Skip.
@@ -548,24 +548,44 @@ func wait_for_backend_by_race(w *manager, pool string) *backend_record {
 }
 
 // COMMAND_TO_STOP_BACKEND tells the pinger thread to shutdown the backend.
-func command_to_stop_backend(w *manager, g backend) {
-	var proc = g.get_super_part()
-	if proc.ch_quit_backend != nil {
-		close(proc.ch_quit_backend)
-		proc.ch_quit_backend = nil
+func command_to_stop_backend(w *manager, pool string) {
+	var d backend
+	func() {
+		w.mutex.Lock()
+		defer w.mutex.Unlock()
+		d = w.process[pool]
+	}()
+	if d == nil {
+		return
 	}
+	tell_stop_backend(w, d)
+}
+
+// TELL_STOP_BACKEND tells the pinger thread to shutdown the backend.
+func tell_stop_backend(w *manager, d backend) {
+	var proc = d.get_super_part()
+	func() {
+		proc.mutex.Lock()
+		defer proc.mutex.Unlock()
+		if proc.ch_quit_backend != nil {
+			close(proc.ch_quit_backend)
+			proc.ch_quit_backend = nil
+		}
+	}()
 }
 
 // PING_BACKEND performs heartbeating.  It will shutdown the backend,
 // either when heartbeating fails or it is instructed to stop the
 // backend.  Note that it uses a copy of proc.ch_quit_backend
 // here, because the field will be set null after closing.
-func ping_backend(w *manager, g backend) {
-	var proc = g.get_super_part()
+func ping_backend(w *manager, d backend) {
+	var proc = d.get_super_part()
 	var duration = (time.Duration(w.Backend_awake_duration) * time.Second)
 	var interval = (time.Duration(proc.Heartbeat_interval) * time.Second)
 	var expiry = int64(3 * proc.Heartbeat_interval)
 	var ch_quit_backend = proc.ch_quit_backend
+
+	set_backend_expiry(w.table, proc.Pool, expiry)
 
 	proc.heartbeat_misses = 0
 	for {
@@ -581,7 +601,7 @@ func ping_backend(w *manager, g backend) {
 
 		// Do heatbeat.
 
-		var status = g.heartbeat()
+		var status = d.heartbeat()
 		if status == 200 {
 			proc.heartbeat_misses = 0
 		} else {
@@ -615,8 +635,8 @@ func ping_backend(w *manager, g backend) {
 			break
 		}
 	}
-	stop_backend(w, g)
-	wait4_child_process(w, g)
+	stop_backend(w, d)
+	wait4_child_process(w, d)
 }
 
 // STOP_BACKEND calls backend's shutdown().  Note that there is a race
@@ -624,16 +644,16 @@ func ping_backend(w *manager, g backend) {
 // it would be possible some requests are sent to a backend while it
 // is going to be shutdown.  It waits for a short time to avoid the
 // race, assuming all requests are finished in the wait.
-func stop_backend(w *manager, g backend) {
+func stop_backend(w *manager, d backend) {
 	fmt.Println("stop_backend()")
-	var proc = g.get_super_part()
+	var proc = d.get_super_part()
 
 	delete_backend_exclusion(w.table, proc.Pool)
 	delete_backend(w.table, proc.Pool)
 
 	time.Sleep(time.Duration(w.backend_linger_ms) * time.Millisecond)
 
-	var err1 = g.shutdown()
+	var err1 = d.shutdown()
 	if err1 != nil {
 		logger.infof(("Mux() Backend shutdown() failed: pool=(%s) err=(%v)"),
 			proc.Pool, err1)
@@ -694,13 +714,19 @@ func start_disgorging_stdio(proc *backend_process) {
 // receives messages written by threads started in
 // start_disgorging_stdio().
 func disgorge_stdio_to_log(proc *backend_process) {
+	var pool = proc.Pool
 	for {
 		var x1, ok1 = <-proc.ch_stdio
 		if !ok1 {
 			fmt.Println("CLOSED")
 			break
 		}
-		fmt.Println("LINE: ", x1.int, x1.string)
+		// fmt.Println("LINE: ", x1.int, x1.string)
+		if x1.int == on_stdout {
+			logger.infof("Mux(pool=%s) stdout: %s", pool, x1.string)
+		} else {
+			logger.infof("Mux(pool=%s) stderr: %s", pool, x1.string)
+		}
 	}
 }
 
@@ -710,10 +736,10 @@ func drain_start_messages_to_log(pool string, outs []string, errs []string) {
 	// fmt.Println("drain_start_messages_to_log()")
 	var s string
 	for _, s = range outs {
-		logger.debugf("Mux(pool=%s): %s", pool, s)
+		logger.infof("Mux(pool=%s) stdout: %s", pool, s)
 	}
 	for _, s = range errs {
-		logger.debugf("Mux(pool=%s): %s", pool, s)
+		logger.infof("Mux(pool=%s) stderr: %s", pool, s)
 	}
 }
 
@@ -758,8 +784,8 @@ func list_backends_under_manager(w *manager) []*backend_record {
 	return list
 }
 
-func wait4_child_process(w *manager, g backend) {
-	var proc = g.get_super_part()
+func wait4_child_process(w *manager, d backend) {
+	var proc = d.get_super_part()
 	var pid = proc.cmd.Process.Pid
 	//var pid = proc.be.Backend_pid
 	for {

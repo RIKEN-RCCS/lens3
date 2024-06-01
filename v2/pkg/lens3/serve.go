@@ -33,10 +33,16 @@ const lens3_version string = "v2.1"
 func Run_lenticularis_mux() {
 	var flag_version = flag.Bool("v", false, "Lens3 version.")
 	var flag_help = flag.Bool("h", false, "Print help.")
-	var flag_conf = flag.String("c", "conf.json",
-		"A file containing keyval-db connection info.")
+	var flag_conf = flag.String("c", "",
+		"A file containing keyval-db connection information (REQUIRED).")
 	flag.Parse()
 	var args = flag.Args()
+
+	if *flag_conf == "" {
+		print_lenticularis_mux_usage()
+		os.Exit(0)
+	}
+
 	var services []string
 	switch len(args) {
 	default:
@@ -88,7 +94,7 @@ func Run_lenticularis_mux() {
 
 func print_lenticularis_mux_usage() {
 	fmt.Fprintf(os.Stderr,
-		"Usage: lenticularis-mux [-c conf] [reg/mux/reg+mux]\n"+
+		"Usage: lenticularis-mux -c conf [reg/mux/reg+mux]\n"+
 			"  where the mux part can be mux:xxx"+
 			" to specify a different configuration.\n"+
 			"  No reg nor mux means reg+mux\n")

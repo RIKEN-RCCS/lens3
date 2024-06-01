@@ -19,6 +19,7 @@ import (
 	"fmt"
 	//"flag"
 	//"context"
+	"runtime/debug"
 	//"io"
 	"encoding/json"
 	"log"
@@ -176,6 +177,7 @@ func proxy_request_rewriter(m *multiplexer) func(r *httputil.ProxyRequest) {
 // It passes the request to the next forwarding proxy.
 func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer handle_multiplexer_exc(m, w, r)
 		fmt.Printf("*** r.Header.Get(Remote_Addr)=%#v\n", r.Header.Get("Remote_Addr"))
 		fmt.Printf("*** r.RemoteAddr=%#v\n", r.RemoteAddr)
 
@@ -194,7 +196,7 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 			return
 		}
 
-		fmt.Println("*** secret=", authenticated)
+		fmt.Println("*** secret=", authenticated.Access_key)
 
 		switch {
 		case authenticated != nil && authenticated.Secret_policy == secret_policy_internal_access:
@@ -339,7 +341,7 @@ func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, be *
 // Multiplexers.
 func serve_internal_access(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record, secret *secret_record) {
 	assert_fatal(secret != nil)
-	logger.debugf("Mux(%s) serve_internal_access: pool=(%s)",
+	logger.debugf("Mux(%s) internal-access: pool=(%s)",
 		m.mux_ep, secret.Pool)
 
 	// REJECT REQUESTS FROM THE OUTSIDE.
@@ -365,6 +367,26 @@ func serve_internal_access(m *multiplexer, w http.ResponseWriter, r *http.Reques
 	}
 
 	make_absent_buckets_in_backend(m, w, r, pooldata, secret)
+}
+
+func handle_multiplexer_exc(m *multiplexer, w http.ResponseWriter, r *http.Request) {
+	var x = recover()
+	switch err1 := x.(type) {
+	case nil:
+	case *proxy_exc:
+		fmt.Println("RECOVER!", err1)
+		var msg = map[string]string{}
+		for _, kv := range err1.message {
+			msg[kv[0]] = kv[1]
+		}
+		var b1, err2 = json.Marshal(msg)
+		assert_fatal(err2 == nil)
+		http.Error(w, string(b1), err1.code)
+	default:
+		fmt.Println("TRAP unhandled panic", err1)
+		fmt.Println("stacktrace:\n" + string(debug.Stack()))
+		http.Error(w, "BAD", http_500_internal_server_error)
+	}
 }
 
 // CHECK_AUTHENTICATED checks the signature in an AWS Authorization
@@ -671,8 +693,14 @@ func make_absent_buckets_in_backend(m *multiplexer, w http.ResponseWriter, r *ht
 			m.mux_ep, pool)
 		return
 	}
-	var buckets_exsting = list_buckets_in_backend(m, be)
-	fmt.Println("list_buckets_in_backend=", buckets_exsting)
+	var buckets_exsting, err = list_buckets_in_backend(m, be)
+	if err != nil {
+		logger.errf("Mux(%s) Backend access failed: pool=(%s), err=(%v)",
+			m.mux_ep, be.Pool, err)
+		command_to_stop_backend(m.manager, pool)
+	}
+
+	//fmt.Println("list_buckets_in_backend=", buckets_exsting)
 
 	var now int64 = time.Now().Unix()
 	for _, b := range buckets_needed {
@@ -736,7 +764,7 @@ func mux_periodic_work(m *multiplexer) {
 	//time.Sleep(1 * time.Second)
 	for {
 		if m.verbose {
-			logger.debugf("Mux(%s) Update Mux-ep periodically", m.mux_ep)
+			logger.debugf("Mux(%s) Update Mux-ep", m.mux_ep)
 		}
 		mux.Timestamp = time.Now().Unix()
 		set_mux_ep(m.table, m.mux_ep, mux)

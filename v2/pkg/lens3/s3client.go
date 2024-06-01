@@ -5,9 +5,22 @@
 
 package lens3
 
+// MEMO: The errors from clients are wrapped with
+// "aws.smithy.OperationError".  The "OperationError" consists of
+// {ServiceID, OperationName, Err}.  It wraps errors such as
+// "aws.retry.MaxAttemptsError", "aws.RequestCanceledError"...
+// "aws.retry.MaxAttemptsError" further wraps
+// "service.internal.s3shared.ResponseError" in
+// "github.com/aws/aws-sdk-go-v2".  It embeds
+// "aws.transport.http.ResponseError" (Note "awshttp" is an alias).
+// It embeds "aws.smithy-go.transport.http.ResponseError".
+//
+// See https://pkg.go.dev/github.com/aws/smithy-go
+
 import (
 	"fmt"
 	//"flag"
+	//"errors"
 	"context"
 	//"io"
 	//"log"
@@ -22,6 +35,7 @@ import (
 	//"strings"
 	"math/rand/v2"
 	"time"
+	//"github.com/aws/smithy-go"
 	//"runtime"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -76,7 +90,7 @@ func probe_access_mux(t *keyval_table, pool string) error {
 	return nil
 }
 
-func list_buckets_in_backend(m *multiplexer, be *backend_record) []string {
+func list_buckets_in_backend(m *multiplexer, be *backend_record) ([]string, error) {
 	var session = ""
 	var beurl = "http://" + be.Backend_ep
 	var provider = credentials.NewStaticCredentialsProvider(
@@ -90,15 +104,13 @@ func list_buckets_in_backend(m *multiplexer, be *backend_record) []string {
 	var client *s3.Client = s3.New(options)
 
 	//var ctx = context.Background()
-	var timeout = 1000 * time.Millisecond
+	var timeout = 10000 * time.Millisecond
 	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	var v, err1 = client.ListBuckets(ctx,
-		&s3.ListBucketsInput{})
+	var v, err1 = client.ListBuckets(ctx, &s3.ListBucketsInput{})
 	if err1 != nil {
-		logger.errf("List buckets in backend failed: pool=(%s), err=(%v)",
-			be.Pool, err1)
-		return []string{}
+		fmt.Printf("client.ListBuckets() err=%T %#v\n", err1, err1)
+		return nil, err1
 	}
 	var bkts []string
 	for _, b := range v.Buckets {
@@ -107,7 +119,7 @@ func list_buckets_in_backend(m *multiplexer, be *backend_record) []string {
 			bkts = append(bkts, *(b.Name))
 		}
 	}
-	return bkts
+	return bkts, nil
 }
 
 func make_bucket_in_backend(m *multiplexer, be *backend_record, bucket *bucket_record) bool {

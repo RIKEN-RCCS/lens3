@@ -52,11 +52,12 @@ func make_adm_command_table() {
 
 func adm_toplevel() {
 	//os.Args[...]
-	var confpath = flag.String("c", "conf.json",
+	var flag_conf = flag.String("c", "conf.json",
 		"A file containing keyval-db connection info.")
-	var debug = flag.Bool("debug", false, "debug")
-	_ = confpath
-	_ = debug
+	var flag_debug = flag.Bool("d", false,
+		"Debug flag.")
+	_ = flag_conf
+	_ = flag_debug
 	flag.Parse()
 
 	var args = flag.Args()
@@ -65,8 +66,8 @@ func adm_toplevel() {
 		return
 	}
 
-	assert_fatal(confpath != nil)
-	var dbconf = read_db_conf(*confpath)
+	assert_fatal(flag_conf != nil)
+	var dbconf = read_db_conf(*flag_conf)
 	//fmt.Println(dbconf)
 	var t = make_table(dbconf)
 	_ = t

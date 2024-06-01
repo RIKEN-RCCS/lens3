@@ -77,7 +77,7 @@ type registrar struct {
 
 	trusted_proxies []net.IP
 
-	ch_quit chan vacuous
+	ch_quit_service chan vacuous
 
 	*reg_conf
 	//registrar_conf
@@ -222,7 +222,7 @@ type reg_error_message [][2]string
 
 func configure_registrar(z *registrar, t *keyval_table, q chan vacuous, c *reg_conf) {
 	z.table = t
-	z.ch_quit = q
+	z.ch_quit_service = q
 	z.reg_conf = c
 	z.verbose = true
 
@@ -249,7 +249,7 @@ func start_registrar(z *registrar) {
 	// Root "/" requests are redirected.
 
 	z.router.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-		defer handle_proxy_exc(z, w, r)
+		defer handle_registrar_exc(z, w, r)
 		fmt.Println("Reg.GET /")
 		logger.debug("Reg.GET /")
 		//	defer func() {
@@ -267,38 +267,38 @@ func start_registrar(z *registrar) {
 	})
 
 	z.router.HandleFunc("GET /ui/index.html", func(w http.ResponseWriter, r *http.Request) {
-		defer handle_proxy_exc(z, w, r)
+		defer handle_registrar_exc(z, w, r)
 		var _ = return_ui_script(z, w, r, "ui/index.html")
 	})
 
 	z.router.HandleFunc("GET /ui2/index.html", func(w http.ResponseWriter, r *http.Request) {
-		defer handle_proxy_exc(z, w, r)
+		defer handle_registrar_exc(z, w, r)
 		var _ = return_ui_script(z, w, r, "ui2/index.html")
 	})
 
 	z.router.HandleFunc("GET /ui/", func(w http.ResponseWriter, r *http.Request) {
-		defer handle_proxy_exc(z, w, r)
+		defer handle_registrar_exc(z, w, r)
 		var _ = return_file(z, w, r, r.URL.Path, &efs1)
 	})
 
 	z.router.HandleFunc("GET /ui2/", func(w http.ResponseWriter, r *http.Request) {
-		defer handle_proxy_exc(z, w, r)
+		defer handle_registrar_exc(z, w, r)
 		var _ = return_file(z, w, r, r.URL.Path, &efs2)
 	})
 
 	z.router.HandleFunc("GET /user-info", func(w http.ResponseWriter, r *http.Request) {
 		logger.debug("Reg.GET /user-info")
-		defer handle_proxy_exc(z, w, r)
+		defer handle_registrar_exc(z, w, r)
 		var _ = return_user_info(z, w, r)
 	})
 
 	z.router.HandleFunc("GET /pool", func(w http.ResponseWriter, r *http.Request) {
-		defer handle_proxy_exc(z, w, r)
+		defer handle_registrar_exc(z, w, r)
 		var _ = list_pool_and_return_response(z, w, r, "")
 	})
 
 	z.router.HandleFunc("GET /pool/{pool}", func(w http.ResponseWriter, r *http.Request) {
-		defer handle_proxy_exc(z, w, r)
+		defer handle_registrar_exc(z, w, r)
 		var pool = r.PathValue("pool")
 		var _ = list_pool_and_return_response(z, w, r, pool)
 	})
@@ -306,12 +306,12 @@ func start_registrar(z *registrar) {
 	// A POST request makes a pool.
 
 	z.router.HandleFunc("POST /pool", func(w http.ResponseWriter, r *http.Request) {
-		defer handle_proxy_exc(z, w, r)
+		defer handle_registrar_exc(z, w, r)
 		var _ = make_pool_and_return_response(z, w, r)
 	})
 
 	z.router.HandleFunc("DELETE /pool/{pool}", func(w http.ResponseWriter, r *http.Request) {
-		defer handle_proxy_exc(z, w, r)
+		defer handle_registrar_exc(z, w, r)
 		var pool = r.PathValue("pool")
 		var _ = delete_pool_and_return_response(z, w, r, pool)
 	})
@@ -319,13 +319,13 @@ func start_registrar(z *registrar) {
 	// A PUT request makes a bucket.
 
 	z.router.HandleFunc("PUT /pool/{pool}/bucket", func(w http.ResponseWriter, r *http.Request) {
-		defer handle_proxy_exc(z, w, r)
+		defer handle_registrar_exc(z, w, r)
 		var pool = r.PathValue("pool")
 		var _ = make_bucket_and_return_response(z, w, r, pool)
 	})
 
 	z.router.HandleFunc("DELETE /pool/{pool}/bucket/{bucket}", func(w http.ResponseWriter, r *http.Request) {
-		defer handle_proxy_exc(z, w, r)
+		defer handle_registrar_exc(z, w, r)
 		var pool = r.PathValue("pool")
 		var bucket = r.PathValue("bucket")
 		var _ = delete_bucket_and_return_response(z, w, r, pool, bucket)
@@ -334,13 +334,13 @@ func start_registrar(z *registrar) {
 	// A POST request makes a secret.
 
 	z.router.HandleFunc("POST /pool/{pool}/secret", func(w http.ResponseWriter, r *http.Request) {
-		defer handle_proxy_exc(z, w, r)
+		defer handle_registrar_exc(z, w, r)
 		var pool = r.PathValue("pool")
 		var _ = make_secret_and_return_response(z, w, r, pool)
 	})
 
 	z.router.HandleFunc("DELETE /pool/{pool}/secret/{secret}", func(w http.ResponseWriter, r *http.Request) {
-		defer handle_proxy_exc(z, w, r)
+		defer handle_registrar_exc(z, w, r)
 		var pool = r.PathValue("pool")
 		var secret = r.PathValue("secret")
 		var _ = delete_secret_and_return_response(z, w, r, pool, secret)
@@ -353,7 +353,7 @@ func start_registrar(z *registrar) {
 	}
 }
 
-func handle_proxy_exc(z *registrar, w http.ResponseWriter, r *http.Request) {
+func handle_registrar_exc(z *registrar, w http.ResponseWriter, r *http.Request) {
 	var x = recover()
 	switch err1 := x.(type) {
 	case nil:
@@ -1059,8 +1059,13 @@ func make_csrf_tokens(z *registrar, uid string) *csrf_token_record {
 		Csrf_token_h: generate_random_key(),
 		Timestamp:    now,
 	}
+	var timeout = int64(conf.Ui_session_duration)
 	set_csrf_token(z.table, uid, data)
-	set_csrf_token_expiry(z.table, uid, int64(conf.Ui_session_duration))
+	var ok = set_csrf_token_expiry(z.table, uid, timeout)
+	if !ok {
+		// Ignore an error.
+		logger.errf("Mux() Bad call set_csrf_token_expiry()")
+	}
 	//var x = get_csrf_token(z.table, uid)
 	//fmt.Println("make_csrf_tokens=", x)
 

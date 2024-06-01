@@ -35,7 +35,7 @@ func Test_misc(t *testing.T) {
 	// check_json()
 
 	// run_registrar()
-	run_service()
+	//run_service()
 }
 
 func Test_reg(t *testing.T) {

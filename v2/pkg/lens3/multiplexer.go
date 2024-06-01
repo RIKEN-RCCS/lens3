@@ -59,7 +59,7 @@ type multiplexer struct {
 	trusted_proxies []net.IP
 
 	// CH_QUIT is to receive quitting notification.
-	ch_quit chan vacuous
+	ch_quit_service chan vacuous
 
 	conf *mux_conf
 	//multiplexer_conf
@@ -79,7 +79,7 @@ func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, q chan v
 	m.table = t
 	m.manager = w
 	m.conf = c
-	m.ch_quit = q
+	m.ch_quit_service = q
 	m.verbose = true
 	//m.multiplexer_conf = conf.Multiplexer
 
@@ -740,7 +740,11 @@ func mux_periodic_work(m *multiplexer) {
 		}
 		mux.Timestamp = time.Now().Unix()
 		set_mux_ep(m.table, m.mux_ep, mux)
-		set_mux_ep_expiry(m.table, m.mux_ep, expiry)
+		var ok = set_mux_ep_expiry(m.table, m.mux_ep, expiry)
+		if !ok {
+			// Ignore an error.
+			logger.errf("Mux() Bad call set_mux_ep_expiry()")
+		}
 		var jitter = rand.Int64N(interval / 8)
 		time.Sleep(time.Duration(interval+jitter) * time.Second)
 	}

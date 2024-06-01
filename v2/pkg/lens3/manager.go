@@ -82,7 +82,7 @@ type manager struct {
 	environ []string
 
 	// CH_QUIT is to receive quitting notification.
-	ch_quit chan vacuous
+	ch_quit_service chan vacuous
 
 	conf *mux_conf
 	//backend_conf
@@ -136,11 +136,11 @@ type backend_process struct {
 	// ENVIRON is the shared one in the_manager.
 	environ *[]string
 
-	// The followings {cmd,ch_stdio,ch_terminate_backend} are set when
+	// The followings {cmd,ch_stdio,ch_quit_backend} are set when
 	// starting a backend.
-	cmd                  *exec.Cmd
-	ch_stdio             chan stdio_message
-	ch_terminate_backend chan vacuous
+	cmd             *exec.Cmd
+	ch_stdio        chan stdio_message
+	ch_quit_backend chan vacuous
 
 	heartbeat_misses int
 
@@ -190,11 +190,9 @@ const (
 func configure_manager(w *manager, m *multiplexer, t *keyval_table, q chan vacuous, c *mux_conf) {
 	w.table = t
 	w.multiplexer = m
-	w.ch_quit = q
+	w.ch_quit_service = q
 	w.conf = c
 	w.manager_conf = c.Manager
-
-	w.ch_quit = make(chan vacuous)
 
 	w.backend_stabilize_ms = 10
 	w.backend_linger_ms = 10
@@ -224,12 +222,7 @@ func stop_running_backends(w *manager) {
 	}()
 
 	for _, g := range processes {
-		terminate_backend(w, g)
-	}
-
-	if w.ch_quit != nil {
-		close(w.ch_quit)
-		w.ch_quit = nil
+		command_to_stop_backend(w, g)
 	}
 }
 
@@ -242,8 +235,8 @@ func start_backend(w *manager, pool string) backend {
 		Mux_ep:    w.mux_ep,
 		Timestamp: now,
 	}
-	var ok, _ = set_ex_backend_exclusion(w.table, pool, ep)
-	if !ok {
+	var ok1, _ = set_ex_backend_exclusion(w.table, pool, ep)
+	if !ok1 {
 		var be1 = wait_for_backend_by_race(w, pool)
 		if be1 == nil {
 			logger.debugf("start_backend(pool=%s) waits by race", pool)
@@ -251,7 +244,11 @@ func start_backend(w *manager, pool string) backend {
 		return nil
 	} else {
 		var expiry int64 = int64(3 * w.Backend_start_timeout)
-		set_backend_exclusion_expiry(w.table, pool, expiry)
+		var ok2 = set_backend_exclusion_expiry(w.table, pool, expiry)
+		if !ok2 {
+			// Ignore an error.
+			logger.errf("Mux() Bad call set_backend_exclusion_expiry()")
+		}
 		var be2 = start_backend_in_mutexed(w, pool)
 		return be2
 	}
@@ -269,11 +266,11 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 		return nil
 	}
 
-	var g = w.factory.make_backend(pool)
+	var d = w.factory.make_backend(pool)
 
 	// Initialize the super-part.
 
-	var proc *backend_process = g.get_super_part()
+	var proc *backend_process = d.get_super_part()
 	proc.pool_record = *pooldata
 	proc.be = &backend_record{
 		Pool:        pool,
@@ -293,14 +290,14 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 
 	// proc.cmd
 	// proc.ch_stdio
-	// proc.ch_terminate_backend
+	// proc.ch_quit_backend
 
 	var available_ports = list_available_ports(w)
 
 	fmt.Printf("start_backend() proc=%v ports=%v\n", proc, available_ports)
 
 	for _, port := range available_ports {
-		var r1 = try_start_backend(w, g, port)
+		var r1 = try_start_backend(w, d, port)
 		switch r1.start_state {
 		case start_ongoing:
 			panic("internal")
@@ -322,7 +319,7 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 			w.mutex.Lock()
 			defer w.mutex.Unlock()
 			if !w.shutdown_in_progress {
-				w.process = append(w.process, g)
+				w.process = append(w.process, d)
 				ok = true
 			} else {
 				ok = false
@@ -331,7 +328,7 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 		if !ok {
 			logger.warnf("Mux() Starting a backend failed"+
 				" because manager is in shutdown: pool=(%s)", pool)
-			terminate_backend(w, g)
+			command_to_stop_backend(w, d)
 			return nil
 		}
 
@@ -341,8 +338,8 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 
 		time.Sleep(time.Duration(w.backend_stabilize_ms) * time.Millisecond)
 
-		g.establish()
-		go ping_backend(w, g)
+		d.establish()
+		go ping_backend(w, d)
 
 		if true {
 			var be = proc.be
@@ -354,7 +351,7 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 		var now int64 = time.Now().Unix()
 		proc.be.Timestamp = now
 		set_backend(w.table, proc.Pool, proc.be)
-		return g
+		return d
 	}
 
 	// All ports are tried and failed.
@@ -419,7 +416,7 @@ func try_start_backend(w *manager, g backend, port int) start_result {
 
 	proc.cmd = cmd
 	proc.ch_stdio = make(chan stdio_message)
-	proc.ch_terminate_backend = make(chan vacuous)
+	proc.ch_quit_backend = make(chan vacuous)
 
 	start_disgorging_stdio(proc)
 
@@ -550,34 +547,37 @@ func wait_for_backend_by_race(w *manager, pool string) *backend_record {
 	return nil
 }
 
-// TERMINATE_BACKEND tells the pinger thread to shutdown the backend.
-func terminate_backend(w *manager, g backend) {
+// COMMAND_TO_STOP_BACKEND tells the pinger thread to shutdown the backend.
+func command_to_stop_backend(w *manager, g backend) {
 	var proc = g.get_super_part()
-	if proc.ch_terminate_backend != nil {
-		close(proc.ch_terminate_backend)
-		proc.ch_terminate_backend = nil
+	if proc.ch_quit_backend != nil {
+		close(proc.ch_quit_backend)
+		proc.ch_quit_backend = nil
 	}
 }
 
 // PING_BACKEND performs heartbeating.  It will shutdown the backend,
 // either when heartbeating fails or it is instructed to stop the
-// backend.  Note that it uses a copy of proc.ch_terminate_backend
+// backend.  Note that it uses a copy of proc.ch_quit_backend
 // here, because the field will be set null after closing.
 func ping_backend(w *manager, g backend) {
 	var proc = g.get_super_part()
-	var ch_terminate = proc.ch_terminate_backend
 	var duration = (time.Duration(w.Backend_awake_duration) * time.Second)
+	var interval = (time.Duration(proc.Heartbeat_interval) * time.Second)
+	var expiry = int64(3 * proc.Heartbeat_interval)
+	var ch_quit_backend = proc.ch_quit_backend
+
 	proc.heartbeat_misses = 0
 	for {
 		var ok1 bool
 		select {
-		case _, ok1 = <-ch_terminate:
+		case _, ok1 = <-ch_quit_backend:
 			assert_fatal(!ok1)
-			fmt.Println("*** CH_TERMINATE CLOSED")
+			fmt.Println("*** CH_QUIT_BACKEND CLOSED")
 			break
 		default:
 		}
-		time.Sleep(time.Duration(proc.Heartbeat_interval) * time.Second)
+		time.Sleep(interval)
 
 		// Do heatbeat.
 
@@ -605,18 +605,27 @@ func ping_backend(w *manager, g backend) {
 			logger.debugf("Mux() Awake time elapsed: pool=(%s)", proc.Pool)
 			break
 		}
+
+		// Update a record expiration.
+
+		var ok = set_backend_expiry(w.table, proc.Pool, expiry)
+		if !ok {
+			logger.warnf("Mux() Backend keyval-db entry gone: pool=(%s)",
+				proc.Pool)
+			break
+		}
 	}
-	shutdown_backend(w, g)
+	stop_backend(w, g)
 	wait4_child_process(w, g)
 }
 
-// SHUTDOWN_BACKEND calls backend's shutdown().  Note that there is a
-// race in checking a backend existence and stopping a backend.  That
-// is, it would be possible some requests are sent to a backend while
-// it is going to be shutdown.  It waits for a short time to avoid the
+// STOP_BACKEND calls backend's shutdown().  Note that there is a race
+// in checking a backend existence and stopping a backend.  That is,
+// it would be possible some requests are sent to a backend while it
+// is going to be shutdown.  It waits for a short time to avoid the
 // race, assuming all requests are finished in the wait.
-func shutdown_backend(w *manager, g backend) {
-	fmt.Println("shutdown_backend()")
+func stop_backend(w *manager, g backend) {
+	fmt.Println("stop_backend()")
 	var proc = g.get_super_part()
 
 	delete_backend_exclusion(w.table, proc.Pool)

@@ -99,15 +99,15 @@ func start_service(confpath string, services []string) {
 	var dbconf = read_db_conf(confpath)
 	var t = make_table(dbconf)
 
-	var ch_quit = make(chan vacuous)
-	handle_unix_signals(t, ch_quit)
+	var ch_quit_service = make(chan vacuous)
+	handle_unix_signals(t, ch_quit_service)
 
 	for i, service := range services {
 		var run_on_main_thread = (i == len(services)-1)
 		if service == "reg" {
 			var regconf = get_reg_conf(t, service)
 			var z = &the_registrar
-			configure_registrar(z, t, ch_quit, regconf)
+			configure_registrar(z, t, ch_quit_service, regconf)
 			if run_on_main_thread {
 				start_registrar(z)
 			} else {
@@ -118,8 +118,8 @@ func start_service(confpath string, services []string) {
 			var muxconf = get_mux_conf(t, service)
 			var m = &the_multiplexer
 			var w = &the_manager
-			configure_multiplexer(m, w, t, ch_quit, muxconf)
-			configure_manager(w, m, t, ch_quit, muxconf)
+			configure_multiplexer(m, w, t, ch_quit_service, muxconf)
+			configure_manager(w, m, t, ch_quit_service, muxconf)
 			defer w.factory.clean_at_exit()
 			if run_on_main_thread {
 				start_multiplexer(m)
@@ -130,7 +130,7 @@ func start_service(confpath string, services []string) {
 	}
 }
 
-func handle_unix_signals(t *keyval_table, ch_quit chan vacuous) {
+func handle_unix_signals(t *keyval_table, ch_quit_service chan vacuous) {
 	var ch_sig = make(chan os.Signal, 1)
 
 	var pid = os.Getpid()
@@ -158,7 +158,7 @@ func handle_unix_signals(t *keyval_table, ch_quit chan vacuous) {
 			}
 		}
 		// (Graceful killing here).
-		close(ch_quit)
+		close(ch_quit_service)
 		time.Sleep(100 * time.Millisecond)
 		fmt.Printf("killing by pgid=%d\n", pgid)
 		unix.Kill(-pgid, unix.SIGTERM)

@@ -387,7 +387,8 @@ func raise_on_setnx_error(w *redis.BoolCmd) {
 	}
 }
 
-// RAISE_ON_GET_ERROR raises on an error but a non-existing case.
+// RAISE_ON_GET_ERROR raises on an error except for a non-existing
+// case.  Existence of an entry is double checked in unmarshaling.
 func raise_on_get_error(w *redis.StringCmd) {
 	var err = w.Err()
 	if err != nil && err != redis.Nil {
@@ -413,14 +414,14 @@ func raise_on_del_failure(w *redis.IntCmd) {
 	}
 }
 
-func raise_on_expire_failure(w *redis.BoolCmd) {
+// CHECK_ON_EXPIRE_FAILURE raises on an error except for a
+// non-existing case.  It returns NG when a key does not exist.
+func check_on_expire_failure(w *redis.BoolCmd) bool {
 	var ok, err = w.Result()
 	if err != nil {
 		raise(&table_exc{m: "expire errs", e: err})
 	}
-	if !ok {
-		raise(&table_exc{m: "expire no entry"})
-	}
+	return ok
 }
 
 /* CONF */
@@ -717,8 +718,9 @@ func set_ex_backend_exclusion(t *keyval_table, pool string, data *backend_exclus
 	return false, holder
 }
 
-func set_backend_exclusion_expiry(t *keyval_table, pool string, timeout int64) {
-	db_expire_with_prefix(t, db_backend_exclusion_prefix, pool, timeout)
+func set_backend_exclusion_expiry(t *keyval_table, pool string, timeout int64) bool {
+	var ok = db_expire_with_prefix(t, db_backend_exclusion_prefix, pool, timeout)
+	return ok
 }
 
 func get_backend_exclusion(t *keyval_table, pool string) *backend_exclusion_record {
@@ -734,6 +736,11 @@ func delete_backend_exclusion(t *keyval_table, pool string) {
 func set_backend(t *keyval_table, pool string, data *backend_record) {
 	assert_fatal(data.Pool == pool)
 	db_set_with_prefix(t, db_backend_data_prefix, pool, data)
+}
+
+func set_backend_expiry(t *keyval_table, pool string, timeout int64) bool {
+	var ok = db_expire_with_prefix(t, db_backend_data_prefix, pool, timeout)
+	return ok
 }
 
 func get_backend(t *keyval_table, pool string) *backend_record {
@@ -767,8 +774,9 @@ func set_mux_ep(t *keyval_table, mux_ep string, data *mux_record) {
 	db_set_with_prefix(t, db_mux_ep_prefix, mux_ep, data)
 }
 
-func set_mux_ep_expiry(t *keyval_table, mux_ep string, timeout int64) {
-	db_expire_with_prefix(t, db_mux_ep_prefix, mux_ep, timeout)
+func set_mux_ep_expiry(t *keyval_table, mux_ep string, timeout int64) bool {
+	var ok = db_expire_with_prefix(t, db_mux_ep_prefix, mux_ep, timeout)
+	return ok
 }
 
 func get_mux_ep(t *keyval_table, mux_ep string) *mux_record {
@@ -1014,8 +1022,9 @@ func set_csrf_token(t *keyval_table, uid string, token *csrf_token_record) {
 	db_set_with_prefix(t, db_csrf_token_prefix, uid, token)
 }
 
-func set_csrf_token_expiry(t *keyval_table, uid string, timeout int64) {
-	db_expire_with_prefix(t, db_csrf_token_prefix, uid, timeout)
+func set_csrf_token_expiry(t *keyval_table, uid string, timeout int64) bool {
+	var ok = db_expire_with_prefix(t, db_csrf_token_prefix, uid, timeout)
+	return ok
 }
 
 func get_csrf_token(t *keyval_table, uid string) *csrf_token_record {
@@ -1053,11 +1062,12 @@ func db_get_with_prefix(t *keyval_table, prefix string, key string, val any) boo
 	return ok
 }
 
-func db_expire_with_prefix(t *keyval_table, prefix string, key string, timeout int64) {
+func db_expire_with_prefix(t *keyval_table, prefix string, key string, timeout int64) bool {
 	var db = t.prefix_to_db[prefix]
 	var k = (prefix + key)
 	var w = db.Expire(t.ctx, k, (time.Duration(timeout) * time.Second))
-	raise_on_expire_failure(w)
+	var ok = check_on_expire_failure(w)
+	return ok
 }
 
 // DB_DEL_WITH_PREFIX returns OK/NG, but usually, failure is ignored.
@@ -1065,7 +1075,8 @@ func db_del_with_prefix(t *keyval_table, prefix string, key string) bool {
 	var db = t.prefix_to_db[prefix]
 	var k = (prefix + key)
 	var w = db.Del(t.ctx, k)
-	return check_on_del_failure(w)
+	var ok = check_on_del_failure(w)
+	return ok
 }
 
 // DB_DEL_WITH_PREFIX raises, when delete failed.

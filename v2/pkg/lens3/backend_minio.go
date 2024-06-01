@@ -105,15 +105,15 @@ func (fa *backend_minio_conf) clean_at_exit() {
 	clean_tmp()
 }
 
-func finalize_backend_minio(g *backend_minio) {
-	if g.mc_config_dir != "" {
-		os.RemoveAll(g.mc_config_dir)
-		g.mc_config_dir = ""
+func finalize_backend_minio(d *backend_minio) {
+	if d.mc_config_dir != "" {
+		os.RemoveAll(d.mc_config_dir)
+		d.mc_config_dir = ""
 	}
 }
 
-func (g *backend_minio) get_super_part() *backend_process {
-	return &(g.backend_process)
+func (d *backend_minio) get_super_part() *backend_process {
+	return &(d.backend_process)
 }
 
 func (proc *backend_minio) make_command_line(address string, directory string) backend_command {
@@ -134,7 +134,7 @@ func (proc *backend_minio) make_command_line(address string, directory string) b
 // of an error with messages "level=FATAL", it diagnoses the cause of
 // the error by the first fatal message.  It returns a retry response
 // only on the port-in-use error.
-func (g *backend_minio) check_startup(outerr int, ss []string) start_result {
+func (d *backend_minio) check_startup(outerr int, ss []string) start_result {
 	fmt.Println("minio.check_startup()")
 	var mm, _ = decode_json(ss)
 	//fmt.Printf("mm=%T\n", mm)
@@ -179,40 +179,40 @@ func (g *backend_minio) check_startup(outerr int, ss []string) start_result {
 	}
 }
 
-func (g *backend_minio) establish() error {
+func (d *backend_minio) establish() error {
 	fmt.Println("minio.establish()")
-	var v1 = minio_mc_alias_set(g)
+	var v1 = minio_mc_alias_set(d)
 	return v1.err
 }
 
 // SHUTDOWN stops a server using MC admin-service-stop.
-func (g *backend_minio) shutdown() error {
+func (d *backend_minio) shutdown() error {
 	//fmt.Println("minio.shutdown()")
-	var proc = g.get_super_part()
+	var proc = d.get_super_part()
 	logger.debugf("Mux(minio) Stopping MinIO: pool=(%s) process=(%v).",
 		proc.Pool, proc)
-	//assert_fatal(g.mc_alias != nil)
-	var v1 = minio_mc_admin_service_stop(g)
+	//assert_fatal(d.mc_alias != nil)
+	var v1 = minio_mc_admin_service_stop(d)
 	return v1.err
 }
 
 // HEARTBEAT http-gets the path "/minio/health/live" and returns an
 // http status code.  It returns 500 on a connection failure.
-func (g *backend_minio) heartbeat() int {
+func (d *backend_minio) heartbeat() int {
 	//fmt.Println("minio.heartbeat()")
-	var proc = g.get_super_part()
+	var proc = d.get_super_part()
 
-	if g.heartbeat_client == nil {
+	if d.heartbeat_client == nil {
 		var timeout = (time.Duration(proc.Heartbeat_timeout) * time.Second)
-		g.heartbeat_client = &http.Client{
+		d.heartbeat_client = &http.Client{
 			Timeout: timeout,
 		}
 		var ep = proc.be.Backend_ep
-		g.heartbeat_url = fmt.Sprintf("http://%s/minio/health/live", ep)
+		d.heartbeat_url = fmt.Sprintf("http://%s/minio/health/live", ep)
 	}
 
-	var c = g.heartbeat_client
-	var rsp, err1 = c.Get(g.heartbeat_url)
+	var c = d.heartbeat_client
+	var rsp, err1 = c.Get(d.heartbeat_url)
 	if err1 != nil {
 		logger.debugf("Mux(minio) Heartbeat failed (http.Client.Get()):"+
 			" pool=(%s) err=(%v)", proc.Pool, err1)
@@ -312,15 +312,15 @@ func simplify_minio_mc_message(s []byte) *minio_mc_result {
 // EXECUTE_MINIO_MC_CMD runs an MC-command command and checks its output.
 // Note that a timeout kills the process by SIGKILL.  MEMO: Timeout of
 // context returns "context.deadlineExceededError".
-func execute_minio_mc_cmd(g *backend_minio, name string, command []string) *minio_mc_result {
-	//var proc = g.get_super_part()
-	assert_fatal(g.mc_alias != "" && g.mc_config_dir != "")
+func execute_minio_mc_cmd(d *backend_minio, name string, command []string) *minio_mc_result {
+	//var proc = d.get_super_part()
+	assert_fatal(d.mc_alias != "" && d.mc_config_dir != "")
 	var argv = append([]string{
-		g.Mc,
+		d.Mc,
 		"--json",
-		fmt.Sprintf("--config-dir=%s", g.mc_config_dir)},
+		fmt.Sprintf("--config-dir=%s", d.mc_config_dir)},
 		command...)
-	var timeout = (time.Duration(g.Backend_command_timeout) * time.Second)
+	var timeout = (time.Duration(d.Backend_command_timeout) * time.Second)
 	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	var cmd = exec.CommandContext(ctx, argv[0], argv[1:]...)
@@ -328,7 +328,7 @@ func execute_minio_mc_cmd(g *backend_minio, name string, command []string) *mini
 	cmd.Stdin = nil
 	cmd.Stdout = &outb
 	cmd.Stderr = &errb
-	cmd.Env = *g.environ
+	cmd.Env = *d.environ
 	var err1 = cmd.Run()
 	fmt.Println("cmd.Run()=", err1)
 	switch err2 := err1.(type) {
@@ -347,7 +347,7 @@ func execute_minio_mc_cmd(g *backend_minio, name string, command []string) *mini
 			argv, err1, outb.String(), errb.String())
 	}
 	var wstatus = cmd.ProcessState.ExitCode()
-	if g.verbose {
+	if d.verbose {
 		logger.debugf("Mux(minio) MC-command done:"+
 			" cmd=(%v) status=%v stdout=(%s) stderr=(%s)",
 			argv, wstatus, outb.String(), errb.String())
@@ -361,7 +361,7 @@ func execute_minio_mc_cmd(g *backend_minio, name string, command []string) *mini
 	}
 	var v1 = simplify_minio_mc_message(outb.Bytes())
 	if v1.err == nil {
-		if g.verbose {
+		if d.verbose {
 			logger.debugf("Mux(minio) MC-command OK: cmd=%v", command)
 		} else {
 			logger.debugf("Mux(minio) MC-command OK: cmd=%s", name)
@@ -374,43 +374,43 @@ func execute_minio_mc_cmd(g *backend_minio, name string, command []string) *mini
 	return v1
 }
 
-func minio_mc_alias_set(g *backend_minio) *minio_mc_result {
-	assert_fatal(g.mc_alias == "" && g.mc_config_dir == "")
+func minio_mc_alias_set(d *backend_minio) *minio_mc_result {
+	assert_fatal(d.mc_alias == "" && d.mc_config_dir == "")
 	var rnd = strings.ToLower(random_string(12))
-	var url = fmt.Sprintf("http://%s", g.be.Backend_ep)
-	//g.mc_config_dir = tempfile.TemporaryDirectory()
+	var url = fmt.Sprintf("http://%s", d.be.Backend_ep)
+	//d.mc_config_dir = tempfile.TemporaryDirectory()
 	var dir, err1 = os.MkdirTemp("", "lens3-mc-")
 	if err1 != nil {
 		logger.errf("Mux(minio) os.MkdirTemp() failed: err=(%v)", err1)
 		return &minio_mc_result{nil, err1}
 	}
-	g.mc_alias = fmt.Sprintf("pool-%s-%s", g.Pool, rnd)
-	g.mc_config_dir = dir
-	var v1 = execute_minio_mc_cmd(g, "alias_set",
-		[]string{"alias", "set", g.mc_alias, url,
-			g.be.Root_access, g.be.Root_secret,
+	d.mc_alias = fmt.Sprintf("pool-%s-%s", d.Pool, rnd)
+	d.mc_config_dir = dir
+	var v1 = execute_minio_mc_cmd(d, "alias_set",
+		[]string{"alias", "set", d.mc_alias, url,
+			d.be.Root_access, d.be.Root_secret,
 			"--api", "S3v4"})
 	if v1.err != nil {
-		g.mc_alias = ""
-		g.mc_config_dir = ""
+		d.mc_alias = ""
+		d.mc_config_dir = ""
 	}
 	return v1
 }
 
-func minio_mc_alias_remove(g *backend_minio) *minio_mc_result {
-	assert_fatal(g.mc_alias != "" && g.mc_config_dir != "")
-	var v1 = execute_minio_mc_cmd(g, "alias_remove",
-		[]string{"alias", "remove", g.mc_alias})
+func minio_mc_alias_remove(d *backend_minio) *minio_mc_result {
+	assert_fatal(d.mc_alias != "" && d.mc_config_dir != "")
+	var v1 = execute_minio_mc_cmd(d, "alias_remove",
+		[]string{"alias", "remove", d.mc_alias})
 	if v1.err == nil {
-		g.mc_alias = ""
-		g.mc_config_dir = ""
+		d.mc_alias = ""
+		d.mc_config_dir = ""
 	}
 	return v1
 }
 
-func minio_mc_admin_service_stop(g *backend_minio) *minio_mc_result {
-	var v1 = execute_minio_mc_cmd(g, "admin_service_stop",
-		[]string{"admin", "service", "stop", g.mc_alias})
+func minio_mc_admin_service_stop(d *backend_minio) *minio_mc_result {
+	var v1 = execute_minio_mc_cmd(d, "admin_service_stop",
+		[]string{"admin", "service", "stop", d.mc_alias})
 	return v1
 }
 

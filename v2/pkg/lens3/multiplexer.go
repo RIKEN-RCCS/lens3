@@ -235,17 +235,17 @@ func serve_authenticated_access(m *multiplexer, w http.ResponseWriter, r *http.R
 		return
 	}
 	fmt.Println("*** AHO#2-2")
-	var prop *pool_record = ensure_pool_existence(m, w, r, bucket.Pool)
-	if prop == nil {
+	var pooldata *pool_record = ensure_pool_existence(m, w, r, bucket.Pool)
+	if pooldata == nil {
 		return
 	}
 	fmt.Println("*** AHO#2-3")
-	if !ensure_user_is_active(m, w, r, prop.Owner_uid) {
+	if !ensure_user_is_active(m, w, r, pooldata.Owner_uid) {
 		return
 	}
 	fmt.Println("*** AHO#2-4")
 	//awake_suspended_pool()
-	if !ensure_pool_state(m, w, r, prop.Pool) {
+	if !ensure_pool_state(m, w, r, pooldata.Pool) {
 		return
 	}
 	if !ensure_permission_by_secret(m, w, r, secret) {
@@ -268,15 +268,15 @@ func serve_anonymous_access(m *multiplexer, w http.ResponseWriter, r *http.Reque
 	if !ensure_bucket_not_expired(m, w, r, bucket, now) {
 		return
 	}
-	var prop *pool_record = ensure_pool_existence(m, w, r, bucket.Pool)
-	if prop == nil {
+	var pooldata *pool_record = ensure_pool_existence(m, w, r, bucket.Pool)
+	if pooldata == nil {
 		return
 	}
-	if !ensure_user_is_active(m, w, r, prop.Owner_uid) {
+	if !ensure_user_is_active(m, w, r, pooldata.Owner_uid) {
 		return
 	}
 	//awake_suspended_pool()
-	if !ensure_pool_state(m, w, r, prop.Pool) {
+	if !ensure_pool_state(m, w, r, pooldata.Pool) {
 		return
 	}
 	if !ensure_permission_by_bucket(m, w, r, bucket) {
@@ -348,14 +348,14 @@ func serve_internal_access(m *multiplexer, w http.ResponseWriter, r *http.Reques
 	//var peer = r.RemoteAddr
 
 	var pool = secret.Pool
-	var prop *pool_record = ensure_pool_existence(m, w, r, pool)
-	if prop == nil {
+	var pooldata *pool_record = ensure_pool_existence(m, w, r, pool)
+	if pooldata == nil {
 		return
 	}
-	if !ensure_user_is_active(m, w, r, prop.Owner_uid) {
+	if !ensure_user_is_active(m, w, r, pooldata.Owner_uid) {
 		return
 	}
-	if !ensure_pool_state(m, w, r, prop.Pool) {
+	if !ensure_pool_state(m, w, r, pooldata.Pool) {
 		return
 	}
 
@@ -364,7 +364,7 @@ func serve_internal_access(m *multiplexer, w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	make_absent_buckets_in_backend(m, w, r, prop, secret)
+	make_absent_buckets_in_backend(m, w, r, pooldata, secret)
 }
 
 // CHECK_AUTHENTICATED checks the signature in an AWS Authorization
@@ -443,15 +443,15 @@ func ensure_backend_running(m *multiplexer, w http.ResponseWriter, r *http.Reque
 // ENSURE_POOL_EXISTENCE checks the pool exists.  It should never fail.
 // It is inconsistent if a bucket exists but a pool does not.
 func ensure_pool_existence(m *multiplexer, w http.ResponseWriter, r *http.Request, pool string) *pool_record {
-	var prop *pool_record = get_pool(m.table, pool)
-	if prop == nil {
+	var pooldata *pool_record = get_pool(m.table, pool)
+	if pooldata == nil {
 		return_mux_response(m, w, r, http_404_not_found,
 			[][2]string{
 				message_nonexisting_pool,
 			})
 		return nil
 	}
-	return prop
+	return pooldata
 }
 
 func ensure_user_is_active(m *multiplexer, w http.ResponseWriter, r *http.Request, uid string) bool {
@@ -660,8 +660,8 @@ func pick_bucket_in_path(m *multiplexer, r *http.Request) (string, *proxy_exc) {
 	return bucket, nil
 }
 
-func make_absent_buckets_in_backend(m *multiplexer, w http.ResponseWriter, r *http.Request, prop *pool_record, secret *secret_record) {
-	var pool = prop.Pool
+func make_absent_buckets_in_backend(m *multiplexer, w http.ResponseWriter, r *http.Request, pooldata *pool_record, secret *secret_record) {
+	var pool = pooldata.Pool
 
 	var buckets_needed = gather_buckets(m.table, pool)
 

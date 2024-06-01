@@ -68,7 +68,7 @@ func run_dummy_mux_client(m *multiplexer) {
 	fmt.Println("MUX CLIENT RUN...")
 	fmt.Println("")
 
-	var pool = "163a54e4c746633e"
+	var pool = "09f7b267c97308bc"
 	var err1 = probe_access_mux(m.table, pool)
 	fmt.Println("err=", err1)
 

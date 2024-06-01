@@ -36,7 +36,7 @@ type cmd struct {
 type dump_data struct {
 	Confs []*lens3_conf  `json:"Confs"`
 	Users []*user_record `json:"Users"`
-	Pools []*pool_data   `json:"Pools"`
+	Pools []*pool_prop   `json:"Pools"`
 }
 
 var cmd_table = map[string]*cmd{}
@@ -100,18 +100,18 @@ func dump_db__(t *keyval_table) *dump_data {
 	// Collect pools:
 	var poollist = list_pools(t, "*")
 	//fmt.Println("poollist=", poollist)
-	var pools []*pool_data
+	var poolprops []*pool_prop
 	for _, pool := range poollist {
-		var i = gather_pool_data(t, pool)
+		var i = gather_pool_prop(t, pool)
 		//fmt.Println("pool=", i)
 		if i != nil {
-			pools = append(pools, i)
+			poolprops = append(poolprops, i)
 		}
 	}
 	return &dump_data{
 		Confs: confs,
 		Users: users,
-		Pools: pools,
+		Pools: poolprops,
 	}
 }
 
@@ -298,16 +298,16 @@ var cmd_list = []*cmd{
 			} else {
 				list = args[1:]
 			}
-			var descs []*pool_data
+			var poolprops []*pool_prop
 			for _, name := range list {
-				var d = gather_pool_data(adm.table, name)
+				var d = gather_pool_prop(adm.table, name)
 				if d == nil {
 					fmt.Printf("No pool found for {pid}")
 				} else {
-					descs = append(descs, d)
+					poolprops = append(poolprops, d)
 				}
 			}
-			for _, x := range descs {
+			for _, x := range poolprops {
 				print_in_json(x)
 			}
 		},
@@ -361,14 +361,14 @@ var cmd_list = []*cmd{
 		run: func(adm *adm, args []string) {
 			fmt.Println("// dumping...")
 			var poollist = list_pools(adm.table, "*")
-			var pools []*pool_data
+			var poolprops []*pool_prop
 			for _, pool := range poollist {
-				var i = gather_pool_data(adm.table, pool)
+				var i = gather_pool_prop(adm.table, pool)
 				if i != nil {
-					pools = append(pools, i)
+					poolprops = append(poolprops, i)
 				}
 			}
-			dump_in_json_to_file(args[1], pools)
+			dump_in_json_to_file(args[1], poolprops)
 		},
 	},
 

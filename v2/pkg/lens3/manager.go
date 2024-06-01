@@ -263,8 +263,8 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 	//delete_backend(w.table, pool)
 	defer delete_backend_exclusion(w.table, pool)
 
-	var poolprop = get_pool(w.table, pool)
-	if poolprop == nil {
+	var pooldata = get_pool(w.table, pool)
+	if pooldata == nil {
 		logger.warnf("Mux() start_backend() pool is missing: pool=%s", pool)
 		return nil
 	}
@@ -274,7 +274,7 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 	// Initialize the super-part.
 
 	var proc *backend_process = g.get_super_part()
-	proc.pool_record = *poolprop
+	proc.pool_record = *pooldata
 	proc.be = &backend_record{
 		Pool:        pool,
 		Backend_ep:  "",

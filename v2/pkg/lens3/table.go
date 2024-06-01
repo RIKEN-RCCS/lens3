@@ -41,18 +41,18 @@ const (
 	db_user_data_prefix  = "uu:"
 	db_user_claim_prefix = "um:"
 
-	db_pool_prop_prefix = "po:"
+	db_pool_data_prefix = "po:"
 	db_directory_prefix = "bd:"
 	db_pool_name_prefix = "px:"
-	db_secret_prefix    = "sx:"
 	db_bucket_prefix    = "bk:"
+	db_secret_prefix    = "sx:"
 
 	db_mux_ep_prefix            = "mu:"
-	db_backend_exclusion_prefix = "bx:"
-	db_backend_data_prefix      = "be:"
-	db_csrf_token_prefix        = "ut:"
+	db_backend_data_prefix      = "de:"
+	db_backend_exclusion_prefix = "dx:"
+	db_csrf_token_prefix        = "tn:"
 	db_pool_state_prefix        = "ps:"
-	db_access_timestamp_prefix  = "ts:"
+	db_pool_timestamp_prefix    = "pt:"
 	db_user_timestamp_prefix    = "us:"
 	//db_backend_ep_prefix     = "ep:"
 )
@@ -69,7 +69,7 @@ var prefix_to_db_number_assignment = map[string]int{
 	db_user_data_prefix:  setting_db,
 	db_user_claim_prefix: setting_db,
 
-	db_pool_prop_prefix: storage_db,
+	db_pool_data_prefix: storage_db,
 	db_directory_prefix: storage_db,
 	db_pool_name_prefix: storage_db,
 	db_secret_prefix:    storage_db,
@@ -80,7 +80,7 @@ var prefix_to_db_number_assignment = map[string]int{
 	db_backend_data_prefix:      process_db,
 	db_csrf_token_prefix:        process_db,
 	db_pool_state_prefix:        process_db,
-	db_access_timestamp_prefix:  process_db,
+	db_pool_timestamp_prefix:    process_db,
 	db_user_timestamp_prefix:    process_db,
 	//db_backend_ep_prefix:       process_db,
 }
@@ -103,7 +103,7 @@ type user_record struct {
 	Timestamp                  int64 `json:"timestamp"`
 }
 
-// "ut:" + uid Entry (db_csrf_token_prefix).
+// "tn:" + uid Entry (db_csrf_token_prefix).
 type csrf_token_record struct {
 	Csrf_token_c string `json:"csrf_token_c"`
 	Csrf_token_h string `json:"csrf_token_h"`
@@ -122,7 +122,7 @@ type pool_mutex_record struct {
 	Timestamp int64  `json:"timestamp"`
 }
 
-// "po:" + pool-name Entry (DB_POOL_PROP_PREFIX).
+// "po:" + pool-name Entry (DB_POOL_DATA_PREFIX).
 // Constraint: (key≡pool_record.Pool).
 type pool_record struct {
 	Pool              string `json:"pool"`
@@ -135,7 +135,7 @@ type pool_record struct {
 	Timestamp         int64  `json:"timestamp"`
 }
 
-// "bx:" + pool-name Entry (DB_BACKEND_EXCLUSION_PREFIX).  This entry
+// "dx:" + pool-name Entry (DB_BACKEND_EXCLUSION_PREFIX).  This entry
 // is a temporarily created mutex to run a single backend.
 type backend_exclusion_record struct {
 	Mux_ep    string `json:"mux_ep"`
@@ -151,7 +151,7 @@ type pool_state_record struct {
 	Timestamp int64       `json:"timestamp"`
 }
 
-// "be:" + pool-name Entry (DB_BACKEND_DATA_PREFIX).  A pair of
+// "de:" + pool-name Entry (DB_BACKEND_DATA_PREFIX).  A pair of
 // root_access and root_secret is a credential for accessing a
 // backend.  Timestamp is a start time.  Constraint:
 // (key≡backend_record.Pool).
@@ -204,7 +204,7 @@ type mux_record struct {
 	Timestamp  int64  `json:"timestamp"`
 }
 
-// "ts:" + pool-name Entry (DB_ACCESS_TIMESTAMP_PREFIX).
+// "pt:" + pool-name Entry (DB_POOL_TIMESTAMP_PREFIX).
 // type int64
 
 // "us:" + uid Entry (DB_USER_TIMESTAMP_PREFIX).
@@ -595,23 +595,23 @@ func clear_user_claim(t *keyval_table, uid string) {
 
 func set_pool(t *keyval_table, pool string, data *pool_record) {
 	assert_fatal(data.Pool == pool)
-	db_set_with_prefix(t, db_pool_prop_prefix, pool, data)
+	db_set_with_prefix(t, db_pool_data_prefix, pool, data)
 }
 
 func get_pool(t *keyval_table, pool string) *pool_record {
 	var data pool_record
-	var ok = db_get_with_prefix(t, db_pool_prop_prefix, pool, &data)
+	var ok = db_get_with_prefix(t, db_pool_data_prefix, pool, &data)
 	return ITE(ok, &data, nil)
 }
 
 func delete_pool(t *keyval_table, pool string) {
-	db_del_with_prefix(t, db_pool_prop_prefix, pool)
+	db_del_with_prefix(t, db_pool_data_prefix, pool)
 }
 
 // LIST_POOLS returns a list of all pool-names when the argument is
 // pool="*".  Or, it checks the existence of a pool.
 func list_pools(t *keyval_table, pool string) []string {
-	var prefix = db_pool_prop_prefix
+	var prefix = db_pool_data_prefix
 	var keyi = scan_table(t, prefix, pool)
 	var pools []string
 	for keyi.Next(t.ctx) {
@@ -842,22 +842,22 @@ func list_buckets(t *keyval_table, pool string) []*bucket_record {
 
 func set_access_timestamp(t *keyval_table, pool string) {
 	var now int64 = time.Now().Unix()
-	db_set_with_prefix(t, db_access_timestamp_prefix, pool, now)
+	db_set_with_prefix(t, db_pool_timestamp_prefix, pool, now)
 }
 
 func get_access_timestamp(t *keyval_table, pool string) int64 {
 	var data int64
-	var ok = db_get_with_prefix(t, db_access_timestamp_prefix, pool, &data)
+	var ok = db_get_with_prefix(t, db_pool_timestamp_prefix, pool, &data)
 	return ITE(ok, data, 0)
 }
 
 func delete_access_timestamp(t *keyval_table, pool string) {
-	db_del_with_prefix(t, db_access_timestamp_prefix, pool)
+	db_del_with_prefix(t, db_pool_timestamp_prefix, pool)
 }
 
 // LIST_ACCESS_TIMESTAMPS returns a list of (pool-id, ts) pairs.
 func list_access_timestamps(t *keyval_table) []name_timestamp_pair {
-	var prefix = db_access_timestamp_prefix
+	var prefix = db_pool_timestamp_prefix
 	var keyi = scan_table(t, prefix, "*")
 	var descs []name_timestamp_pair
 	for keyi.Next(t.ctx) {

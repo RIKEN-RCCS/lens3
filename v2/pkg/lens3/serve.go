@@ -143,17 +143,18 @@ func handle_unix_signals(t *keyval_table, ch_quit chan vacuous) {
 	signal.Notify(ch_sig, unix.SIGINT, unix.SIGTERM, unix.SIGHUP)
 
 	go func() {
+	watchloop:
 		for signal := range ch_sig {
 			switch signal {
 			case unix.SIGINT:
 				fmt.Println("SIGINT")
-				break
+				break watchloop
 			case unix.SIGTERM:
 				fmt.Println("SIGTERM")
-				break
+				break watchloop
 			case unix.SIGHUP:
 				fmt.Println("SIGHUP")
-				break
+				break watchloop
 			}
 		}
 		// (Graceful killing here).

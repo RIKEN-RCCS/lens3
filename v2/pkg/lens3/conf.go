@@ -41,6 +41,7 @@ type mux_conf struct {
 	Manager     manager_conf     `json:"manager"`
 	Minio       minio_conf       `json:"minio"`
 	Rclone      rclone_conf      `json:"rclone"`
+	Mqtt        mqtt_conf        `json:"mqtt"`
 	Log_file    string           `json:"log_file"`
 	Log_syslog  syslog_conf      `json:"log_syslog"`
 }
@@ -75,6 +76,7 @@ type multiplexer_conf struct {
 	Mux_node_name           string       `json:"mux_node_name"`
 	Backend                 backend_name `json:"backend"`
 	Backend_command_timeout time_in_sec  `json:"backend_command_timeout"`
+	Alert                   string       `json:"alert"`
 	Mux_access_log_file     string       `json:"mux_access_log_file"`
 }
 
@@ -127,6 +129,11 @@ type minio_conf struct {
 }
 
 type rclone_conf struct {
+	Rclone          string   `json:"rclone"`
+	Command_options []string `json:"command_options"`
+}
+
+type mqtt_conf struct {
 	Minio string `json:"minio"`
 	Mc    string `json:"mc"`
 }

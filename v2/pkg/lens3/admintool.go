@@ -14,6 +14,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -143,15 +144,30 @@ func load_user(t *keyval_table, filename string) {
 	}
 	defer r1.Close()
 	var e = csv.NewReader(r1)
-	// Set variable of number of columns.
+	// Set as variable number of columns.
 	e.FieldsPerRecord = -1
 	var users, err2 = e.ReadAll()
 	if err2 != nil {
 		log.Panicf("Reading csv entry failed: err=(%v).\n", err2)
 	}
+
+	// Sort rows to process ADD rows first.
+
+	var ordering = map[string]int{
+		// Zero for missing key.
+		"ADD":     1,
+		"MODIFY":  1,
+		"DELETE":  2,
+		"ENABLE":  3,
+		"DISABLE": 4,
+	}
+	slices.SortFunc(users, func(a, b []string) int {
+		return ordering[a[0]] - ordering[b[0]]
+	})
+
 	for _, record := range users {
 		switch record[0] {
-		case "ADD":
+		case "ADD", "MODIFY":
 			// ADD,uid,claim,group,...
 			var groupok = func() bool {
 				for _, g := range record[3:] {
@@ -181,6 +197,9 @@ func load_user(t *keyval_table, filename string) {
 				Check_terms_and_conditions: false,
 				Timestamp:                  now,
 			}
+			if record[0] == "ADD" {
+				deregister_user(t, u.Uid)
+			}
 			add_user(t, u)
 		case "DELETE", "ENABLE", "DISABLE":
 			// DELETE,uid,...
@@ -206,7 +225,7 @@ func load_user(t *keyval_table, filename string) {
 				}
 				switch op {
 				case "DELETE":
-					delete_user(t, n)
+					deregister_user(t, n)
 				case "ENABLE", "DISABLE":
 					u.Enabled = (op == "ENABLE")
 					add_user(t, u)
@@ -310,7 +329,7 @@ func restore_db(t *keyval_table, filename string) {
 	}
 }
 
-func remove_db_entry(t *keyval_table, key string) {
+func delete_db_entry(t *keyval_table, key string) {
 	adm_del_db_raw(t, key)
 }
 
@@ -445,14 +464,17 @@ var cmd_list = []*cmd{
 
 		doc: `Loads users in csv format.  It adds or deletes users as
         in the list.  It reads rows starting with one of: "ADD",
-        "DELETE", "ENABLE", or "DISABLE".  Add rows are:
+        "MODIFY", "DELETE", "ENABLE", or "DISABLE".  Add and modify
+        are almost the same.  Add rows consist of:
         ADD,uid,claim,group,... (the rest is a group list).  The claim
         is an X-Remote-User key or empty.  A group list needs at least
-        one entry.  Adding a row overwrites the old one, but keeps an
-        enabled state.  DELETE, ENABLE and DISABLE take rows of a uid
-        list: DELETE,uid,...  It processes all add rows first, then
-        the delete rows, enable rows, and disable rows in this order.
-        Do not put spaces around a comma or trailing commas in csv.`,
+        one entry.  Adding and modifying work differently on existing
+        users.  Adding resets the user and deletes the pools owned.
+        Modifying keeps the pools.  DELETE, ENABLE and DISABLE take
+        rows of a uid list: DELETE,uid,...  It processes all
+        add/modify rows first, then the delete, enable, and disable in
+        this order.  Do not put spaces around a comma or trailing
+        commas in csv.`,
 
 		run: func(adm *adm, args []string) {
 			load_user(adm.table, args[1])
@@ -583,7 +605,7 @@ var cmd_list = []*cmd{
 		synopsis: "remove-db-entry key",
 		doc:      `Removes an entry in the keyval-db by a key.`,
 		run: func(adm *adm, args []string) {
-			remove_db_entry(adm.table, args[1])
+			delete_db_entry(adm.table, args[1])
 		},
 	},
 

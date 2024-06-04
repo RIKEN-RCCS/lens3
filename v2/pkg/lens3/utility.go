@@ -94,6 +94,11 @@ type proxy_exc struct {
 	message [][2]string
 }
 
+type registrar_error_exc struct {
+	code    int
+	message [][2]string
+}
+
 func (e *termination_exc) Error() string {
 	return "termination_exc:" + e.m
 }
@@ -104,6 +109,10 @@ func (e *reg_error_exc) Error() string {
 
 func (e *proxy_exc) Error() string {
 	return fmt.Sprintf("proxy_exc: %v", e.message)
+}
+
+func (e *registrar_error_exc) Error() string {
+	return fmt.Sprintf("registrar_error_exc: %v", e.message)
 }
 
 func mux_err(code int, s string) {

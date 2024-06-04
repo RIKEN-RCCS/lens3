@@ -1,4 +1,4 @@
-/* S3-server handler for MinIO. */
+/* S3-server delegate for MinIO. */
 
 // Copyright 2022-2024 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
@@ -57,7 +57,7 @@ type backend_minio struct {
 }
 
 // BACKEND_MINIO_CONF is a static and common part of a MinIO backend.
-// It doubles as a factory.
+// It has double roles as a factory.
 type backend_minio_conf struct {
 	*minio_conf
 	//bin_minio string
@@ -75,16 +75,15 @@ type backend_minio_conf struct {
 
 var the_backend_minio_factory = &backend_minio_conf{}
 
-func (fa *backend_minio_conf) make_backend(pool string) backend {
-	var g = &backend_minio{}
+func (fa *backend_minio_conf) make_delegate(pool string) backend {
+	var d = &backend_minio{}
 	// Set the super part.
-	g.Pool = pool
-	g.be = nil
-	g.manager_conf = &the_manager.manager_conf
+	d.Pool = pool
+	d.be = nil
 	// Set the local part.
-	g.backend_minio_conf = the_backend_minio_factory
-	runtime.SetFinalizer(g, finalize_backend_minio)
-	return g
+	d.backend_minio_conf = the_backend_minio_factory
+	runtime.SetFinalizer(d, finalize_backend_minio)
+	return d
 }
 
 func (fa *backend_minio_conf) configure(conf *mux_conf) {
@@ -116,14 +115,14 @@ func (d *backend_minio) get_super_part() *backend_process {
 	return &(d.backend_process)
 }
 
-func (proc *backend_minio) make_command_line(address string, directory string) backend_command {
+func (d *backend_minio) make_command_line(address string, directory string) backend_command {
 	var argv = []string{
-		proc.Minio,
+		d.Minio,
 		"--json", "--anonymous", "server",
 		"--address", address, directory}
 	var envs = []string{
-		fmt.Sprintf("MINIO_ROOT_USER=%s", proc.be.Root_access),
-		fmt.Sprintf("MINIO_ROOT_PASSWORD=%s", proc.be.Root_secret),
+		fmt.Sprintf("MINIO_ROOT_USER=%s", d.be.Root_access),
+		fmt.Sprintf("MINIO_ROOT_PASSWORD=%s", d.be.Root_secret),
 		fmt.Sprintf("MINIO_BROWSER=%s", "off"),
 	}
 	return backend_command{argv, envs}
@@ -255,7 +254,7 @@ func has_expected_response(m map[string]interface{}) bool {
 	return strings.HasPrefix(s, minio_expected_response)
 }
 
-// MINIO_MC_RESULT is a decoding of an output of a MC-command.  On an
+// MINIO_MC_RESULT is a decoding of an output of an MC-command.  On an
 // error, it returns {nil,error}.
 type minio_mc_result struct {
 	values []map[string]any
@@ -305,57 +304,53 @@ func simplify_minio_mc_message(s []byte) *minio_mc_result {
 	return &minio_mc_result{mm, nil}
 }
 
-// EXECUTE_MINIO_MC_CMD runs an MC-command command and checks its output.
+// EXECUTE_MINIO_MC_CMD runs an MC-command and checks its output.
 // Note that a timeout kills the process by SIGKILL.  MEMO: Timeout of
 // context returns "context.deadlineExceededError".
 func execute_minio_mc_cmd(d *backend_minio, name string, command []string) *minio_mc_result {
 	//var proc = d.get_super_part()
 	assert_fatal(d.mc_alias != "" && d.mc_config_dir != "")
-	var argv = append([]string{
+	var argv = []string{
 		d.Mc,
 		"--json",
-		fmt.Sprintf("--config-dir=%s", d.mc_config_dir)},
-		command...)
+		fmt.Sprintf("--config-dir=%s", d.mc_config_dir),
+	}
+	argv = append(argv, command...)
 	var timeout = (time.Duration(d.Backend_command_timeout) * time.Second)
 	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	var cmd = exec.CommandContext(ctx, argv[0], argv[1:]...)
-	var outb, errb bytes.Buffer
+	var stdoutb, stderrb bytes.Buffer
 	cmd.Stdin = nil
-	cmd.Stdout = &outb
-	cmd.Stderr = &errb
+	cmd.Stdout = &stdoutb
+	cmd.Stderr = &stderrb
 	cmd.Env = *d.environ
 	var err1 = cmd.Run()
 	//fmt.Println("cmd.Run()=", err1)
+	var wstatus = cmd.ProcessState.ExitCode()
 	switch err2 := err1.(type) {
 	case nil:
 		// OK.
+		if d.verbose {
+			logger.debugf("Mux(minio) MC-command done:"+
+				" cmd=(%v) exit=%d stdout=(%s) stderr=(%s)",
+				argv, wstatus, stdoutb.String(), stderrb.String())
+		}
 	case *exec.ExitError:
 		// Not successful.
-		var status = err2.ProcessState.ExitCode()
-		logger.errf("Mux(minio) MC-command failed:"+
-			" cmd=(%v) exit=%d error=(%v) stdout=(%s) stderr=(%s)",
-			argv, status, err2, outb.String(), errb.String())
+		if wstatus == -1 {
+			logger.errf("Mux(minio) MC-command signaled/unfinished:"+
+				" cmd=(%v) err=(%v) stdout=(%s) stderr=(%s)",
+				argv, err2, stdoutb.String(), stderrb.String())
+			return &minio_mc_result{nil, err2}
+		}
 	default:
-		//fmt.Printf("cmd.Run()=%T %v", err1, err1)
+		// Error.
 		logger.errf("Mux(minio) MC-command failed:"+
-			" cmd=(%v) error=(%v) stdout=(%s) stderr=(%s)",
-			argv, err1, outb.String(), errb.String())
+			" cmd=(%v) err=(%v) stdout=(%s) stderr=(%s)",
+			argv, err1, stdoutb.String(), stderrb.String())
 	}
-	var wstatus = cmd.ProcessState.ExitCode()
-	if d.verbose {
-		logger.debugf("Mux(minio) MC-command done:"+
-			" cmd=(%v) status=%v stdout=(%s) stderr=(%s)",
-			argv, wstatus, outb.String(), errb.String())
-	}
-	if wstatus == -1 {
-		logger.errf("Mux(minio) MC-command unfinished:"+
-			" cmd=(%v) stdout=(%s) stderr=(%s)",
-			argv, outb.String(), errb.String())
-		var err3 = fmt.Errorf("MC-command unfinished: (%s)", outb.String())
-		return &minio_mc_result{nil, err3}
-	}
-	var v1 = simplify_minio_mc_message(outb.Bytes())
+	var v1 = simplify_minio_mc_message(stdoutb.Bytes())
 	if v1.err == nil {
 		if d.verbose {
 			logger.debugf("Mux(minio) MC-command OK: cmd=(%v)", command)
@@ -364,8 +359,8 @@ func execute_minio_mc_cmd(d *backend_minio, name string, command []string) *mini
 		}
 	} else {
 		logger.errf("Mux(minio) MC-command failed:"+
-			" cmd=(%v) error=(%v) stdout=(%v) stderr=(%v)",
-			argv, v1.err, outb, errb)
+			" cmd=(%v) err=(%v) stdout=(%s) stderr=(%s)",
+			argv, v1.err, stdoutb.String(), stderrb.String())
 	}
 	return v1
 }

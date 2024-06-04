@@ -34,6 +34,10 @@
     "minio": "/usr/local/bin/minio",
     "mc": "/usr/local/bin/mc"
   },
+  "rclone": {
+    "rclone": "/usr/local/bin/rclone",
+    "command_options": []
+  },
   "log_file": "/tmp/lens3-reg-log",
   "log_syslog": {
     "facility": "LOCAL7",

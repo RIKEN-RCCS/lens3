@@ -574,8 +574,8 @@ func delete_pool_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 		return nil
 	}
 
-	var d = gather_pool_prop(z.table, pool)
-	if d == nil {
+	var ok = deregister_pool(z.table, pool)
+	if !ok {
 		return_reg_error_response(z, w, r, http_400_bad_request,
 			[][2]string{
 				message_No_pool,
@@ -587,42 +587,6 @@ func delete_pool_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 	// activate_backend(pool)
 	// disable_backend_secrets()
 	// disable_backend_buckets()
-
-	// Delete buckets_directory.
-
-	var path = d.Buckets_directory
-	var ok1 = delete_buckets_directory_unconditionally(z.table, path)
-	if !ok1 {
-		logger.infof("delete_buckets_directory failed (ignored)")
-	}
-
-	// Delete buckets.
-
-	var bkts = d.Buckets
-	for _, b := range bkts {
-		assert_fatal(b.Pool == pool)
-		var ok2 = delete_bucket_unconditionally(z.table, b.Bucket)
-		if !ok2 {
-			logger.infof("delete_bucket failed (ignored)")
-		}
-	}
-
-	// Delete access-keys.
-
-	for _, k := range d.Secrets {
-		assert_fatal(k.Pool == pool)
-		var ok = delete_secret_key_unconditionally(z.table, k.Access_key)
-		if !ok {
-			logger.infof("delete_secret_key failed (ignored)")
-		}
-	}
-
-	// DOIT OR NOT DOIT: set none-policy to buckets for MinIO backend.
-
-	//erase_backend_ep(self.tables, pool)
-	//erase_pool_prop(self.tables, pool)
-
-	delete_pool(z.table, pool)
 
 	var rspn = &success_response{
 		response_common: response_common{
@@ -1511,4 +1475,85 @@ func list_groups_of_user(z *registrar, uid string) []string {
 		groups = append(groups, gr.Name)
 	}
 	return groups
+}
+
+// LIST_POOLS_OF_USER returns a list of pools that are owned by a
+// specified user.
+func list_pools_of_user(t *keyval_table, uid string) []string {
+	var namelist = list_pools(t, "*")
+	var list []string
+	for _, pool := range namelist {
+		var p = get_pool(t, pool)
+		if p != nil && p.Owner_uid == uid {
+			list = append(list, pool)
+		}
+	}
+	return list
+}
+
+// DEREGISTER_USER deletes a user, along with its pool.  Deleting a
+// pool additionally deletes its assets.
+func deregister_user(t *keyval_table, uid string) {
+	var poolnames = list_pools_of_user(t, uid)
+	for _, pool := range poolnames {
+		//var p = gather_pool_prop(t, pool)
+		//if p == nil {
+		//continue
+		//}
+		// Ignore errors.
+		var _ = deregister_pool(t, pool)
+	}
+	delete_user(t, uid)
+	delete_user_timestamp(t, uid)
+}
+
+// DEREGISTER_POOL deletes a pool, along with its buckets-directory,
+// buckets, and access-keys.  It returns OK/NG.  It ignores most of
+// the errors but only fails when a pool is not found.  IT DOES
+// NOTHING TO A BACKEND.  That is, it does not remove or disable
+// buckets in the backend.
+func deregister_pool(t *keyval_table, pool string) bool {
+	var p = gather_pool_prop(t, pool)
+	if p == nil {
+		return false
+	}
+
+	// Delete buckets_directory.
+
+	var path = p.Buckets_directory
+	var ok1 = delete_buckets_directory_unconditionally(t, path)
+	if !ok1 {
+		logger.infof("Reg() Deleting a buckets directory failed (ignored): %s",
+			path)
+	}
+
+	// Delete buckets.
+
+	var bkts = p.Buckets
+	for _, b := range bkts {
+		assert_fatal(b.Pool == p.pool_record.Pool)
+		var ok2 = delete_bucket_unconditionally(t, b.Bucket)
+		if !ok2 {
+			logger.infof("Reg() Deleting a bucket failed (ignored): %s",
+				b.Bucket)
+		}
+	}
+
+	// Delete access-keys.
+
+	for _, k := range p.Secrets {
+		assert_fatal(k.Pool == p.pool_record.Pool)
+		var ok = delete_secret_key_unconditionally(t, k.Access_key)
+		if !ok {
+			logger.infof("Reg() Deleting a secret-key failed (ignored): %s",
+				k.Access_key)
+		}
+	}
+
+	//erase_backend_ep(self.tables, pool)
+	//erase_pool_prop(self.tables, pool)
+
+	delete_pool(t, p.pool_record.Pool)
+
+	return true
 }

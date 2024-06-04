@@ -1111,7 +1111,7 @@ func load_db_data(w *redis.StringCmd, data any) bool {
 	d.DisallowUnknownFields()
 	var err2 = d.Decode(data)
 	if err2 != nil {
-		logger.errf("Bad json data in the keyval-db: %v", err2)
+		logger.errf("Bad json data in the keyval-db: %#v", err2)
 		raise(&table_exc{m: "json-unmarshal errs", e: err2})
 	}
 	return true

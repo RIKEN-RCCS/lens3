@@ -93,7 +93,7 @@ type manager struct {
 type backend_factory interface {
 	configure(conf *mux_conf)
 	clean_at_exit()
-	make_backend(string) backend
+	make_delegate(string) backend
 }
 
 // BACKEND is a backend specific part.  A backend shall not start its
@@ -209,7 +209,17 @@ func configure_manager(w *manager, m *multiplexer, t *keyval_table, q chan vacuo
 
 	w.mux_ep = m.mux_ep
 
-	w.factory = the_backend_minio_factory
+	switch c.Multiplexer.Backend {
+	case "minio":
+		w.factory = the_backend_minio_factory
+	case "rclone":
+		w.factory = the_backend_rclone_factory
+	default:
+		logger.errf("Mux() Configuration error, unknown backend (%s)",
+			c.Multiplexer.Backend)
+		log.Panic("")
+	}
+
 	w.factory.configure(c)
 }
 
@@ -268,7 +278,7 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 		return nil
 	}
 
-	var d = w.factory.make_backend(pool)
+	var d = w.factory.make_delegate(pool)
 
 	// Initialize the super-part.
 
@@ -284,9 +294,9 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 		Mux_pid:     w.multiplexer.mux_pid,
 		Timestamp:   0,
 	}
-
 	proc.verbose = true
 	proc.environ = &w.environ
+	proc.manager_conf = &w.manager_conf
 
 	// The following fields are set in starting a backend.
 

@@ -21,6 +21,8 @@ package lens3
 //
 // Some rc-commands: "core/quit", "job/list"
 
+// MEMO: rc-port is http://127.0.0.1:5572/
+
 // MEMO: Option "--config=notfound" lets not use the rclone.conf file.
 // "notfound" is a keyword.
 //
@@ -29,9 +31,9 @@ package lens3
 
 import (
 	"bytes"
-	"errors"
-	//"encoding/json"
+	//"errors"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	//"maps"
@@ -43,33 +45,44 @@ import (
 	//"path/filepath"
 	//"log"
 	"net/http"
+	"regexp"
 	"runtime"
 	"strconv"
-	//"strings"
-	"regexp"
+	"strings"
 	//"time"
 	//"reflect"
 )
 
-// Messages from rclone at its start-up.  The regexp has a matching
-// part for extracting the port number for RC commands from
-// rclone_response_control.
+// Messages Patterns.  These are messages from rclone at its start-up.
+// Lens3 avoids using "--use-json-log", since some messages are not in
+// json in rclone-v1.66.0.  The regexp has matching parts (host and
+// port) for extracting the port number from the url in the message.
 var (
 	date_time_pattern = `\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}`
-	url_pattern       = `http://[^:]*:([0-9]*)`
+	url_pattern       = `http://([^:]*|\[[^\]]*\]):([0-9]*)/`
 
 	rclone_response_expected_re = regexp.MustCompile(
 		`^` + date_time_pattern +
 			` NOTICE: Local file system at [^:]*:` +
 			` Starting s3 server on \[` + url_pattern + `\]$`)
-	rclone_response_control_re = regexp.MustCompile(
+
+	rclone_response_control_url_re = regexp.MustCompile(
 		`^` + date_time_pattern +
 			` NOTICE: Serving remote control on ` +
-			url_pattern + `/$`)
+			url_pattern + `$`)
+
+	rclone_response_s3_failure_re = regexp.MustCompile(
+		`^` + date_time_pattern +
+			` Failed to s3: .*$`)
+
 	rclone_response_port_in_use_re = regexp.MustCompile(
 		`^` + date_time_pattern +
 			` Failed to s3: failed to init server: listen tcp :[0-9]*:` +
 			` bind: address already in use$`)
+
+	rclone_response_rc_failure_re = regexp.MustCompile(
+		`^` + date_time_pattern +
+			` Failed to start remote control: .*$`)
 )
 
 // BACKEND_RCLONE is a manager for rclone.
@@ -136,54 +149,81 @@ func (d *backend_rclone) make_command_line(address string, directory string) bac
 }
 
 // CHECK_STARTUP decides the server state.  See "backend_minio.go".
-func (d *backend_rclone) check_startup(outerr int, ss []string) start_result {
-	fmt.Println("rclone.check_startup()")
-	var mm, _ = decode_json(ss)
-	//fmt.Printf("mm=%T\n", mm)
-	if len(mm) == 0 {
+func (d *backend_rclone) check_startup(stream int, mm []string) start_result {
+	fmt.Println("rclone.check_startup1(%v)", mm)
+	if stream == on_stdout {
 		return start_result{
 			start_state: start_ongoing,
 			message:     "--",
 		}
 	}
-	// var m1, fatal1 = check_fatal_exists(mm)
-	var m1, error1 = find_one(mm, has_level_fatal)
-	if error1 {
-		assert_fatal(m1 != nil)
-		var msg = get_string(m1, "message")
-		switch {
-		case rclone_response_port_in_use_re.MatchString(msg):
-			//case strings.HasPrefix(msg, rclone_response_port_in_use):
+	fmt.Println("rclone.check_startup2(%v)", mm)
+
+	var got_failure = rclone_response_s3_failure_re.MatchString
+	var failure_found, m1 = find_one(mm, got_failure)
+	if failure_found {
+		var port_in_use = rclone_response_port_in_use_re.MatchString(m1)
+		if port_in_use {
 			return start_result{
 				start_state: start_to_retry,
-				message:     msg,
+				message:     m1,
 			}
-		default:
+		} else {
 			return start_result{
 				start_state: start_failed,
-				message:     msg,
+				message:     m1,
 			}
 		}
 	}
-	// var m2, expected1 = check_expected_exists(mm)
-	var m2, expected1 = find_one(mm, has_expected_response)
-	if expected1 {
-		assert_fatal(m2 != nil)
-		var msg = get_string(m2, "message")
-		fmt.Println("*** EXPECTED=", msg)
+	var got_expected = rclone_response_expected_re.MatchString
+	var got_control = rclone_response_control_url_re.MatchString
+	var expected_found, m2 = find_one(mm, got_expected)
+	var control_found, m3 = find_one(mm, got_control)
+	switch {
+	case expected_found && control_found:
+		var port, ok1 = parse_rclone_control_url_response(m3)
+		if !ok1 {
+			logger.errf("Mux(rclone) Got an expected message of rclone"+
+				" but with a bad control url message: (%s)", m3)
+			return start_result{
+				start_state: start_failed,
+				message:     ("bad control url message: " + m3),
+			}
+		}
+		fmt.Println("*** EXPECTED=", port, m2)
+		d.rc_port = port
 		return start_result{
 			start_state: start_started,
-			message:     msg,
+			message:     m2,
 		}
-	}
-	return start_result{
-		start_state: start_ongoing,
-		message:     "--",
+	case expected_found && !control_found:
+		logger.errf("Mux(rclone) Got an expected message of rclone" +
+			" but without a control url message")
+		return start_result{
+			start_state: start_failed,
+			message:     m1,
+		}
+	default:
+		return start_result{
+			start_state: start_ongoing,
+			message:     "--",
+		}
 	}
 }
 
+func parse_rclone_control_url_response(m string) (int, bool) {
+	var w1 = rclone_response_control_url_re.FindStringSubmatch(m)
+	if len(w1) != 3 {
+		return 0, false
+	}
+	var port, err1 = strconv.Atoi(w1[2])
+	if err1 != nil {
+		return 0, false
+	}
+	return port, true
+}
+
 func (d *backend_rclone) establish() error {
-	fmt.Println("rclone.establish()")
 	return nil
 }
 
@@ -212,7 +252,7 @@ func (d *backend_rclone) heartbeat() int {
 	}
 
 	var c = d.heartbeat_client
-	var rsp, err1 = c.Get(d.heartbeat_url)
+	var rsp, err1 = c.Head(d.heartbeat_url)
 	if err1 != nil {
 		logger.debugf("Mux(rclone) Heartbeat failed (http.Client.Get()):"+
 			" pool=(%s) err=(%v)", proc.Pool, err1)
@@ -231,51 +271,34 @@ func (d *backend_rclone) heartbeat() int {
 // RCLONE_RC_RESULT is a decoding of an output of an RC-command.  On an
 // error, it returns {nil,error}.
 type rclone_rc_result struct {
-	values []map[string]any
-	err    error
+	value map[string]any
+	err   error
 }
 
-// SIMPLIFY_RCLONE_RC_MESSAGE returns a 2-tuple {[value,...], ""} on success,
-// or {nil, error-cause} on failure.  It extracts a message part from
-// an error message.  RC-command may return zero or more values as
-// separate json records.  An empty output is a proper success.  Each
-// record is {"status": "success", ...}, containing a value.  An error
-// record looks like: {"status": "error", "error": {"message":, ...,
-// "cause": {"error": {"Code": ..., ...}}}}.  The
-// "error/cause/error/Code" slot will be a keyword of useful
-// information if it exists.  A returned 2-tuple may have a whole
-// message instead of a cause-code if the slot is missing.
+// SIMPLIFY_RCLONE_RC_MESSAGE returns a 2-tuple {value,nil} on
+// success, or {nil,err} on failure or decoding error.  An empty
+// output is a proper success.  A failure output looks like
+// {"error":message,...}.
 func simplify_rclone_rc_message(s []byte) *rclone_rc_result {
-	var mm, ok = decode_json([]string{string(s)})
-	if !ok {
+	var s2 = string(s)
+	var r = strings.NewReader(s2)
+	var dec = json.NewDecoder(r)
+	var m map[string]any
+	var err1 = dec.Decode(&m)
+	if err1 != nil {
 		logger.err("Mux(rclone) json decode failed")
-		var err1 = fmt.Errorf("RC-command returned a bad json: (%s)", s)
 		return &rclone_rc_result{nil, err1}
 	}
-
-	for _, m := range mm {
-		switch get_string(m, "status") {
-		case "success":
-			// Skip.
-		case "error":
-			if len(mm) != 1 {
-				logger.warnf("Mux(rclone) RC-command with multiple errors: (%v)", mm)
-			}
-			var m1 = get_string(m, "error", "cause", "error", "Code")
-			if m1 != "" {
-				return &rclone_rc_result{nil, errors.New(m1)}
-			}
-			var m2 = get_string(m, "error", "message")
-			if m2 != "" {
-				return &rclone_rc_result{nil, errors.New(m2)}
-			}
-			return &rclone_rc_result{nil, fmt.Errorf("%s", m)}
-		default:
-			// Unknown status.
-			return &rclone_rc_result{nil, fmt.Errorf("%s", m)}
-		}
+	switch msg := m["error"].(type) {
+	case nil:
+		// OK.
+	case string:
+		var err2 = fmt.Errorf("(%s)", msg)
+		return &rclone_rc_result{nil, err2}
+	default:
+		panic("never")
 	}
-	return &rclone_rc_result{mm, nil}
+	return &rclone_rc_result{m, nil}
 }
 
 // EXECUTE_RCLONE_RC_CMD runs an RC-command command and checks its output.

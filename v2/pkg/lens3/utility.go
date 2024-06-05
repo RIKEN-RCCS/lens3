@@ -249,9 +249,9 @@ func decode_json(ss []string) ([]map[string]any, bool) {
 	var r = &strings_reader{ss, 0, 0}
 	var dec = json.NewDecoder(r)
 
-	var mm []map[string]interface{}
+	var mm []map[string]any
 	for dec.More() {
-		var m map[string]interface{}
+		var m map[string]any
 		var err1 = dec.Decode(&m)
 		if err1 != nil {
 			return mm, false
@@ -481,4 +481,15 @@ func check_frontend_proxy_trusted(trusted []net.IP, peer string) bool {
 		}
 	}
 	return false
+}
+
+// FIND_ONE searches in the list for one that satisfies f.  It returns
+// a boolean and the first satisfying one if it exists.
+func find_one[T any](mm []T, f func(T) bool) (bool, T) {
+	for _, m := range mm {
+		if f(m) {
+			return true, m
+		}
+	}
+	return false, *new(T)
 }

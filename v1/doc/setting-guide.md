@@ -172,8 +172,9 @@ by "restorecon" (or using "chcon -t redis_log_t").
 # mkdir /var/log/lenticularis-redis
 # chown lens3:lens3 /var/log/lenticularis-redis
 # chmod 700 /var/log/lenticularis-redis
-# semanage fcontext -a -t redis_log_t /var/log/lenticularis-redis
-# restorecon -v /var/log/lenticularis-redis
+# semanage fcontext -a -t redis_log_t "/var/log/lenticularis-redis(/.*)?"
+# semanage fcontext -l | grep lenticularis-redis
+# restorecon -r -v /var/log/lenticularis-redis
 # ls -dlZ /var/log/lenticularis-redis
 (* Check the context is with redis_log_t on /var/log/lenticularis-redis. *)
 ```

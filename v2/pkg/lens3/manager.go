@@ -440,6 +440,7 @@ func try_start_backend(w *manager, d backend, port int) start_result {
 
 	proc.be.Backend_pid = cmd.Process.Pid
 	var r1 = wait_for_backend_come_up(d)
+
 	fmt.Println("*** DONE state=", r1.start_state, r1.message)
 
 	assert_fatal(r1.start_state != start_ongoing)
@@ -459,13 +460,15 @@ func wait_for_backend_come_up(d backend) start_result {
 	var msg_stdout []string
 	var msg_stderr []string
 
+	// It makes a closure in stead of directly defering a call, so
+	// that to refer to finally collected msg_stdout and msg_stderr.
+
 	defer func() {
-		// It defers calling a closure to refer to finally collected
-		// msg_stdout and msg_stderr.
 		drain_start_messages_to_log(proc.Pool, msg_stdout, msg_stderr)
 	}()
 
-	var timeout = time.After(60 * time.Second)
+	var timeout = time.Duration(proc.Backend_start_timeout) * time.Second
+	var ch_timeout = time.After(timeout)
 	for {
 		select {
 		case msg1, ok1 := <-proc.ch_stdio:
@@ -475,13 +478,15 @@ func wait_for_backend_come_up(d backend) start_result {
 					message:     "pipe closed",
 				}
 			}
-			var messages_on_stdout bool = false
+			var some_messages_on_stdout bool = false
+			var some_messages_on_stderr bool = false
 			switch msg1.int {
 			case on_stdout:
 				msg_stdout = append(msg_stdout, msg1.string)
-				messages_on_stdout = true
+				some_messages_on_stdout = true
 			case on_stderr:
 				msg_stderr = append(msg_stderr, msg1.string)
+				some_messages_on_stderr = true
 			}
 			// Sleep for a short time for stdio messages.
 			// (* time.Sleep(10 * time.Millisecond) *)
@@ -494,9 +499,10 @@ func wait_for_backend_come_up(d backend) start_result {
 					switch msg2.int {
 					case on_stdout:
 						msg_stdout = append(msg_stdout, msg2.string)
-						messages_on_stdout = true
+						some_messages_on_stdout = true
 					case on_stderr:
 						msg_stderr = append(msg_stderr, msg2.string)
+						some_messages_on_stderr = true
 					}
 					continue
 				default:
@@ -504,17 +510,21 @@ func wait_for_backend_come_up(d backend) start_result {
 				}
 				break
 			}
-			if messages_on_stdout {
+			if some_messages_on_stdout {
 				var st1 = d.check_startup(on_stdout, msg_stdout)
 				switch st1.start_state {
 				case start_ongoing:
 					// Skip.
-				case start_started:
-					fmt.Println("*** SERVER COME UP")
+				default:
 					return st1
-				case start_to_retry:
-					return st1
-				case start_failed:
+				}
+			}
+			if some_messages_on_stderr {
+				var st1 = d.check_startup(on_stderr, msg_stderr)
+				switch st1.start_state {
+				case start_ongoing:
+					// Skip.
+				default:
 					return st1
 				}
 			}
@@ -525,7 +535,7 @@ func wait_for_backend_come_up(d backend) start_result {
 				}
 			}
 			continue
-		case <-timeout:
+		case <-ch_timeout:
 			return start_result{
 				start_state: start_failed,
 				message:     "timeout",

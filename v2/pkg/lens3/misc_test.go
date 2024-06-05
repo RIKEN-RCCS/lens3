@@ -36,6 +36,7 @@ func Test_misc(t *testing.T) {
 
 	// run_registrar()
 	//run_service()
+	check_rclone_message_regexp_matching()
 }
 
 func Test_reg(t *testing.T) {
@@ -254,18 +255,22 @@ func test_functions_in_utility_go() {
 	fmt.Println("equal=", eq)
 }
 
-func check_json() {
+func check_json_marshaling_on_int_arrays() {
 	fmt.Println("Check json on [][2]int strings...")
 
 	// marshaling result:
-	// {"F1":[[10,20],[30,40],[40,50]],"F2":[[10,20],[30,40],[40,50]],
-	// "F3":null,"F4":null,
-	// "F5":[],"F6":[],
-	// "F7":[[0,0]],"F8":[[0,0]]}
-	// {[[10 20] [30 40] [40 50]] 0xc000012258
-	// [] <nil>
-	// [] 0xc000012288
-	// [[0 0]] 0xc0000122b8}
+	// {
+	// "F1":[[10,20],[30,40],[40,50]],
+	// "F2":[[10,20],[30,40],[40,50]],
+	// "F3":null,
+	// "F4":null,
+	// "F5":[],
+	// "F6":[],
+	// "F7":[[0,0]],
+	// "F8":[[0,0]]
+	// }
+	//
+	// unmarshaling result:
 	// F1 = [[10 20] [30 40] [40 50]] : [][2]int
 	// F2 = &[[10 20] [30 40] [40 50]] : *[][2]int
 	// F3 = [] : [][2]int
@@ -315,4 +320,31 @@ func check_json() {
 	fmt.Printf("F6 = %v : %T\n", x2.F6, x2.F6)
 	fmt.Printf("F7 = %v : %T\n", x2.F7, x2.F7)
 	fmt.Printf("F8 = %v : %T\n", x2.F8, x2.F8)
+}
+
+func check_rclone_message_regexp_matching() {
+	var msg1 = `2024/05/05 01:01:01 NOTICE: Local file system at /home/someone/pool-a: Starting s3 server on [http://[::]:8081/]`
+
+	var m1 = rclone_response_expected_re.FindStringSubmatch(msg1)
+	if m1 == nil {
+		fmt.Println("expected=", (m1 != nil))
+	} else {
+		fmt.Println("expected=", (m1 != nil), m1[1:])
+	}
+
+	var msg2 = `2024/05/05 01:01:01 NOTICE: Serving remote control on http://127.0.0.1:5572/`
+
+	var m2 = rclone_response_control_url_re.FindStringSubmatch(msg2)
+	if m2 == nil {
+		fmt.Println("control_url=", (m2 != nil))
+	} else {
+		fmt.Println("control_url=", (m2 != nil), m2[1:])
+	}
+
+	var msg3 = `2024/05/05 01:01:01 Failed to s3: failed to init server: listen tcp :6378: bind: address already in use`
+	var m3 = rclone_response_port_in_use_re.FindStringSubmatch(msg3)
+	fmt.Println("port_in_use=", (m3 != nil))
+
+	var m4 = rclone_response_failure_re.FindStringSubmatch(msg3)
+	fmt.Println("failure=", (m4 != nil))
 }

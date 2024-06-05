@@ -133,8 +133,14 @@ func (d *backend_minio) make_command_line(address string, directory string) back
 // of an error with messages "level=FATAL", it diagnoses the cause of
 // the error by the first fatal message.  It returns a retry response
 // only on the port-in-use error.
-func (d *backend_minio) check_startup(outerr int, ss []string) start_result {
+func (d *backend_minio) check_startup(stream int, ss []string) start_result {
 	fmt.Println("minio.check_startup()")
+	if stream == on_stderr {
+		return start_result{
+			start_state: start_ongoing,
+			message:     "--",
+		}
+	}
 	var mm, _ = decode_json(ss)
 	//fmt.Printf("mm=%T\n", mm)
 	if len(mm) == 0 {
@@ -144,8 +150,8 @@ func (d *backend_minio) check_startup(outerr int, ss []string) start_result {
 		}
 	}
 	// var m1, fatal1 = check_fatal_exists(mm)
-	var m1, error1 = find_one(mm, has_level_fatal)
-	if error1 {
+	var error_found, m1 = find_one(mm, has_level_fatal)
+	if error_found {
 		assert_fatal(m1 != nil)
 		var msg = get_string(m1, "message")
 		switch {
@@ -162,8 +168,8 @@ func (d *backend_minio) check_startup(outerr int, ss []string) start_result {
 		}
 	}
 	// var m2, expected1 = check_expected_exists(mm)
-	var m2, expected1 = find_one(mm, has_expected_response)
-	if expected1 {
+	var expected_found, m2 = find_one(mm, has_expected_response)
+	if expected_found {
 		assert_fatal(m2 != nil)
 		var msg = get_string(m2, "message")
 		fmt.Println("*** EXPECTED=", msg)
@@ -229,27 +235,13 @@ func (d *backend_minio) heartbeat() int {
 
 // *** MC-COMMANDS ***
 
-// FIND_ONE searches in a list for one satisfies f.  It returns a
-// boolean and the first satisfying one if it exists.
-func find_one(mm []map[string]interface{}, f func(map[string]interface{}) bool) (map[string]interface{}, bool) {
-	for _, m := range mm {
-		//var m, ok = x.(map[string]interface{})
-		//if ok {
-		if f(m) {
-			return m, true
-		}
-		//}
-	}
-	return nil, false
-}
-
 // Note It works with a missing key, because fetching a missing key
 // from a map returns a zero-value.
-func has_level_fatal(m map[string]interface{}) bool {
+func has_level_fatal(m map[string]any) bool {
 	return (m["level"] == "FATAL")
 }
 
-func has_expected_response(m map[string]interface{}) bool {
+func has_expected_response(m map[string]any) bool {
 	var s = get_string(m, "message")
 	return strings.HasPrefix(s, minio_expected_response)
 }

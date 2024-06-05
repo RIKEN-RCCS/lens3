@@ -213,7 +213,7 @@ func read_conf(filename string) lens3_conf {
 	if err1 != nil {
 		panic(err1)
 	}
-	var conf1 = make(map[string]interface{})
+	var conf1 = make(map[string]any)
 	var err2 = json.Unmarshal(json1, &conf1)
 	if err2 != nil {
 		panic(err2)

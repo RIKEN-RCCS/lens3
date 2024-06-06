@@ -62,8 +62,9 @@ type Conf_header struct {
 	Aws_signature string `json:"aws_signature"`
 }
 
-// NOTE: Trusted_proxy_list should include the fontend proxies and the
-// Mux hosts.
+// MULTIPLEXER_CONF is the Mux part of a configuration.  mux_node_name
+// is optional.  NOTE: Trusted_proxy_list should include the frontend
+// proxies and the Mux hosts.
 type multiplexer_conf struct {
 	Port                    int          `json:"port"`
 	Front_host              string       `json:"front_host"`

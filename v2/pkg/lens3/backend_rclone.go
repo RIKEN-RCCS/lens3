@@ -8,8 +8,8 @@ package lens3
 // MEMO: Starting rclone-serve-s3.
 //
 // rclone serve s3 '/home/someone/somewhere' [-vvv]
-// --addr :{port} --auth-key "{id},{key}"
-// --rc [--rc-addr :{port}]
+// --addr :{port1} --auth-key "{id},{key}"
+// --rc --rc-addr :{port2}
 // --rc-user {rcuser} --rc-pass {rcpass}
 // [--force-path-style true]
 // [--vfs-cache-mode full]
@@ -55,8 +55,8 @@ import (
 
 // Messages Patterns.  These are messages from rclone at its start-up.
 // Lens3 avoids using "--use-json-log", since some messages are not in
-// json in rclone-v1.66.0.  The regexp has matching parts (host and
-// port) for extracting the port number from the url in the message.
+// json in rclone-v1.66.0.  Checking port-in-use matches against the
+// substring extracted from the failure message.
 var (
 	date_time_pattern = `\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}`
 	url_pattern       = `http://([^:]*|\[[^\]]*\]):([0-9]*)/`
@@ -66,28 +66,27 @@ var (
 			` NOTICE: Local file system at [^:]*:` +
 			` Starting s3 server on \[` + url_pattern + `\]$`)
 
+	rclone_response_s3_failure_re = regexp.MustCompile(
+		`^` + date_time_pattern +
+			` Failed to s3: (.*)$`)
+
+	rclone_response_rc_failure_re = regexp.MustCompile(
+		`^` + date_time_pattern +
+			` Failed to start remote control: (.*)$`)
+
+	rclone_response_port_in_use_re = regexp.MustCompile(
+		`^` + `failed to init server: listen tcp :[0-9]*:` +
+			` bind: address already in use$`)
+
 	rclone_response_control_url_re = regexp.MustCompile(
 		`^` + date_time_pattern +
 			` NOTICE: Serving remote control on ` +
 			url_pattern + `$`)
-
-	rclone_response_s3_failure_re = regexp.MustCompile(
-		`^` + date_time_pattern +
-			` Failed to s3: .*$`)
-
-	rclone_response_port_in_use_re = regexp.MustCompile(
-		`^` + date_time_pattern +
-			` Failed to s3: failed to init server: listen tcp :[0-9]*:` +
-			` bind: address already in use$`)
-
-	rclone_response_rc_failure_re = regexp.MustCompile(
-		`^` + date_time_pattern +
-			` Failed to start remote control: .*$`)
 )
 
 // BACKEND_RCLONE is a manager for rclone.
 type backend_rclone struct {
-	backend_process
+	backend_delegate
 
 	rc_port int
 	rc_user string
@@ -96,52 +95,58 @@ type backend_rclone struct {
 	heartbeat_client *http.Client
 	heartbeat_url    string
 
-	*backend_rclone_conf
-}
-
-// BACKEND_RCLONE_CONF.  See "backend_minio.go".
-type backend_rclone_conf struct {
+	//*backend_rclone_conf
 	*rclone_conf
 }
 
-var the_backend_rclone_factory = &backend_rclone_conf{}
+// BACKEND_FACTORY_RCLONE.  See "backend_minio.go".
+type backend_factory_rclone struct {
+	*rclone_conf
+	backend_conf
+}
 
-func (fa *backend_rclone_conf) make_delegate(pool string) backend {
+var the_backend_rclone_factory = &backend_factory_rclone{}
+
+func (fa *backend_factory_rclone) configure(conf *mux_conf) {
+	fa.rclone_conf = &conf.Rclone
+	fa.backend_conf.use_n_ports = 2
+}
+
+func (fa *backend_factory_rclone) make_delegate(pool string) backend {
 	var d = &backend_rclone{}
 	// Set the super part.
-	d.Pool = pool
+	d.backend_conf = &fa.backend_conf
 	// Set the local part.
-	d.backend_rclone_conf = the_backend_rclone_factory
+	d.rclone_conf = the_backend_rclone_factory.rclone_conf
 	d.rc_user = random_string(10)
 	d.rc_pass = random_string(20)
 	runtime.SetFinalizer(d, finalize_backend_rclone)
 	return d
 }
 
-func (fa *backend_rclone_conf) configure(conf *mux_conf) {
-	fa.rclone_conf = &conf.Rclone
-}
-
-func (fa *backend_rclone_conf) clean_at_exit() {
+func (fa *backend_factory_rclone) clean_at_exit() {
 	clean_tmp()
 }
 
 func finalize_backend_rclone(d *backend_rclone) {
 }
 
-func (d *backend_rclone) get_super_part() *backend_process {
-	return &(d.backend_process)
+func (d *backend_rclone) get_super_part() *backend_delegate {
+	return &(d.backend_delegate)
 }
 
-func (d *backend_rclone) make_command_line(address string, directory string) backend_command {
+func (d *backend_rclone) make_command_line(port int, directory string) backend_command {
+	d.rc_port = (port + 1)
+	var ep1 = net.JoinHostPort("", strconv.Itoa(port))
+	var ep2 = net.JoinHostPort("", strconv.Itoa(port+1))
 	var keypair = fmt.Sprintf("%s,%s", d.be.Root_access, d.be.Root_secret)
 	var argv = []string{
 		d.Rclone, "serve", "s3",
 		directory,
-		"--addr", address, "--auth-key", keypair,
 		"--config", "notfound",
-		"--rc", "--rc-user", d.rc_user, "--rc-pass", d.rc_pass,
-		// [--rc-addr :8090]
+		"--addr", ep1, "--auth-key", keypair,
+		"--rc", "--rc-addr", ep2,
+		"--rc-user", d.rc_user, "--rc-pass", d.rc_pass,
 	}
 	argv = append(argv, d.Command_options...)
 	var envs = []string{}
@@ -149,8 +154,7 @@ func (d *backend_rclone) make_command_line(address string, directory string) bac
 }
 
 // CHECK_STARTUP decides the server state.  See "backend_minio.go".
-func (d *backend_rclone) check_startup(stream int, mm []string) start_result {
-	fmt.Println("rclone.check_startup1(%v)", mm)
+func (d *backend_rclone) check_startup(stream stdio_stream, mm []string) start_result {
 	if stream == on_stdout {
 		return start_result{
 			start_state: start_ongoing,
@@ -159,68 +163,56 @@ func (d *backend_rclone) check_startup(stream int, mm []string) start_result {
 	}
 	fmt.Println("rclone.check_startup2(%v)", mm)
 
-	var got_failure = rclone_response_s3_failure_re.MatchString
-	var failure_found, m1 = find_one(mm, got_failure)
-	if failure_found {
-		var port_in_use = rclone_response_port_in_use_re.MatchString(m1)
-		if port_in_use {
-			return start_result{
-				start_state: start_to_retry,
-				message:     m1,
-			}
-		} else {
-			return start_result{
-				start_state: start_failed,
-				message:     m1,
-			}
-		}
+	var got_s3_failure = rclone_response_s3_failure_re.MatchString
+	var failure_s3_found, m1 = find_one(mm, got_s3_failure)
+	if failure_s3_found {
+		var r1 = check_rclone_port_in_use(m1, rclone_response_s3_failure_re)
+		return r1
 	}
+
+	var got_rc_failure = rclone_response_rc_failure_re.MatchString
+	var failure_rc_found, m2 = find_one(mm, got_rc_failure)
+	if failure_rc_found {
+		var r2 = check_rclone_port_in_use(m2, rclone_response_rc_failure_re)
+		return r2
+	}
+
 	var got_expected = rclone_response_expected_re.MatchString
-	var got_control = rclone_response_control_url_re.MatchString
-	var expected_found, m2 = find_one(mm, got_expected)
-	var control_found, m3 = find_one(mm, got_control)
-	switch {
-	case expected_found && control_found:
-		var port, ok1 = parse_rclone_control_url_response(m3)
-		if !ok1 {
-			logger.errf("Mux(rclone) Got an expected message of rclone"+
-				" but with a bad control url message: (%s)", m3)
-			return start_result{
-				start_state: start_failed,
-				message:     ("bad control url message: " + m3),
-			}
+	var expected_found, m3 = find_one(mm, got_expected)
+	if expected_found {
+		var got_control = rclone_response_control_url_re.MatchString
+		var control_found, _ = find_one(mm, got_control)
+		if !control_found {
+			logger.warnf("Mux(rclone) Got an expected message of rclone" +
+				" but not a control message")
 		}
-		fmt.Println("*** EXPECTED=", port, m2)
-		d.rc_port = port
+		fmt.Println("*** EXPECTED=", m3)
 		return start_result{
 			start_state: start_started,
-			message:     m2,
+			message:     m3,
 		}
-	case expected_found && !control_found:
-		logger.errf("Mux(rclone) Got an expected message of rclone" +
-			" but without a control url message")
-		return start_result{
-			start_state: start_failed,
-			message:     m1,
-		}
-	default:
-		return start_result{
-			start_state: start_ongoing,
-			message:     "--",
-		}
+	}
+	return start_result{
+		start_state: start_ongoing,
+		message:     "--",
 	}
 }
 
-func parse_rclone_control_url_response(m string) (int, bool) {
-	var w1 = rclone_response_control_url_re.FindStringSubmatch(m)
-	if len(w1) != 3 {
-		return 0, false
+func check_rclone_port_in_use(m string, re *regexp.Regexp) start_result {
+	var w1 = re.FindStringSubmatch(m)
+	assert_fatal(w1 != nil && len(w1) == 2)
+	var port_in_use = rclone_response_port_in_use_re.MatchString(w1[1])
+	if port_in_use {
+		return start_result{
+			start_state: start_to_retry,
+			message:     m,
+		}
+	} else {
+		return start_result{
+			start_state: start_failed,
+			message:     m,
+		}
 	}
-	var port, err1 = strconv.Atoi(w1[2])
-	if err1 != nil {
-		return 0, false
-	}
-	return port, true
 }
 
 func (d *backend_rclone) establish() error {
@@ -301,7 +293,7 @@ func simplify_rclone_rc_message(s []byte) *rclone_rc_result {
 	return &rclone_rc_result{m, nil}
 }
 
-// EXECUTE_RCLONE_RC_CMD runs an RC-command command and checks its output.
+// EXECUTE_RCLONE_RC_CMD runs an RC-command and checks its output.
 // Note that a timeout kills the process by SIGKILL.  MEMO: Timeout of
 // context returns "context.deadlineExceededError".
 func execute_rclone_rc_cmd(d *backend_rclone, name string, command []string) *rclone_rc_result {
@@ -309,6 +301,8 @@ func execute_rclone_rc_cmd(d *backend_rclone, name string, command []string) *rc
 	var argv = []string{
 		d.Rclone, "rc",
 		"--url", port,
+		"--user", d.rc_user,
+		"--pass", d.rc_pass,
 	}
 	argv = append(argv, command...)
 	var timeout = (time.Duration(d.Backend_command_timeout) * time.Second)

@@ -12,12 +12,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	//"maps"
 	"time"
 	//"syscall"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	//"log"
 	"net/http"
 	"runtime"
@@ -39,68 +41,44 @@ var (
 	// minio_response_failure_ = "Unable to initialize backend"
 )
 
-// BACKEND_MINIO is a manager for MinIO.
+// BACKEND_MINIO is a delegate for MinIO.
 type backend_minio struct {
-	backend_process
-
-	heartbeat_client *http.Client
-	heartbeat_url    string
-	//failure_message  string
+	backend_delegate
 
 	mc_alias      string
 	mc_config_dir string
 
-	//g.env_minio map[string]string
-	//g.env_mc map[string]string
+	heartbeat_client *http.Client
+	heartbeat_url    string
 
-	*backend_minio_conf
-}
-
-// BACKEND_MINIO_CONF is a static and common part of a MinIO backend.
-// It has double roles as a factory.
-type backend_minio_conf struct {
 	*minio_conf
-	//bin_minio string
-	//bin_mc    string
-
-	//*manager_conf
-	// In manager_conf.
-	//minio_setup_at_start    bool
-	//minio_start_timeout     time.Duration
-	//minio_setup_timeout     time.Duration
-	//minio_stop_timeout      time.Duration
-	//minio_mc_timeout        time.Duration
-	//minio_watch_gap_minimal time.Duration
 }
 
-var the_backend_minio_factory = &backend_minio_conf{}
+// BACKEND_FACTORY_MINIO is a factory and holds the static and common
+// part of a MinIO backend.
+type backend_factory_minio struct {
+	*minio_conf
+	backend_conf
+}
 
-func (fa *backend_minio_conf) make_delegate(pool string) backend {
+var the_backend_minio_factory = &backend_factory_minio{}
+
+func (fa *backend_factory_minio) configure(conf *mux_conf) {
+	fa.minio_conf = &conf.Minio
+	fa.backend_conf.use_n_ports = 1
+}
+
+func (fa *backend_factory_minio) make_delegate(pool string) backend {
 	var d = &backend_minio{}
 	// Set the super part.
-	d.Pool = pool
-	d.be = nil
+	d.backend_conf = &fa.backend_conf
 	// Set the local part.
-	d.backend_minio_conf = the_backend_minio_factory
+	d.minio_conf = the_backend_minio_factory.minio_conf
 	runtime.SetFinalizer(d, finalize_backend_minio)
 	return d
 }
 
-func (fa *backend_minio_conf) configure(conf *mux_conf) {
-	fa.minio_conf = &conf.Minio
-
-	//fa.bin_minio = "/usr/local/bin/minio"
-	//fa.bin_mc = "/usr/local/bin/mc"
-
-	//fa.minio_setup_at_start = true
-	//fa.minio_start_timeout = 60
-	//fa.minio_setup_timeout = 60
-	//fa.minio_stop_timeout = 30
-	//fa.minio_mc_timeout = 60
-	//fa.minio_watch_gap_minimal = 30
-}
-
-func (fa *backend_minio_conf) clean_at_exit() {
+func (fa *backend_factory_minio) clean_at_exit() {
 	clean_tmp()
 }
 
@@ -111,15 +89,16 @@ func finalize_backend_minio(d *backend_minio) {
 	}
 }
 
-func (d *backend_minio) get_super_part() *backend_process {
-	return &(d.backend_process)
+func (d *backend_minio) get_super_part() *backend_delegate {
+	return &(d.backend_delegate)
 }
 
-func (d *backend_minio) make_command_line(address string, directory string) backend_command {
+func (d *backend_minio) make_command_line(port int, directory string) backend_command {
+	var ep = net.JoinHostPort("", strconv.Itoa(port))
 	var argv = []string{
 		d.Minio,
 		"--json", "--anonymous", "server",
-		"--address", address, directory}
+		"--address", ep, directory}
 	var envs = []string{
 		fmt.Sprintf("MINIO_ROOT_USER=%s", d.be.Root_access),
 		fmt.Sprintf("MINIO_ROOT_PASSWORD=%s", d.be.Root_secret),
@@ -133,7 +112,7 @@ func (d *backend_minio) make_command_line(address string, directory string) back
 // of an error with messages "level=FATAL", it diagnoses the cause of
 // the error by the first fatal message.  It returns a retry response
 // only on the port-in-use error.
-func (d *backend_minio) check_startup(stream int, ss []string) start_result {
+func (d *backend_minio) check_startup(stream stdio_stream, ss []string) start_result {
 	fmt.Println("minio.check_startup()")
 	if stream == on_stderr {
 		return start_result{

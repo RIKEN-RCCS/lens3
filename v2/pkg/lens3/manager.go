@@ -1,4 +1,4 @@
-/* A sentinel for an S3-server process. */
+/* A sentinel of an S3-server process. */
 
 // Copyright 2022-2024 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
@@ -6,11 +6,11 @@
 package lens3
 
 // A manager watches the backend server state and records its outputs
-// in logs.  The first few lines from a backend is used to check its
-// start.  A backend usually does not output anything later except on
+// in logs.  The first few lines from the backend is used to check its
+// start.  Backends usually do not output anything later except on
 // errors.
 
-// MEMO: A manager tries to kill a server by sudo's signal relaying,
+// MEMO: A manager tries to kill a backend by sudo's signal relaying,
 // when a shutdown fails.  Signal relaying works because sudo runs
 // with the same RUID.  Note that killpg won't work.  A cancel
 // function is replaced by one with SIGTERM.  The default in
@@ -92,42 +92,42 @@ type manager struct {
 // BACKEND_FACTORY is to make a backend instance.
 type backend_factory interface {
 	configure(conf *mux_conf)
-	clean_at_exit()
 	make_delegate(string) backend
+	clean_at_exit()
 }
 
 // BACKEND is a backend specific part.  A backend shall not start its
 // long-running threads.  Or, it lets them enter a wait-group.
 type backend interface {
 	// GET_SUPER_PART returns a generic part or a superclass.
-	get_super_part() *backend_process
+	get_super_part() *backend_delegate
 
 	// MAKE_COMMAND_LINE returns a command and environment of a
 	// backend instance.
-	make_command_line(string, string) backend_command
+	make_command_line(port int, directory string) backend_command
 
-	// CHECK_STARTUP checks a start of a server.  It is called each
-	// time a server outputs a line of a message.  It looks for a
+	// CHECK_STARTUP checks a start of a backend.  It is called each
+	// time a backend outputs a line of a message.  It looks for a
 	// specific message.  The first argument indicates stdout or
 	// stderr by values on_stdout and on_stderr.  The passed strings
 	// are accumulated ones all from the start.
-	check_startup(int, []string) start_result
+	check_startup(stdio_stream, []string) start_result
 
 	// ESTABLISH does a server specific initialization at its start.
 	establish() error
 
-	// SHUTDOWN stops a server in its specific way.
+	// SHUTDOWN stops a backend in its specific way.
 	shutdown() error
 
-	// HEARTBEAT pings a server and returns an http status.  It is an
+	// HEARTBEAT pings a backend and returns an http status.  It is an
 	// error but status=200.
 	heartbeat() int
 }
 
-// BACKEND_PROCESS is a generic part of a backend.  It is embedded in
-// a backend instance and returned by get_super_part().  A
-// configuration "manager_conf" is shared with the manager".
-type backend_process struct {
+// BACKEND_DELEGATE is a generic part of a backend.  It is embedded in
+// a backend instance and obtained by get_super_part().  A
+// configuration "manager_conf" is shared with the manager.
+type backend_delegate struct {
 	pool_record
 	be *backend_record
 
@@ -147,8 +147,16 @@ type backend_process struct {
 	// MUTEX protects accesses to the ch_quit_backend.
 	mutex sync.Mutex
 
-	//*backend_conf
 	*manager_conf
+	*backend_conf
+}
+
+// BACKEND_CONF is static parameters that are thought to be a part of
+// manager_conf.  It is set by factory's make_delegate().
+type backend_conf struct {
+	// USE_N_PORTS is the number of ports used per backend.  It is
+	// MinIO:1 and rclone:2.
+	use_n_ports int
 }
 
 type backend_command struct {
@@ -161,10 +169,13 @@ var the_manager = manager{
 	//processes: make(map[int]backend),
 }
 
-// ON_STDOUT and ON_STDERR are indicators of stdout or stderr stored
-// in a stdio_message.
+// STDIO_STREAM is an indicator of which of a stream of stdio;
+// ON_STDOUT for stdout and ON_STDERR for stderr.  It is stored in a
+// stdio_message.
+type stdio_stream int
+
 const (
-	on_stdout int = iota + 1
+	on_stdout stdio_stream = iota + 1
 	on_stderr
 )
 
@@ -172,7 +183,7 @@ const (
 // Each is one line of a message.  The first field ON_STDOUT or
 // ON_STDERR indicates a message is from stdout or stderr.
 type stdio_message struct {
-	int
+	stdio_stream
 	string
 }
 
@@ -221,6 +232,24 @@ func configure_manager(w *manager, m *multiplexer, t *keyval_table, q chan vacuo
 	}
 
 	w.factory.configure(c)
+}
+
+// INITIALIZE_BACKEND_DELEGATE initializes the super part of a backend.
+func initialize_backend_delegate(w *manager, proc *backend_delegate, pooldata *pool_record) {
+	proc.pool_record = *pooldata
+	proc.be = &backend_record{
+		Pool:        pooldata.Pool,
+		Backend_ep:  "",
+		Backend_pid: 0,
+		Root_access: generate_access_key(),
+		Root_secret: generate_secret_key(),
+		Mux_ep:      w.multiplexer.mux_ep,
+		Mux_pid:     w.multiplexer.mux_pid,
+		Timestamp:   0,
+	}
+	proc.verbose = true
+	proc.environ = &w.environ
+	proc.manager_conf = &w.manager_conf
 }
 
 func stop_running_backends(w *manager) {
@@ -280,23 +309,10 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 
 	var d = w.factory.make_delegate(pool)
 
-	// Initialize the super-part.
+	// Initialize the super part.
 
-	var proc *backend_process = d.get_super_part()
-	proc.pool_record = *pooldata
-	proc.be = &backend_record{
-		Pool:        pool,
-		Backend_ep:  "",
-		Backend_pid: 0,
-		Root_access: generate_access_key(),
-		Root_secret: generate_secret_key(),
-		Mux_ep:      w.multiplexer.mux_ep,
-		Mux_pid:     w.multiplexer.mux_pid,
-		Timestamp:   0,
-	}
-	proc.verbose = true
-	proc.environ = &w.environ
-	proc.manager_conf = &w.manager_conf
+	var proc *backend_delegate = d.get_super_part()
+	initialize_backend_delegate(w, proc, pooldata)
 
 	// The following fields are set in starting a backend.
 
@@ -304,7 +320,7 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 	// proc.ch_stdio
 	// proc.ch_quit_backend
 
-	var available_ports = list_available_ports(w)
+	var available_ports = list_available_ports(w, proc.use_n_ports)
 
 	if proc.verbose {
 		fmt.Printf("start_backend() ports=%v\n", available_ports)
@@ -348,7 +364,7 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 
 		go disgorge_stdio_to_log(proc)
 
-		// Sleep for a while for a server to be stable.
+		// Sleep for a while for a backend to be stable.
 
 		time.Sleep(time.Duration(w.backend_stabilize_ms) * time.Millisecond)
 
@@ -372,7 +388,7 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 }
 
 // TRY_START_BACKEND starts a process and waits for a message or a
-// timeout.  A message from the server is one that indicates a
+// timeout.  A message from the backend is one that indicates a
 // success/failure.  Note that it changes a cancel function from
 // SIGKILL to SIGTERM to make it work with sudo.
 func try_start_backend(w *manager, d backend, port int) start_result {
@@ -388,9 +404,8 @@ func try_start_backend(w *manager, d backend, port int) start_result {
 
 	var user = proc.Owner_uid
 	var group = proc.Owner_gid
-	var address = proc.be.Backend_ep
 	var directory = proc.Buckets_directory
-	var command = d.make_command_line(address, directory)
+	var command = d.make_command_line(port, directory)
 	var sudo_argv = []string{
 		w.Sudo,
 		"-n",
@@ -448,13 +463,13 @@ func try_start_backend(w *manager, d backend, port int) start_result {
 	return r1
 }
 
-// WAIT_FOR_BACKEND_COME_UP waits until either a server (1) outputs an
-// expected message, (2) outputs an error message, (3) outputs too
-// many messages, (4) reaches a timeout, (5) closes both
+// WAIT_FOR_BACKEND_COME_UP waits until either a backend server (1)
+// outputs an expected message, (2) outputs an error message, (3)
+// outputs too many messages, (4) reaches a timeout, (5) closes both
 // stdout+stderr.  It returns STARTED/TO_RETRY/FAILED.  It reads the
-// stdio channel as much as available.
+// stdio channels as much as available.
 func wait_for_backend_come_up(d backend) start_result {
-	var proc *backend_process = d.get_super_part()
+	var proc *backend_delegate = d.get_super_part()
 	// fmt.Printf("WAIT_FOR_BACKEND_COME_UP() svr=%T proc=%T\n", svr, proc)
 
 	var msg_stdout []string
@@ -480,7 +495,7 @@ func wait_for_backend_come_up(d backend) start_result {
 			}
 			var some_messages_on_stdout bool = false
 			var some_messages_on_stderr bool = false
-			switch msg1.int {
+			switch msg1.stdio_stream {
 			case on_stdout:
 				msg_stdout = append(msg_stdout, msg1.string)
 				some_messages_on_stdout = true
@@ -496,7 +511,7 @@ func wait_for_backend_come_up(d backend) start_result {
 					if !ok2 {
 						break
 					}
-					switch msg2.int {
+					switch msg2.stdio_stream {
 					case on_stdout:
 						msg_stdout = append(msg_stdout, msg2.string)
 						some_messages_on_stdout = true
@@ -690,7 +705,7 @@ func stop_backend(w *manager, d backend) {
 // START_DISGORGING_STDIO spawns threads to emit backend output to the
 // "ch_stdio" channel.  It returns immediately.  It drains one line at
 // a time.  It closes the channel when both are closed.
-func start_disgorging_stdio(proc *backend_process) {
+func start_disgorging_stdio(proc *backend_delegate) {
 	var cmd *exec.Cmd = proc.cmd
 
 	var stdout1, err1 = cmd.StdoutPipe()
@@ -732,7 +747,7 @@ func start_disgorging_stdio(proc *backend_process) {
 // DISGORGE_STDIO_TO_LOG outputs stdout+stderr messages to a log.  It
 // receives messages written by threads started in
 // start_disgorging_stdio().
-func disgorge_stdio_to_log(proc *backend_process) {
+func disgorge_stdio_to_log(proc *backend_delegate) {
 	var pool = proc.Pool
 	for {
 		var x1, ok1 = <-proc.ch_stdio
@@ -741,7 +756,7 @@ func disgorge_stdio_to_log(proc *backend_process) {
 			break
 		}
 		// fmt.Println("LINE: ", x1.int, x1.string)
-		if x1.int == on_stdout {
+		if x1.stdio_stream == on_stdout {
 			logger.infof("Mux(pool=%s) stdout: %s", pool, x1.string)
 		} else {
 			logger.infof("Mux(pool=%s) stderr: %s", pool, x1.string)
@@ -763,9 +778,12 @@ func drain_start_messages_to_log(pool string, outs []string, errs []string) {
 }
 
 // LIST_AVAILABLE_PORTS lists ports available.  It drops the ports
-// used by backends running on this host locally.  It randomizes the
-// order of the entries.
-func list_available_ports(w *manager) []int {
+// used by backends running on this host locally.  It uses each
+// integer skipping by use_n_ports.  It randomizes the order of the
+// list.
+func list_available_ports(w *manager, use_n_ports int) []int {
+	assert_fatal(use_n_ports == 1 || use_n_ports == 2)
+
 	var bes = list_backends_under_manager(w)
 	var used []int
 	for _, be := range bes {
@@ -780,10 +798,13 @@ func list_available_ports(w *manager) []int {
 		}
 		used = append(used, port)
 	}
+
 	var ports []int
-	for i := w.Port_min; i <= w.Port_max+1; i++ {
-		if slices.Index(used, i) == -1 {
-			ports = append(ports, i)
+	for i := w.Port_min; i <= w.Port_max; i++ {
+		if (i%use_n_ports) == 0 && (i+(use_n_ports-1)) <= w.Port_max {
+			if slices.Index(used, i) == -1 {
+				ports = append(ports, i)
+			}
 		}
 	}
 	rand.Shuffle(len(ports), func(i, j int) {

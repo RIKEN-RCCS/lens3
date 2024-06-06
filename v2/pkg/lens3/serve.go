@@ -144,7 +144,7 @@ func handle_unix_signals(t *keyval_table, ch_quit_service chan vacuous) {
 	if err1 != nil {
 		// Ignore.
 	}
-	fmt.Printf("Receiving signals; pid=%d pgid=%d\n", pid, pgid)
+	fmt.Printf("Set signal receivers; pid=%d pgid=%d\n", pid, pgid)
 
 	signal.Notify(ch_sig, unix.SIGINT, unix.SIGTERM, unix.SIGHUP)
 

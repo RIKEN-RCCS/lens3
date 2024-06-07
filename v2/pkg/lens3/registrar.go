@@ -758,7 +758,7 @@ func return_json_repsonse(z *registrar, w http.ResponseWriter, r *http.Request, 
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	io.WriteString(w, string(v1))
-	log_access(r, http_200_OK)
+	log_access_by_request(r, http_200_OK)
 	return
 }
 
@@ -777,7 +777,7 @@ func return_reg_error_response(z *registrar, w http.ResponseWriter, r *http.Requ
 	var b1, err1 = json.Marshal(rspn)
 	assert_fatal(err1 == nil)
 	http.Error(w, string(b1), code)
-	log_access(r, code)
+	log_access_by_request(r, code)
 }
 
 // GRANT_ACCESS_WITH_ERROR_RETURN checks an access to a pool by a user

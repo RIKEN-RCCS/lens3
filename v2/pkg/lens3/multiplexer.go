@@ -18,7 +18,7 @@ package lens3
 import (
 	"fmt"
 	//"flag"
-	//"context"
+	"context"
 	"runtime/debug"
 	//"io"
 	"encoding/json"
@@ -43,6 +43,7 @@ import (
 type multiplexer struct {
 	// EP_PORT is a listening port of Mux (":port").
 	ep_port string
+
 	manager *manager
 
 	verbose bool
@@ -55,7 +56,7 @@ type multiplexer struct {
 	mux_pid int
 
 	// MUX_ADDRS is a sorted list of ip adrresses.
-	mux_addrs []string
+	// mux_addrs []string
 
 	trusted_proxies []net.IP
 
@@ -68,10 +69,7 @@ type multiplexer struct {
 }
 
 // THE_MULTIPLEXER is the single multiplexer instance.
-var the_multiplexer = multiplexer{
-	//pool: make(map[string]backend),
-	//proc: make(map[int]backend),
-}
+var the_multiplexer = multiplexer{}
 
 const (
 	empty_payload_hash_sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -102,7 +100,7 @@ func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, q chan v
 	m.mux_ep = net.JoinHostPort(host, strconv.Itoa(port))
 	m.mux_pid = os.Getpid()
 
-	conf.Forwarding_timeout = 60
+	//conf.Forwarding_timeout = 60
 	//m.client = &http.Client{}
 	//m.proxy = m.client
 	conf.Front_host = "localhost"
@@ -122,7 +120,8 @@ func start_multiplexer(m *multiplexer) {
 	go mux_periodic_work(m)
 
 	var proxy1 = httputil.ReverseProxy{
-		Rewrite: proxy_request_rewriter(m),
+		Rewrite:        proxy_request_rewriter(m),
+		ModifyResponse: proxy_access_logger(m),
 	}
 	var proxy2 = make_checker_proxy(m, &proxy1)
 	m.server = &http.Server{
@@ -131,46 +130,32 @@ func start_multiplexer(m *multiplexer) {
 	}
 
 	logger.infof("Mux(%s) Start Mux", m.mux_ep)
-	// var err2 = http.ListenAndServe(m.ep_port, proxy2)
-	var err2 = m.server.ListenAndServe()
+	var err1 = m.server.ListenAndServe()
 	logger.infof("Mux(%s) http.Server.ListenAndServe() done err=(%v)",
-		m.mux_ep, err2)
+		m.mux_ep, err1)
 }
 
 // PROXY_REQUEST_REWRITER is a function in ReverseProxy.Rewriter.  It
 // receives forwarding information from a forwarding-proxy via the
-// http header "lens3-be".
-func proxy_request_rewriter(m *multiplexer) func(r *httputil.ProxyRequest) {
+// context value "lens3-be".
+func proxy_request_rewriter(m *multiplexer) func(*httputil.ProxyRequest) {
 	return func(r *httputil.ProxyRequest) {
-		var x = r.In.Header["lens3-be"]
-		//fmt.Printf("r.In.Header=%#v\n", r.In.Header)
-		assert_fatal(len(x) == 2)
-		var pool, ep = x[0], x[1]
-		delete(r.In.Header, "lens3-be")
-		delete(r.Out.Header, "lens3-be")
+		var ctx = r.In.Context()
+		var x = ctx.Value("lens3-be")
+		var forwarding, ok = x.(*url.URL)
+		assert_fatal(ok)
 
-		// var be = get_backend(m.table, pool)
-		// if be == nil {
-		// 	logger.debug("Mux({pool}).")
-		// 	raise(&proxy_exc{http_404_not_found, "pool non-exist"})
-		// }
+		fmt.Println("*** FORWARDING=", forwarding)
 
-		fmt.Println("*** POOL=", pool, "to", "ep=", ep)
-		//var g = m.pool[pool]
-		//var proc = g.get_super_part()
-
-		var url1, err1 = url.Parse("http://" + ep)
-		if err1 != nil {
-			logger.debugf("Mux(pool=%s) bad backend ep: ep=(%s) err=(%v)",
-				pool, ep, err1)
-			raise(&proxy_exc{http_500_internal_server_error,
-				[][2]string{
-					message_bad_backend_ep,
-				}})
-		}
-		fmt.Println("*** URL=", url1)
-		r.SetURL(url1)
+		r.SetURL(forwarding)
 		r.SetXForwarded()
+	}
+}
+
+func proxy_access_logger(m *multiplexer) func(*http.Response) error {
+	return func(r *http.Response) error {
+		log_access(r)
+		return nil
 	}
 }
 
@@ -228,7 +213,6 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 }
 
 func serve_authenticated_access(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record, secret *secret_record, proxy http.Handler) {
-	fmt.Println("*** AHO#2")
 	assert_fatal(bucket != nil && secret != nil)
 	var now int64 = time.Now().Unix()
 	if !ensure_bucket_owner(m, w, r, bucket, secret) {
@@ -237,16 +221,13 @@ func serve_authenticated_access(m *multiplexer, w http.ResponseWriter, r *http.R
 	if !ensure_bucket_not_expired(m, w, r, bucket, now) {
 		return
 	}
-	fmt.Println("*** AHO#2-2")
 	var pooldata *pool_record = ensure_pool_existence(m, w, r, bucket.Pool)
 	if pooldata == nil {
 		return
 	}
-	fmt.Println("*** AHO#2-3")
 	if !ensure_user_is_active(m, w, r, pooldata.Owner_uid) {
 		return
 	}
-	fmt.Println("*** AHO#2-4")
 	//awake_suspended_pool()
 	if !ensure_pool_state(m, w, r, pooldata.Pool) {
 		return
@@ -254,7 +235,6 @@ func serve_authenticated_access(m *multiplexer, w http.ResponseWriter, r *http.R
 	if !ensure_permission_by_secret(m, w, r, secret) {
 		return
 	}
-	fmt.Println("*** AHO#2-4")
 
 	var be = ensure_backend_running(m, w, r, bucket.Pool)
 	if be == nil {
@@ -265,7 +245,6 @@ func serve_authenticated_access(m *multiplexer, w http.ResponseWriter, r *http.R
 }
 
 func serve_anonymous_access(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record, proxy http.Handler) {
-	fmt.Println("*** AHO#3")
 	assert_fatal(bucket != nil)
 	var now int64 = time.Now().Unix()
 	if !ensure_bucket_not_expired(m, w, r, bucket, now) {
@@ -296,46 +275,27 @@ func serve_anonymous_access(m *multiplexer, w http.ResponseWriter, r *http.Reque
 
 // FORWARD_ACCESS forwards a granted access to a backend.
 func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, be *backend_record, proxy http.Handler) {
-	fmt.Println("*** AHO#4")
-
-	// Start a backend.
-
-	/*
-		set_access_timestamp(m.table, pool)
-
-		var be1 = get_backend(m.table, pool)
-		if be1 == nil {
-			var proc = start_backend(m.manager, pool)
-			if proc == nil {
-				return_mux_response(m, w, r, http_500_internal_server_error,
-					[][2]string{
-						message_cannot_start_backend,
-					})
-				return
-			}
-		}
-		var be2 = get_backend(m.table, pool)
-		if be2 == nil {
-			return_mux_response(m, w, r, http_500_internal_server_error,
-				[][2]string{
-					message_backend_not_running,
-				})
-			return
-		}
-
-		fmt.Println("*** AHO#5")
-
-		logger.debugf("Mux(pool=%s) backend=(%v)", pool, be2)
-	*/
-
 	// Replace an authorization header.
 
 	sign_by_backend_credential(r, be)
 
-	// Tell the endpoint to httputil.ReverseProxy.
+	// Tell the forwarding endpoint to httputil.ReverseProxy.
 
-	r.Header["lens3-be"] = []string{be.Pool, be.Backend_ep}
-	proxy.ServeHTTP(w, r)
+	var ep = be.Backend_ep
+	var forwarding, err1 = url.Parse("http://" + ep)
+	if err1 != nil {
+		logger.debugf("Mux() Bad backend ep: ep=(%s) err=(%v)",
+			ep, err1)
+		raise(&proxy_exc{http_500_internal_server_error,
+			[][2]string{
+				message_bad_backend_ep,
+			}})
+	}
+	var ctx1 = r.Context()
+	var ctx2 = context.WithValue(ctx1, "lens3-be", forwarding)
+	var r2 = r.WithContext(ctx2)
+
+	proxy.ServeHTTP(w, r2)
 }
 
 // SERVE_INTERNAL_ACCESS handles requests by probe_access_mux() from
@@ -701,7 +661,7 @@ func return_mux_response(m *multiplexer, w http.ResponseWriter, r *http.Request,
 	var b1, err1 = json.Marshal(rspn)
 	assert_fatal(err1 == nil)
 	http.Error(w, string(b1), code)
-	log_access(r, code)
+	log_access_by_request(r, code)
 }
 
 func return_mux_response_by_error(m *multiplexer, w http.ResponseWriter, r *http.Request, err error) {

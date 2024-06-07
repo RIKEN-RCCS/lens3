@@ -121,7 +121,7 @@ type backend interface {
 
 	// HEARTBEAT pings a backend and returns an http status.  It is an
 	// error but status=200.
-	heartbeat() int
+	heartbeat(w *manager) int
 }
 
 // BACKEND_DELEGATE is a generic part of a backend.  It is embedded in
@@ -169,9 +169,8 @@ var the_manager = manager{
 	//processes: make(map[int]backend),
 }
 
-// STDIO_STREAM is an indicator of which of a stream of stdio;
-// ON_STDOUT for stdout and ON_STDERR for stderr.  It is stored in a
-// stdio_message.
+// STDIO_STREAM is an indicator of which of a stream of stdio, stdout
+// or stderr.  It is stored in a STDIO_MESSAGE.
 type stdio_stream int
 
 const (
@@ -180,8 +179,8 @@ const (
 )
 
 // STDIO_MESSAGE is a message passed through a "ch_stdio" channel.
-// Each is one line of a message.  The first field ON_STDOUT or
-// ON_STDERR indicates a message is from stdout or stderr.
+// Each is one line of a message.  It is keyed by ON_STDOUT or
+// ON_STDERR to indicate a message is from stdout or stderr.
 type stdio_message struct {
 	stdio_stream
 	string
@@ -369,6 +368,9 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 		time.Sleep(time.Duration(w.backend_stabilize_ms) * time.Millisecond)
 
 		d.establish()
+
+		make_absent_buckets_in_backend(w, proc.be)
+
 		go ping_backend(w, d)
 
 		var now int64 = time.Now().Unix()
@@ -379,7 +381,7 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 
 	// All ports are tried and failed.
 
-	logger.warnf("Mux() Starting a backend SUSPENDED (no ports): pool=(%s)",
+	logger.warnf("Mux() A backend SUSPENDED (no ports): pool=(%s)",
 		pool)
 	var state = pool_state_SUSPENDED
 	var reason = pool_reason_BACKEND_BUSY
@@ -466,7 +468,7 @@ func try_start_backend(w *manager, d backend, port int) start_result {
 // WAIT_FOR_BACKEND_COME_UP waits until either a backend server (1)
 // outputs an expected message, (2) outputs an error message, (3)
 // outputs too many messages, (4) reaches a timeout, (5) closes both
-// stdout+stderr.  It returns STARTED/TO_RETRY/FAILED.  It reads the
+// stdout+stderr.  It returns STARTED/FAILED/TO_RETRY.  It reads the
 // stdio channels as much as available.
 func wait_for_backend_come_up(d backend) start_result {
 	var proc *backend_delegate = d.get_super_part()
@@ -635,7 +637,7 @@ func ping_backend(w *manager, d backend) {
 
 		// Do heatbeat.
 
-		var status = d.heartbeat()
+		var status = d.heartbeat(w)
 		if status == 200 {
 			proc.heartbeat_misses = 0
 		} else {
@@ -850,8 +852,48 @@ func wait4_child_process(w *manager, d backend) {
 				unix.ErrnoName(unix.ECHILD))
 			continue
 		}
-		logger.debugf("Mux() wait4() returns pid=%d status=%d rusage=(%#v)",
+		logger.debugf("Mux() wait4() returns: pid=%d status=%d rusage=(%#v)",
 			wpid, wstatus, rusage)
 		break
+	}
+}
+
+// MAKE_ABSENT_BUCKETS_IN_BACKEND makes consistent about buckets with
+// a record in Registrar.  Note that it runs during starting a
+// backend.  Thus, it won't work to call get_backend(table,pool),
+// because the record is not set in the keyval-db yet.
+func make_absent_buckets_in_backend(w *manager, be *backend_record) {
+	// var be = get_backend(w.table, pool)
+	// if be == nil {
+	// 	logger.errf("Mux() Backend not running in setup: pool=(%s)",
+	// 		pool)
+	// 	return
+	// }
+
+	var pool = be.Pool
+	var buckets_needed = gather_buckets(w.table, pool)
+
+	var buckets_exsting, err = list_buckets_in_backend(w, be)
+	if err != nil {
+		logger.errf("Mux() Backend access failed: pool=(%s) err=(%v)",
+			be.Pool, err)
+		command_to_stop_backend(w, pool)
+	}
+
+	fmt.Println("list_buckets_in_backend=", buckets_exsting)
+
+	var now int64 = time.Now().Unix()
+	for _, b := range buckets_needed {
+		if slices.Contains(buckets_exsting, b.Bucket) {
+			continue
+		}
+		if b.Expiration_time < now {
+			continue
+		}
+
+		logger.debugf("Mux() Making a bucket in backend: pool=(%s) bucket=(%s)",
+			b.Pool, b.Bucket)
+
+		make_bucket_in_backend(w, be, b)
 	}
 }

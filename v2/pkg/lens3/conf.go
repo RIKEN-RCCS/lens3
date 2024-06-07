@@ -1,12 +1,13 @@
-/* A conf-file reader. */
+/* A conf file reader. */
 
 // Copyright 2022-2024 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
 
 package lens3
 
-// Conf-files are read and checked against structures.  It accepts
-// extra fields.
+// Configuration Files.  The configurations are stored in the
+// keyval-db.  Conf files are read and checked against the structures.
+// It accepts extra fields.
 
 import (
 	"bytes"
@@ -20,8 +21,8 @@ import (
 	//"time"
 )
 
-// DB_CONF is a pair of an endpoint and password to access a
-// keyval-db, and it is usually stored in a file in "etc".
+// DB_CONF is a pair of an endpoint and a password to access the
+// keyval-db.
 type db_conf struct {
 	Ep       string
 	Password string
@@ -76,32 +77,32 @@ type multiplexer_conf struct {
 	Error_response_delay_ms time_in_sec  `json:"error_response_delay_ms"`
 	Mux_node_name           string       `json:"mux_node_name"`
 	Backend                 backend_name `json:"backend"`
-	Backend_command_timeout time_in_sec  `json:"backend_command_timeout"`
+	Backend_timeout_ms      time_in_sec  `json:"backend_timeout_ms"`
 	Alert                   string       `json:"alert"`
 	Mux_access_log_file     string       `json:"mux_access_log_file"`
 }
 
 type registrar_conf struct {
-	Port                    int           `json:"port"`
-	Front_host              string        `json:"front_host"`
-	Trusted_proxy_list      []string      `json:"trusted_proxy_list"`
-	Base_path               string        `json:"base_path"`
-	Claim_uid_map           claim_uid_map `json:"claim_uid_map"`
-	User_approval           user_approval `json:"user_approval"`
-	Uid_allow_range_list    [][2]int      `json:"uid_allow_range_list"`
-	Uid_block_range_list    [][2]int      `json:"uid_block_range_list"`
-	Gid_drop_range_list     [][2]int      `json:"gid_drop_range_list"`
-	Gid_drop_list           []int         `json:"gid_drop_list"`
-	User_expiration_days    int           `json:"user_expiration_days"`
-	Pool_expiration_days    int           `json:"pool_expiration_days"`
-	Bucket_expiration_days  int           `json:"bucket_expiration_days"`
-	Secret_expiration_days  int           `json:"secret_expiration_days"`
-	Backend                 backend_name  `json:"backend"`
-	Backend_command_timeout time_in_sec   `json:"backend_command_timeout"`
-	Probe_access_timeout    time_in_sec   `json:"probe_access_timeout"`
-	Postpone_probe_access   bool          `json:"postpone_probe_access"`
-	Ui_session_duration     time_in_sec   `json:"ui_session_duration"`
-	Reg_access_log_file     string        `json:"reg_access_log_file"`
+	Port                   int           `json:"port"`
+	Front_host             string        `json:"front_host"`
+	Trusted_proxy_list     []string      `json:"trusted_proxy_list"`
+	Base_path              string        `json:"base_path"`
+	Claim_uid_map          claim_uid_map `json:"claim_uid_map"`
+	User_approval          user_approval `json:"user_approval"`
+	Uid_allow_range_list   [][2]int      `json:"uid_allow_range_list"`
+	Uid_block_range_list   [][2]int      `json:"uid_block_range_list"`
+	Gid_drop_range_list    [][2]int      `json:"gid_drop_range_list"`
+	Gid_drop_list          []int         `json:"gid_drop_list"`
+	User_expiration_days   int           `json:"user_expiration_days"`
+	Pool_expiration_days   int           `json:"pool_expiration_days"`
+	Bucket_expiration_days int           `json:"bucket_expiration_days"`
+	Secret_expiration_days int           `json:"secret_expiration_days"`
+	Backend                backend_name  `json:"backend"`
+	Backend_timeout_ms     time_in_sec   `json:"backend_timeout_ms"`
+	Probe_access_timeout   time_in_sec   `json:"probe_access_timeout"`
+	Postpone_probe_access  bool          `json:"postpone_probe_access"`
+	Ui_session_duration    time_in_sec   `json:"ui_session_duration"`
+	Reg_access_log_file    string        `json:"reg_access_log_file"`
 }
 
 type manager_conf struct {
@@ -111,8 +112,9 @@ type manager_conf struct {
 	Backend_awake_duration    time_in_sec `json:"backend_awake_duration"`
 	Backend_start_timeout     time_in_sec `json:"backend_start_timeout"`
 	Backend_setup_timeout     time_in_sec `json:"backend_setup_timeout"`
-	Backend_command_timeout   time_in_sec `json:"backend_command_timeout"`
 	Backend_stop_timeout      time_in_sec `json:"backend_stop_timeout"`
+	Backend_timeout_ms        time_in_sec `json:"backend_timeout_ms"`
+	Backend_region            string      `json:"backend_region"`
 	Backend_no_setup_at_start bool        `json:"backend_no_setup_at_start"`
 	Heartbeat_interval        time_in_sec `json:"heartbeat_interval"`
 	Heartbeat_timeout         time_in_sec `json:"heartbeat_timeout"`
@@ -183,13 +185,13 @@ var backend_list = []backend_name{
 	backend_name_rclone,
 }
 
-const bad_message = "Bad json conf-file."
+const bad_message = "Bad json conf file."
 
-// READ_DB_CONF reads a conf-file for the keyval table.
+// READ_DB_CONF reads a conf file for the keyval table.
 func read_db_conf(filepath string) db_conf {
 	var b1, err1 = os.ReadFile(filepath)
 	if err1 != nil {
-		log.Panicf("Reading a conf-file failed: file=(%s), err=(%v)",
+		log.Panicf("Reading a conf file failed: file=(%s), err=(%v)",
 			filepath, err1)
 	}
 	var b2 = bytes.NewReader(b1)
@@ -226,7 +228,7 @@ func read_conf(filename string) lens3_conf {
 		var muxconf mux_conf
 		var err3 = json.Unmarshal(json1, &muxconf)
 		if err3 != nil {
-			panic(fmt.Sprint("Bad json conf-file:", err3))
+			panic(fmt.Sprint("Bad json conf file:", err3))
 		}
 		//fmt.Println("MUX CONF is", muxconf)
 		check_mux_conf(&muxconf)
@@ -235,13 +237,13 @@ func read_conf(filename string) lens3_conf {
 		var regconf reg_conf
 		var err4 = json.Unmarshal(json1, &regconf)
 		if err4 != nil {
-			panic(fmt.Sprint("Bad json conf-file:", err4))
+			panic(fmt.Sprint("Bad json conf file:", err4))
 		}
 		//fmt.Println("REG CONF is", regconf)
 		check_reg_conf(&regconf)
 		return &regconf
 	default:
-		log.Panicf("Bad json conf-file: Bad subject field (%s).", sub)
+		log.Panicf("Bad json conf file: Bad subject field (%s).", sub)
 		return nil
 	}
 }
@@ -268,7 +270,7 @@ func check_reg_conf(conf *reg_conf) {
 
 func assert_slot(c bool) {
 	if !c {
-		panic(fmt.Errorf("Bad conf-file."))
+		panic(fmt.Errorf("Bad conf file."))
 	}
 }
 
@@ -317,7 +319,7 @@ func check_multiplexer_entry(e multiplexer_conf) {
 		"Busy_suspension_time",
 		//"Mux_node_name",
 		"Backend",
-		"Backend_command_timeout",
+		"Backend_timeout_ms",
 		"Mux_access_log_file",
 	} {
 		check_field_required_and_positive(e, slot)
@@ -344,7 +346,7 @@ func check_registrar_entry(e registrar_conf) {
 		"Bucket_expiration_days",
 		"Secret_expiration_days",
 		"Backend",
-		"Backend_command_timeout",
+		"Backend_timeout_ms",
 		"Probe_access_timeout",
 		"Postpone_probe_access",
 		"Ui_session_duration",
@@ -369,7 +371,8 @@ func check_manager_entry(e manager_conf) {
 		"Backend_start_timeout",
 		"Backend_setup_timeout",
 		"Backend_stop_timeout",
-		"Backend_command_timeout",
+		"Backend_timeout_ms",
+		"Backend_region",
 		"Backend_no_setup_at_start",
 		"Heartbeat_interval",
 		"Heartbeat_miss_tolerance",
@@ -410,11 +413,11 @@ func check_syslog_entry(e syslog_conf) {
 // 		// e.Base_path != "" &&
 // 		slices.Contains(claim_conversions, e.Claim_uid_map) &&
 // 		e.Probe_access_timeout > 0 &&
-// 		e.Backend_command_timeout > 0 &&
+// 		e.Backend_timeout_ms > 0 &&
 // 		e.Max_pool_expiry > 0 &&
 // 		e.Csrf_secret_seed != "" &&
 // 		e.Backend != "" &&
-// 		e.Backend_command_timeout > 0 &&
+// 		e.Backend_timeout_ms > 0 &&
 // 		e.Reg_access_log_file != "" {
 // 	} else {
 // 		panic(fmt.Errorf(bad_message))
@@ -432,7 +435,7 @@ func check_syslog_entry(e syslog_conf) {
 // 		e.Busy_suspension_time > 0 &&
 // 		//e.Mux_node_name
 // 		e.Backend != "" &&
-// 		e.Backend_command_timeout > 0 &&
+// 		e.Backend_timeout_ms > 0 &&
 // 		e.Mux_access_log_file != "" {
 // 	} else {
 // 		panic(fmt.Errorf(bad_message))
@@ -448,7 +451,7 @@ func check_syslog_entry(e syslog_conf) {
 // 	assert_slot(e.Backend_start_timeout > 0)
 // 	assert_slot(e.Backend_setup_timeout > 0)
 // 	assert_slot(e.Backend_stop_timeout > 0)
-// 	assert_slot(e.Backend_command_timeout > 0)
+// 	assert_slot(e.Backend_timeout_ms > 0)
 // 	assert_slot(e.Heartbeat_interval > 0)
 // 	assert_slot(e.Heartbeat_miss_tolerance > 0)
 // 	assert_slot(e.Heartbeat_timeout > 0)

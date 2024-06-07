@@ -182,7 +182,7 @@ func (d *backend_minio) shutdown() error {
 
 // HEARTBEAT http-gets the path "/minio/health/live" and returns an
 // http status code.  It returns 500 on a connection failure.
-func (d *backend_minio) heartbeat() int {
+func (d *backend_minio) heartbeat(*manager) int {
 	//fmt.Println("minio.heartbeat()")
 	var proc = d.get_super_part()
 
@@ -287,7 +287,7 @@ func execute_minio_mc_cmd(d *backend_minio, name string, command []string) *mini
 		fmt.Sprintf("--config-dir=%s", d.mc_config_dir),
 	}
 	argv = append(argv, command...)
-	var timeout = (time.Duration(d.Backend_command_timeout) * time.Second)
+	var timeout = (time.Duration(d.Backend_timeout_ms) * time.Millisecond)
 	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	var cmd = exec.CommandContext(ctx, argv[0], argv[1:]...)

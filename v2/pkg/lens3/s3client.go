@@ -42,8 +42,11 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-// PROBE_ACCESS_MUX accesses a Mux with a probe-key.  It chooses one
-// under which a backend is running, or randomly.
+// PROBE_ACCESS_MUX accesses a Mux from Registrar or other
+// Multiplexers using a probe-key.  A probe-access starts a backend
+// and amends its setting.  It chooses a Mux under which a backend is
+// running, or randomly.  It uses "us-east-1" region, which can be
+// arbitrary.
 func probe_access_mux(t *keyval_table, pool string) error {
 	var prop = get_pool(t, pool)
 	if prop == nil {
@@ -71,10 +74,11 @@ func probe_access_mux(t *keyval_table, pool string) error {
 	var muxurl = "http://" + ep
 	var provider = credentials.NewStaticCredentialsProvider(
 		secret.Access_key, secret.Secret_key, session)
+	var region = "us-east-1"
 	var options = s3.Options{
 		BaseEndpoint: aws.String(muxurl),
 		Credentials:  provider,
-		Region:       "us-east-1",
+		Region:       region,
 		UsePathStyle: true,
 	}
 	var client *s3.Client = s3.New(options)
@@ -90,21 +94,21 @@ func probe_access_mux(t *keyval_table, pool string) error {
 	return nil
 }
 
-func list_buckets_in_backend(m *multiplexer, be *backend_record) ([]string, error) {
+func list_buckets_in_backend(w *manager, be *backend_record) ([]string, error) {
 	var session = ""
 	var beurl = "http://" + be.Backend_ep
 	var provider = credentials.NewStaticCredentialsProvider(
 		be.Root_access, be.Root_secret, session)
+	var region = w.Backend_region
 	var options = s3.Options{
 		BaseEndpoint: aws.String(beurl),
 		Credentials:  provider,
-		Region:       "us-east-1",
+		Region:       region,
 		UsePathStyle: true,
 	}
 	var client *s3.Client = s3.New(options)
 
-	//var ctx = context.Background()
-	var timeout = 10000 * time.Millisecond
+	var timeout = (time.Duration(w.Backend_timeout_ms) * time.Millisecond)
 	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	var v, err1 = client.ListBuckets(ctx, &s3.ListBucketsInput{})
@@ -122,21 +126,21 @@ func list_buckets_in_backend(m *multiplexer, be *backend_record) ([]string, erro
 	return bkts, nil
 }
 
-func make_bucket_in_backend(m *multiplexer, be *backend_record, bucket *bucket_record) bool {
+func make_bucket_in_backend(w *manager, be *backend_record, bucket *bucket_record) bool {
 	var session = ""
 	var beurl = "http://" + be.Backend_ep
 	var provider = credentials.NewStaticCredentialsProvider(
 		be.Root_access, be.Root_secret, session)
+	var region = w.Backend_region
 	var options = s3.Options{
 		BaseEndpoint: aws.String(beurl),
 		Credentials:  provider,
-		Region:       "us-east-1",
+		Region:       region,
 		UsePathStyle: true,
 	}
 	var client *s3.Client = s3.New(options)
 
-	// var ctx = context.Background()
-	var timeout = 1000 * time.Millisecond
+	var timeout = (time.Duration(w.Backend_timeout_ms) * time.Millisecond)
 	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	var v, err1 = client.CreateBucket(ctx,
@@ -150,4 +154,32 @@ func make_bucket_in_backend(m *multiplexer, be *backend_record, bucket *bucket_r
 	}
 	fmt.Println("CreateBucket()=", v)
 	return true
+}
+
+func heartbeat_backend(w *manager, be *backend_record) int {
+	var session = ""
+	var beurl = "http://" + be.Backend_ep
+	var provider = credentials.NewStaticCredentialsProvider(
+		be.Root_access, be.Root_secret, session)
+	var region = w.Backend_region
+	var options = s3.Options{
+		BaseEndpoint: aws.String(beurl),
+		Credentials:  provider,
+		Region:       region,
+		UsePathStyle: true,
+	}
+	var client *s3.Client = s3.New(options)
+
+	var timeout = (time.Duration(w.Backend_timeout_ms) * time.Millisecond)
+	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	var v, err1 = client.ListBuckets(ctx, &s3.ListBucketsInput{})
+	if err1 != nil {
+		fmt.Printf("s3.Client.ListBuckets() err=%#v\n", err1)
+		return http_400_bad_request
+	}
+
+	fmt.Printf("s3.Client.ListBuckets()=%#v\n", v)
+
+	return http_200_OK
 }

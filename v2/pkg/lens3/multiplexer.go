@@ -161,7 +161,7 @@ func proxy_request_rewriter(m *multiplexer) func(r *httputil.ProxyRequest) {
 
 		var url1, err1 = url.Parse("http://" + ep)
 		if err1 != nil {
-			logger.debugf("Mux(pool=%s) bad backend ep: ep=(%s), err=(%v)",
+			logger.debugf("Mux(pool=%s) bad backend ep: ep=(%s) err=(%v)",
 				pool, ep, err1)
 			raise(&proxy_exc{http_500_internal_server_error,
 				[][2]string{
@@ -338,8 +338,10 @@ func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, be *
 	proxy.ServeHTTP(w, r)
 }
 
-// SERVE_INTERNAL_ACCESS handles requests from Register or other
-// Multiplexers.
+// SERVE_INTERNAL_ACCESS handles requests by probe_access_mux() from
+// Registrar or other Multiplexers.  A call to
+// make_absent_buckets_in_backend() has a race, but it results in only
+// redundant work.
 func serve_internal_access(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record, secret *secret_record) {
 	assert_fatal(secret != nil)
 	logger.debugf("Mux(%s) internal-access: pool=(%s)",
@@ -367,7 +369,7 @@ func serve_internal_access(m *multiplexer, w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	make_absent_buckets_in_backend(m, w, r, pooldata, secret)
+	make_absent_buckets_in_backend(m.manager, be)
 }
 
 func handle_multiplexer_exc(m *multiplexer, w http.ResponseWriter, r *http.Request) {
@@ -452,6 +454,7 @@ func ensure_backend_running(m *multiplexer, w http.ResponseWriter, r *http.Reque
 			return nil
 		}
 	}
+
 	var be2 = get_backend(m.table, pool)
 	if be2 == nil {
 		return_mux_response(m, w, r, http_500_internal_server_error,
@@ -681,42 +684,6 @@ func pick_bucket_in_path(m *multiplexer, r *http.Request) (string, *proxy_exc) {
 		return bucket, err1
 	}
 	return bucket, nil
-}
-
-func make_absent_buckets_in_backend(m *multiplexer, w http.ResponseWriter, r *http.Request, pooldata *pool_record, secret *secret_record) {
-	var pool = pooldata.Pool
-
-	var buckets_needed = gather_buckets(m.table, pool)
-
-	var be = get_backend(m.table, pool)
-	if be == nil {
-		logger.warnf("Mux(%s) backend not running for probing: pool=(%s)",
-			m.mux_ep, pool)
-		return
-	}
-	var buckets_exsting, err = list_buckets_in_backend(m, be)
-	if err != nil {
-		logger.errf("Mux(%s) Backend access failed: pool=(%s), err=(%v)",
-			m.mux_ep, be.Pool, err)
-		command_to_stop_backend(m.manager, pool)
-	}
-
-	//fmt.Println("list_buckets_in_backend=", buckets_exsting)
-
-	var now int64 = time.Now().Unix()
-	for _, b := range buckets_needed {
-		if slices.Contains(buckets_exsting, b.Bucket) {
-			continue
-		}
-		if b.Expiration_time < now {
-			continue
-		}
-
-		logger.debugf("Making a bucket in backend: pool=(%s), bucket=(%s)",
-			b.Pool, b.Bucket)
-
-		make_bucket_in_backend(m, be, b)
-	}
 }
 
 func return_mux_response(m *multiplexer, w http.ResponseWriter, r *http.Request, code int, message [][2]string) {

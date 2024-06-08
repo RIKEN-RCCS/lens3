@@ -18,28 +18,29 @@ package lens3
 // See https://pkg.go.dev/github.com/aws/smithy-go
 
 import (
-	"fmt"
-	//"flag"
-	//"errors"
 	"context"
-	//"io"
-	//"log"
-	//"os"
-	//"net"
-	//"maps"
-	//"net/http"
-	//"net/http/httputil"
-	//"net/url"
-	//"regexp"
-	//"slices"
-	//"strings"
-	"math/rand/v2"
-	"time"
-	//"github.com/aws/smithy-go"
-	//"runtime"
+	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/smithy-go"
+	"math/rand/v2"
+	"time"
+	//"errors"
+	//"flag"
+	//"github.com/aws/smithy-go"
+	//"io"
+	//"log"
+	//"maps"
+	//"net"
+	//"net/http"
+	//"net/http/httputil"
+	//"net/url"
+	//"os"
+	//"regexp"
+	//"runtime"
+	//"slices"
+	//"strings"
 )
 
 // PROBE_ACCESS_MUX accesses a Mux from Registrar or other
@@ -173,13 +174,25 @@ func heartbeat_backend(w *manager, be *backend_record) int {
 	var timeout = (time.Duration(w.Backend_timeout_ms) * time.Millisecond)
 	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	var v, err1 = client.ListBuckets(ctx, &s3.ListBucketsInput{})
+	var _, err1 = client.ListBuckets(ctx, &s3.ListBucketsInput{})
 	if err1 != nil {
-		fmt.Printf("s3.Client.ListBuckets() err=%#v\n", err1)
+		var err2, ok1 = err1.(*smithy.OperationError)
+		if ok1 {
+			// The error is an canceled error, because it sets small 1~sec
+			// timeout (err1.Err : *aws.RequestCanceledError).
+			var err3, ok2 = (err2.Err).(*aws.RequestCanceledError)
+			if ok2 {
+				logger.warnf("Mux() Heartbeat failed: err=(%v)", err3.Err)
+			} else {
+				logger.warnf("Mux() Heartbeat failed: err=(%v)", err2.Err)
+			}
+		} else {
+			logger.warnf("Mux() Heartbeat failed: err=(%v)", err1)
+		}
 		return http_400_bad_request
 	}
 
-	fmt.Printf("s3.Client.ListBuckets()=%#v\n", v)
+	//fmt.Printf("s3.Client.ListBuckets()=%#v\n", v)
 
 	return http_200_OK
 }

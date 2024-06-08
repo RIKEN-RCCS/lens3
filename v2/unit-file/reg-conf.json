@@ -19,24 +19,17 @@
     "pool_expiration_days": 365,
     "bucket_expiration_days": 365,
     "secret_expiration_days": 365,
-    "backend": "minio",
-    "backend_command_timeout": 10,
+    "error_response_delay_ms": 1000,
+    "backend": "rclone",
+    "backend_timeout_ms": 1000,
     "probe_access_timeout": 60,
     "postpone_probe_access": false,
     "ui_session_duration": 1800,
-    "reg_access_log_file": "/tmp/lens3-reg-access-log"
+    "access_log_file": "/tmp/lens3-reg-access-log"
   },
   "ui": {
     "s3_url": "https://lens3.exmaple.com",
     "footer_banner": "This site is operated by exmaple.com"
-  },
-  "minio": {
-    "minio": "/usr/local/bin/minio",
-    "mc": "/usr/local/bin/mc"
-  },
-  "rclone": {
-    "rclone": "/usr/local/bin/rclone",
-    "command_options": []
   },
   "log_file": "/tmp/lens3-reg-log",
   "log_syslog": {

@@ -299,29 +299,31 @@ func execute_minio_mc_cmd(d *backend_minio, name string, command []string) *mini
 	var err1 = cmd.Run()
 	//fmt.Println("cmd.Run()=", err1)
 	var wstatus = cmd.ProcessState.ExitCode()
+	var stdouts = strings.TrimSpace(stdoutb.String())
+	var stderrs = strings.TrimSpace(stderrb.String())
 	switch err2 := err1.(type) {
 	case nil:
 		// OK.
 		if d.verbose {
 			logger.debugf("Mux(minio) MC-command done:"+
 				" cmd=(%v) exit=%d stdout=(%s) stderr=(%s)",
-				argv, wstatus, stdoutb.String(), stderrb.String())
+				argv, wstatus, stdouts, stderrs)
 		}
 	case *exec.ExitError:
 		// Not successful.
 		if wstatus == -1 {
 			logger.errf("Mux(minio) MC-command signaled/unfinished:"+
 				" cmd=(%v) err=(%v) stdout=(%s) stderr=(%s)",
-				argv, err2, stdoutb.String(), stderrb.String())
+				argv, err2, stdouts, stderrs)
 			return &minio_mc_result{nil, err2}
 		}
 	default:
 		// Error.
 		logger.errf("Mux(minio) MC-command failed:"+
 			" cmd=(%v) err=(%v) stdout=(%s) stderr=(%s)",
-			argv, err1, stdoutb.String(), stderrb.String())
+			argv, err1, stdouts, stderrs)
 	}
-	var v1 = simplify_minio_mc_message(stdoutb.Bytes())
+	var v1 = simplify_minio_mc_message([]byte(stdouts))
 	if v1.err == nil {
 		if d.verbose {
 			logger.debugf("Mux(minio) MC-command OK: cmd=(%v)", command)
@@ -331,7 +333,7 @@ func execute_minio_mc_cmd(d *backend_minio, name string, command []string) *mini
 	} else {
 		logger.errf("Mux(minio) MC-command failed:"+
 			" cmd=(%v) err=(%v) stdout=(%s) stderr=(%s)",
-			argv, v1.err, stdoutb.String(), stderrb.String())
+			argv, v1.err, stdouts, stderrs)
 	}
 	return v1
 }

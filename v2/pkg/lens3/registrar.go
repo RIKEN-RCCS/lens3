@@ -225,6 +225,9 @@ func configure_registrar(z *registrar, t *keyval_table, q chan vacuous, c *reg_c
 	z.verbose = true
 
 	var conf = &z.conf.Registrar
+
+	reg_open_log(conf.Access_log_file)
+
 	z.ep_port = net.JoinHostPort("", strconv.Itoa(conf.Port))
 
 	var addrs []net.IP = convert_hosts_to_addrs(conf.Trusted_proxy_list)
@@ -365,7 +368,7 @@ func handle_registrar_exc(z *registrar, w http.ResponseWriter, rqst *http.Reques
 		delay_sleep(z.conf.Registrar.Error_response_delay_ms)
 		http.Error(w, string(b1), err1.code)
 		//log_access_with_user(rspn, "-")
-		log_access_with_request(rqst, err1.code, int64(len(b1)), "-")
+		log_reg_access_by_request(rqst, err1.code, int64(len(b1)), "-")
 	default:
 		fmt.Println("TRAP unhandled panic", err1)
 		fmt.Println("stacktrace:\n" + string(debug.Stack()))
@@ -374,7 +377,7 @@ func handle_registrar_exc(z *registrar, w http.ResponseWriter, rqst *http.Reques
 		var code = http_500_internal_server_error
 		http.Error(w, msg, code)
 		//log_access_with_user(rspn, "-")
-		log_access_with_request(rqst, code, int64(len(msg)), "-")
+		log_reg_access_by_request(rqst, code, int64(len(msg)), "-")
 	}
 }
 
@@ -386,7 +389,7 @@ func return_ui_script(z *registrar, w http.ResponseWriter, rqst *http.Request, p
 		var code = http_500_internal_server_error
 		http.Error(w, msg, code)
 		//log_access_with_user(rspn, "-")
-		log_access_with_request(rqst, code, int64(len(msg)), "-")
+		log_reg_access_by_request(rqst, code, int64(len(msg)), "-")
 		return nil
 	}
 	var parameters = (`<script type="text/javascript">const base_path_="` +
@@ -403,7 +406,7 @@ func return_ui_script(z *registrar, w http.ResponseWriter, rqst *http.Request, p
 		wf.Flush()
 	}
 	//log_access_with_user(rspn, "-")
-	log_access_with_request(rqst, 200, int64(len(data2)), "-")
+	log_reg_access_by_request(rqst, 200, int64(len(data2)), "-")
 	return &data2
 }
 
@@ -415,7 +418,7 @@ func return_file(z *registrar, w http.ResponseWriter, rqst *http.Request, path s
 		var code = http_500_internal_server_error
 		http.Error(w, msg, code)
 		//log_access_with_user(rspn, "-")
-		log_access_with_request(rqst, code, int64(len(msg)), "-")
+		log_reg_access_by_request(rqst, code, int64(len(msg)), "-")
 		return nil
 	}
 	var _, err2 = w.Write(data1)
@@ -427,7 +430,7 @@ func return_file(z *registrar, w http.ResponseWriter, rqst *http.Request, path s
 		wf.Flush()
 	}
 	//log_access_with_user(rspn, "-")
-	log_access_with_request(rqst, 200, int64(len(data1)), "-")
+	log_reg_access_by_request(rqst, 200, int64(len(data1)), "-")
 	return &data1
 }
 
@@ -1591,7 +1594,7 @@ func return_json_repsonse(z *registrar, w http.ResponseWriter, rqst *http.Reques
 	if ok {
 		wf.Flush()
 	}
-	log_access_with_request(rqst, 200, int64(len(v1)), u.Uid)
+	log_reg_access_by_request(rqst, 200, int64(len(v1)), u.Uid)
 	return
 }
 
@@ -1613,5 +1616,5 @@ func return_reg_error_response(z *registrar, w http.ResponseWriter, rqst *http.R
 	delay_sleep(z.conf.Registrar.Error_response_delay_ms)
 	http.Error(w, string(b1), code)
 	//log_access_with_user(rspn, u.Uid)
-	log_access_with_request(rqst, code, int64(len(b1)), u.Uid)
+	log_reg_access_by_request(rqst, code, int64(len(b1)), u.Uid)
 }

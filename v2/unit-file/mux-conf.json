@@ -14,10 +14,10 @@
     "busy_suspension_time": 180,
     "error_response_delay_ms": 1000,
     "mux_node_name": "localhost",
-    "backend": "minio",
-    "backend_command_timeout": 10,
+    "backend": "rclone",
+    "backend_timeout_ms": 1000,
     "alert": "mqtt",
-    "mux_access_log_file": "/tmp/lens3-mux-access-log"
+    "access_log_file": "/tmp/lens3-mux-access-log"
   },
   "manager": {
     "sudo": "/usr/bin/sudo",
@@ -27,7 +27,8 @@
     "backend_start_timeout": 60,
     "backend_stop_timeout": 30,
     "backend_setup_timeout": 60,
-    "backend_command_timeout": 10,
+    "backend_timeout_ms": 1000,
+    "backend_region": "us-east-1",
     "backend_no_setup_at_start": false,
     "heartbeat_interval": 61,
     "heartbeat_timeout": 30,

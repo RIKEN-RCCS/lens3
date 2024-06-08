@@ -433,12 +433,14 @@ func set_conf(t *keyval_table, conf lens3_conf) {
 		if !(sub == "mux" || (len(sub) >= 5 && sub[:4] == "mux:")) {
 			panic("bad conf; subject≠mux")
 		}
+		//fmt.Println("set mux-conf")
 		db_set_with_prefix(t, db_conf_prefix, sub, conf1)
 	case *reg_conf:
 		var sub = conf1.Subject
 		if !(sub == "reg") {
 			panic("bad conf; subject≠reg")
 		}
+		//fmt.Println("set reg-conf")
 		db_set_with_prefix(t, db_conf_prefix, sub, conf1)
 	default:
 		log.Panicf("type: (%T) type≠mux_conf nor type≠reg_conf\n", conf)

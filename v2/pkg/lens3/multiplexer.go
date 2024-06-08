@@ -84,6 +84,7 @@ func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, q chan v
 	//m.multiplexer_conf = conf.Multiplexer
 
 	var conf = &m.conf.Multiplexer
+	mux_open_log(conf.Access_log_file)
 
 	var host string
 	if conf.Mux_node_name != "" {
@@ -157,7 +158,7 @@ func proxy_access_addenda(m *multiplexer) func(*http.Response) error {
 		if rspn.StatusCode != 200 {
 			delay_sleep(m.conf.Multiplexer.Error_response_delay_ms)
 		}
-		log_access(rspn)
+		log_mux_access_by_response(rspn)
 		return nil
 	}
 }
@@ -349,7 +350,7 @@ func handle_multiplexer_exc(m *multiplexer, w http.ResponseWriter, r *http.Reque
 		assert_fatal(err2 == nil)
 		delay_sleep(m.conf.Multiplexer.Error_response_delay_ms)
 		http.Error(w, string(b1), err1.code)
-		log_access_with_request(r, err1.code, int64(len(b1)), "-")
+		log_mux_access_by_request(r, err1.code, int64(len(b1)), "-")
 	default:
 		fmt.Println("TRAP unhandled panic", err1)
 		fmt.Println("stacktrace:\n" + string(debug.Stack()))
@@ -357,7 +358,7 @@ func handle_multiplexer_exc(m *multiplexer, w http.ResponseWriter, r *http.Reque
 		var msg = "BAD"
 		var code = http_500_internal_server_error
 		http.Error(w, msg, code)
-		log_access_with_request(r, code, int64(len(msg)), "-")
+		log_mux_access_by_request(r, code, int64(len(msg)), "-")
 	}
 }
 
@@ -671,7 +672,7 @@ func return_mux_response(m *multiplexer, w http.ResponseWriter, r *http.Request,
 	assert_fatal(err1 == nil)
 	delay_sleep(m.conf.Multiplexer.Error_response_delay_ms)
 	http.Error(w, string(b1), code)
-	log_access_with_request(r, code, int64(len(b1)), "-")
+	log_mux_access_by_request(r, code, int64(len(b1)), "-")
 }
 
 func return_mux_response_by_error(m *multiplexer, w http.ResponseWriter, r *http.Request, err error) {

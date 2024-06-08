@@ -89,19 +89,10 @@ func Run_lenticularis_mux() {
 	}
 
 	//fmt.Println("services=", services)
-	start_service(*flag_conf, services)
+	start_lenticularis_service(*flag_conf, services)
 }
 
-func print_lenticularis_mux_usage() {
-	fmt.Fprintf(os.Stderr,
-		"Usage: lenticularis-mux -c conf [reg/mux/reg+mux]\n"+
-			"  where the mux part can be mux:xxx"+
-			" to specify a different configuration.\n"+
-			"  No reg nor mux means reg+mux\n")
-	flag.PrintDefaults()
-}
-
-func start_service(confpath string, services []string) {
+func start_lenticularis_service(confpath string, services []string) {
 	var dbconf = read_db_conf(confpath)
 	var t = make_table(dbconf)
 
@@ -134,6 +125,15 @@ func start_service(confpath string, services []string) {
 			}
 		}
 	}
+}
+
+func print_lenticularis_mux_usage() {
+	fmt.Fprintf(os.Stderr,
+		"Usage: lenticularis-mux -c conf [reg/mux/reg+mux]\n"+
+			"  where the mux part can be mux:xxx"+
+			" to specify a different configuration.\n"+
+			"  No reg nor mux means reg+mux\n")
+	flag.PrintDefaults()
 }
 
 func handle_unix_signals(t *keyval_table, ch_quit_service chan vacuous) {

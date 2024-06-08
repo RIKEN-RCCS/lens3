@@ -50,11 +50,11 @@ type mux_conf struct {
 // REG_CONF is a configuration of Reg.  log_file is optional.
 type reg_conf struct {
 	Conf_header
-	Registrar  registrar_conf `json:"registrar"`
-	UI         UI_conf        `json:"ui"`
-	Minio      minio_conf     `json:"minio"`
-	Log_file   string         `json:"log_file"`
-	Log_syslog syslog_conf    `json:"log_syslog"`
+	Registrar registrar_conf `json:"registrar"`
+	UI        UI_conf        `json:"ui"`
+	//Minio      minio_conf     `json:"minio"`
+	Log_file   string      `json:"log_file"`
+	Log_syslog syslog_conf `json:"log_syslog"`
 }
 
 type Conf_header struct {
@@ -79,7 +79,7 @@ type multiplexer_conf struct {
 	Backend                 backend_name `json:"backend"`
 	Backend_timeout_ms      time_in_sec  `json:"backend_timeout_ms"`
 	Alert                   string       `json:"alert"`
-	Mux_access_log_file     string       `json:"mux_access_log_file"`
+	Access_log_file         string       `json:"access_log_file"`
 }
 
 type registrar_conf struct {
@@ -103,7 +103,7 @@ type registrar_conf struct {
 	Probe_access_timeout    time_in_sec   `json:"probe_access_timeout"`
 	Postpone_probe_access   bool          `json:"postpone_probe_access"`
 	Ui_session_duration     time_in_sec   `json:"ui_session_duration"`
-	Reg_access_log_file     string        `json:"reg_access_log_file"`
+	Access_log_file         string        `json:"access_log_file"`
 }
 
 type manager_conf struct {
@@ -255,6 +255,8 @@ func check_mux_conf(conf *mux_conf) {
 	switch conf.Multiplexer.Backend {
 	case "minio":
 		check_minio_entry(conf.Minio)
+	case "rclone":
+		check_rclone_entry(conf.Rclone)
 	}
 	check_syslog_entry(conf.Log_syslog)
 }
@@ -263,7 +265,7 @@ func check_reg_conf(conf *reg_conf) {
 	check_registrar_entry(conf.Registrar)
 	switch conf.Registrar.Backend {
 	case "minio":
-		check_minio_entry(conf.Minio)
+		//check_minio_entry(conf.Minio)
 	}
 	check_ui_entry(conf.UI)
 	check_syslog_entry(conf.Log_syslog)
@@ -321,7 +323,7 @@ func check_multiplexer_entry(e multiplexer_conf) {
 		//"Mux_node_name",
 		"Backend",
 		"Backend_timeout_ms",
-		"Mux_access_log_file",
+		"Access_log_file",
 	} {
 		check_field_required_and_positive(e, slot)
 	}
@@ -352,7 +354,7 @@ func check_registrar_entry(e registrar_conf) {
 		"Probe_access_timeout",
 		"Postpone_probe_access",
 		"Ui_session_duration",
-		"Reg_access_log_file",
+		"Access_log_file",
 	} {
 		check_field_required_and_positive(e, slot)
 	}
@@ -385,8 +387,16 @@ func check_manager_entry(e manager_conf) {
 }
 
 func check_minio_entry(e minio_conf) {
-	if len(e.Minio) > 0 &&
-		len(e.Mc) > 0 {
+	if len(e.Minio) > 0 && len(e.Mc) > 0 {
+		// OK.
+	} else {
+		panic(fmt.Errorf(bad_message))
+	}
+}
+
+func check_rclone_entry(e rclone_conf) {
+	if len(e.Rclone) > 0 {
+		// OK.
 	} else {
 		panic(fmt.Errorf(bad_message))
 	}

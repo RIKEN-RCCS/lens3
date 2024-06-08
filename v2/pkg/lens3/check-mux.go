@@ -41,7 +41,7 @@ func run_service() {
 		start_multiplexer(m)
 	*/
 
-	go start_service("conf.json", []string{"reg", "mux"})
+	go start_lenticularis_service("conf.json", []string{"reg", "mux"})
 
 	//run_dummy_reg_client_for_mux_client()
 	var m = &the_multiplexer

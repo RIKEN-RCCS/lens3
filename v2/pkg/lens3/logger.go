@@ -83,6 +83,27 @@ func (w *log_writer) debug(m string) error {
 	return nil
 }
 
+var reg_log_file *os.File
+var mux_log_file *os.File
+
+func reg_open_log(f string) {
+	var s, err1 = os.OpenFile(f, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
+	if err1 != nil {
+		logger.critf("Reg() Opening a log file failed: err=(%v)", err1)
+		panic("")
+	}
+	reg_log_file = s
+}
+
+func mux_open_log(f string) {
+	var s, err1 = os.OpenFile(f, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
+	if err1 != nil {
+		logger.critf("Mux() Opening a log file failed: err=(%v)", err1)
+		panic("")
+	}
+	mux_log_file = s
+}
+
 // MEMO: Apache httpd access log format:
 //
 // LogFormat %h %l %u %t "%r" %>s %b "%{Referer}i" "%{User-Agent}i" combined
@@ -93,12 +114,20 @@ func (w *log_writer) debug(m string) error {
 //  200 333 "-" "aws-cli/1.18.156 Python/3.6.8
 //  Linux/4.18.0-513.18.1.el8_9.x86_64 botocore/1.18.15"
 
-func log_access(rspn *http.Response) {
+func log_mux_access_by_response(rspn *http.Response) {
 	var rqst = rspn.Request
-	log_access_with_request(rqst, rspn.StatusCode, rspn.ContentLength, "-")
+	log_access(mux_log_file, rqst, rspn.StatusCode, rspn.ContentLength, "-")
 }
 
-func log_access_with_request(rqst *http.Request, code int, length int64, uid string) {
+func log_mux_access_by_request(rqst *http.Request, code int, length int64, uid string) {
+	log_access(mux_log_file, rqst, code, length, "-")
+}
+
+func log_reg_access_by_request(rqst *http.Request, code int, length int64, uid string) {
+	log_access(reg_log_file, rqst, code, length, "-")
+}
+
+func log_access(f *os.File, rqst *http.Request, code int, length int64, uid string) {
 	var layout = "02/Jan/2006:15:04:05 -0700"
 
 	// l: RFC 1413 client identity by identd
@@ -115,7 +144,20 @@ func log_access_with_request(rqst *http.Request, code int, length int64, uid str
 	var rf = "-"
 	var ua = rqst.Header.Get("User-Agent")
 
-	logger.infof((`%s %s %s [%s] %q` + ` %s %s %q %q`),
+	var msg = fmt.Sprintf((`%s %s %s [%s] %q` + ` %s %s %q %q` + "\n"),
 		h, l, u, t, r,
 		s, b, rf, ua)
+	var _, err1 = f.WriteString(msg)
+	if err1 != nil {
+		var key string
+		switch f {
+		case mux_log_file:
+			key = "Mux()"
+		case reg_log_file:
+			key = "Reg()"
+		default:
+			panic("")
+		}
+		logger.critf("%s Wrinting to a log failed: err=(%v)", key, err1)
+	}
 }

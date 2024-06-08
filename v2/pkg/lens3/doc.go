@@ -15,3 +15,8 @@ package lens3
 
 // GOLANG VERSIONS: "slices" is from v1.22.  Note Golang is v1.21
 // in Linux Rocky8/9 as of 2024-04-01.
+
+// Golang prefers "x/sys/unix" over "syscall".  "SysProcAttr" are
+// the same in "x/sys/unix" and "syscall".
+
+// "log/slog" is in Go1.21.

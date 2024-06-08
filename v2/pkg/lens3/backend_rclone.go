@@ -336,30 +336,32 @@ func execute_rclone_rc_cmd(d *backend_rclone, name string, command []string) *rc
 	var err1 = cmd.Run()
 	//fmt.Println("cmd.Run()=", err1)
 	var wstatus = cmd.ProcessState.ExitCode()
+	var stdouts = strings.TrimSpace(stdoutb.String())
+	var stderrs = strings.TrimSpace(stderrb.String())
 	switch err2 := err1.(type) {
 	case nil:
 		// OK.
 		if d.verbose {
 			logger.debugf("Mux(rclone) RC-command done:"+
 				" cmd=(%v) exit=%d stdout=(%s) stderr=(%s)",
-				argv, wstatus, stdoutb.String(), stderrb.String())
+				argv, wstatus, stdouts, stderrs)
 		}
 	case *exec.ExitError:
 		// NOT SUCCESSFUL.
 		if wstatus == -1 {
 			logger.errf("Mux(rclone) RC-command signaled/unfinished:"+
 				" cmd=(%v) err=(%v) stdout=(%s) stderr=(%s)",
-				argv, err2, stdoutb.String(), stderrb.String())
+				argv, err2, stdouts, stderrs)
 			return &rclone_rc_result{nil, err2}
 		}
 	default:
 		// ERROR.
 		logger.errf("Mux(rclone) RC-command failed:"+
 			" cmd=(%v) err=(%v) stdout=(%s) stderr=(%s)",
-			argv, err1, stdoutb.String(), stderrb.String())
+			argv, err1, stdouts, stderrs)
 		return &rclone_rc_result{nil, err1}
 	}
-	var v1 = simplify_rclone_rc_message(stdoutb.Bytes())
+	var v1 = simplify_rclone_rc_message([]byte(stdouts))
 	if v1.err == nil {
 		if d.verbose {
 			logger.debugf("Mux(rclone) RC-command OK: cmd=(%v)", command)
@@ -369,7 +371,7 @@ func execute_rclone_rc_cmd(d *backend_rclone, name string, command []string) *rc
 	} else {
 		logger.errf("Mux(rclone) RC-command failed:"+
 			" cmd=(%v) err=(%v) stdout=(%s) stderr=(%s)",
-			argv, v1.err, stdoutb.String(), stderrb.String())
+			argv, v1.err, stdouts, stderrs)
 	}
 	return v1
 }

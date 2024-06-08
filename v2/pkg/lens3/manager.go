@@ -24,36 +24,32 @@ package lens3
 // are identical and concrete.
 
 import (
-	// Golang prefers "x/sys/unix" over "syscall".  "SysProcAttr" are
-	// the same in "x/sys/unix" and "syscall".
-
-	// "log/slog" is in Go1.21.
-
 	"bufio"
 	"context"
-	//"encoding/json"
 	"fmt"
+	"golang.org/x/sys/unix"
 	"log"
-	//"log/slog"
-	"time"
-	//"reflect"
-	//"io"
-	//"os"
-	"os/exec"
-	//"os/signal"
 	"math/rand/v2"
 	"net"
-	//"os/user"
-	"sync"
-	//"bytes"
-	//"syscall"
-	"golang.org/x/sys/unix"
-	//"runtime"
-	//"reflect"
+	"os/exec"
 	"slices"
 	"strconv"
-	//"time"
+	"sync"
+	"time"
+	//"strings"
+	//"bytes"
+	//"encoding/json"
+	//"io"
+	//"log/slog"
+	//"os"
+	//"os/signal"
+	//"os/user"
+	//"reflect"
+	//"reflect"
+	//"runtime"
+	//"syscall"
 	//"testing"
+	//"time"
 )
 
 // MANAGER keeps track of backend processes.  Manager is a single
@@ -138,9 +134,10 @@ type backend_delegate struct {
 
 	// The following fields {cmd,ch_stdio,ch_quit_backend} are set
 	// when starting a backend.
-	cmd             *exec.Cmd
-	ch_stdio        chan stdio_message
-	ch_quit_backend chan vacuous
+	cmd                  *exec.Cmd
+	ch_stdio             <-chan stdio_message
+	ch_quit_backend      <-chan vacuous
+	ch_quit_backend_send chan<- vacuous
 
 	heartbeat_misses int
 
@@ -430,7 +427,7 @@ func try_start_backend(w *manager, d backend, port int) start_result {
 	cmd.Env = envs
 	cmd.SysProcAttr = &unix.SysProcAttr{
 		// Note (?) it fails with: Noctty=true
-		Setsid:     true,
+		Setsid:     false,
 		Setctty:    false,
 		Noctty:     false,
 		Foreground: false,
@@ -440,11 +437,14 @@ func try_start_backend(w *manager, d backend, port int) start_result {
 	}
 	cmd.Stdin = nil
 
+	var ch_stdio = make(chan stdio_message)
+	var ch_quit_backend = make(chan vacuous)
 	proc.cmd = cmd
-	proc.ch_stdio = make(chan stdio_message)
-	proc.ch_quit_backend = make(chan vacuous)
+	proc.ch_stdio = ch_stdio
+	proc.ch_quit_backend = ch_quit_backend
+	proc.ch_quit_backend_send = ch_quit_backend
 
-	start_disgorging_stdio(proc)
+	start_disgorging_stdio(w, d, ch_stdio)
 
 	var err3 = cmd.Start()
 	if err3 != nil {
@@ -603,23 +603,22 @@ func tell_stop_backend(w *manager, d backend) {
 	func() {
 		proc.mutex.Lock()
 		defer proc.mutex.Unlock()
-		if proc.ch_quit_backend != nil {
-			close(proc.ch_quit_backend)
-			proc.ch_quit_backend = nil
+		if proc.ch_quit_backend_send != nil {
+			close(proc.ch_quit_backend_send)
+			proc.ch_quit_backend_send = nil
 		}
 	}()
 }
 
 // PING_BACKEND performs heartbeating.  It will shutdown the backend,
 // either when heartbeating fails or it is instructed to stop the
-// backend.  Note that it uses a copy of proc.ch_quit_backend
-// here, because the field will be set null after closing.
+// backend.
 func ping_backend(w *manager, d backend) {
 	var proc = d.get_super_part()
 	var duration = (time.Duration(w.Backend_awake_duration) * time.Second)
 	var interval = (time.Duration(proc.Heartbeat_interval) * time.Second)
 	var expiry = int64(3 * proc.Heartbeat_interval)
-	var ch_quit_backend = proc.ch_quit_backend
+	//var ch_quit_backend = proc.ch_quit_backend
 
 	set_backend_expiry(w.table, proc.Pool, expiry)
 
@@ -627,7 +626,7 @@ func ping_backend(w *manager, d backend) {
 	for {
 		var ok1 bool
 		select {
-		case _, ok1 = <-ch_quit_backend:
+		case _, ok1 = <-proc.ch_quit_backend:
 			assert_fatal(!ok1)
 			fmt.Println("*** CH_QUIT_BACKEND CLOSED")
 			break
@@ -704,10 +703,12 @@ func stop_backend(w *manager, d backend) {
 	}
 }
 
-// START_DISGORGING_STDIO spawns threads to emit backend output to the
-// "ch_stdio" channel.  It returns immediately.  It drains one line at
-// a time.  It closes the channel when both are closed.
-func start_disgorging_stdio(proc *backend_delegate) {
+// START_DISGORGING_STDIO spawns threads to emit backend stdout/stderr
+// outputs to the "ch_stdio" channel.  It returns immediately.  It
+// drains one line at a time.  It closes the channel when both are
+// closed.
+func start_disgorging_stdio(w *manager, d backend, ch_stdio chan<- stdio_message) {
+	var proc = d.get_super_part()
 	var cmd *exec.Cmd = proc.cmd
 
 	var stdout1, err1 = cmd.StdoutPipe()
@@ -727,7 +728,7 @@ func start_disgorging_stdio(proc *backend_delegate) {
 		var c1 = bufio.NewScanner(stdout1)
 		for c1.Scan() {
 			var s1 = c1.Text()
-			proc.ch_stdio <- stdio_message{on_stdout, s1}
+			ch_stdio <- stdio_message{on_stdout, s1}
 		}
 	}()
 
@@ -736,17 +737,18 @@ func start_disgorging_stdio(proc *backend_delegate) {
 		var c2 = bufio.NewScanner(stderr1)
 		for c2.Scan() {
 			var s2 = c2.Text()
-			proc.ch_stdio <- stdio_message{on_stderr, s2}
+			ch_stdio <- stdio_message{on_stderr, s2}
 		}
 	}()
 
 	go func() {
 		wg.Wait()
-		close(proc.ch_stdio)
+		close(ch_stdio)
+		tell_stop_backend(w, d)
 	}()
 }
 
-// DISGORGE_STDIO_TO_LOG outputs stdout+stderr messages to a log.  It
+// DISGORGE_STDIO_TO_LOG dumps stdout+stderr messages to a log.  It
 // receives messages written by threads started in
 // start_disgorging_stdio().
 func disgorge_stdio_to_log(proc *backend_delegate) {
@@ -754,28 +756,32 @@ func disgorge_stdio_to_log(proc *backend_delegate) {
 	for {
 		var x1, ok1 = <-proc.ch_stdio
 		if !ok1 {
-			fmt.Println("CLOSED")
 			break
 		}
 		// fmt.Println("LINE: ", x1.int, x1.string)
+		//var m = strings.TrimSpace(x1.string)
+		var m = x1.string
 		if x1.stdio_stream == on_stdout {
-			logger.infof("Mux(pool=%s) stdout: %s", pool, x1.string)
+			logger.infof("Mux(pool=%s) stdout=(%s)", pool, m)
 		} else {
-			logger.infof("Mux(pool=%s) stderr: %s", pool, x1.string)
+			logger.infof("Mux(pool=%s) stderr=(%s)", pool, m)
 		}
+	}
+	if proc.verbose {
+		logger.debugf("Mux(pool=%s) stdio dumper done", pool)
 	}
 }
 
 // DRAIN_START_MESSAGES_TO_LOG outputs messages to a log, that are
 // stored for checking a proper start of a backend.
-func drain_start_messages_to_log(pool string, outs []string, errs []string) {
+func drain_start_messages_to_log(pool string, stdouts []string, stderrs []string) {
 	// fmt.Println("drain_start_messages_to_log()")
 	var s string
-	for _, s = range outs {
-		logger.infof("Mux(pool=%s) stdout: %s", pool, s)
+	for _, s = range stdouts {
+		logger.infof("Mux(pool=%s) stdout=(%s)", pool, s)
 	}
-	for _, s = range errs {
-		logger.infof("Mux(pool=%s) stderr: %s", pool, s)
+	for _, s = range stderrs {
+		logger.infof("Mux(pool=%s) stderr=(%s)", pool, s)
 	}
 }
 

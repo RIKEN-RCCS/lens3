@@ -83,10 +83,6 @@ func (w *log_writer) debug(m string) error {
 	return nil
 }
 
-func log_access_by_request(r *http.Request, code int) {
-	logger.infof("access code=%d", code)
-}
-
 // MEMO: Apache httpd access log format:
 //
 // LogFormat %h %l %u %t "%r" %>s %b "%{Referer}i" "%{User-Agent}i" combined

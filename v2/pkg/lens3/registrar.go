@@ -29,7 +29,6 @@ package lens3
 
 import (
 	"bytes"
-	//"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -43,6 +42,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	//"context"
 	//"flag"
 	//"log"
 	//"maps"
@@ -78,7 +78,7 @@ type registrar struct {
 
 	server *http.Server
 
-	*reg_conf
+	conf *reg_conf
 }
 
 const reg_api_version = "v1.2"
@@ -221,10 +221,10 @@ type reg_error_message [][2]string
 func configure_registrar(z *registrar, t *keyval_table, q chan vacuous, c *reg_conf) {
 	z.table = t
 	z.ch_quit_service = q
-	z.reg_conf = c
+	z.conf = c
 	z.verbose = true
 
-	var conf = &z.Registrar
+	var conf = &z.conf.Registrar
 	z.ep_port = net.JoinHostPort("", strconv.Itoa(conf.Port))
 
 	var addrs []net.IP = convert_hosts_to_addrs(conf.Trusted_proxy_list)
@@ -362,14 +362,14 @@ func handle_registrar_exc(z *registrar, w http.ResponseWriter, rqst *http.Reques
 		}
 		var b1, err2 = json.Marshal(msg)
 		assert_fatal(err2 == nil)
-		delay_sleep(z.Registrar.Error_response_delay_ms)
+		delay_sleep(z.conf.Registrar.Error_response_delay_ms)
 		http.Error(w, string(b1), err1.code)
 		//log_access_with_user(rspn, "-")
 		log_access_with_request(rqst, err1.code, int64(len(b1)), "-")
 	default:
 		fmt.Println("TRAP unhandled panic", err1)
 		fmt.Println("stacktrace:\n" + string(debug.Stack()))
-		delay_sleep(z.Registrar.Error_response_delay_ms)
+		delay_sleep(z.conf.Registrar.Error_response_delay_ms)
 		var msg = "BAD"
 		var code = http_500_internal_server_error
 		http.Error(w, msg, code)
@@ -381,7 +381,7 @@ func handle_registrar_exc(z *registrar, w http.ResponseWriter, rqst *http.Reques
 func return_ui_script(z *registrar, w http.ResponseWriter, rqst *http.Request, path string) *string {
 	var data1, err1 = efs1.ReadFile(path)
 	if err1 != nil {
-		delay_sleep(z.Registrar.Error_response_delay_ms)
+		delay_sleep(z.conf.Registrar.Error_response_delay_ms)
 		var msg = "BAD"
 		var code = http_500_internal_server_error
 		http.Error(w, msg, code)
@@ -390,7 +390,7 @@ func return_ui_script(z *registrar, w http.ResponseWriter, rqst *http.Request, p
 		return nil
 	}
 	var parameters = (`<script type="text/javascript">const base_path_="` +
-		z.Registrar.Base_path + `";</script>`)
+		z.conf.Registrar.Base_path + `";</script>`)
 	var data2 = strings.Replace(string(data1),
 		"PLACE_BASE_PATH_SETTING_HERE", parameters, 1)
 	//fmt.Println(string(data2))
@@ -410,7 +410,7 @@ func return_ui_script(z *registrar, w http.ResponseWriter, rqst *http.Request, p
 func return_file(z *registrar, w http.ResponseWriter, rqst *http.Request, path string, efs1 *embed.FS) *[]byte {
 	var data1, err1 = efs1.ReadFile(path)
 	if err1 != nil {
-		delay_sleep(z.Registrar.Error_response_delay_ms)
+		delay_sleep(z.conf.Registrar.Error_response_delay_ms)
 		var msg = "BAD"
 		var code = http_500_internal_server_error
 		http.Error(w, msg, code)
@@ -565,7 +565,7 @@ func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 		return nil
 	}
 
-	var conf = &z.Registrar
+	var conf = &z.conf.Registrar
 	assert_fatal(conf.Pool_expiration_days > 0)
 	var days = conf.Pool_expiration_days
 	var expiration = time.Now().AddDate(0, 0, days).Unix()
@@ -653,7 +653,7 @@ func make_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 	var policy = intern_ui_bucket_policy(args.Bucket_policy)
 	assert_fatal(policy != "")
 
-	var conf = &z.Registrar
+	var conf = &z.conf.Registrar
 	assert_fatal(conf.Bucket_expiration_days > 0)
 	var days = conf.Bucket_expiration_days
 	var expiration = time.Now().AddDate(0, 0, days).Unix()
@@ -792,7 +792,7 @@ func return_pool_prop(z *registrar, w http.ResponseWriter, r *http.Request, u *u
 // is granted.  It returns a user record on success.  It does not
 // check the pool-state on deleting a pool.
 func grant_access_with_error_return(z *registrar, w http.ResponseWriter, r *http.Request, pool string, firstsession bool) *user_record {
-	var conf = &z.Registrar
+	var conf = &z.conf.Registrar
 	_ = conf
 
 	fmt.Println(";; r.RemoteAddr=", r.RemoteAddr)
@@ -909,7 +909,7 @@ func check_lens3_is_running(t *keyval_table) bool {
 // register a new user record, when it is the first session under
 // default-allow setting (that is, conf.User_approval=allow).
 func check_user_account(z *registrar, uid string, firstsession bool) *user_record {
-	var conf = &z.Registrar
+	var conf = &z.conf.Registrar
 
 	// Reject unregistered users.
 
@@ -951,7 +951,7 @@ func check_user_account(z *registrar, uid string, firstsession bool) *user_recor
 // REGISTER_NEW_USER registers a user at an access to the registrar.
 // It checks the unix account.  The new record has empty groups.
 func register_new_user(z *registrar, uid string, firstsession bool) *user_record {
-	var conf = &z.Registrar
+	var conf = &z.conf.Registrar
 	var approving = (conf.User_approval == user_default_allow && firstsession)
 	assert_fatal(approving)
 
@@ -1025,7 +1025,7 @@ func check_csrf_tokens(z *registrar, w http.ResponseWriter, r *http.Request, uid
 }
 
 func make_csrf_tokens(z *registrar, uid string) *csrf_token_record {
-	var conf = &z.Registrar
+	var conf = &z.conf.Registrar
 	var now = time.Now().Unix()
 	var data = &csrf_token_record{
 		Csrf_token_c: generate_random_key(),
@@ -1156,7 +1156,7 @@ func check_make_secret_arguments(z *registrar, u *user_record, pool string, data
 		}
 	}
 	// Check Expiration_time.
-	var conf = &z.Registrar
+	var conf = &z.conf.Registrar
 	assert_fatal(conf.Secret_expiration_days > 0)
 	var days = conf.Secret_expiration_days
 	var e = time.Unix(args.Expiration_time, 0)
@@ -1314,8 +1314,8 @@ func copy_user_record_to_ui(z *registrar, u *user_record, groups []string) *user
 		Uid:           u.Uid,
 		Groups:        groups,
 		Lens3_version: lens3_version,
-		S3_url:        z.UI.S3_url,
-		Footer_banner: z.UI.Footer_banner,
+		S3_url:        z.conf.UI.S3_url,
+		Footer_banner: z.conf.UI.Footer_banner,
 	}
 	return v
 }
@@ -1442,7 +1442,7 @@ func intern_ui_bucket_policy(policy string) bucket_policy {
 }
 
 func extend_user_expiration_time(z *registrar, u *user_record) {
-	var conf = &z.Registrar
+	var conf = &z.conf.Registrar
 	assert_fatal(conf.User_expiration_days > 0)
 	var days = conf.User_expiration_days
 	var expiration = time.Now().AddDate(0, 0, days).Unix()
@@ -1453,7 +1453,7 @@ func extend_user_expiration_time(z *registrar, u *user_record) {
 }
 
 func list_groups_of_user(z *registrar, uid string) []string {
-	var conf = &z.Registrar
+	var conf = &z.conf.Registrar
 
 	var uu, err1 = user.Lookup(uid)
 	if err1 != nil {
@@ -1610,7 +1610,7 @@ func return_reg_error_response(z *registrar, w http.ResponseWriter, rqst *http.R
 	}
 	var b1, err1 = json.Marshal(value)
 	assert_fatal(err1 == nil)
-	delay_sleep(z.Registrar.Error_response_delay_ms)
+	delay_sleep(z.conf.Registrar.Error_response_delay_ms)
 	http.Error(w, string(b1), code)
 	//log_access_with_user(rspn, u.Uid)
 	log_access_with_request(rqst, code, int64(len(b1)), u.Uid)

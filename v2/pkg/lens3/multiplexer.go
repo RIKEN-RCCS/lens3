@@ -16,26 +16,26 @@ package lens3
 // (ResponseWriter,*Request)→unit
 
 import (
-	"fmt"
-	//"flag"
 	"context"
-	"runtime/debug"
-	//"io"
 	"encoding/json"
-	//"log"
-	//"os"
-	"net"
-	//"os/user"
-	//"maps"
+	"fmt"
 	"math/rand/v2"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"runtime/debug"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
+	//"flag"
+	//"io"
+	//"log"
+	//"maps"
+	//"os"
+	//"os/user"
 	//"runtime"
 )
 
@@ -121,7 +121,7 @@ func start_multiplexer(m *multiplexer) {
 
 	var proxy1 = httputil.ReverseProxy{
 		Rewrite:        proxy_request_rewriter(m),
-		ModifyResponse: proxy_access_logger(m),
+		ModifyResponse: proxy_access_addenda(m),
 	}
 	var proxy2 = make_checker_proxy(m, &proxy1)
 	m.server = &http.Server{
@@ -152,9 +152,12 @@ func proxy_request_rewriter(m *multiplexer) func(*httputil.ProxyRequest) {
 	}
 }
 
-func proxy_access_logger(m *multiplexer) func(*http.Response) error {
-	return func(r *http.Response) error {
-		log_access(r)
+func proxy_access_addenda(m *multiplexer) func(*http.Response) error {
+	return func(rspn *http.Response) error {
+		if rspn.StatusCode != 200 {
+			delay_sleep(m.conf.Multiplexer.Error_response_delay_ms)
+		}
+		log_access(rspn)
 		return nil
 	}
 }
@@ -344,11 +347,17 @@ func handle_multiplexer_exc(m *multiplexer, w http.ResponseWriter, r *http.Reque
 		}
 		var b1, err2 = json.Marshal(msg)
 		assert_fatal(err2 == nil)
+		delay_sleep(m.conf.Multiplexer.Error_response_delay_ms)
 		http.Error(w, string(b1), err1.code)
+		log_access_with_request(r, err1.code, int64(len(b1)), "-")
 	default:
 		fmt.Println("TRAP unhandled panic", err1)
 		fmt.Println("stacktrace:\n" + string(debug.Stack()))
-		http.Error(w, "BAD", http_500_internal_server_error)
+		delay_sleep(m.conf.Multiplexer.Error_response_delay_ms)
+		var msg = "BAD"
+		var code = http_500_internal_server_error
+		http.Error(w, msg, code)
+		log_access_with_request(r, code, int64(len(msg)), "-")
 	}
 }
 
@@ -660,8 +669,9 @@ func return_mux_response(m *multiplexer, w http.ResponseWriter, r *http.Request,
 	}
 	var b1, err1 = json.Marshal(rspn)
 	assert_fatal(err1 == nil)
+	delay_sleep(m.conf.Multiplexer.Error_response_delay_ms)
 	http.Error(w, string(b1), code)
-	log_access_by_request(r, code)
+	log_access_with_request(r, code, int64(len(b1)), "-")
 }
 
 func return_mux_response_by_error(m *multiplexer, w http.ResponseWriter, r *http.Request, err error) {

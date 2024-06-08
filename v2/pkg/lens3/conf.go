@@ -83,26 +83,27 @@ type multiplexer_conf struct {
 }
 
 type registrar_conf struct {
-	Port                   int           `json:"port"`
-	Front_host             string        `json:"front_host"`
-	Trusted_proxy_list     []string      `json:"trusted_proxy_list"`
-	Base_path              string        `json:"base_path"`
-	Claim_uid_map          claim_uid_map `json:"claim_uid_map"`
-	User_approval          user_approval `json:"user_approval"`
-	Uid_allow_range_list   [][2]int      `json:"uid_allow_range_list"`
-	Uid_block_range_list   [][2]int      `json:"uid_block_range_list"`
-	Gid_drop_range_list    [][2]int      `json:"gid_drop_range_list"`
-	Gid_drop_list          []int         `json:"gid_drop_list"`
-	User_expiration_days   int           `json:"user_expiration_days"`
-	Pool_expiration_days   int           `json:"pool_expiration_days"`
-	Bucket_expiration_days int           `json:"bucket_expiration_days"`
-	Secret_expiration_days int           `json:"secret_expiration_days"`
-	Backend                backend_name  `json:"backend"`
-	Backend_timeout_ms     time_in_sec   `json:"backend_timeout_ms"`
-	Probe_access_timeout   time_in_sec   `json:"probe_access_timeout"`
-	Postpone_probe_access  bool          `json:"postpone_probe_access"`
-	Ui_session_duration    time_in_sec   `json:"ui_session_duration"`
-	Reg_access_log_file    string        `json:"reg_access_log_file"`
+	Port                    int           `json:"port"`
+	Front_host              string        `json:"front_host"`
+	Trusted_proxy_list      []string      `json:"trusted_proxy_list"`
+	Base_path               string        `json:"base_path"`
+	Claim_uid_map           claim_uid_map `json:"claim_uid_map"`
+	User_approval           user_approval `json:"user_approval"`
+	Uid_allow_range_list    [][2]int      `json:"uid_allow_range_list"`
+	Uid_block_range_list    [][2]int      `json:"uid_block_range_list"`
+	Gid_drop_range_list     [][2]int      `json:"gid_drop_range_list"`
+	Gid_drop_list           []int         `json:"gid_drop_list"`
+	User_expiration_days    int           `json:"user_expiration_days"`
+	Pool_expiration_days    int           `json:"pool_expiration_days"`
+	Bucket_expiration_days  int           `json:"bucket_expiration_days"`
+	Secret_expiration_days  int           `json:"secret_expiration_days"`
+	Error_response_delay_ms time_in_sec   `json:"error_response_delay_ms"`
+	Backend                 backend_name  `json:"backend"`
+	Backend_timeout_ms      time_in_sec   `json:"backend_timeout_ms"`
+	Probe_access_timeout    time_in_sec   `json:"probe_access_timeout"`
+	Postpone_probe_access   bool          `json:"postpone_probe_access"`
+	Ui_session_duration     time_in_sec   `json:"ui_session_duration"`
+	Reg_access_log_file     string        `json:"reg_access_log_file"`
 }
 
 type manager_conf struct {
@@ -315,8 +316,8 @@ func check_multiplexer_entry(e multiplexer_conf) {
 		"Mux_ep_update_interval",
 		"Forwarding_timeout",
 		"Probe_access_timeout",
-		"Error_response_delay_ms",
 		"Busy_suspension_time",
+		"Error_response_delay_ms",
 		//"Mux_node_name",
 		"Backend",
 		"Backend_timeout_ms",
@@ -345,6 +346,7 @@ func check_registrar_entry(e registrar_conf) {
 		"Pool_expiration_days",
 		"Bucket_expiration_days",
 		"Secret_expiration_days",
+		"Error_response_delay_ms",
 		"Backend",
 		"Backend_timeout_ms",
 		"Probe_access_timeout",

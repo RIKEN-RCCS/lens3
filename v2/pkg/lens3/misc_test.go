@@ -342,9 +342,12 @@ func check_rclone_message_regexp_matching() {
 	}
 
 	var msg3 = `2024/05/05 01:01:01 Failed to s3: failed to init server: listen tcp :6378: bind: address already in use`
-	var m3 = rclone_response_port_in_use_re.FindStringSubmatch(msg3)
-	fmt.Println("port_in_use=", (m3 != nil))
 
-	var m4 = rclone_response_failure_re.FindStringSubmatch(msg3)
-	fmt.Println("failure=", (m4 != nil))
+	var m3 = rclone_response_s3_failure_re.FindStringSubmatch(msg3)
+	fmt.Println("failure=", (m3 != nil))
+	assert_fatal(m3 != nil && len(m3) == 2)
+
+	var m4 = rclone_response_port_in_use_re.FindStringSubmatch(m3[1])
+	fmt.Println("port_in_use=", (m4 != nil))
+
 }

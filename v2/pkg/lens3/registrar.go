@@ -1,11 +1,11 @@
-/* Lens3-Reg.  It is a registrar of buckets and secrets. */
+/* Lens3-Reg.  Registrar of buckets and secrets via a Web-API. */
 
 // Copyright 2022-2024 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
 
 package lens3
 
-// UI expects responses as FastAPI/Starlette's "JSONResponse".
+// MEMO: UI expects responses as FastAPI/Starlette's "JSONResponse".
 //
 // media_type = "application/json"
 // json.dumps(
@@ -16,43 +16,44 @@ package lens3
 //   separators=(",", ":"),
 // ).encode("utf-8")
 
-// It uses a "double submit cookie" for CSRF prevention used in
+// Registrar uses a "double submit cookie" for CSRF prevention used in
 // fastapi_csrf_protect.  It uses a cookie+header pair.  A cookie is
-// "fastapi-csrf-token" and a header is "X-Csrf-Token".  However, this
-// implementes only the header part, assuming the cookie part is
-// subsumed by authenitication by httpd.  The CSRF state of a client
-// is set by a response of "GET /user_info".  See
-// https://github.com/aekasitt/fastapi-csrf-protect.
+// "fastapi-csrf-token" and a header is "X-Csrf-Token".  The CSRF
+// state of a client is set by a response of "GET /user_info".
+// (However, this implementes only the header part, assuming the
+// cookie part is subsumed by authenitication by httpd).  See
+// https://github.com/aekasitt/fastapi-csrf-protect
 
-// ??? NOTE: Maybe, consider adding a "Retry-After" header for 503 error.
+// NOTE???: Maybe, consider adding a "Retry-After" header for 503
+// error.
 
 import (
 	"bytes"
-	"fmt"
-	//"flag"
-	"path/filepath"
-	"runtime/debug"
 	//"context"
 	"encoding/json"
-	"io"
-	//"log"
-	"net"
-	//"maps"
-	//"math/rand/v2"
-	"net/http"
-	//"net/http/httputil"
-	//"net/url"
-	//"os"
 	"errors"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
 	"os/user"
+	"path/filepath"
+	"runtime/debug"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
+	//"flag"
+	//"log"
+	//"maps"
+	//"math/rand/v2"
+	//"net/http/httputil"
+	//"net/url"
+	//"os"
 	//"runtime"
 )
 
-// UI script is by embeded files.
+// UI script is by Golang's embedded files.
 
 import "embed"
 
@@ -63,7 +64,7 @@ var efs1 embed.FS
 var efs2 embed.FS
 
 type registrar struct {
-	// EP_PORT is a listening port of Reg (":port").
+	// EP_PORT is a listening port of Registrar (":port").
 	ep_port string
 
 	verbose bool
@@ -349,7 +350,7 @@ func start_registrar(z *registrar) {
 		z.ep_port, err1)
 }
 
-func handle_registrar_exc(z *registrar, w http.ResponseWriter, r *http.Request) {
+func handle_registrar_exc(z *registrar, w http.ResponseWriter, rqst *http.Request) {
 	var x = recover()
 	switch err1 := x.(type) {
 	case nil:
@@ -361,18 +362,31 @@ func handle_registrar_exc(z *registrar, w http.ResponseWriter, r *http.Request) 
 		}
 		var b1, err2 = json.Marshal(msg)
 		assert_fatal(err2 == nil)
+		delay_sleep(z.Registrar.Error_response_delay_ms)
 		http.Error(w, string(b1), err1.code)
+		//log_access_with_user(rspn, "-")
+		log_access_with_request(rqst, err1.code, int64(len(b1)), "-")
 	default:
 		fmt.Println("TRAP unhandled panic", err1)
 		fmt.Println("stacktrace:\n" + string(debug.Stack()))
-		http.Error(w, "BAD", http_500_internal_server_error)
+		delay_sleep(z.Registrar.Error_response_delay_ms)
+		var msg = "BAD"
+		var code = http_500_internal_server_error
+		http.Error(w, msg, code)
+		//log_access_with_user(rspn, "-")
+		log_access_with_request(rqst, code, int64(len(msg)), "-")
 	}
 }
 
-func return_ui_script(z *registrar, w http.ResponseWriter, r *http.Request, path string) *string {
+func return_ui_script(z *registrar, w http.ResponseWriter, rqst *http.Request, path string) *string {
 	var data1, err1 = efs1.ReadFile(path)
 	if err1 != nil {
-		http.Error(w, "BAD", http_500_internal_server_error)
+		delay_sleep(z.Registrar.Error_response_delay_ms)
+		var msg = "BAD"
+		var code = http_500_internal_server_error
+		http.Error(w, msg, code)
+		//log_access_with_user(rspn, "-")
+		log_access_with_request(rqst, code, int64(len(msg)), "-")
 		return nil
 	}
 	var parameters = (`<script type="text/javascript">const base_path_="` +
@@ -380,17 +394,40 @@ func return_ui_script(z *registrar, w http.ResponseWriter, r *http.Request, path
 	var data2 = strings.Replace(string(data1),
 		"PLACE_BASE_PATH_SETTING_HERE", parameters, 1)
 	//fmt.Println(string(data2))
-	io.WriteString(w, data2)
+	var _, err2 = io.WriteString(w, data2)
+	if err2 != nil {
+		logger.errf("Reg() Writing reply failed: err=(%v)", err2)
+	}
+	var wf, ok = w.(http.Flusher)
+	if ok {
+		wf.Flush()
+	}
+	//log_access_with_user(rspn, "-")
+	log_access_with_request(rqst, 200, int64(len(data2)), "-")
 	return &data2
 }
 
-func return_file(z *registrar, w http.ResponseWriter, r *http.Request, path string, efs1 *embed.FS) *[]byte {
+func return_file(z *registrar, w http.ResponseWriter, rqst *http.Request, path string, efs1 *embed.FS) *[]byte {
 	var data1, err1 = efs1.ReadFile(path)
 	if err1 != nil {
-		http.Error(w, "BAD", http_500_internal_server_error)
+		delay_sleep(z.Registrar.Error_response_delay_ms)
+		var msg = "BAD"
+		var code = http_500_internal_server_error
+		http.Error(w, msg, code)
+		//log_access_with_user(rspn, "-")
+		log_access_with_request(rqst, code, int64(len(msg)), "-")
 		return nil
 	}
-	io.WriteString(w, string(data1))
+	var _, err2 = w.Write(data1)
+	if err2 != nil {
+		logger.errf("Reg() Writing reply failed: err=(%v)", err2)
+	}
+	var wf, ok = w.(http.Flusher)
+	if ok {
+		wf.Flush()
+	}
+	//log_access_with_user(rspn, "-")
+	log_access_with_request(rqst, 200, int64(len(data1)), "-")
 	return &data1
 }
 
@@ -405,7 +442,7 @@ func return_user_info(z *registrar, w http.ResponseWriter, r *http.Request) *use
 	if u == nil {
 		return nil
 	}
-	if !check_empty_arguments_with_error_return(z, w, r, "", opr) {
+	if !check_empty_arguments_with_error_return(z, w, r, u, "", opr) {
 		return nil
 	}
 
@@ -428,7 +465,7 @@ func return_user_info(z *registrar, w http.ResponseWriter, r *http.Request) *use
 		Csrf_token: csrf.Csrf_token_h,
 		User_info:  *info,
 	}
-	return_json_repsonse(z, w, r, rspn)
+	return_json_repsonse(z, w, r, u, rspn)
 	return rspn
 }
 
@@ -440,7 +477,7 @@ func list_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 	if u == nil {
 		return nil
 	}
-	if !check_empty_arguments_with_error_return(z, w, r, pool, opr) {
+	if !check_empty_arguments_with_error_return(z, w, r, u, pool, opr) {
 		return nil
 	}
 
@@ -454,7 +491,7 @@ func list_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 	}
 
 	if pool != "" && len(poollist) == 0 {
-		return_reg_error_response(z, w, r, http_400_bad_request,
+		return_reg_error_response(z, w, r, u, http_400_bad_request,
 			[][2]string{
 				message_No_pool,
 				{"pool", pool},
@@ -464,7 +501,7 @@ func list_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 	if pool != "" && len(poollist) > 1 {
 		logger.errf("Reg() multiple pools with the same id (pool=%s)",
 			pool)
-		return_reg_error_response(z, w, r, http_500_internal_server_error,
+		return_reg_error_response(z, w, r, u, http_500_internal_server_error,
 			[][2]string{message_internal_error})
 		return nil
 	}
@@ -480,7 +517,7 @@ func list_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 		},
 		Pool_list: poollist,
 	}
-	return_json_repsonse(z, w, r, rspn)
+	return_json_repsonse(z, w, r, u, rspn)
 	return rspn
 }
 
@@ -519,7 +556,7 @@ func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 	if !ok {
 		var _ = delete_pool_name_unconditionally(z.table, pool)
 		var owner = find_owner_of_pool(z, holder)
-		return_reg_error_response(z, w, r, http_400_bad_request,
+		return_reg_error_response(z, w, r, u, http_400_bad_request,
 			[][2]string{
 				message_Buckets_directory_already_taken,
 				{"path", path},
@@ -560,7 +597,7 @@ func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 	set_pool(z.table, pool, pooldata)
 	set_pool_state(z.table, pool, pool_state_INITIAL, pool_reason_NORMAL)
 
-	var rspn = return_pool_prop(z, w, r, pool)
+	var rspn = return_pool_prop(z, w, r, u, pool)
 	return rspn
 }
 
@@ -570,13 +607,13 @@ func delete_pool_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 	if u == nil {
 		return nil
 	}
-	if !check_empty_arguments_with_error_return(z, w, r, pool, opr) {
+	if !check_empty_arguments_with_error_return(z, w, r, u, pool, opr) {
 		return nil
 	}
 
 	var ok = deregister_pool(z.table, pool)
 	if !ok {
-		return_reg_error_response(z, w, r, http_400_bad_request,
+		return_reg_error_response(z, w, r, u, http_400_bad_request,
 			[][2]string{
 				message_No_pool,
 				{"pool", pool},
@@ -595,7 +632,7 @@ func delete_pool_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 			Timestamp: time.Now().Unix(),
 		},
 	}
-	return_json_repsonse(z, w, r, rspn)
+	return_json_repsonse(z, w, r, u, rspn)
 	return rspn
 }
 
@@ -632,7 +669,7 @@ func make_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 	var ok1, holder = set_ex_bucket(z.table, name, bucket)
 	if !ok1 {
 		var owner = find_owner_of_pool(z, holder)
-		return_reg_error_response(z, w, r, http_400_bad_request,
+		return_reg_error_response(z, w, r, u, http_400_bad_request,
 			[][2]string{
 				message_Bucket_already_taken,
 				{"owner", owner},
@@ -646,7 +683,7 @@ func make_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 		var _ = probe_access_mux(z.table, pool)
 	}
 
-	var rspn = return_pool_prop(z, w, r, pool)
+	var rspn = return_pool_prop(z, w, r, u, pool)
 	return rspn
 }
 
@@ -656,23 +693,23 @@ func delete_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *h
 	if u == nil {
 		return nil
 	}
-	if !check_bucket_owner_with_error_return(z, w, r, pool, bucket, opr) {
+	if !check_bucket_owner_with_error_return(z, w, r, u, pool, bucket, opr) {
 		return nil
 	}
-	if !check_empty_arguments_with_error_return(z, w, r, pool, opr) {
+	if !check_empty_arguments_with_error_return(z, w, r, u, pool, opr) {
 		return nil
 	}
 
 	var ok1 = delete_bucket_unconditionally(z.table, bucket)
 	if !ok1 {
-		return_reg_error_response(z, w, r, http_404_not_found,
+		return_reg_error_response(z, w, r, u, http_404_not_found,
 			[][2]string{
 				message_No_bucket,
 				{"bucket", bucket},
 			})
 		return nil
 	}
-	var rspn = return_pool_prop(z, w, r, pool)
+	var rspn = return_pool_prop(z, w, r, u, pool)
 	return rspn
 }
 
@@ -701,7 +738,7 @@ func make_secret_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 		Timestamp:       now,
 	}
 	var _ = set_with_unique_secret_key(z.table, secret)
-	var rspn = return_pool_prop(z, w, r, pool)
+	var rspn = return_pool_prop(z, w, r, u, pool)
 	return rspn
 }
 
@@ -711,10 +748,10 @@ func delete_secret_and_return_response(z *registrar, w http.ResponseWriter, r *h
 	if u == nil {
 		return nil
 	}
-	if !check_secret_owner_with_error_return(z, w, r, pool, secret, opr) {
+	if !check_secret_owner_with_error_return(z, w, r, u, pool, secret, opr) {
 		return nil
 	}
-	if !check_empty_arguments_with_error_return(z, w, r, pool, opr) {
+	if !check_empty_arguments_with_error_return(z, w, r, u, pool, opr) {
 		return nil
 	}
 
@@ -722,7 +759,7 @@ func delete_secret_and_return_response(z *registrar, w http.ResponseWriter, r *h
 	var ok = delete_secret_key_unconditionally(z.table, secret)
 	if !ok {
 		logger.infof("delete_secret_key failed (ignored)")
-		return_reg_error_response(z, w, r, http_400_bad_request,
+		return_reg_error_response(z, w, r, u, http_400_bad_request,
 			[][2]string{
 				message_Bad_secret,
 				{"secret", secret},
@@ -730,12 +767,12 @@ func delete_secret_and_return_response(z *registrar, w http.ResponseWriter, r *h
 		return nil
 	}
 
-	var rpsn *pool_prop_response = return_pool_prop(z, w, r, pool)
+	var rpsn *pool_prop_response = return_pool_prop(z, w, r, u, pool)
 	return rpsn
 }
 
 // RETURN_POOL_PROP returns pool data.
-func return_pool_prop(z *registrar, w http.ResponseWriter, r *http.Request, pool string) *pool_prop_response {
+func return_pool_prop(z *registrar, w http.ResponseWriter, r *http.Request, u *user_record, pool string) *pool_prop_response {
 	var d = gather_pool_prop(z.table, pool)
 	assert_fatal(d != nil)
 	var poolprop = copy_pool_prop_to_ui(d)
@@ -747,37 +784,8 @@ func return_pool_prop(z *registrar, w http.ResponseWriter, r *http.Request, pool
 		},
 		Pool_prop: poolprop,
 	}
-	return_json_repsonse(z, w, r, rspn)
+	return_json_repsonse(z, w, r, u, rspn)
 	return rspn
-}
-
-func return_json_repsonse(z *registrar, w http.ResponseWriter, r *http.Request, rspn any) {
-	var v1, err1 = json.Marshal(rspn)
-	if err1 != nil {
-		panic(err1)
-	}
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	io.WriteString(w, string(v1))
-	log_access_by_request(r, http_200_OK)
-	return
-}
-
-func return_reg_error_response(z *registrar, w http.ResponseWriter, r *http.Request, code int, reason [][2]string) {
-	var msg = map[string]string{}
-	for _, kv := range reason {
-		msg[kv[0]] = kv[1]
-	}
-	var rspn = &error_response{
-		response_common: response_common{
-			Status:    "error",
-			Reason:    msg,
-			Timestamp: time.Now().Unix(),
-		},
-	}
-	var b1, err1 = json.Marshal(rspn)
-	assert_fatal(err1 == nil)
-	http.Error(w, string(b1), code)
-	log_access_by_request(r, code)
 }
 
 // GRANT_ACCESS_WITH_ERROR_RETURN checks an access to a pool by a user
@@ -792,39 +800,44 @@ func grant_access_with_error_return(z *registrar, w http.ResponseWriter, r *http
 	fmt.Println(";; X-Remote-User=", r.Header.Get("X-Remote-User"))
 	fmt.Println(";; X-Csrf-Token=", r.Header.Get("X-Csrf-Token"))
 
-	if check_lens3_is_running(z.table) {
-		logger.errf("Reg() lens3 is not running")
-		return_reg_error_response(z, w, r, http_500_internal_server_error,
-			[][2]string{
-				message_Lens3_not_running,
-			})
-		return nil
-	}
-
-	// Check on the frontend proxy.
-
-	//var client = r.Header.Get("X-Real-Ip")
-	var peer = r.RemoteAddr
-	if !check_frontend_proxy_trusted(z.trusted_proxies, peer) {
-		logger.errf("Reg() frontend proxy is untrusted: ep=(%v)", peer)
-		return_reg_error_response(z, w, r, http_500_internal_server_error,
-			[][2]string{
-				message_Bad_proxy_configuration,
-			})
-		return nil
-	}
-
-	// Check on the user.
+	// Check the user.
 
 	var x_remote_user = r.Header.Get("X-Remote-User")
 	var uid = map_claim_to_uid(z, x_remote_user)
 	var u = check_user_account(z, uid, firstsession)
 	if u == nil {
 		logger.warnf("Reg() user is not active: uid=(%s)", uid)
-		return_reg_error_response(z, w, r, http_401_unauthorized,
+		var dummy = &user_record{
+			Uid: "-",
+		}
+		return_reg_error_response(z, w, r, dummy, http_401_unauthorized,
 			[][2]string{
 				message_Bad_user_account,
 				{"state", "inactive"},
+			})
+		return nil
+	}
+
+	// Check if Lens3 is working.
+
+	if check_lens3_is_running(z.table) {
+		logger.errf("Reg() Lens3 is not running")
+		return_reg_error_response(z, w, r, u, http_500_internal_server_error,
+			[][2]string{
+				message_Lens3_not_running,
+			})
+		return nil
+	}
+
+	// Check the frontend proxy.
+
+	//var client = r.Header.Get("X-Real-Ip")
+	var peer = r.RemoteAddr
+	if !check_frontend_proxy_trusted(z.trusted_proxies, peer) {
+		logger.errf("Reg() frontend proxy is untrusted: ep=(%v)", peer)
+		return_reg_error_response(z, w, r, u, http_500_internal_server_error,
+			[][2]string{
+				message_Bad_proxy_configuration,
 			})
 		return nil
 	}
@@ -833,7 +846,7 @@ func grant_access_with_error_return(z *registrar, w http.ResponseWriter, r *http
 		var ok = check_csrf_tokens(z, w, r, uid)
 		if !ok {
 			logger.warnf("Reg() Bad csrf tokens: uid=(%s)", uid)
-			return_reg_error_response(z, w, r, http_401_unauthorized,
+			return_reg_error_response(z, w, r, u, http_401_unauthorized,
 				[][2]string{
 					message_Bad_csrf_tokens,
 				})
@@ -845,11 +858,11 @@ func grant_access_with_error_return(z *registrar, w http.ResponseWriter, r *http
 		return u
 	}
 
-	// Check on the pool given a pool-name.
+	// Check the pool given a pool-name.
 
 	if !check_pool_naming(pool) {
 		logger.debugf("Reg() Bad pool: uid=(%s) pool=(%s)", uid, pool)
-		return_reg_error_response(z, w, r, http_401_unauthorized,
+		return_reg_error_response(z, w, r, u, http_401_unauthorized,
 			[][2]string{
 				message_Bad_pool,
 				{"pool", pool},
@@ -860,7 +873,7 @@ func grant_access_with_error_return(z *registrar, w http.ResponseWriter, r *http
 	var pooldata = get_pool(z.table, pool)
 	if pooldata == nil {
 		logger.debugf("Reg() No pool: uid=(%s) pool=(%s)", uid, pool)
-		return_reg_error_response(z, w, r, http_401_unauthorized,
+		return_reg_error_response(z, w, r, u, http_401_unauthorized,
 			[][2]string{
 				message_No_pool,
 				{"pool", pool},
@@ -869,7 +882,7 @@ func grant_access_with_error_return(z *registrar, w http.ResponseWriter, r *http
 	}
 	if pooldata.Owner_uid != u.Uid {
 		logger.debugf("Reg() Not pool owner: uid=(%s) pool=(%s)", uid, pool)
-		return_reg_error_response(z, w, r, http_401_unauthorized,
+		return_reg_error_response(z, w, r, u, http_401_unauthorized,
 			[][2]string{
 				message_Not_pool_owner,
 				{"pool", pool},
@@ -1157,31 +1170,7 @@ func check_make_secret_arguments(z *registrar, u *user_record, pool string, data
 	return nil
 }
 
-func check_bucket_naming_with_error_return(z *registrar, w http.ResponseWriter, r *http.Request, bucket string) bool {
-	var ok = check_bucket_naming(bucket)
-	if !ok {
-		return_reg_error_response(z, w, r, http_400_bad_request,
-			[][2]string{
-				message_Bad_bucket,
-				{"bucket", bucket},
-			})
-	}
-	return ok
-}
-
-func check_access_key_naming_with_error_return(z *registrar, w http.ResponseWriter, r *http.Request, secret string) bool {
-	var ok = check_access_key_naming(secret)
-	if !ok {
-		return_reg_error_response(z, w, r, http_400_bad_request,
-			[][2]string{
-				message_Bad_secret,
-				{"secret", secret},
-			})
-	}
-	return ok
-}
-
-func check_empty_arguments_with_error_return(z *registrar, w http.ResponseWriter, r *http.Request, pool string, opr string) bool {
+func check_empty_arguments_with_error_return(z *registrar, w http.ResponseWriter, r *http.Request, u *user_record, pool string, opr string) bool {
 	var is = r.Body
 	var err1 = check_stream_eof(is)
 	if err1 == nil {
@@ -1190,7 +1179,7 @@ func check_empty_arguments_with_error_return(z *registrar, w http.ResponseWriter
 		if z.verbose && err1 == nil {
 			logger.warnf("garbage in request body")
 		}
-		return_reg_error_response(z, w, r, http_400_bad_request,
+		return_reg_error_response(z, w, r, u, http_400_bad_request,
 			[][2]string{
 				message_Arguments_not_empty,
 			})
@@ -1198,13 +1187,13 @@ func check_empty_arguments_with_error_return(z *registrar, w http.ResponseWriter
 	}
 }
 
-func check_bucket_owner_with_error_return(z *registrar, w http.ResponseWriter, r *http.Request, pool string, bucket string, opr string) bool {
-	if !check_bucket_naming_with_error_return(z, w, r, bucket) {
+func check_bucket_owner_with_error_return(z *registrar, w http.ResponseWriter, r *http.Request, u *user_record, pool string, bucket string, opr string) bool {
+	if !check_bucket_naming_with_error_return(z, w, r, u, bucket) {
 		return false
 	}
 	var b *bucket_record = get_bucket(z.table, bucket)
 	if b == nil {
-		return_reg_error_response(z, w, r, http_404_not_found,
+		return_reg_error_response(z, w, r, u, http_404_not_found,
 			[][2]string{
 				message_No_bucket,
 				{"bucket", bucket},
@@ -1212,7 +1201,7 @@ func check_bucket_owner_with_error_return(z *registrar, w http.ResponseWriter, r
 		return false
 	}
 	if b.Pool != pool {
-		return_reg_error_response(z, w, r, http_401_unauthorized,
+		return_reg_error_response(z, w, r, u, http_401_unauthorized,
 			[][2]string{
 				message_Not_bucket_owner,
 				{"bucket", bucket},
@@ -1222,13 +1211,25 @@ func check_bucket_owner_with_error_return(z *registrar, w http.ResponseWriter, r
 	return true
 }
 
-func check_secret_owner_with_error_return(z *registrar, w http.ResponseWriter, r *http.Request, pool string, secret string, opr string) bool {
-	if !check_access_key_naming_with_error_return(z, w, r, secret) {
+func check_bucket_naming_with_error_return(z *registrar, w http.ResponseWriter, r *http.Request, u *user_record, bucket string) bool {
+	var ok = check_bucket_naming(bucket)
+	if !ok {
+		return_reg_error_response(z, w, r, u, http_400_bad_request,
+			[][2]string{
+				message_Bad_bucket,
+				{"bucket", bucket},
+			})
+	}
+	return ok
+}
+
+func check_secret_owner_with_error_return(z *registrar, w http.ResponseWriter, r *http.Request, u *user_record, pool string, secret string, opr string) bool {
+	if !check_access_key_naming_with_error_return(z, w, r, u, secret) {
 		return false
 	}
 	var b *secret_record = get_secret(z.table, secret)
 	if b == nil {
-		return_reg_error_response(z, w, r, http_404_not_found,
+		return_reg_error_response(z, w, r, u, http_404_not_found,
 			[][2]string{
 				message_No_secret,
 				{"secret", secret},
@@ -1236,7 +1237,7 @@ func check_secret_owner_with_error_return(z *registrar, w http.ResponseWriter, r
 		return false
 	}
 	if b.Pool != pool {
-		return_reg_error_response(z, w, r, http_401_unauthorized,
+		return_reg_error_response(z, w, r, u, http_401_unauthorized,
 			[][2]string{
 				message_Not_secret_owner,
 				{"secret", secret},
@@ -1246,12 +1247,24 @@ func check_secret_owner_with_error_return(z *registrar, w http.ResponseWriter, r
 	return true
 }
 
+func check_access_key_naming_with_error_return(z *registrar, w http.ResponseWriter, r *http.Request, u *user_record, secret string) bool {
+	var ok = check_access_key_naming(secret)
+	if !ok {
+		return_reg_error_response(z, w, r, u, http_400_bad_request,
+			[][2]string{
+				message_Bad_secret,
+				{"secret", secret},
+			})
+	}
+	return ok
+}
+
 type checker_fn func(z *registrar, u *user_record, pool string, data any) reg_error_message
 
 func decode_request_body_with_error_return(z *registrar, w http.ResponseWriter, r *http.Request, u *user_record, pool string, opr string, data any, check checker_fn) bool {
 	var ok1 = decode_request_body(z, r, data)
 	if !ok1 {
-		return_reg_error_response(z, w, r, http_400_bad_request,
+		return_reg_error_response(z, w, r, u, http_400_bad_request,
 			[][2]string{
 				message_Bad_body_encoding,
 				{"op", opr},
@@ -1260,7 +1273,7 @@ func decode_request_body_with_error_return(z *registrar, w http.ResponseWriter, 
 	}
 	var msg = check(z, u, pool, data)
 	if msg != nil {
-		return_reg_error_response(z, w, r, http_400_bad_request,
+		return_reg_error_response(z, w, r, u, http_400_bad_request,
 			msg)
 		return false
 	}
@@ -1556,4 +1569,49 @@ func deregister_pool(t *keyval_table, pool string) bool {
 	delete_pool(t, p.pool_record.Pool)
 
 	return true
+}
+
+// NOTE: It cannot obtain a response object.  http.ResponseWriter is
+// an instance of http.response, but it is not public.  Note that also
+// the field http.Request.Response is null.  Niether a context does
+// not have a response.  http.RoundTrip is on the client side.
+func return_json_repsonse(z *registrar, w http.ResponseWriter, rqst *http.Request, u *user_record, value any) {
+	assert_fatal(u != nil)
+	var v1, err1 = json.Marshal(value)
+	if err1 != nil {
+		panic(err1)
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	//io.WriteString(w, string(v1))
+	var _, err2 = w.Write(v1)
+	if err2 != nil {
+		logger.errf("Reg() Writing reply failed: err=(%v)", err2)
+	}
+	var wf, ok = w.(http.Flusher)
+	if ok {
+		wf.Flush()
+	}
+	log_access_with_request(rqst, 200, int64(len(v1)), u.Uid)
+	return
+}
+
+func return_reg_error_response(z *registrar, w http.ResponseWriter, rqst *http.Request, u *user_record, code int, reason [][2]string) {
+	assert_fatal(u != nil)
+	var msg = map[string]string{}
+	for _, kv := range reason {
+		msg[kv[0]] = kv[1]
+	}
+	var value = &error_response{
+		response_common: response_common{
+			Status:    "error",
+			Reason:    msg,
+			Timestamp: time.Now().Unix(),
+		},
+	}
+	var b1, err1 = json.Marshal(value)
+	assert_fatal(err1 == nil)
+	delay_sleep(z.Registrar.Error_response_delay_ms)
+	http.Error(w, string(b1), code)
+	//log_access_with_user(rspn, u.Uid)
+	log_access_with_request(rqst, code, int64(len(b1)), u.Uid)
 }

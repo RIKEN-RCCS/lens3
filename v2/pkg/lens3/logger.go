@@ -93,33 +93,33 @@ func log_access_by_request(r *http.Request, code int) {
 //
 // https://en.wikipedia.org/wiki/Common_Log_Format
 //
-//  10.128.8.30 - - [04/Mar/2024:17:43:20 +0900] "GET /... HTTP/1.1"
-//  403 403 "-" "aws-cli/1.18.156 Python/3.6.8
+//  192.168.2.2 - - [02/Jan/2006:15:04:05 -0700] "GET /... HTTP/1.1"
+//  200 333 "-" "aws-cli/1.18.156 Python/3.6.8
 //  Linux/4.18.0-513.18.1.el8_9.x86_64 botocore/1.18.15"
 
 func log_access(rspn *http.Response) {
-	var req = rspn.Request
-	//fmt.Printf("*** ACCESS_LOGGING Response=%#v\n", rspn)
-	//fmt.Printf("*** ACCESS_LOGGING Request=%#v\n", req)
+	var rqst = rspn.Request
+	log_access_with_request(rqst, rspn.StatusCode, rspn.ContentLength, "-")
+}
 
+func log_access_with_request(rqst *http.Request, code int, length int64, uid string) {
 	var layout = "02/Jan/2006:15:04:05 -0700"
 
 	// l: RFC 1413 client identity by identd
-	// (RFC 1413 : "Identification Protocol")
 	// u: user
 	// rf: Referer
 
-	var h = req.RemoteAddr
+	var h = rqst.RemoteAddr
 	var l = "-"
-	var u = "-"
+	var u = uid
 	var t = time.Now().Format(layout)
-	var r = fmt.Sprintf("%s %s %s", req.Method, req.URL, req.Proto)
-	var s = fmt.Sprintf("%d", rspn.StatusCode)
-	var b = fmt.Sprintf("%d", rspn.ContentLength)
+	var r = fmt.Sprintf("%s %s %s", rqst.Method, rqst.URL, rqst.Proto)
+	var s = fmt.Sprintf("%d", code)
+	var b = fmt.Sprintf("%d", length)
 	var rf = "-"
-	var ua = req.Header.Get("User-Agent")
+	var ua = rqst.Header.Get("User-Agent")
 
-	logger.infof((`%s %s %s [%s] "%s"` + ` %s %s "%s" "%s"`),
+	logger.infof((`%s %s %s [%s] %q` + ` %s %s %q %q`),
 		h, l, u, t, r,
 		s, b, rf, ua)
 }

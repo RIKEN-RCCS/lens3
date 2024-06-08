@@ -5,7 +5,7 @@
 
 package lens3
 
-// Multiplexer is a proxy to a backend S3 server.  Lens3 main part.
+// Multiplexer is a proxy to backend S3 servers -- Lens3's main part.
 
 // MEMO:
 //

@@ -163,7 +163,7 @@ func (d *backend_rclone) check_startup(stream stdio_stream, mm []string) start_r
 			message:     "--",
 		}
 	}
-	fmt.Println("rclone.check_startup2(%v)", mm)
+	fmt.Printf("rclone.check_startup2(%v)\n", mm)
 
 	// Check failure.  Failure messages can be both by S3 and RC.
 

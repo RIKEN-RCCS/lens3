@@ -6,29 +6,26 @@
 package lens3
 
 import (
-	// GOLANG VERSIONS: "slices" is from v1.22.  Note Golang is v1.21
-	// in Linux Rocky8/9 as of 2023-04-01.
-
-	//"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	//"github.com/go-redis/redis/v8"
 	"io"
+	"math/rand/v2"
 	"net"
 	"os"
-	//"log"
-	//"log/syslog"
-	"sort"
-	//"time"
-	//"slices"
-	"math/rand/v2"
 	"reflect"
 	"regexp"
 	"runtime"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
+	"time"
+	//"context"
+	//"github.com/go-redis/redis/v8"
+	//"log"
+	//"log/syslog"
+	//"slices"
 )
 
 type vacuous = struct{}
@@ -492,4 +489,8 @@ func find_one[T any](mm []T, f func(T) bool) (bool, T) {
 		}
 	}
 	return false, *new(T)
+}
+
+func delay_sleep(ms time_in_sec) {
+	time.Sleep(time.Duration(ms) * time.Millisecond)
 }

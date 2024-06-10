@@ -29,7 +29,7 @@ func run_registrar(n int) {
 	var regconf = get_reg_conf(t, "reg")
 	_ = muxconf
 
-	var z = &the_registrar
+	var z = the_registrar
 	configure_registrar(z, t, nil, regconf)
 
 	fmt.Println("now+365=", time.Now().AddDate(0, 0, 30).Unix())

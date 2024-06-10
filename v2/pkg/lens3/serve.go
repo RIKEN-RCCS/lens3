@@ -103,7 +103,7 @@ func start_lenticularis_service(confpath string, services []string) {
 		var run_on_main_thread = (i == len(services)-1)
 		if service == "reg" {
 			var regconf = get_reg_conf(t, service)
-			var z = &the_registrar
+			var z = the_registrar
 			configure_registrar(z, t, ch_quit_service, regconf)
 			if run_on_main_thread {
 				start_registrar(z)
@@ -113,8 +113,8 @@ func start_lenticularis_service(confpath string, services []string) {
 		}
 		if strings.HasPrefix(service, "mux") {
 			var muxconf = get_mux_conf(t, service)
-			var m = &the_multiplexer
-			var w = &the_manager
+			var m = the_multiplexer
+			var w = the_manager
 			configure_multiplexer(m, w, t, ch_quit_service, muxconf)
 			configure_manager(w, m, t, ch_quit_service, muxconf)
 			defer w.factory.clean_at_exit()

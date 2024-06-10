@@ -83,10 +83,15 @@ func (w *log_writer) debug(m string) error {
 	return nil
 }
 
+// logger.ERROR = log.New(os.Stdout, "[ERROR] ", 0)
+// logger.CRITICAL = log.New(os.Stdout, "[CRIT] ", 0)
+// logger.WARN = log.New(os.Stdout, "[WARN]  ", 0)
+// logger.DEBUG = log.New(os.Stdout, "[DEBUG] ", 0)
+
 var reg_log_file *os.File
 var mux_log_file *os.File
 
-func reg_open_log(f string) {
+func open_log_for_reg(f string) {
 	var s, err1 = os.OpenFile(f, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
 	if err1 != nil {
 		logger.critf("Reg() Opening a log file failed: err=(%v)", err1)
@@ -95,7 +100,7 @@ func reg_open_log(f string) {
 	reg_log_file = s
 }
 
-func mux_open_log(f string) {
+func open_log_for_mux(f string) {
 	var s, err1 = os.OpenFile(f, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
 	if err1 != nil {
 		logger.critf("Mux() Opening a log file failed: err=(%v)", err1)

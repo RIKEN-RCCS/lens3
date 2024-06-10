@@ -27,6 +27,13 @@
     "ui_session_duration": 1800,
     "access_log_file": "/tmp/lens3-reg-access-log"
   },
+  "mqtt": {
+    "ep": "localhost:1883",
+    "client": "lens3-reg",
+    "topic": "Lens3 Reg Alart",
+    "username": "lens3",
+    "password": "k7IwUfcKvYgaXfY9kHNoiXOP6RhTAHir9EzPbms8"
+  },
   "ui": {
     "s3_url": "https://lens3.exmaple.com",
     "footer_banner": "This site is operated by exmaple.com"

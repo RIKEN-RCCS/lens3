@@ -162,9 +162,7 @@ type backend_command struct {
 }
 
 // THE_MANAGER is the single multiplexer instance.
-var the_manager = manager{
-	//processes: make(map[int]backend),
-}
+var the_manager = &manager{}
 
 // STDIO_STREAM is an indicator of which of a stream of stdio, stdout
 // or stderr.  It is stored in a STDIO_MESSAGE.

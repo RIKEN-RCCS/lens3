@@ -29,13 +29,13 @@ func run_service() {
 		var muxconf = get_mux_conf(t, "mux")
 		var regconf = get_reg_conf(t, "reg")
 
-		var m = &the_multiplexer
-		var w = &the_manager
+		var m = the_multiplexer
+		var w = the_manager
 		configure_multiplexer(m, w, t, muxconf)
 		configure_manager(w, m, t, muxconf)
 		//go start_manager(w)
 
-		var z = &the_registrar
+		var z = the_registrar
 		configure_registrar(z, t, regconf)
 		go start_registrar(z)
 		start_multiplexer(m)
@@ -44,7 +44,7 @@ func run_service() {
 	go start_lenticularis_service("conf.json", []string{"reg", "mux"})
 
 	//run_dummy_reg_client_for_mux_client()
-	var m = &the_multiplexer
+	var m = the_multiplexer
 	run_dummy_mux_client(m)
 }
 

@@ -50,11 +50,11 @@ type mux_conf struct {
 // REG_CONF is a configuration of Reg.  log_file is optional.
 type reg_conf struct {
 	Conf_header
-	Registrar registrar_conf `json:"registrar"`
-	UI        UI_conf        `json:"ui"`
-	//Minio      minio_conf     `json:"minio"`
-	Log_file   string      `json:"log_file"`
-	Log_syslog syslog_conf `json:"log_syslog"`
+	Registrar  registrar_conf `json:"registrar"`
+	Mqtt       mqtt_conf      `json:"mqtt"`
+	UI         UI_conf        `json:"ui"`
+	Log_file   string         `json:"log_file"`
+	Log_syslog syslog_conf    `json:"log_syslog"`
 }
 
 type Conf_header struct {
@@ -138,8 +138,11 @@ type rclone_conf struct {
 }
 
 type mqtt_conf struct {
-	Minio string `json:"minio"`
-	Mc    string `json:"mc"`
+	Ep       string `json:"ep"`
+	Client   string `json:"client"`
+	Topic    string `json:"topic"`
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 type UI_conf struct {
@@ -206,7 +209,7 @@ func read_db_conf(filepath string) db_conf {
 	if conf.Ep == "" || conf.Password == "" {
 		log.Panic("conf.redis.ep or conf.redis.password missing")
 	}
-	check_db_entry(conf)
+	check_db_entry(&conf)
 	return conf
 }
 
@@ -250,25 +253,23 @@ func read_conf(filename string) lens3_conf {
 }
 
 func check_mux_conf(conf *mux_conf) {
-	check_multiplexer_entry(conf.Multiplexer)
-	check_manager_entry(conf.Manager)
+	check_multiplexer_entry(&conf.Multiplexer)
+	check_manager_entry(&conf.Manager)
 	switch conf.Multiplexer.Backend {
 	case "minio":
-		check_minio_entry(conf.Minio)
+		check_minio_entry(&conf.Minio)
 	case "rclone":
-		check_rclone_entry(conf.Rclone)
+		check_rclone_entry(&conf.Rclone)
 	}
-	check_syslog_entry(conf.Log_syslog)
+	check_mqtt_entry(&conf.Mqtt)
+	check_syslog_entry(&conf.Log_syslog)
 }
 
 func check_reg_conf(conf *reg_conf) {
-	check_registrar_entry(conf.Registrar)
-	switch conf.Registrar.Backend {
-	case "minio":
-		//check_minio_entry(conf.Minio)
-	}
-	check_ui_entry(conf.UI)
-	check_syslog_entry(conf.Log_syslog)
+	check_registrar_entry(&conf.Registrar)
+	check_mqtt_entry(&conf.Mqtt)
+	check_ui_entry(&conf.UI)
+	check_syslog_entry(&conf.Log_syslog)
 }
 
 func assert_slot(c bool) {
@@ -277,7 +278,7 @@ func assert_slot(c bool) {
 	}
 }
 
-func check_db_entry(e db_conf) {
+func check_db_entry(e *db_conf) {
 	if len(e.Ep) > 0 && len(e.Password) > 0 {
 	} else {
 		log.Panic(fmt.Errorf(bad_message))
@@ -310,7 +311,7 @@ func check_field_required_and_positive(t any, slot string) {
 	}
 }
 
-func check_multiplexer_entry(e multiplexer_conf) {
+func check_multiplexer_entry(e *multiplexer_conf) {
 	for _, slot := range []string{
 		"Port",
 		"Front_host",
@@ -325,14 +326,14 @@ func check_multiplexer_entry(e multiplexer_conf) {
 		"Backend_timeout_ms",
 		"Access_log_file",
 	} {
-		check_field_required_and_positive(e, slot)
+		check_field_required_and_positive(*e, slot)
 	}
 	if !slices.Contains(backend_list, e.Backend) {
 		panic(fmt.Errorf(bad_message))
 	}
 }
 
-func check_registrar_entry(e registrar_conf) {
+func check_registrar_entry(e *registrar_conf) {
 	for _, slot := range []string{
 		"Port",
 		"Front_host",
@@ -356,7 +357,7 @@ func check_registrar_entry(e registrar_conf) {
 		"Ui_session_duration",
 		"Access_log_file",
 	} {
-		check_field_required_and_positive(e, slot)
+		check_field_required_and_positive(*e, slot)
 	}
 	if !slices.Contains(claim_conversions, e.Claim_uid_map) {
 		panic(fmt.Errorf(bad_message))
@@ -366,7 +367,7 @@ func check_registrar_entry(e registrar_conf) {
 	}
 }
 
-func check_manager_entry(e manager_conf) {
+func check_manager_entry(e *manager_conf) {
 	for _, slot := range []string{
 		"Sudo",
 		"Port_min",
@@ -382,11 +383,11 @@ func check_manager_entry(e manager_conf) {
 		"Heartbeat_miss_tolerance",
 		"Heartbeat_timeout",
 	} {
-		check_field_required_and_positive(e, slot)
+		check_field_required_and_positive(*e, slot)
 	}
 }
 
-func check_minio_entry(e minio_conf) {
+func check_minio_entry(e *minio_conf) {
 	if len(e.Minio) > 0 && len(e.Mc) > 0 {
 		// OK.
 	} else {
@@ -394,7 +395,7 @@ func check_minio_entry(e minio_conf) {
 	}
 }
 
-func check_rclone_entry(e rclone_conf) {
+func check_rclone_entry(e *rclone_conf) {
 	if len(e.Rclone) > 0 {
 		// OK.
 	} else {
@@ -402,7 +403,15 @@ func check_rclone_entry(e rclone_conf) {
 	}
 }
 
-func check_ui_entry(e UI_conf) {
+func check_mqtt_entry(e *mqtt_conf) {
+	if len(e.Ep) > 0 {
+		// OK.
+	} else {
+		panic(fmt.Errorf(bad_message))
+	}
+}
+
+func check_ui_entry(e *UI_conf) {
 	if len(e.S3_url) > 0 &&
 		len(e.Footer_banner) > 0 {
 	} else {
@@ -410,7 +419,7 @@ func check_ui_entry(e UI_conf) {
 	}
 }
 
-func check_syslog_entry(e syslog_conf) {
+func check_syslog_entry(e *syslog_conf) {
 	if len(e.Facility) > 0 &&
 		len(e.Priority) > 0 {
 	} else {

@@ -78,6 +78,8 @@ type registrar struct {
 
 	server *http.Server
 
+	mqtt *mqtt_client
+
 	conf *reg_conf
 }
 
@@ -179,7 +181,7 @@ type make_secret_arguments struct {
 	Expiration_time int64  `json:"expiration_time"`
 }
 
-var the_registrar = registrar{}
+var the_registrar = &registrar{}
 
 var err_body_not_allowed = errors.New("http: request method or response status code does not allow body")
 
@@ -218,15 +220,15 @@ var map_secret_policy_to_ui = map[secret_policy]string{
 // REG_ERROR_MESSAGE is an extra error message returned to UI on errors.
 type reg_error_message [][2]string
 
-func configure_registrar(z *registrar, t *keyval_table, q chan vacuous, c *reg_conf) {
+func configure_registrar(z *registrar, t *keyval_table, qch <-chan vacuous, c *reg_conf) {
 	z.table = t
-	z.ch_quit_service = q
+	z.ch_quit_service = qch
 	z.conf = c
 	z.verbose = true
 
 	var conf = &z.conf.Registrar
-
-	reg_open_log(conf.Access_log_file)
+	open_log_for_reg(conf.Access_log_file)
+	z.mqtt = configure_mqtt(&z.conf.Mqtt, qch)
 
 	z.ep_port = net.JoinHostPort("", strconv.Itoa(conf.Port))
 

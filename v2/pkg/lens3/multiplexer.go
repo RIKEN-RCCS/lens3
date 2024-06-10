@@ -65,26 +65,29 @@ type multiplexer struct {
 
 	server *http.Server
 
+	mqtt *mqtt_client
+
 	conf *mux_conf
 }
 
 // THE_MULTIPLEXER is the single multiplexer instance.
-var the_multiplexer = multiplexer{}
+var the_multiplexer = &multiplexer{}
 
 const (
 	empty_payload_hash_sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 )
 
-func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, q chan vacuous, c *mux_conf) {
+func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, qch <-chan vacuous, c *mux_conf) {
 	m.table = t
 	m.manager = w
 	m.conf = c
-	m.ch_quit_service = q
+	m.ch_quit_service = qch
 	m.verbose = true
 	//m.multiplexer_conf = conf.Multiplexer
 
 	var conf = &m.conf.Multiplexer
-	mux_open_log(conf.Access_log_file)
+	open_log_for_mux(conf.Access_log_file)
+	m.mqtt = configure_mqtt(&m.conf.Mqtt, qch)
 
 	var host string
 	if conf.Mux_node_name != "" {
@@ -104,7 +107,7 @@ func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, q chan v
 	//conf.Forwarding_timeout = 60
 	//m.client = &http.Client{}
 	//m.proxy = m.client
-	conf.Front_host = "localhost"
+	//conf.Front_host = "localhost"
 
 	var addrs []net.IP = convert_hosts_to_addrs(conf.Trusted_proxy_list)
 	logger.debugf("Mux(%s) trusted_proxies=(%v)", m.mux_ep, addrs)

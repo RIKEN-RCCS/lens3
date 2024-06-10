@@ -42,6 +42,13 @@
     "rclone": "/usr/local/bin/rclone",
     "command_options": []
   },
+  "mqtt": {
+    "ep": "localhost:1883",
+    "client": "lens3-mux",
+    "topic": "Lens3 Mux Alart",
+    "username": "lens3",
+    "password": "k7IwUfcKvYgaXfY9kHNoiXOP6RhTAHir9EzPbms8"
+  },
   "log_file": "/tmp/lens3-mux-log",
   "log_syslog": {
     "facility": "LOCAL7",

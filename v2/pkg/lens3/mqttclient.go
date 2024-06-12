@@ -5,24 +5,22 @@
 
 package lens3
 
-// Lens3 uses Paho for MQTT v5 (although Paho for v5 seems not widely
-// used).  Do not confuse Paho for v3 with v5.
+// Lens3 uses Paho for MQTT v5 (although that version of Paho seems
+// not widely used).  Do not confuse Paho for v3 with v5.
 
 // MQTT V3
 // https://pkg.go.dev/github.com/eclipse/paho.mqtt.golang
-//
 // MQTT V5
 // https://pkg.go.dev/github.com/eclipse/paho.golang
 
 // MEMO: password with moqquitto
 //
-// % mosquitto_passwd -c password.txt
+// % mosquitto_passwd -c password.txt lens3
 // % mosquitto_passwd -b password.txt lens3 password
 //
-// # cat /etc/mosquitto/mosquitto.conf
+// # vi /etc/mosquitto/mosquitto.conf
 //   allow_anonymous false
 //   password_file /etc/mosquitto/password.txt
-//   ?? per_listener_settings true
 
 import (
 	"context"
@@ -53,7 +51,8 @@ func configure_mqtt(c *mqtt_conf, qch <-chan vacuous) *mqtt_client {
 	var ep = "mqtt://" + q.conf.Ep
 	var mqtturl, err1 = url.Parse(ep)
 	if err1 != nil {
-		logger.debugf("MQTT() Bad endpoint: ep=(%s) err=(%v)", ep, err1)
+		logger.errf("MQTT() Bad endpoint: ep=(%s) err=(%v)", ep, err1)
+		return nil
 	}
 	q.queue = memory.New()
 	var conf = autopaho.ClientConfig{
@@ -68,7 +67,7 @@ func configure_mqtt(c *mqtt_conf, qch <-chan vacuous) *mqtt_client {
 		SessionExpiryInterval: 60,
 
 		OnConnectionUp: func(cm *autopaho.ConnectionManager, ack *paho.Connack) {
-			logger.warnf("MQTT() Connection up: ack=(%v)", ack)
+			logger.debugf("MQTT() Connection up: ack=(%v)", ack.ReasonCode)
 		},
 
 		OnConnectError: func(err error) {
@@ -92,10 +91,10 @@ func configure_mqtt(c *mqtt_conf, qch <-chan vacuous) *mqtt_client {
 
 			OnServerDisconnect: func(d *paho.Disconnect) {
 				if d.Properties != nil {
-					logger.warnf("MQTT() Server disconnect: (%v)",
+					logger.debugf("MQTT() Server disconnect: (%v)",
 						d.Properties.ReasonString)
 				} else {
-					logger.warnf("MQTT() Server disconnect: code=(%d)",
+					logger.debugf("MQTT() Server disconnect: code=(%d)",
 						d.ReasonCode)
 				}
 			},

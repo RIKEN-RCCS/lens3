@@ -437,18 +437,18 @@ section prepares it.  It is better to run `lens3-admin` on the same
 host running Redis.  See the following descriptions of the fields of
 the configurations.
 
-* [mux-conf-yaml.md](mux-conf-yaml.md)
-* [reg-conf-yaml.md](reg-conf-yaml.md)
+* [mux-conf-json.md](mux-conf-json.md)
+* [reg-conf-json.md](reg-conf-json.md)
 
 Make the configurations in files to load them in Redis.
 
 ```
 # su - lens3
 lens3$ cd ~
-lens3$ cp $TOP/v2/unit-file/reg-conf.yaml reg-conf.yaml
-lens3$ cp $TOP/v3/unit-file/mux-conf.yaml mux-conf.yaml
-lens3$ vi reg-conf.yaml
-lens3$ vi mux-conf.yaml
+lens3$ cp $TOP/v3/unit-file/mux-conf.json mux-conf.json
+lens3$ cp $TOP/v2/unit-file/reg-conf.json reg-conf.json
+lens3$ vi mux-conf.json
+lens3$ vi reg-conf.json
 ```
 
 Load the Lens3 configuration from the files.  Note `lens3-admin` needs
@@ -462,13 +462,21 @@ database in raw text.
 # chmod 660 /home/lens3/conf.json
 # su - lens3
 lens3$ cd ~
-lens3$ lens3-admin -c conf.json load-conf reg-conf.yaml
-lens3$ lens3-admin -c conf.json load-conf mux-conf.yaml
+lens3$ lens3-admin -c conf.json load-conf mux-conf.json
+lens3$ lens3-admin -c conf.json load-conf reg-conf.json
 lens3$ lens3-admin -c conf.json show-conf
 ```
 
 Restarting of services, lenticularis-mux and lenticularis-reg, is
 needed after setting configurations.  Run `systemctl restart` on them.
+
+Syntax of json can be checked by tools such as "jq" -- command-line
+JSON processor.
+
+```
+lens3$ cat mux-conf.json | jq
+lens3$ cat reg-conf.json | jq
+```
 
 ## Set up sudoers for Lens3-Mux
 
@@ -481,6 +489,19 @@ in "/etc/sudoers.d/lenticularis-sudoers".
 # cp $TOP/unit-file/mux/lenticularis-sudoers /etc/sudoers.d/
 # vi /etc/sudoers.d/lenticularis-sudoers
 # chmod 440 /etc/sudoers.d/lenticularis-sudoers
+```
+
+## (Optional) Set up System Logging
+
+Logging in RedHat/Rocky is in memory by default.  It needs a change in
+the setting to keep logs across reboots.
+
+```
+# vi /etc/systemd/journald.conf
+[Journal]
+Storage=persistent
+
+# systemctl restart systemd-journald
 ```
 
 ## (Optional) Set up Log Rotation

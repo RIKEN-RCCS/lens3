@@ -245,7 +245,7 @@ type minio_mc_result struct {
 func simplify_minio_mc_message(s []byte) *minio_mc_result {
 	var mm, ok = decode_json([]string{string(s)})
 	if !ok {
-		logger.err("Mux(minio) json decode failed")
+		logger.errf("Mux(minio) json decode failed")
 		var err1 = fmt.Errorf("MC-command returned a bad json: (%s)", s)
 		return &minio_mc_result{nil, err1}
 	}

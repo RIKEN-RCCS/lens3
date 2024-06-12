@@ -3,21 +3,19 @@
   "version": "v2.1",
   "aws_signature": "AWS4-HMAC-SHA256",
   "multiplexer": {
+    "backend": "rclone",
     "port": 8003,
     "front_host": "localhost",
     "trusted_proxy_list": [
       "localhost"
     ],
+    "mux_node_name": "localhost",
     "mux_ep_update_interval": 307,
     "forwarding_timeout": 60,
     "probe_access_timeout": 60,
     "busy_suspension_time": 180,
     "error_response_delay_ms": 1000,
-    "mux_node_name": "localhost",
-    "backend": "rclone",
-    "backend_timeout_ms": 1000,
-    "alert": "mqtt",
-    "access_log_file": "/tmp/lens3-mux-access-log"
+    "backend_timeout_ms": 1000
   },
   "manager": {
     "sudo": "/usr/bin/sudo",
@@ -42,16 +40,7 @@
     "rclone": "/usr/local/bin/rclone",
     "command_options": []
   },
-  "mqtt": {
-    "ep": "localhost:1883",
-    "client": "lens3-mux",
-    "topic": "Lens3 Mux Alart",
-    "username": "lens3",
-    "password": "k7IwUfcKvYgaXfY9kHNoiXOP6RhTAHir9EzPbms8"
-  },
-  "log_file": "/tmp/lens3-mux-log",
-  "log_syslog": {
-    "facility": "LOCAL7",
-    "priority": "DEBUG"
+  "log": {
+    "access_log_file": "/tmp/lens3-mux-access-log"
   }
 }

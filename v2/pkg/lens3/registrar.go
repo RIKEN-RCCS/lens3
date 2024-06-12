@@ -227,8 +227,8 @@ func configure_registrar(z *registrar, t *keyval_table, qch <-chan vacuous, c *r
 	z.verbose = true
 
 	var conf = &z.conf.Registrar
-	open_log_for_reg(conf.Access_log_file)
-	z.mqtt = configure_mqtt(&z.conf.Mqtt, qch)
+	open_log_for_reg(c.Log.Access_log_file)
+	z.mqtt = configure_mqtt(&c.Logging.Mqtt, qch)
 
 	z.ep_port = net.JoinHostPort("", strconv.Itoa(conf.Port))
 
@@ -241,12 +241,14 @@ func configure_registrar(z *registrar, t *keyval_table, qch <-chan vacuous, c *r
 }
 
 func start_registrar(z *registrar) {
-	//fmt.Println("start_registrar() z=", z)
-	//var conf = &z.Registrar
+	logger.debugf("Reg() start_registrar()")
+
 	var router = http.NewServeMux()
 	z.server = &http.Server{
 		Addr:    z.ep_port,
 		Handler: router,
+		//ErrorLog *log.Logger,
+		//BaseContext func(net.Listener) context.Context,
 	}
 
 	// Root "/" requests are redirected.
@@ -254,7 +256,7 @@ func start_registrar(z *registrar) {
 	router.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
 		fmt.Println("Reg.GET /")
-		logger.debug("Reg.GET /")
+		logger.debugf("Reg.GET /")
 		//	defer func() {
 		//		var x = recover()
 		//		switch e := x.(type) {
@@ -290,7 +292,7 @@ func start_registrar(z *registrar) {
 	})
 
 	router.HandleFunc("GET /user-info", func(w http.ResponseWriter, r *http.Request) {
-		logger.debug("Reg.GET /user-info")
+		logger.debugf("Reg.GET /user-info")
 		defer handle_registrar_exc(z, w, r)
 		var _ = return_user_info(z, w, r)
 	})

@@ -34,27 +34,23 @@ type lens3_conf interface{ lens3_conf_union() }
 func (mux_conf) lens3_conf_union() {}
 func (reg_conf) lens3_conf_union() {}
 
-// MUX_CONF is a configuration of Mux.  mux_node_name and log_file are
-// optional.
+// MUX_CONF is a configuration of Mux.
 type mux_conf struct {
 	Conf_header
 	Multiplexer multiplexer_conf `json:"multiplexer"`
 	Manager     manager_conf     `json:"manager"`
 	Minio       minio_conf       `json:"minio"`
 	Rclone      rclone_conf      `json:"rclone"`
-	Mqtt        mqtt_conf        `json:"mqtt"`
-	Log_file    string           `json:"log_file"`
-	Log_syslog  syslog_conf      `json:"log_syslog"`
+	Log         access_log_conf  `json:"log"`
 }
 
-// REG_CONF is a configuration of Reg.  log_file is optional.
+// REG_CONF is a configuration of Reg.
 type reg_conf struct {
 	Conf_header
-	Registrar  registrar_conf `json:"registrar"`
-	Mqtt       mqtt_conf      `json:"mqtt"`
-	UI         UI_conf        `json:"ui"`
-	Log_file   string         `json:"log_file"`
-	Log_syslog syslog_conf    `json:"log_syslog"`
+	Registrar registrar_conf  `json:"registrar"`
+	UI        UI_conf         `json:"ui"`
+	Log       access_log_conf `json:"log"`
+	Logging   logging_conf    `json:"logging"`
 }
 
 type Conf_header struct {
@@ -67,28 +63,28 @@ type Conf_header struct {
 // is optional.  NOTE: Trusted_proxy_list should include the frontend
 // proxies and the Mux hosts.
 type multiplexer_conf struct {
+	Backend                 backend_name `json:"backend"`
 	Port                    int          `json:"port"`
 	Front_host              string       `json:"front_host"`
 	Trusted_proxy_list      []string     `json:"trusted_proxy_list"`
+	Mux_node_name           string       `json:"mux_node_name"`
 	Mux_ep_update_interval  time_in_sec  `json:"mux_ep_update_interval"`
 	Forwarding_timeout      time_in_sec  `json:"forwarding_timeout"`
 	Probe_access_timeout    time_in_sec  `json:"probe_access_timeout"`
 	Busy_suspension_time    time_in_sec  `json:"busy_suspension_time"`
 	Error_response_delay_ms time_in_sec  `json:"error_response_delay_ms"`
-	Mux_node_name           string       `json:"mux_node_name"`
-	Backend                 backend_name `json:"backend"`
 	Backend_timeout_ms      time_in_sec  `json:"backend_timeout_ms"`
-	Alert                   string       `json:"alert"`
-	Access_log_file         string       `json:"access_log_file"`
 }
 
 type registrar_conf struct {
+	Backend                 backend_name  `json:"backend"`
 	Port                    int           `json:"port"`
 	Front_host              string        `json:"front_host"`
 	Trusted_proxy_list      []string      `json:"trusted_proxy_list"`
 	Base_path               string        `json:"base_path"`
 	Claim_uid_map           claim_uid_map `json:"claim_uid_map"`
 	User_approval           user_approval `json:"user_approval"`
+	Postpone_probe_access   bool          `json:"postpone_probe_access"`
 	Uid_allow_range_list    [][2]int      `json:"uid_allow_range_list"`
 	Uid_block_range_list    [][2]int      `json:"uid_block_range_list"`
 	Gid_drop_range_list     [][2]int      `json:"gid_drop_range_list"`
@@ -98,12 +94,9 @@ type registrar_conf struct {
 	Bucket_expiration_days  int           `json:"bucket_expiration_days"`
 	Secret_expiration_days  int           `json:"secret_expiration_days"`
 	Error_response_delay_ms time_in_sec   `json:"error_response_delay_ms"`
-	Backend                 backend_name  `json:"backend"`
 	Backend_timeout_ms      time_in_sec   `json:"backend_timeout_ms"`
 	Probe_access_timeout    time_in_sec   `json:"probe_access_timeout"`
-	Postpone_probe_access   bool          `json:"postpone_probe_access"`
 	Ui_session_duration     time_in_sec   `json:"ui_session_duration"`
-	Access_log_file         string        `json:"access_log_file"`
 }
 
 type manager_conf struct {
@@ -122,9 +115,8 @@ type manager_conf struct {
 	Heartbeat_miss_tolerance  int         `json:"heartbeat_miss_tolerance"`
 	backend_stabilize_ms      time_in_sec
 	backend_linger_ms         time_in_sec
-
-	watch_gap_minimal  time_in_sec
-	manager_expiration time_in_sec
+	watch_gap_minimal         time_in_sec
+	manager_expiration        time_in_sec
 }
 
 type minio_conf struct {
@@ -137,22 +129,39 @@ type rclone_conf struct {
 	Command_options []string `json:"command_options"`
 }
 
+type UI_conf struct {
+	S3_url        string `json:"s3_url"`
+	Footer_banner string `json:"footer_banner"`
+}
+
+type access_log_conf struct {
+	Access_log_file string `json:"access_log_file"`
+}
+
+type logging_conf struct {
+	Syslog syslog_conf `json:"syslog"`
+	Alert  alert_conf  `json:"alert"`
+	Mqtt   mqtt_conf   `json:"mqtt"`
+}
+
+// LOG_FILE is optional.
+type syslog_conf struct {
+	Log_file string `json:"log_file"`
+	Facility string `json:"facility"`
+	Level    string `json:"level"`
+}
+
+type alert_conf struct {
+	Queue  string   `json:"queue"`
+	Levels []string `json:"levels"`
+}
+
 type mqtt_conf struct {
 	Ep       string `json:"ep"`
 	Client   string `json:"client"`
 	Topic    string `json:"topic"`
 	Username string `json:"username"`
 	Password string `json:"password"`
-}
-
-type UI_conf struct {
-	S3_url        string `json:"s3_url"`
-	Footer_banner string `json:"footer_banner"`
-}
-
-type syslog_conf struct {
-	Facility string `json:"facility"`
-	Priority string `json:"priority"`
 }
 
 type time_in_sec int64
@@ -261,15 +270,14 @@ func check_mux_conf(conf *mux_conf) {
 	case "rclone":
 		check_rclone_entry(&conf.Rclone)
 	}
-	check_mqtt_entry(&conf.Mqtt)
-	check_syslog_entry(&conf.Log_syslog)
+	check_access_log_entry(&conf.Log)
 }
 
 func check_reg_conf(conf *reg_conf) {
 	check_registrar_entry(&conf.Registrar)
-	check_mqtt_entry(&conf.Mqtt)
 	check_ui_entry(&conf.UI)
-	check_syslog_entry(&conf.Log_syslog)
+	check_access_log_entry(&conf.Log)
+	check_logging_entry(&conf.Logging)
 }
 
 func assert_slot(c bool) {
@@ -313,18 +321,17 @@ func check_field_required_and_positive(t any, slot string) {
 
 func check_multiplexer_entry(e *multiplexer_conf) {
 	for _, slot := range []string{
+		"Backend",
 		"Port",
 		"Front_host",
 		//"Trusted_proxy_list",
+		//"Mux_node_name",
 		"Mux_ep_update_interval",
 		"Forwarding_timeout",
 		"Probe_access_timeout",
 		"Busy_suspension_time",
 		"Error_response_delay_ms",
-		//"Mux_node_name",
-		"Backend",
 		"Backend_timeout_ms",
-		"Access_log_file",
 	} {
 		check_field_required_and_positive(*e, slot)
 	}
@@ -335,6 +342,7 @@ func check_multiplexer_entry(e *multiplexer_conf) {
 
 func check_registrar_entry(e *registrar_conf) {
 	for _, slot := range []string{
+		"Backend",
 		"Port",
 		"Front_host",
 		// "Trusted_proxy_list",
@@ -350,12 +358,10 @@ func check_registrar_entry(e *registrar_conf) {
 		"Bucket_expiration_days",
 		"Secret_expiration_days",
 		"Error_response_delay_ms",
-		"Backend",
 		"Backend_timeout_ms",
 		"Probe_access_timeout",
 		"Postpone_probe_access",
 		"Ui_session_duration",
-		"Access_log_file",
 	} {
 		check_field_required_and_positive(*e, slot)
 	}
@@ -403,25 +409,51 @@ func check_rclone_entry(e *rclone_conf) {
 	}
 }
 
-func check_mqtt_entry(e *mqtt_conf) {
-	if len(e.Ep) > 0 {
+func check_ui_entry(e *UI_conf) {
+	if len(e.S3_url) > 0 &&
+		len(e.Footer_banner) > 0 {
 		// OK.
 	} else {
 		panic(fmt.Errorf(bad_message))
 	}
 }
 
-func check_ui_entry(e *UI_conf) {
-	if len(e.S3_url) > 0 &&
-		len(e.Footer_banner) > 0 {
-	} else {
-		panic(fmt.Errorf(bad_message))
+func check_access_log_entry(e *access_log_conf) {
+	for _, slot := range []string{
+		"Access_log_file",
+	} {
+		check_field_required_and_positive(*e, slot)
+	}
+}
+
+func check_logging_entry(e *logging_conf) {
+	check_syslog_entry(&e.Syslog)
+	check_alert_entry(&e.Alert)
+	if e.Alert.Queue == "mqtt" {
+		check_mqtt_entry(&e.Mqtt)
 	}
 }
 
 func check_syslog_entry(e *syslog_conf) {
 	if len(e.Facility) > 0 &&
-		len(e.Priority) > 0 {
+		len(e.Level) > 0 {
+		// OK.
+	} else {
+		panic(fmt.Errorf(bad_message))
+	}
+}
+
+func check_alert_entry(e *alert_conf) {
+	if len(e.Levels) > 0 {
+		// OK.
+	} else {
+		panic(fmt.Errorf(bad_message))
+	}
+}
+
+func check_mqtt_entry(e *mqtt_conf) {
+	if len(e.Ep) > 0 {
+		// OK.
 	} else {
 		panic(fmt.Errorf(bad_message))
 	}

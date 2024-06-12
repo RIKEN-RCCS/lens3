@@ -86,8 +86,8 @@ func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, qch <-ch
 	//m.multiplexer_conf = conf.Multiplexer
 
 	var conf = &m.conf.Multiplexer
-	open_log_for_mux(conf.Access_log_file)
-	m.mqtt = configure_mqtt(&m.conf.Mqtt, qch)
+	open_log_for_mux(c.Log.Access_log_file)
+	//m.mqtt = configure_mqtt(&c.Logging.Mqtt, qch)
 
 	var host string
 	if conf.Mux_node_name != "" {
@@ -119,7 +119,7 @@ func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, qch <-ch
 
 // MEMO: ReverseProxy <: Handler as it implements ServeHTTP().
 func start_multiplexer(m *multiplexer) {
-	fmt.Println("start_multiplexer()")
+	logger.debugf("start_multiplexer()")
 
 	go mux_periodic_work(m)
 
@@ -131,6 +131,8 @@ func start_multiplexer(m *multiplexer) {
 	m.server = &http.Server{
 		Addr:    m.ep_port,
 		Handler: proxy2,
+		//ErrorLog *log.Logger,
+		//BaseContext func(net.Listener) context.Context,
 	}
 
 	logger.infof("Mux(%s) Start Mux", m.mux_ep)

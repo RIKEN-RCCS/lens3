@@ -1,112 +1,174 @@
-/* Dummy of syslog. */
+/* Logger Setup. */
 
 // Copyright 2022-2024 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
 
 package lens3
 
-// Logger wrapper like syslog but outputs to stdout.
-
 import (
+	"context"
 	"fmt"
-	"log"
+	"io"
+	"log/slog"
+	"log/syslog"
 	"net/http"
 	"os"
 	"time"
 )
 
-// var logger = slog.Default()
-// var logger = syslog.New()
-var logger = logger_default()
+// "slogger" is with a source file:line.  "logger" is without a source
+// file:line, because its calls are nested and from this file.
+var slogger = slog.Default()
+var logger = &log_writer{slog.Default()}
 
-type log_writer struct {
-	o *log.Logger
+func configure_logger(logging *logging_conf) {
+	slog.SetLogLoggerLevel(slog.LevelDebug)
+	slogger = make_logger(logging, true)
+	logger = &log_writer{make_logger(logging, false)}
 }
 
-func logger_default() *log_writer {
-	return &log_writer{
-		o: log.New(os.Stdout, "", log.LstdFlags),
+// It removes the "time" field for output to syslog.
+func make_logger(logging *logging_conf, source bool) *slog.Logger {
+	var w io.Writer
+	var replacer func(groups []string, a slog.Attr) slog.Attr
+	if logging.Syslog.Log_file != "" {
+		fmt.Println("configure_logger(OPENFILE)")
+		var w1, err1 = os.OpenFile(logging.Syslog.Log_file,
+			os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
+		if err1 != nil {
+			logger.critf("Opening a log file failed: err=(%v)", err1)
+			panic("")
+		}
+		w = w1
+		replacer = nil
+	} else {
+		var fac = log_facility_map[logging.Syslog.Facility]
+		var sev = log_severity_map[logging.Syslog.Level]
+		var p syslog.Priority = sev | fac
+		var w1, err2 = syslog.New(p, "lenticularis")
+		if err2 != nil {
+			logger.critf("Opening a log file failed: err=(%v)", err2)
+			panic("")
+		}
+		w = w1
+		replacer = func(groups []string, a slog.Attr) slog.Attr {
+			if a.Key == slog.TimeKey {
+				return slog.Attr{}
+			}
+			return a
+		}
 	}
+	var level, ok = log_level_name[logging.Syslog.Level]
+	if !ok {
+		level = slog.LevelInfo
+	}
+	fmt.Println("configure_logger(OPENFILE) w=", w)
+	return slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{
+		AddSource:   source,
+		Level:       level,
+		ReplaceAttr: replacer,
+	}))
+}
+
+const (
+	log_CRIT   = slog.Level(9)
+	log_NOTICE = slog.Level(2)
+)
+
+var log_level_name = map[string]slog.Level{
+	//"EMERG"
+	//"ALERT"
+	"CRIT":    log_CRIT,
+	"ERR":     slog.LevelError,
+	"WARNING": slog.LevelWarn,
+	"NOTICE":  log_NOTICE,
+	"INFO":    slog.LevelInfo,
+	"DEBUG":   slog.LevelDebug,
+}
+
+var log_severity_map = map[string]syslog.Priority{
+	//LOG_EMERG
+	//LOG_ALERT
+	"CRIT":    syslog.LOG_CRIT,
+	"ERR":     syslog.LOG_ERR,
+	"WARNING": syslog.LOG_WARNING,
+	"NOTICE":  syslog.LOG_NOTICE,
+	"INFO":    syslog.LOG_INFO,
+	"DEBUG":   syslog.LOG_DEBUG,
+}
+
+var log_facility_map = map[string]syslog.Priority{
+	"LOCAL0": syslog.LOG_LOCAL0,
+	"LOCAL1": syslog.LOG_LOCAL1,
+	"LOCAL2": syslog.LOG_LOCAL2,
+	"LOCAL3": syslog.LOG_LOCAL3,
+	"LOCAL4": syslog.LOG_LOCAL4,
+	"LOCAL5": syslog.LOG_LOCAL5,
+	"LOCAL6": syslog.LOG_LOCAL6,
+	"LOCAL7": syslog.LOG_LOCAL7,
+}
+
+type log_writer struct {
+	o *slog.Logger
 }
 
 func (w *log_writer) critf(f string, a ...any) error {
-	return w.crit(fmt.Sprintf(f, a...))
-}
-
-func (w *log_writer) crit(m string) error {
-	w.o.Printf("CRIT %s", m)
+	var m = fmt.Sprintf(f, a...)
+	var ctx = context.Background()
+	w.o.Log(ctx, log_CRIT, m)
 	return nil
 }
 
 func (w *log_writer) errf(f string, a ...any) error {
-	return w.err(fmt.Sprintf(f, a...))
-}
-
-func (w *log_writer) err(m string) error {
-	w.o.Printf("ERR %s", m)
+	var m = fmt.Sprintf(f, a...)
+	w.o.Debug(m)
 	return nil
 }
 
 func (w *log_writer) warnf(f string, a ...any) error {
-	return w.warn(fmt.Sprintf(f, a...))
-}
-
-func (w *log_writer) warn(m string) error {
-	w.o.Printf("WARNING %s", m)
+	var m = fmt.Sprintf(f, a...)
+	w.o.Warn(m)
 	return nil
 }
 
 func (w *log_writer) noticef(f string, a ...any) error {
-	return w.notice(fmt.Sprintf(f, a...))
-}
-
-func (w *log_writer) notice(m string) error {
-	w.o.Printf("NOTICE %s", m)
+	var m = fmt.Sprintf(f, a...)
+	var ctx = context.Background()
+	w.o.Log(ctx, log_NOTICE, m)
 	return nil
 }
 
 func (w *log_writer) infof(f string, a ...any) error {
-	return w.info(fmt.Sprintf(f, a...))
-}
-
-func (w *log_writer) info(m string) error {
-	w.o.Printf("INFO %s", m)
+	var m = fmt.Sprintf(f, a...)
+	w.o.Info(m)
 	return nil
 }
 
 func (w *log_writer) debugf(f string, a ...any) error {
-	return w.debug(fmt.Sprintf(f, a...))
-}
-
-func (w *log_writer) debug(m string) error {
-	w.o.Printf("DEBUG %s", m)
+	var m = fmt.Sprintf(f, a...)
+	w.o.Debug(m)
 	return nil
 }
 
-// logger.ERROR = log.New(os.Stdout, "[ERROR] ", 0)
-// logger.CRITICAL = log.New(os.Stdout, "[CRIT] ", 0)
-// logger.WARN = log.New(os.Stdout, "[WARN]  ", 0)
-// logger.DEBUG = log.New(os.Stdout, "[DEBUG] ", 0)
-
-var reg_log_file *os.File
-var mux_log_file *os.File
-
-func open_log_for_reg(f string) {
-	var s, err1 = os.OpenFile(f, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
-	if err1 != nil {
-		logger.critf("Reg() Opening a log file failed: err=(%v)", err1)
-		panic("")
-	}
-	reg_log_file = s
-}
+var mux_access_log_file *os.File
+var reg_access_log_file *os.File
 
 func open_log_for_mux(f string) {
 	var s, err1 = os.OpenFile(f, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
 	if err1 != nil {
-		logger.critf("Mux() Opening a log file failed: err=(%v)", err1)
+		slogger.Error("Mux() Opening a log file failed", "err", err1)
 		panic("")
 	}
-	mux_log_file = s
+	mux_access_log_file = s
+}
+
+func open_log_for_reg(f string) {
+	var s, err1 = os.OpenFile(f, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
+	if err1 != nil {
+		slogger.Error("Reg() Opening a log file failed: err=(%v)", err1)
+		panic("")
+	}
+	reg_access_log_file = s
 }
 
 // MEMO: Apache httpd access log format:
@@ -121,15 +183,15 @@ func open_log_for_mux(f string) {
 
 func log_mux_access_by_response(rspn *http.Response) {
 	var rqst = rspn.Request
-	log_access(mux_log_file, rqst, rspn.StatusCode, rspn.ContentLength, "-")
+	log_access(mux_access_log_file, rqst, rspn.StatusCode, rspn.ContentLength, "-")
 }
 
 func log_mux_access_by_request(rqst *http.Request, code int, length int64, uid string) {
-	log_access(mux_log_file, rqst, code, length, "-")
+	log_access(mux_access_log_file, rqst, code, length, "-")
 }
 
 func log_reg_access_by_request(rqst *http.Request, code int, length int64, uid string) {
-	log_access(reg_log_file, rqst, code, length, "-")
+	log_access(reg_access_log_file, rqst, code, length, "-")
 }
 
 func log_access(f *os.File, rqst *http.Request, code int, length int64, uid string) {
@@ -156,13 +218,13 @@ func log_access(f *os.File, rqst *http.Request, code int, length int64, uid stri
 	if err1 != nil {
 		var key string
 		switch f {
-		case mux_log_file:
+		case mux_access_log_file:
 			key = "Mux()"
-		case reg_log_file:
+		case reg_access_log_file:
 			key = "Reg()"
 		default:
 			panic("")
 		}
-		logger.critf("%s Wrinting to a log failed: err=(%v)", key, err1)
+		slogger.Error((key + " Wrinting to a log failed"), "file", f, "err", err1)
 	}
 }

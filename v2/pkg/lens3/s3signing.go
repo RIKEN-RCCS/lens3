@@ -130,7 +130,7 @@ func check_credential_in_request(q *http.Request, keypair [2]string) (bool, stri
 	var err1 = s.SignHTTP(ctx, credentials, &r,
 		hash, service, region, date)
 	if err1 != nil {
-		logger.infof("Mux() signer.SignHTTP() failed: err=(%v)", err1)
+		slogger.Info("Mux() signer.SignHTTP() failed", "err", err1)
 		return false, "bad-sign"
 	}
 

@@ -3,6 +3,7 @@
   "version": "v2.1",
   "aws_signature": "AWS4-HMAC-SHA256",
   "registrar": {
+    "backend": "rclone",
     "port": 8004,
     "front_host": "localhost",
     "trusted_proxy_list": [
@@ -11,6 +12,7 @@
     "base_path": "/lens3.sts",
     "claim_uid_map": "id",
     "user_approval": "allow",
+    "postpone_probe_access": false,
     "uid_allow_range_list": [[1,9999]],
     "uid_block_range_list": [[1,99]],
     "gid_drop_range_list": [[1, 999]],
@@ -20,27 +22,33 @@
     "bucket_expiration_days": 365,
     "secret_expiration_days": 365,
     "error_response_delay_ms": 1000,
-    "backend": "rclone",
     "backend_timeout_ms": 1000,
     "probe_access_timeout": 60,
-    "postpone_probe_access": false,
-    "ui_session_duration": 1800,
-    "access_log_file": "/tmp/lens3-reg-access-log"
-  },
-  "mqtt": {
-    "ep": "localhost:1883",
-    "client": "lens3-reg",
-    "topic": "Lens3 Reg Alart",
-    "username": "lens3",
-    "password": "k7IwUfcKvYgaXfY9kHNoiXOP6RhTAHir9EzPbms8"
+    "ui_session_duration": 1800
   },
   "ui": {
     "s3_url": "https://lens3.exmaple.com",
     "footer_banner": "This site is operated by exmaple.com"
   },
-  "log_file": "/tmp/lens3-reg-log",
-  "log_syslog": {
-    "facility": "LOCAL7",
-    "priority": "DEBUG"
+  "log": {
+    "access_log_file": "/tmp/lens3-reg-access-log"
+  },
+  "logging": {
+    "syslog": {
+      "log_file": "/tmp/lens3-log",
+      "facility": "LOCAL7",
+      "level": "DEBUG"
+    },
+    "alert": {
+      "queue": "mqtt",
+      "levels": ["CRIT", "NOTICE"]
+    },
+    "mqtt": {
+      "ep": "localhost:1883",
+      "client": "lens3-logger",
+      "topic": "Lens3 Alert",
+      "username": "lens3",
+      "password": "k7IwUfcKvYgaXfY9kHNoiXOP6RhTAHir9EzPbms8"
+    }
   }
 }

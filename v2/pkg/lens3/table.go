@@ -358,10 +358,10 @@ func make_table(conf db_conf) *keyval_table {
 	for {
 		var s = t.setting.Ping(t.ctx)
 		if s.Err() == nil {
-			logger.debugf("Connected to the keyval-db ep=(%s)", ep)
+			slogger.Debug("Connected to the keyval-db", "ep", ep)
 			return t
 		} else {
-			log.Print("Connection to a keyval-db failed (sleeping).")
+			slogger.Debug("Connection to a keyval-db failed (sleeping)")
 			time.Sleep(30 * time.Second)
 		}
 	}
@@ -871,7 +871,8 @@ func list_access_timestamps(t *keyval_table) []name_timestamp_pair {
 		var pool = keyi.Key()
 		var ts = get_access_timestamp(t, pool)
 		if ts == 0 {
-			logger.infof("intenal: list_access_timestamps")
+			slogger.Info("intenal: list_access_timestamps failed")
+			continue
 		}
 		descs = append(descs, name_timestamp_pair{pool, ts})
 	}
@@ -903,7 +904,8 @@ func list_user_timestamps(t *keyval_table) []name_timestamp_pair {
 		var uid = keyi.Key()
 		var ts = get_user_timestamp(t, uid)
 		if ts == 0 {
-			logger.infof("intenal: List_user_timestamps")
+			slogger.Info("intenal: list_user_timestamps failed")
+			continue
 		}
 		descs = append(descs, name_timestamp_pair{uid, ts})
 	}
@@ -1113,7 +1115,7 @@ func load_db_data(w *redis.StringCmd, data any) bool {
 	d.DisallowUnknownFields()
 	var err2 = d.Decode(data)
 	if err2 != nil {
-		logger.errf("Bad json data in the keyval-db: %#v", err2)
+		slogger.Error("Bad json data in the keyval-db", "err", err2)
 		raise(&table_exc{m: "json-unmarshal errs", e: err2})
 	}
 	return true

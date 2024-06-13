@@ -1,6 +1,6 @@
 /* Check Reg. */
 
-package lens3
+package main
 
 import (
 	"bytes"
@@ -23,25 +23,23 @@ import (
 	//"testing"
 )
 
-func run_registrar(n int) {
-	var dbconf = read_db_conf("conf.json")
-	var t = make_table(dbconf)
-	var muxconf = get_mux_conf(t, "mux")
-	var regconf = get_reg_conf(t, "reg")
-	_ = muxconf
+type make_pool_arguments struct {
+	Buckets_directory string `json:"buckets_directory"`
+	Owner_gid         string `json:"owner_gid"`
+}
 
-	var z = the_registrar
-	configure_registrar(z, t, nil, regconf)
+type make_bucket_arguments struct {
+	Bucket        string `json:"name"`
+	Bucket_policy string `json:"bkt_policy"`
+}
 
-	fmt.Println("now+365=", time.Now().AddDate(0, 0, 30).Unix())
+type make_secret_arguments struct {
+	Secret_policy   string `json:"key_policy"`
+	Expiration_time int64  `json:"expiration_time"`
+}
 
-	clear_everything(z.table)
-
-	go start_registrar(z)
-
-	time.Sleep(1 * time.Second)
-
-	switch n {
+func main() {
+	switch 2 {
 	case 1:
 		run_dummy_reg_client()
 	case 2:

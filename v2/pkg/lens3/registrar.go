@@ -442,6 +442,7 @@ func return_file(z *registrar, w http.ResponseWriter, rqst *http.Request, path s
 // automatically, because groups may change from time to time.  The
 // groups may be empty.
 func return_user_info(z *registrar, w http.ResponseWriter, r *http.Request) *user_info_response {
+	var conf = &z.conf.Registrar
 	var opr = "user-info"
 	var u = grant_access_with_error_return(z, w, r, "", true)
 	if u == nil {
@@ -460,6 +461,22 @@ func return_user_info(z *registrar, w http.ResponseWriter, r *http.Request) *use
 
 	var info = copy_user_record_to_ui(z, u, groups)
 	var csrf = make_csrf_tokens(z, u.Uid)
+	var timeout = int64(conf.Ui_session_duration)
+	//var expiration = time.Now().Add(timeout * time.Second)
+	var cookie = &http.Cookie{
+		Name:  "fastapi-csrf-token",
+		Value: csrf.Csrf_token[0],
+		Path:  "/",
+		//Domain:
+		//Expires: expiration,
+		MaxAge:   int(timeout),
+		Secure:   false,
+		HttpOnly: true,
+		SameSite: http.SameSiteDefaultMode,
+		//Raw:
+		//Unparsed:
+	}
+	http.SetCookie(w, cookie)
 	var now = time.Now().Unix()
 	var rspn = &user_info_response{
 		response_common: response_common{
@@ -467,7 +484,7 @@ func return_user_info(z *registrar, w http.ResponseWriter, r *http.Request) *use
 			Reason:    nil,
 			Timestamp: now,
 		},
-		Csrf_token: csrf.Csrf_token_h,
+		Csrf_token: csrf.Csrf_token[1],
 		User_info:  *info,
 	}
 	return_json_repsonse(z, w, r, u, rspn)
@@ -825,7 +842,7 @@ func grant_access_with_error_return(z *registrar, w http.ResponseWriter, r *http
 
 	// Check if Lens3 is working.
 
-	if check_lens3_is_running(z.table) {
+	if !check_lens3_is_running(z.table) {
 		slogger.Error("Reg() Lens3 is not running")
 		return_reg_error_response(z, w, r, u, http_500_internal_server_error,
 			[][2]string{
@@ -1022,20 +1039,26 @@ func register_new_user(z *registrar, uid string, firstsession bool) *user_record
 
 func check_csrf_tokens(z *registrar, w http.ResponseWriter, r *http.Request, uid string) bool {
 	var v *csrf_token_record = get_csrf_token(z.table, uid)
+	var c, _ = r.Cookie("fastapi-csrf-token")
 	var h = r.Header.Get("X-Csrf-Token")
-	if !(v != nil && h != "" && v.Csrf_token_h == h) {
-		fmt.Println("csrf h=", h, "v=", v)
+	var ok = (v != nil && c != nil && h != "" &&
+		v.Csrf_token[0] == c.Value && v.Csrf_token[1] == h)
+	if z.verbose && !ok {
+		slogger.Debug("Reg() Checking csrf-tokens failed",
+			"token", v.Csrf_token, "header", h, "cookie", c)
 	}
-	return (v != nil && h != "" && v.Csrf_token_h == h)
+	return ok
 }
 
 func make_csrf_tokens(z *registrar, uid string) *csrf_token_record {
 	var conf = &z.conf.Registrar
 	var now = time.Now().Unix()
 	var data = &csrf_token_record{
-		Csrf_token_c: generate_random_key(),
-		Csrf_token_h: generate_random_key(),
-		Timestamp:    now,
+		Csrf_token: []string{
+			generate_random_key(),
+			generate_random_key(),
+		},
+		Timestamp: now,
 	}
 	var timeout = int64(conf.Ui_session_duration)
 	set_csrf_token(z.table, uid, data)
@@ -1046,7 +1069,6 @@ func make_csrf_tokens(z *registrar, uid string) *csrf_token_record {
 	}
 	//var x = get_csrf_token(z.table, uid)
 	//fmt.Println("make_csrf_tokens=", x)
-
 	return data
 }
 

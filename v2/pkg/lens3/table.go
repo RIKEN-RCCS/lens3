@@ -103,11 +103,11 @@ type user_record struct {
 	Timestamp                  int64 `json:"timestamp"`
 }
 
-// "tn:" + uid Entry (db_csrf_token_prefix).
+// "tn:" + uid Entry (db_csrf_token_prefix).  A csrf_token is a pair
+// of cookie+header.
 type csrf_token_record struct {
-	Csrf_token_c string `json:"csrf_token_c"`
-	Csrf_token_h string `json:"csrf_token_h"`
-	Timestamp    int64  `json:"timestamp"`
+	Csrf_token []string `json:"csrf_token"`
+	Timestamp  int64    `json:"timestamp"`
 }
 
 // "um:" + claim Entry (DB_USER_CLAIM_PREFIX).

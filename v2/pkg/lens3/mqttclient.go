@@ -51,7 +51,7 @@ func configure_mqtt(c *mqtt_conf, qch <-chan vacuous) *mqtt_client {
 	var ep = "mqtt://" + q.conf.Ep
 	var mqtturl, err1 = url.Parse(ep)
 	if err1 != nil {
-		logger.errf("MQTT() Bad endpoint: ep=(%s) err=(%v)", ep, err1)
+		slogger.Error("MQTT() Bad endpoint", "ep", ep, "err", err1)
 		return nil
 	}
 	q.queue = memory.New()
@@ -67,11 +67,11 @@ func configure_mqtt(c *mqtt_conf, qch <-chan vacuous) *mqtt_client {
 		SessionExpiryInterval: 60,
 
 		OnConnectionUp: func(cm *autopaho.ConnectionManager, ack *paho.Connack) {
-			logger.debugf("MQTT() Connection up: ack=(%v)", ack.ReasonCode)
+			slogger.Debug("MQTT() Connection up", "ack", ack.ReasonCode)
 		},
 
 		OnConnectError: func(err error) {
-			logger.warnf("MQTT() Connection failed: err=(%v)", err)
+			slogger.Warn("MQTT() Connection failed", "err", err)
 		},
 
 		ConnectUsername: q.conf.Username,
@@ -86,16 +86,16 @@ func configure_mqtt(c *mqtt_conf, qch <-chan vacuous) *mqtt_client {
 			OnPublishReceived: []func(paho.PublishReceived) (bool, error){},
 
 			OnClientError: func(err error) {
-				logger.warnf("MQTT() Client error: err=(%v)", err)
+				slogger.Warn("MQTT() Client error", "err", err)
 			},
 
 			OnServerDisconnect: func(d *paho.Disconnect) {
 				if d.Properties != nil {
-					logger.debugf("MQTT() Server disconnect: (%v)",
-						d.Properties.ReasonString)
+					slogger.Debug("MQTT() Server disconnect",
+						"reason", d.Properties.ReasonString)
 				} else {
-					logger.debugf("MQTT() Server disconnect: code=(%d)",
-						d.ReasonCode)
+					slogger.Debug("MQTT() Server disconnect",
+						"code", d.ReasonCode)
 				}
 			},
 		},
@@ -103,13 +103,13 @@ func configure_mqtt(c *mqtt_conf, qch <-chan vacuous) *mqtt_client {
 	var ctx = context.Background()
 	var cm, err2 = autopaho.NewConnection(ctx, conf)
 	if err2 != nil {
-		logger.errf("MQTT() paho.NewConnection() failed: err=(%v)", err2)
+		slogger.Error("MQTT() paho.NewConnection() failed", "err", err2)
 		return nil
 	}
 	q.cm = cm
 	var err3 = cm.AwaitConnection(ctx)
 	if err3 != nil {
-		logger.errf("MQTT() paho.AwaitConnection() failed: err=(%v)", err3)
+		slogger.Error("MQTT() paho.AwaitConnection() failed", "err", err3)
 		return nil
 	}
 
@@ -130,7 +130,7 @@ func pub_mqtt_message(q *mqtt_client, m string) {
 	})
 	if err1 != nil {
 		if ctx.Err() == nil {
-			logger.errf("MQTT() paho.Publish() failed: err=(%v)", err1)
+			slogger.Error("MQTT() paho.Publish() failed", "err", err1)
 		}
 	}
 }

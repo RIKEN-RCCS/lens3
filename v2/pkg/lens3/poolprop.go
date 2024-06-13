@@ -41,7 +41,7 @@ func gather_pool_prop(t *keyval_table, pool string) *pool_prop {
 	var poolprop = pool_prop{}
 	var pooldata = get_pool(t, pool)
 	if pooldata == nil {
-		logger.warnf("RACE in gather_pool_prop")
+		slogger.Warn("A race happens in gather_pool_prop")
 		return nil
 	}
 	assert_fatal(pooldata.Pool == pool)
@@ -51,8 +51,9 @@ func gather_pool_prop(t *keyval_table, pool string) *pool_prop {
 	//
 	var bd = find_buckets_directory_of_pool(t, pool)
 	if !(pooldata.Buckets_directory == bd) {
-		logger.errf("inconsistent entry found in keyval-db;"+
-			" buckets-directory (%v)≠(%v)", pooldata.Buckets_directory, bd)
+		slogger.Error(("An inconsistent entry in keyval-db:" +
+			" bad buckets-directory entry"),
+			"bd1", pooldata.Buckets_directory, "bd2", bd)
 	}
 	//
 	// Gather buckets.
@@ -70,8 +71,8 @@ func gather_pool_prop(t *keyval_table, pool string) *pool_prop {
 	var uid = poolprop.Owner_uid
 	var u = get_user(t, uid)
 	if u == nil {
-		logger.errf("inconsistent entry found in keyval-db;"+
-			" user of pool nonexists uid=(%s) pool=(%s)", uid, pool)
+		slogger.Error(("An inconsistent entry in keyval-db:" +
+			" user of pool nonexists"), "uid", uid, "pool", pool)
 	}
 	if u != nil {
 		poolprop.user_record = *u
@@ -118,7 +119,7 @@ func update_pool_state(t *keyval_table, pool string, permitted user_approval) (p
 	}
 	var state *pool_state_record = get_pool_state(t, pool)
 	if state == nil {
-		logger.errf("Mux(pool=%s): pool-state not found.", pool)
+		slogger.Error("Pool state not found", "pool", pool)
 		return pool_state_INOPERABLE, pool_reason_POOL_REMOVED
 	}
 
@@ -178,7 +179,7 @@ func check_user_is_active(t *keyval_table, uid string) (bool, error_message) {
 	var now int64 = time.Now().Unix()
 	var ui = get_user(t, uid)
 	if ui == nil {
-		logger.warnf("User not found: user=(%s)", uid)
+		slogger.Warn("User not found", "user", uid)
 		return false, message_user_not_registered
 	}
 	if !ui.Enabled || ui.Expiration_time < now {
@@ -191,7 +192,7 @@ func check_user_is_active(t *keyval_table, uid string) (bool, error_message) {
 		case user.UnknownUserError:
 		default:
 		}
-		logger.warnf("user.Lookup(%s) fails: err=(%v)", uid, err1)
+		slogger.Warn("user.Lookup() fails", "user", uid, "err", err1)
 		return false, message_no_user_account
 	}
 	// (uu.Uid : string, uu.Gid : string)

@@ -41,6 +41,9 @@ import (
 
 // MULTIPLEXER is a single object, "the_multiplexer".
 type multiplexer struct {
+	// MuxEP="Mux(ep)" is a printing name of this Multiplexer.
+	MuxEP string
+
 	// EP_PORT is a listening port of Mux (":port").
 	ep_port string
 
@@ -103,6 +106,7 @@ func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, qch <-ch
 	m.ep_port = net.JoinHostPort("", strconv.Itoa(port))
 	m.mux_ep = net.JoinHostPort(host, strconv.Itoa(port))
 	m.mux_pid = os.Getpid()
+	m.MuxEP = fmt.Sprintf("Mux(%s)", m.mux_ep)
 
 	//conf.Forwarding_timeout = 60
 	//m.client = &http.Client{}
@@ -110,7 +114,7 @@ func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, qch <-ch
 	//conf.Front_host = "localhost"
 
 	var addrs []net.IP = convert_hosts_to_addrs(conf.Trusted_proxy_list)
-	logger.debugf("Mux(%s) trusted_proxies=(%v)", m.mux_ep, addrs)
+	slogger.Debug(m.MuxEP+" Trusted proxies", "ip", addrs)
 	if len(addrs) == 0 {
 		panic("No trusted proxies")
 	}
@@ -119,7 +123,7 @@ func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, qch <-ch
 
 // MEMO: ReverseProxy <: Handler as it implements ServeHTTP().
 func start_multiplexer(m *multiplexer) {
-	logger.debugf("start_multiplexer()")
+	slogger.Debug(m.MuxEP + " start_multiplexer()")
 
 	go mux_periodic_work(m)
 
@@ -135,10 +139,9 @@ func start_multiplexer(m *multiplexer) {
 		//BaseContext func(net.Listener) context.Context,
 	}
 
-	logger.infof("Mux(%s) Start Mux", m.mux_ep)
+	slogger.Info(m.MuxEP + " Start Multiplexer")
 	var err1 = m.server.ListenAndServe()
-	logger.infof("Mux(%s) http.Server.ListenAndServe() done err=(%v)",
-		m.mux_ep, err1)
+	slogger.Info(m.MuxEP+" http.Server.ListenAndServe() done", "err", err1)
 }
 
 // PROXY_REQUEST_REWRITER is a function in ReverseProxy.Rewriter.  It
@@ -293,8 +296,7 @@ func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, be *
 	var ep = be.Backend_ep
 	var forwarding, err1 = url.Parse("http://" + ep)
 	if err1 != nil {
-		logger.debugf("Mux() Bad backend ep: ep=(%s) err=(%v)",
-			ep, err1)
+		slogger.Debug(m.MuxEP+" Bad backend ep", "ep", ep, "err", err1)
 		raise(&proxy_exc{http_500_internal_server_error,
 			[][2]string{
 				message_bad_backend_ep,
@@ -313,8 +315,7 @@ func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, be *
 // redundant work.
 func serve_internal_access(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record, secret *secret_record) {
 	assert_fatal(secret != nil)
-	logger.debugf("Mux(%s) internal-access: pool=(%s)",
-		m.mux_ep, secret.Pool)
+	slogger.Debug(m.MuxEP+" Internal access", "pool", secret.Pool)
 
 	// REJECT REQUESTS FROM THE OUTSIDE.
 
@@ -379,8 +380,7 @@ func check_authenticated(m *multiplexer, r *http.Request) (*secret_record, *prox
 	var key string = auth.credential[0]
 	var secret *secret_record = get_secret(m.table, key)
 	if secret == nil {
-		logger.infof("Mux(%s) unknown credential: access-key=(%s)",
-			m.mux_ep, key)
+		slogger.Info(m.MuxEP+" Unknown credential", "access-key", key)
 		var err1 = &proxy_exc{
 			http_401_unauthorized,
 			[][2]string{
@@ -393,8 +393,8 @@ func check_authenticated(m *multiplexer, r *http.Request) (*secret_record, *prox
 	var keypair = [2]string{key, secret.Secret_key}
 	var ok, reason = check_credential_in_request(r, keypair)
 	if !ok {
-		logger.infof("Mux(%s) bad credential, (%s): access-key=(%s)",
-			m.mux_ep, reason, key)
+		slogger.Info(m.MuxEP+" Bad credential",
+			"reason", reason, "access-key", key)
 		var err2 = &proxy_exc{
 			http_401_unauthorized,
 			[][2]string{
@@ -474,8 +474,7 @@ func ensure_frontend_proxy_trusted(m *multiplexer, w http.ResponseWriter, r *htt
 	//var peer = r.Header.Get("Remote_Addr")
 	var peer = r.RemoteAddr
 	if !check_frontend_proxy_trusted(m.trusted_proxies, peer) {
-		logger.errf("Mux(%s) frontend proxy is untrusted: ep=(%v)",
-			m.mux_ep, peer)
+		slogger.Error(m.MuxEP+" Frontend proxy is untrusted", "ep", peer)
 		return_mux_response(m, w, r, http_500_internal_server_error,
 			[][2]string{
 				message_Bad_proxy_configuration,
@@ -539,7 +538,8 @@ func ensure_pool_state(m *multiplexer, w http.ResponseWriter, r *http.Request, p
 	switch state {
 	case pool_state_INITIAL:
 		if reject_initial_state {
-			logger.errf("Mux(pool=%s) is in initial state.", pool)
+			slogger.Error(m.MuxEP+" Pool is in initial state",
+				"pool", pool)
 			//raise(reg_error(403, "Pool is in initial state"))
 			return_mux_response(m, w, r, http_500_internal_server_error,
 				[][2]string{
@@ -592,8 +592,7 @@ func ensure_permission_by_secret(m *multiplexer, w http.ResponseWriter, r *http.
 	case "DELETE":
 		set = []secret_policy{secret_policy_RW, secret_policy_WO}
 	default:
-		logger.warnf("Mux(%s) http unknown method: method=(%s)",
-			m.mux_ep, method)
+		slogger.Warn(m.MuxEP+" http unknown method", "method", method)
 		set = []secret_policy{}
 	}
 	var ok = slices.Contains(set, policy)
@@ -623,7 +622,7 @@ func ensure_permission_by_bucket(m *multiplexer, w http.ResponseWriter, r *http.
 	case "DELETE":
 		set = []bucket_policy{bucket_policy_RW, bucket_policy_WO}
 	default:
-		logger.warnf("Mux(%s) http unknown method: method=(%s)", m.mux_ep, method)
+		slogger.Warn(m.MuxEP+" http unknown method", "method", method)
 		set = []bucket_policy{}
 	}
 	var ok = slices.Contains(set, policy)
@@ -685,16 +684,16 @@ func return_mux_response_by_error(m *multiplexer, w http.ResponseWriter, r *http
 	case *proxy_exc:
 		return_mux_response(m, w, r, err2.code, err2.message)
 	default:
-		logger.errf("Mux(%s) (interanl) unexpected error: err=(%v)",
-			m.mux_ep, err)
+		slogger.Error(m.MuxEP+" (interanl) Unexpected error", "err", err)
 		raise(err)
 	}
 }
 
 func mux_periodic_work(m *multiplexer) {
 	var conf = &m.conf.Multiplexer
-	logger.debugf("Mux(%s) Periodic work started", m.mux_ep)
-
+	if m.verbose {
+		slogger.Debug(m.MuxEP + " Periodic work started")
+	}
 	var now int64 = time.Now().Unix()
 	var mux = &mux_record{
 		Mux_ep:     m.mux_ep,
@@ -708,14 +707,14 @@ func mux_periodic_work(m *multiplexer) {
 	//time.Sleep(1 * time.Second)
 	for {
 		if m.verbose {
-			logger.debugf("Mux(%s) Update Mux-ep", m.mux_ep)
+			slogger.Debug(m.MuxEP + " Update Mux-ep")
 		}
 		mux.Timestamp = time.Now().Unix()
 		set_mux_ep(m.table, m.mux_ep, mux)
 		var ok = set_mux_ep_expiry(m.table, m.mux_ep, expiry)
 		if !ok {
 			// Ignore an error.
-			logger.errf("Mux() Bad call set_mux_ep_expiry()")
+			slogger.Error(m.MuxEP + " Bad call set_mux_ep_expiry()")
 		}
 		var jitter = rand.Int64N(interval / 8)
 		time.Sleep(time.Duration(interval+jitter) * time.Second)

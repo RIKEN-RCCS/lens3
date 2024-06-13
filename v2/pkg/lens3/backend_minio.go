@@ -173,8 +173,8 @@ func (d *backend_minio) establish() error {
 func (d *backend_minio) shutdown() error {
 	//fmt.Println("minio.shutdown()")
 	var proc = d.get_super_part()
-	logger.debugf("Mux(minio) Stopping MinIO: pool=(%s) pid=%d",
-		proc.Pool, proc.cmd.Process.Pid)
+	slogger.Debug("Mux(minio) Stopping MinIO",
+		"pool", proc.Pool, "pid", proc.cmd.Process.Pid)
 	//assert_fatal(d.mc_alias != nil)
 	var v1 = minio_mc_admin_service_stop(d)
 	return v1.err
@@ -198,15 +198,15 @@ func (d *backend_minio) heartbeat(*manager) int {
 	var c = d.heartbeat_client
 	var rsp, err1 = c.Get(d.heartbeat_url)
 	if err1 != nil {
-		logger.debugf("Mux(minio) Heartbeat failed (http.Client.Get()):"+
-			" pool=(%s) err=(%v)", proc.Pool, err1)
+		slogger.Debug("Mux(minio) Heartbeat failed (http.Client.Get())",
+			"pool", proc.Pool, "err", err1)
 		return http_500_internal_server_error
 	}
 	defer rsp.Body.Close()
 	var _, err2 = io.ReadAll(rsp.Body)
 	if err2 != nil {
-		logger.infof("Mux(minio) Heartbeat failed (io.ReadAll()):"+
-			" pool=(%s) err=(%v)", proc.Pool, err2)
+		slogger.Info("Mux(minio) Heartbeat failed (io.ReadAll())",
+			"pool", proc.Pool, "err", err2)
 		panic(err2)
 	}
 	return rsp.StatusCode
@@ -245,7 +245,7 @@ type minio_mc_result struct {
 func simplify_minio_mc_message(s []byte) *minio_mc_result {
 	var mm, ok = decode_json([]string{string(s)})
 	if !ok {
-		logger.errf("Mux(minio) json decode failed")
+		slogger.Error("Mux(minio) json decode failed")
 		var err1 = fmt.Errorf("MC-command returned a bad json: (%s)", s)
 		return &minio_mc_result{nil, err1}
 	}
@@ -256,7 +256,8 @@ func simplify_minio_mc_message(s []byte) *minio_mc_result {
 			// Skip.
 		case "error":
 			if len(mm) != 1 {
-				logger.warnf("Mux(minio) MC-command with multiple errors: (%v)", mm)
+				slogger.Warn("Mux(minio) MC-command with multiple errors",
+					"msg", mm)
 			}
 			var m1 = get_string(m, "error", "cause", "error", "Code")
 			if m1 != "" {
@@ -305,35 +306,35 @@ func execute_minio_mc_cmd(d *backend_minio, name string, command []string) *mini
 	case nil:
 		// OK.
 		if d.verbose {
-			logger.debugf("Mux(minio) MC-command done:"+
-				" cmd=(%v) exit=%d stdout=(%s) stderr=(%s)",
-				argv, wstatus, stdouts, stderrs)
+			slogger.Debug("Mux(minio) MC-command done",
+				"cmd", argv, "exit", wstatus,
+				"stdout", stdouts, "stderr", stderrs)
 		}
 	case *exec.ExitError:
 		// Not successful.
 		if wstatus == -1 {
-			logger.errf("Mux(minio) MC-command signaled/unfinished:"+
-				" cmd=(%v) err=(%v) stdout=(%s) stderr=(%s)",
-				argv, err2, stdouts, stderrs)
+			slogger.Error("Mux(minio) MC-command signaled/unfinished",
+				"cmd", argv, "err", err2,
+				"stdout", stdouts, "stderr", stderrs)
 			return &minio_mc_result{nil, err2}
 		}
 	default:
 		// Error.
-		logger.errf("Mux(minio) MC-command failed:"+
-			" cmd=(%v) err=(%v) stdout=(%s) stderr=(%s)",
-			argv, err1, stdouts, stderrs)
+		slogger.Error("Mux(minio) MC-command failed",
+			"cmd", argv, "err", err1,
+			"stdout", stdouts, "stderr", stderrs)
 	}
 	var v1 = simplify_minio_mc_message([]byte(stdouts))
 	if v1.err == nil {
 		if d.verbose {
-			logger.debugf("Mux(minio) MC-command OK: cmd=(%v)", command)
+			slogger.Debug("Mux(minio) MC-command OK", "cmd", command)
 		} else {
-			logger.debugf("Mux(minio) MC-command OK: cmd=(%s)", name)
+			slogger.Debug("Mux(minio) MC-command OK", "cmd", name)
 		}
 	} else {
-		logger.errf("Mux(minio) MC-command failed:"+
-			" cmd=(%v) err=(%v) stdout=(%s) stderr=(%s)",
-			argv, v1.err, stdouts, stderrs)
+		slogger.Error("Mux(minio) MC-command failed",
+			"cmd", argv, "err", v1.err,
+			"stdout", stdouts, "stderr", stderrs)
 	}
 	return v1
 }
@@ -345,7 +346,7 @@ func minio_mc_alias_set(d *backend_minio) *minio_mc_result {
 	//d.mc_config_dir = tempfile.TemporaryDirectory()
 	var dir, err1 = os.MkdirTemp("", "lens3-mc-")
 	if err1 != nil {
-		logger.errf("Mux(minio) os.MkdirTemp() failed: err=(%v)", err1)
+		slogger.Error("Mux(minio) os.MkdirTemp() failed", "err", err1)
 		return &minio_mc_result{nil, err1}
 	}
 	d.mc_alias = fmt.Sprintf("pool-%s-%s", d.Pool, rnd)
@@ -385,12 +386,12 @@ func clean_tmp() {
 	assert_fatal(err1 != nil)
 	// (err1 == nil || err1 == filepath.ErrBadPattern)
 	for _, p := range matches {
-		logger.debugf("Mux(minio) Clean by os.RemoveAll(%s)", p)
+		slogger.Debug("Mux(minio) Clean by os.RemoveAll()", "path", p)
 		var err2 = os.RemoveAll(p)
 		if err2 != nil {
 			// (err2 : *os.PathError).
-			logger.warnf("Mux(minio) os.RemoveAll(%s) failed: err=(%v)",
-				p, err2)
+			slogger.Warn("Mux(minio) os.RemoveAll() failed",
+				"path", p, "err", err2)
 		}
 	}
 }

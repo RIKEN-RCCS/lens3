@@ -330,7 +330,7 @@ func convert_hosts_to_addrs(hosts []string) []net.IP {
 	for _, h := range hosts {
 		var ips, err1 = net.LookupIP(h)
 		if err1 != nil {
-			logger.warnf("net.LookupIP(%s) fails: err=(%v)", h, err1)
+			slogger.Warn("net.LookupIP() fails", "host", h, "err", err1)
 			continue
 		}
 		addrs = append(addrs, ips...)
@@ -459,17 +459,17 @@ func check_stream_eof(is io.Reader) error {
 
 func check_frontend_proxy_trusted(trusted []net.IP, peer string) bool {
 	if peer == "" {
-		logger.warnf("Bad frontend proxy: ep=(%s)", peer)
+		slogger.Warn("Bad frontend proxy", "peer", peer)
 		return false
 	}
 	var host, _, err1 = net.SplitHostPort(peer)
 	if err1 != nil {
-		logger.warnf("Bad frontend proxy ep=(%s): err=(%v)", peer, err1)
+		slogger.Warn("Bad frontend proxy", "peer", peer, "err", err1)
 		return false
 	}
 	var ips, err2 = net.LookupIP(host)
 	if err2 != nil {
-		logger.warnf("net.LookupIP(%s) failed: err=(%v)", host, err2)
+		slogger.Warn("net.LookupIP(%s) failed", "peer", host, "err", err2)
 		return false
 	}
 	for _, ip := range ips {

@@ -87,8 +87,7 @@ func probe_access_mux(t *keyval_table, pool string) error {
 	var v, err1 = client.ListBuckets(ctx,
 		&s3.ListBucketsInput{})
 	if err1 != nil {
-		logger.errf("Probing multiplexer failed: ep=(%s), err=(%v)",
-			ep, err1)
+		slogger.Error("Probing multiplexer failed", "ep", ep, "err", err1)
 		return err1
 	}
 	_ = v
@@ -149,8 +148,8 @@ func make_bucket_in_backend(w *manager, be *backend_record, bucket *bucket_recor
 			Bucket: aws.String(bucket.Bucket),
 		})
 	if err1 != nil {
-		logger.errf("Make a bucket in backend failed: bucket=(%s), err=(%v)",
-			bucket.Bucket, err1)
+		slogger.Error("Making a bucket in backend failed",
+			"bucket", bucket.Bucket, "err", err1)
 		return false
 	}
 	fmt.Println("CreateBucket()=", v)
@@ -182,12 +181,12 @@ func heartbeat_backend(w *manager, be *backend_record) int {
 			// timeout (err1.Err : *aws.RequestCanceledError).
 			var err3, ok2 = (err2.Err).(*aws.RequestCanceledError)
 			if ok2 {
-				logger.warnf("Mux() Heartbeat failed: err=(%v)", err3.Err)
+				slogger.Warn("Heartbeat failed", "err", err3.Err)
 			} else {
-				logger.warnf("Mux() Heartbeat failed: err=(%v)", err2.Err)
+				slogger.Warn("Heartbeat failed", "err", err2.Err)
 			}
 		} else {
-			logger.warnf("Mux() Heartbeat failed: err=(%v)", err1)
+			slogger.Warn("Heartbeat failed", "err", err1)
 		}
 		return http_400_bad_request
 	}

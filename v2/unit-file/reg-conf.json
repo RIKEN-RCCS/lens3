@@ -37,7 +37,8 @@
     "syslog": {
       "log_file": "/tmp/lens3-log",
       "facility": "LOCAL7",
-      "level": "DEBUG"
+      "level": "DEBUG",
+      "source_code": false
     },
     "alert": {
       "queue": "mqtt",

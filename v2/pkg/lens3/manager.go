@@ -220,8 +220,8 @@ func configure_manager(w *manager, m *multiplexer, t *keyval_table, q chan vacuo
 	case "rclone":
 		w.factory = the_backend_rclone_factory
 	default:
-		logger.errf("Mux() Configuration error, unknown backend (%s)",
-			c.Multiplexer.Backend)
+		slogger.Error("Mux() Configuration error, unknown backend",
+			"backend", c.Multiplexer.Backend)
 		log.Panic("")
 	}
 
@@ -274,7 +274,7 @@ func start_backend(w *manager, pool string) backend {
 	if !ok1 {
 		var be1 = wait_for_backend_by_race(w, pool)
 		if be1 == nil {
-			logger.debugf("start_backend(pool=%s) waits by race", pool)
+			slogger.Debug("Mux() start_backend waits by race", "pool", pool)
 		}
 		return nil
 	} else {
@@ -282,7 +282,7 @@ func start_backend(w *manager, pool string) backend {
 		var ok2 = set_backend_exclusion_expiry(w.table, pool, expiry)
 		if !ok2 {
 			// Ignore an error.
-			logger.errf("Mux() Bad call set_backend_exclusion_expiry()")
+			slogger.Error("Mux() Bad call set_backend_exclusion_expiry()")
 		}
 		var be2 = start_backend_in_mutexed(w, pool)
 		return be2
@@ -297,7 +297,7 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 
 	var pooldata = get_pool(w.table, pool)
 	if pooldata == nil {
-		logger.warnf("Mux() start_backend() pool is missing: pool=%s", pool)
+		slogger.Warn("Mux() start_backend() pool is missing", "pool", pool)
 		return nil
 	}
 
@@ -330,8 +330,8 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 		case start_to_retry:
 			continue
 		case start_failed:
-			logger.errf("Mux(pool=%s) Starting a backend failed: %s",
-				pool, r1.message)
+			slogger.Error("Mux() Starting a backend failed",
+				"pool", pool, "msg", r1.message)
 			return nil
 		}
 
@@ -350,8 +350,8 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 			}
 		}()
 		if !ok {
-			logger.warnf("Mux(pool=%s) Starting a backend failed: %s",
-				pool, "manager is in shutdown")
+			slogger.Warn("Mux() Starting a backend failed",
+				"pool", pool, "msg", "manager is in shutdown")
 			tell_stop_backend(w, d)
 			return nil
 		}
@@ -376,8 +376,7 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 
 	// All ports are tried and failed.
 
-	logger.warnf("Mux() A backend SUSPENDED (no ports): pool=(%s)",
-		pool)
+	slogger.Warn("Mux() A backend SUSPENDED (no ports)", "pool", pool)
 	var state = pool_state_SUSPENDED
 	var reason = pool_reason_BACKEND_BUSY
 	set_pool_state(w.table, pool, state, reason)
@@ -411,7 +410,7 @@ func try_start_backend(w *manager, d backend, port int) start_result {
 	var argv = append(sudo_argv, command.argv...)
 	var envs = append(w.environ, command.envs...)
 
-	logger.debugf("Mux(pool=%s) Run a backend: argv=%v", proc.Pool, argv)
+	slogger.Debug("Mux() Run a backend", "pool", proc.Pool, "argv", argv)
 	// logger.debugf("Mux(pool=%s) Run a server: argv=%v; envs=%v.",
 	// proc.pool, argv, envs)
 
@@ -446,7 +445,7 @@ func try_start_backend(w *manager, d backend, port int) start_result {
 
 	var err3 = cmd.Start()
 	if err3 != nil {
-		logger.errf("cmd.Start() err=%v", err3)
+		slogger.Error("exec.Command.Start() failed", "err", err3)
 		return start_result{
 			start_state: start_failed,
 			message:     err3.Error(),
@@ -562,7 +561,7 @@ func wait_for_backend_come_up(d backend) start_result {
 // It sleeps in 1ms, 10ms, 100ms, and 1s, and keeps sleeping in 1s
 // until a timeout.
 func wait_for_backend_by_race(w *manager, pool string) *backend_record {
-	logger.debugf("Mux(%s) Waiting for a backend by race.", w.mux_ep)
+	slogger.Debug("Mux() Waiting for a backend by race", "pool", pool)
 	var sleep int64 = 1
 	var limit = time.Now().Add(
 		(time.Duration(w.Backend_start_timeout) * time.Second) +
@@ -577,7 +576,7 @@ func wait_for_backend_by_race(w *manager, pool string) *backend_record {
 			sleep = sleep * 10
 		}
 	}
-	logger.debugf("Mux(%s) Waiting for a backend by race failed.", w.mux_ep)
+	slogger.Debug("Mux() Waiting for a backend by race failed", "pool", pool)
 	return nil
 }
 
@@ -641,12 +640,12 @@ func ping_backend(w *manager, d backend) {
 			proc.heartbeat_misses += 1
 		}
 		if proc.verbose {
-			logger.debugf("Mux() Heartbeat: pool=(%s) status=%d misses=%d",
-				proc.Pool, status, proc.heartbeat_misses)
+			slogger.Debug("Mux() Heartbeat", "pool", proc.Pool,
+				"status", status, "misses", proc.heartbeat_misses)
 		}
 		if proc.heartbeat_misses > w.Heartbeat_miss_tolerance {
-			logger.infof("Mux() Heartbeat failed: pool=(%s) misses=%d",
-				proc.Pool, proc.heartbeat_misses)
+			slogger.Info("Mux() Heartbeat failed",
+				"pool", proc.Pool, "misses", proc.heartbeat_misses)
 			break
 		}
 
@@ -655,7 +654,7 @@ func ping_backend(w *manager, d backend) {
 		var ts = get_access_timestamp(w.table, proc.Pool)
 		var lifetime = time.Unix(ts, 0).Add(duration)
 		if lifetime.Before(time.Now()) {
-			logger.debugf("Mux() Awake time elapsed: pool=(%s)", proc.Pool)
+			slogger.Debug("Mux() Awake time elapsed", "pool", proc.Pool)
 			break
 		}
 
@@ -663,8 +662,8 @@ func ping_backend(w *manager, d backend) {
 
 		var ok = set_backend_expiry(w.table, proc.Pool, expiry)
 		if !ok {
-			logger.warnf("Mux() Backend keyval-db entry gone: pool=(%s)",
-				proc.Pool)
+			slogger.Warn("Mux() Backend entry has gone",
+				"pool", proc.Pool)
 			break
 		}
 	}
@@ -688,16 +687,16 @@ func stop_backend(w *manager, d backend) {
 
 	var err1 = d.shutdown()
 	if err1 != nil {
-		logger.infof(("Mux() Backend shutdown() failed: pool=(%s) err=(%v)"),
-			proc.Pool, err1)
+		slogger.Info("Mux() Backend shutdown() failed",
+			"pool", proc.Pool, "err", err1)
 	}
 	if err1 == nil {
 		return
 	}
 	var err2 = proc.cmd.Cancel()
 	if err2 != nil {
-		logger.infof(("Mux() Backend cmd.Cancel() failed: pool=(%s) err=(%v)"),
-			proc.Pool, err2)
+		slogger.Info("Mux() Backend exec.Command.Cancel() failed",
+			"pool", proc.Pool, "err", err2)
 	}
 }
 
@@ -760,13 +759,13 @@ func disgorge_stdio_to_log(proc *backend_delegate) {
 		//var m = strings.TrimSpace(x1.string)
 		var m = x1.string
 		if x1.stdio_stream == on_stdout {
-			logger.infof("Mux(pool=%s) stdout=(%s)", pool, m)
+			slogger.Info("Mux() stdout message", "pool", pool, "msg", m)
 		} else {
-			logger.infof("Mux(pool=%s) stderr=(%s)", pool, m)
+			slogger.Info("Mux() stderr message", "pool", pool, "msg", m)
 		}
 	}
 	if proc.verbose {
-		logger.debugf("Mux(pool=%s) stdio dumper done", pool)
+		slogger.Debug("Mux() stdio dumper done", "pool", pool)
 	}
 }
 
@@ -776,10 +775,10 @@ func drain_start_messages_to_log(pool string, stdouts []string, stderrs []string
 	// fmt.Println("drain_start_messages_to_log()")
 	var s string
 	for _, s = range stdouts {
-		logger.infof("Mux(pool=%s) stdout=(%s)", pool, s)
+		slogger.Info("Mux() stdout message", "pool", pool, "msg", s)
 	}
 	for _, s = range stderrs {
-		logger.infof("Mux(pool=%s) stderr=(%s)", pool, s)
+		slogger.Info("Mux() stderr message", "pool", pool, "msg", s)
 	}
 }
 
@@ -846,18 +845,22 @@ func wait4_child_process(w *manager, d backend) {
 			if err2 == unix.ECHILD {
 				time.Sleep(60 * time.Second)
 			} else {
-				logger.warnf("wait4() failed: errno=%s",
-					unix.ErrnoName(err2))
+				slogger.Warn("wait4() failed", "errno", unix.ErrnoName(err2))
 			}
 			continue
 		}
 		if wpid == 0 {
-			logger.warnf("Mux() wait4() failed: errno=%s",
-				unix.ErrnoName(unix.ECHILD))
+			slogger.Warn("Mux() wait4() failed",
+				"errno", unix.ErrnoName(unix.ECHILD))
 			continue
 		}
-		logger.debugf("Mux() wait4() returns: pid=%d status=%d rusage=(%#v)",
-			wpid, wstatus, rusage)
+		if proc.verbose {
+			slogger.Debug("Mux() wait4() returns",
+				"pid", wpid, "status", wstatus, "rusage", rusage)
+		} else {
+			slogger.Debug("Mux() wait4() returns",
+				"pid", wpid, "status", wstatus)
+		}
 		break
 	}
 }
@@ -879,8 +882,8 @@ func make_absent_buckets_in_backend(w *manager, be *backend_record) {
 
 	var buckets_exsting, err = list_buckets_in_backend(w, be)
 	if err != nil {
-		logger.errf("Mux() Backend access failed: pool=(%s) err=(%v)",
-			be.Pool, err)
+		slogger.Error("Mux() Backend access failed",
+			"pool", be.Pool, "err", err)
 		command_to_stop_backend(w, pool)
 	}
 
@@ -895,8 +898,8 @@ func make_absent_buckets_in_backend(w *manager, be *backend_record) {
 			continue
 		}
 
-		logger.debugf("Mux() Making a bucket in backend: pool=(%s) bucket=(%s)",
-			b.Pool, b.Bucket)
+		slogger.Debug("Mux() Making a bucket in backend",
+			"pool", b.Pool, "bucket", b.Bucket)
 
 		make_bucket_in_backend(w, be, b)
 	}

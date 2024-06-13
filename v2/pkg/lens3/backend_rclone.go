@@ -189,10 +189,12 @@ func (d *backend_rclone) check_startup(stream stdio_stream, mm []string) start_r
 		var got_control = rclone_response_control_url_re.MatchString
 		var control_found, _ = find_one(mm, got_control)
 		if !control_found {
-			logger.warnf("Mux(rclone) Got an expected message of rclone" +
+			slogger.Warn("Mux(rclone) Got an expected message of rclone" +
 				" but not a control message")
 		}
-		fmt.Println("*** EXPECTED=", m3)
+		if d.verbose {
+			slogger.Debug("Mux(rclone) Got an expected message", "msg", m3)
+		}
 		return start_result{
 			start_state: start_started,
 			message:     m3,
@@ -229,8 +231,8 @@ func (d *backend_rclone) establish() error {
 // SHUTDOWN stops a server using RC core/quit.
 func (d *backend_rclone) shutdown() error {
 	var proc = d.get_super_part()
-	logger.debugf("Mux(rclone) Stopping rclone: pool=(%s) pid=%d",
-		proc.Pool, proc.cmd.Process.Pid)
+	slogger.Debug("Mux(rclone) Stopping rclone",
+		"pool", proc.Pool, "pid", proc.cmd.Process.Pid)
 	var v1 = rclone_rc_core_quit(d)
 	return v1.err
 }
@@ -264,15 +266,15 @@ func (d *backend_rclone) heartbeat__() int {
 	var c = d.heartbeat_client
 	var rsp, err1 = c.Head(d.heartbeat_url)
 	if err1 != nil {
-		logger.debugf("Mux(rclone) Heartbeat failed (http.Client.Get()):"+
-			" pool=(%s) err=(%v)", proc.Pool, err1)
+		slogger.Debug("Mux(rclone) Heartbeat failed (http.Client.Get())",
+			"pool", proc.Pool, "err", err1)
 		return http_500_internal_server_error
 	}
 	defer rsp.Body.Close()
 	var _, err2 = io.ReadAll(rsp.Body)
 	if err2 != nil {
-		logger.infof("Mux(rclone) Heartbeat failed (io.ReadAll()):"+
-			" pool=(%s) err=(%v)", proc.Pool, err2)
+		slogger.Info("Mux(rclone) Heartbeat failed (io.ReadAll())",
+			"pool", proc.Pool, "err", err2)
 		panic(err2)
 	}
 	return rsp.StatusCode
@@ -296,8 +298,8 @@ func simplify_rclone_rc_message(s []byte) *rclone_rc_result {
 	var m map[string]any
 	var err1 = dec.Decode(&m)
 	if err1 != nil {
-		logger.errf("Mux(rclone) Bad message from rclone-rc: (%s)",
-			s2)
+		slogger.Error("Mux(rclone) Bad message from rclone-rc",
+			"msg", s2)
 		return &rclone_rc_result{nil, err1}
 	}
 	switch msg := m["error"].(type) {
@@ -342,36 +344,38 @@ func execute_rclone_rc_cmd(d *backend_rclone, name string, command []string) *rc
 	case nil:
 		// OK.
 		if d.verbose {
-			logger.debugf("Mux(rclone) RC-command done:"+
-				" cmd=(%v) exit=%d stdout=(%s) stderr=(%s)",
-				argv, wstatus, stdouts, stderrs)
+			slogger.Debug("Mux(rclone) RC-command done",
+				"cmd", argv, "exit", wstatus,
+				"stdout", stdouts, "stderr", stderrs)
 		}
 	case *exec.ExitError:
 		// NOT SUCCESSFUL.
 		if wstatus == -1 {
-			logger.errf("Mux(rclone) RC-command signaled/unfinished:"+
-				" cmd=(%v) err=(%v) stdout=(%s) stderr=(%s)",
-				argv, err2, stdouts, stderrs)
+			slogger.Error("Mux(rclone) RC-command signaled/unfinished",
+				"cmd", argv, "err", err2,
+				"stdout", stdouts, "stderr", stderrs)
 			return &rclone_rc_result{nil, err2}
 		}
 	default:
 		// ERROR.
-		logger.errf("Mux(rclone) RC-command failed:"+
-			" cmd=(%v) err=(%v) stdout=(%s) stderr=(%s)",
-			argv, err1, stdouts, stderrs)
+		slogger.Error("Mux(rclone) RC-command faile",
+			"cmd", argv, "err", err1,
+			"stdout", stdouts, "stderr", stderrs)
 		return &rclone_rc_result{nil, err1}
 	}
 	var v1 = simplify_rclone_rc_message([]byte(stdouts))
 	if v1.err == nil {
 		if d.verbose {
-			logger.debugf("Mux(rclone) RC-command OK: cmd=(%v)", command)
+			slogger.Debug("Mux(rclone) RC-command OK",
+				"cmd", command)
 		} else {
-			logger.debugf("Mux(rclone) RC-command OK: cmd=(%s)", name)
+			slogger.Debug("Mux(rclone) RC-command OK",
+				"cmd", name)
 		}
 	} else {
-		logger.errf("Mux(rclone) RC-command failed:"+
-			" cmd=(%v) err=(%v) stdout=(%s) stderr=(%s)",
-			argv, v1.err, stdouts, stderrs)
+		slogger.Error("Mux(rclone) RC-command failed",
+			"cmd", argv, "err", v1.err,
+			"stdout", stdouts, "stderr", stderrs)
 	}
 	return v1
 }

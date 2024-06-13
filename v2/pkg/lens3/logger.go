@@ -13,56 +13,65 @@ import (
 	"log/syslog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 )
 
-// "slogger" is with a source file:line.  "logger" is without a source
-// file:line, because its calls are nested and from this file.
+// SLOGGER is a logger.  It uses a default one first, but it will soon
+// be replaced by one created in configure_logger().
 var slogger = slog.Default()
-var logger = &log_writer{slog.Default()}
 
 func configure_logger(logging *logging_conf) {
 	slog.SetLogLoggerLevel(slog.LevelDebug)
-	slogger = make_logger(logging, true)
-	logger = &log_writer{make_logger(logging, false)}
+	slogger = make_logger(logging)
 }
 
-// It removes the "time" field for output to syslog.
-func make_logger(logging *logging_conf, source bool) *slog.Logger {
+// MAKE_LOGGER makes either a file logger or a syslog logger.  It
+// removes the "time" field for syslog.  See "Example (Wrapping)" in
+// the "slog" document.
+func make_logger(logging *logging_conf) *slog.Logger {
 	var w io.Writer
-	var replacer func(groups []string, a slog.Attr) slog.Attr
+	var notime bool
 	if logging.Syslog.Log_file != "" {
-		fmt.Println("configure_logger(OPENFILE)")
-		var w1, err1 = os.OpenFile(logging.Syslog.Log_file,
-			os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
+		var f = logging.Syslog.Log_file
+		var w1, err1 = os.OpenFile(f, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
 		if err1 != nil {
-			logger.critf("Opening a log file failed: err=(%v)", err1)
+			slog.Error("Opening a log file failed", "file", f, "err", err1)
 			panic("")
 		}
 		w = w1
-		replacer = nil
+		notime = false
 	} else {
 		var fac = log_facility_map[logging.Syslog.Facility]
 		var sev = log_severity_map[logging.Syslog.Level]
 		var p syslog.Priority = sev | fac
 		var w1, err2 = syslog.New(p, "lenticularis")
 		if err2 != nil {
-			logger.critf("Opening a log file failed: err=(%v)", err2)
+			slog.Error("Opening syslog failed", "err", err2)
 			panic("")
 		}
 		w = w1
-		replacer = func(groups []string, a slog.Attr) slog.Attr {
-			if a.Key == slog.TimeKey {
-				return slog.Attr{}
-			}
-			return a
-		}
+		notime = true
 	}
-	var level, ok = log_level_name[logging.Syslog.Level]
-	if !ok {
+
+	var replacer = func(groups []string, a slog.Attr) slog.Attr {
+		if notime && a.Key == slog.TimeKey {
+			return slog.Attr{}
+		}
+		if a.Key == slog.SourceKey {
+			var s, ok1 = a.Value.Any().(*slog.Source)
+			if ok1 {
+				s.File = filepath.Base(s.File)
+			}
+		}
+		return a
+	}
+
+	var level, ok2 = log_level_name[logging.Syslog.Level]
+	if !ok2 {
 		level = slog.LevelInfo
 	}
-	fmt.Println("configure_logger(OPENFILE) w=", w)
+	var source bool = logging.Syslog.Source_code
 	return slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{
 		AddSource:   source,
 		Level:       level,
@@ -107,6 +116,9 @@ var log_facility_map = map[string]syslog.Priority{
 	"LOCAL6": syslog.LOG_LOCAL6,
 	"LOCAL7": syslog.LOG_LOCAL7,
 }
+
+// LOG_WRITER IS NOT USED.
+// logger_ = &log_writer{slog.Default()}
 
 type log_writer struct {
 	o *slog.Logger

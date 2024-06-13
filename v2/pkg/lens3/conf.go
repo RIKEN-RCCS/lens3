@@ -144,11 +144,12 @@ type logging_conf struct {
 	Mqtt   mqtt_conf   `json:"mqtt"`
 }
 
-// LOG_FILE is optional.
+// LOG_FILE is optional.  It uses syslog when it is not present.
 type syslog_conf struct {
-	Log_file string `json:"log_file"`
-	Facility string `json:"facility"`
-	Level    string `json:"level"`
+	Log_file    string `json:"log_file"`
+	Facility    string `json:"facility"`
+	Level       string `json:"level"`
+	Source_code bool   `json:"source_code"`
 }
 
 type alert_conf struct {

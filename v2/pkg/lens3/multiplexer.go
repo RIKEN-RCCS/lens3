@@ -154,7 +154,7 @@ func proxy_request_rewriter(m *multiplexer) func(*httputil.ProxyRequest) {
 		var forwarding, ok = x.(*url.URL)
 		assert_fatal(ok)
 
-		fmt.Println("*** FORWARDING=", forwarding)
+		//fmt.Println("*** FORWARDING=", forwarding)
 
 		r.SetURL(forwarding)
 		r.SetXForwarded()
@@ -194,7 +194,7 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 			return
 		}
 
-		fmt.Println("*** secret=", authenticated.Access_key)
+		//fmt.Println("*** secret=", authenticated.Access_key)
 
 		switch {
 		case authenticated != nil && authenticated.Secret_policy == secret_policy_internal_access:
@@ -347,7 +347,7 @@ func handle_multiplexer_exc(m *multiplexer, w http.ResponseWriter, r *http.Reque
 	switch err1 := x.(type) {
 	case nil:
 	case *proxy_exc:
-		fmt.Println("RECOVER!", err1)
+		slogger.Info(m.MuxEP+" Handle an exception", "err", err1)
 		var msg = map[string]string{}
 		for _, kv := range err1.message {
 			msg[kv[0]] = kv[1]
@@ -358,8 +358,8 @@ func handle_multiplexer_exc(m *multiplexer, w http.ResponseWriter, r *http.Reque
 		http.Error(w, string(b1), err1.code)
 		log_mux_access_by_request(r, err1.code, int64(len(b1)), "-")
 	default:
-		fmt.Println("TRAP unhandled panic", err1)
-		fmt.Println("stacktrace:\n" + string(debug.Stack()))
+		slogger.Error(m.MuxEP+" Trap an unhandled panic", "err", err1)
+		slogger.Error(m.MuxEP + " stacktrace:\n" + string(debug.Stack()))
 		delay_sleep(m.conf.Multiplexer.Error_response_delay_ms)
 		var msg = "BAD"
 		var code = http_500_internal_server_error
@@ -420,6 +420,7 @@ func ensure_backend_running(m *multiplexer, w http.ResponseWriter, r *http.Reque
 
 	var be1 = get_backend(m.table, pool)
 	if be1 == nil {
+		slogger.Info(m.MuxEP+" Start a backend", "pool", pool)
 		var proc = start_backend(m.manager, pool)
 		if proc == nil {
 			return_mux_response(m, w, r, http_500_internal_server_error,

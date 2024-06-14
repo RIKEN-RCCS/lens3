@@ -100,7 +100,7 @@ func start_lenticularis_service(confpath string, services []string) {
 	handle_unix_signals(t, ch_quit_service)
 
 	var regconf = get_reg_conf(t, "reg")
-	configure_logger(&regconf.Logging)
+	configure_logger(&regconf.Logging, ch_quit_service)
 
 	for i, service := range services {
 		var run_on_main_thread = (i == len(services)-1)

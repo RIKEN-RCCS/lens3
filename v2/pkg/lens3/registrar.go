@@ -228,7 +228,7 @@ func configure_registrar(z *registrar, t *keyval_table, qch <-chan vacuous, c *r
 
 	var conf = &z.conf.Registrar
 	open_log_for_reg(c.Log.Access_log_file)
-	z.mqtt = configure_mqtt(&c.Logging.Mqtt, qch)
+	//z.mqtt = configure_mqtt(&c.Logging.Mqtt, qch)
 
 	z.ep_port = net.JoinHostPort("", strconv.Itoa(conf.Port))
 

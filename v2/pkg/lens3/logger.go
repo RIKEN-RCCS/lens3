@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -21,36 +22,36 @@ import (
 // be replaced by one created in configure_logger().
 var slogger = slog.Default()
 
-func configure_logger(logging *logging_conf) {
+func configure_logger(logging *logging_conf, qch <-chan vacuous) {
 	slog.SetLogLoggerLevel(slog.LevelDebug)
-	slogger = make_logger(logging)
+	slogger = make_logger(logging, qch)
 }
 
 // MAKE_LOGGER makes either a file logger or a syslog logger.  It
 // removes the "time" field for syslog.  See "Example (Wrapping)" in
 // the "slog" document.
-func make_logger(logging *logging_conf) *slog.Logger {
-	var w io.Writer
+func make_logger(logging *logging_conf, qch <-chan vacuous) *slog.Logger {
+	var w1 io.Writer
 	var notime bool
 	if logging.Syslog.Log_file != "" {
 		var f = logging.Syslog.Log_file
-		var w1, err1 = os.OpenFile(f, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
+		var w2, err1 = os.OpenFile(f, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
 		if err1 != nil {
 			slog.Error("Opening a log file failed", "file", f, "err", err1)
 			panic("")
 		}
-		w = w1
+		w1 = w2
 		notime = false
 	} else {
 		var fac = log_facility_map[logging.Syslog.Facility]
 		var sev = log_severity_map[logging.Syslog.Level]
 		var p syslog.Priority = sev | fac
-		var w1, err2 = syslog.New(p, "lenticularis")
+		var w2, err2 = syslog.New(p, "lenticularis")
 		if err2 != nil {
 			slog.Error("Opening syslog failed", "err", err2)
 			panic("")
 		}
-		w = w1
+		w1 = w2
 		notime = true
 	}
 
@@ -67,16 +68,37 @@ func make_logger(logging *logging_conf) *slog.Logger {
 		return a
 	}
 
-	var level, ok2 = log_level_name[logging.Syslog.Level]
-	if !ok2 {
-		level = slog.LevelInfo
-	}
-	var source bool = logging.Syslog.Source_code
-	return slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{
+	// Make a usual (file or syslog) logger.
+
+	var source bool = logging.Syslog.Source_line
+	var level = map_level_name(logging.Syslog.Level)
+	var h1 slog.Handler = slog.NewTextHandler(w1, &slog.HandlerOptions{
 		AddSource:   source,
 		Level:       level,
 		ReplaceAttr: replacer,
-	}))
+	})
+
+	// Maker a logger for alerting.
+
+	var h2 slog.Handler = nil
+	var alert slog.Level = slog.LevelInfo
+	var mqtt *mqtt_client = nil
+	if strings.EqualFold(logging.Alert.Queue, "mqtt") {
+		mqtt = configure_mqtt(&logging.Mqtt, qch)
+		alert = map_level_name(logging.Alert.Level)
+		h2 = slog.NewTextHandler(mqtt, &slog.HandlerOptions{
+			AddSource:   false,
+			Level:       alert,
+			ReplaceAttr: replacer,
+		})
+	}
+
+	var hx = &slog_fork_handler{
+		h1:    h1,
+		h2:    h2,
+		level: alert,
+	}
+	return slog.New(hx)
 }
 
 const (
@@ -115,6 +137,56 @@ var log_facility_map = map[string]syslog.Priority{
 	"LOCAL5": syslog.LOG_LOCAL5,
 	"LOCAL6": syslog.LOG_LOCAL6,
 	"LOCAL7": syslog.LOG_LOCAL7,
+}
+
+func map_level_name(n string) slog.Level {
+	var l, ok = log_level_name[n]
+	if ok {
+		return l
+	} else {
+		return slog.LevelInfo
+	}
+}
+
+// SLOG_FORK_HANDLER is a handler which copies messages to two
+// handlers.  h1 is the main logger, and h2 is a logger for alerting.
+type slog_fork_handler struct {
+	h1    slog.Handler
+	h2    slog.Handler
+	level slog.Level
+}
+
+func (x *slog_fork_handler) Enabled(ctx context.Context, l slog.Level) bool {
+	return x.h1.Enabled(ctx, l)
+}
+
+// SLOG_FORK_HANDLER.HANDLE outputs to both logging and alerting
+// targets.  Note that errors in MQTT are not reported here.
+func (x *slog_fork_handler) Handle(ctx context.Context, r slog.Record) error {
+	//fmt.Println("SLOG_FORK_HANDLER.Handle")
+	var err1 = x.h1.Handle(ctx, r)
+	if x.h2 != nil && r.Level >= x.level {
+		var skip bool = false
+		r.Attrs(func(a slog.Attr) bool {
+			if a.Key == "alert" {
+				skip = true
+				return false
+			}
+			return true
+		})
+		if !skip {
+			var _ = x.h2.Handle(ctx, r)
+		}
+	}
+	return err1
+}
+
+func (x *slog_fork_handler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return x.h1.WithAttrs(attrs)
+}
+
+func (x *slog_fork_handler) WithGroup(name string) slog.Handler {
+	return x.h1.WithGroup(name)
 }
 
 // LOG_WRITER IS NOT USED.

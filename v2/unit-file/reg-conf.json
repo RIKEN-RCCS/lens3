@@ -42,7 +42,7 @@
     },
     "alert": {
       "queue": "mqtt",
-      "levels": ["CRIT", "NOTICE"]
+      "level": "WARNING"
     },
     "mqtt": {
       "ep": "localhost:1883",

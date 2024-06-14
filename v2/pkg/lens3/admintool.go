@@ -495,7 +495,7 @@ var cmd_list = []*cmd{
 			for _, name := range list {
 				var d = gather_pool_prop(adm.table, name)
 				if d == nil {
-					fmt.Printf("No pool found for {pid}")
+					fmt.Printf("No pool found for pool=(%s)", name)
 				} else {
 					poolprops = append(poolprops, d)
 				}
@@ -610,19 +610,19 @@ var cmd_list = []*cmd{
 	},
 
 	&cmd{
+		synopsis: "wipe-out-db 'everything' (type literally)",
+		doc:      `Removes everything in the keyval-db.`,
+		run: func(adm *adm, args []string) {
+			wipe_out_db(adm.table, args[1])
+		},
+	},
+
+	&cmd{
 		synopsis: "probe-mux pool",
 		doc: `Accesses one Mux for probing a pool.  It starts a
 		backend.`,
 		run: func(adm *adm, args []string) {
 			probe_mux(adm.table, args[1])
-		},
-	},
-
-	&cmd{
-		synopsis: "wipe-out-db 'everything' (type literally)",
-		doc:      `Removes everything in the keyval-db.`,
-		run: func(adm *adm, args []string) {
-			wipe_out_db(adm.table, args[1])
 		},
 	},
 

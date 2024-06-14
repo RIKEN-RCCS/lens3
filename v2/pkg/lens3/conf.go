@@ -149,12 +149,12 @@ type syslog_conf struct {
 	Log_file    string `json:"log_file"`
 	Facility    string `json:"facility"`
 	Level       string `json:"level"`
-	Source_code bool   `json:"source_code"`
+	Source_line bool   `json:"source_line"`
 }
 
 type alert_conf struct {
-	Queue  string   `json:"queue"`
-	Levels []string `json:"levels"`
+	Queue string `json:"queue"`
+	Level string `json:"level"`
 }
 
 type mqtt_conf struct {
@@ -445,7 +445,7 @@ func check_syslog_entry(e *syslog_conf) {
 }
 
 func check_alert_entry(e *alert_conf) {
-	if len(e.Levels) > 0 {
+	if len(e.Level) > 0 {
 		// OK.
 	} else {
 		panic(fmt.Errorf(bad_message))

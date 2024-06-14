@@ -582,6 +582,8 @@ func ensure_permission_by_secret(m *multiplexer, w http.ResponseWriter, r *http.
 	var policy = secret.Secret_policy
 	var set []secret_policy
 	switch method {
+	// "OPTIONS", "GET", "HEAD", "POST", "PUT", "DELETE", "TRACE",
+	// "CONNECT", "PATCH"
 	case "HEAD":
 		fallthrough
 	case "GET":

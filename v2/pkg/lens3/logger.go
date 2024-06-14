@@ -22,15 +22,12 @@ import (
 // be replaced by one created in configure_logger().
 var slogger = slog.Default()
 
+// CONFIGURE_LOGGER makes either a file logger or a syslog logger.  It
+// also makes a logger for alerting.  It removes the "time" field for
+// syslog.  See "Example (Wrapping)" in the "slog" document.
 func configure_logger(logging *logging_conf, qch <-chan vacuous) {
 	slog.SetLogLoggerLevel(slog.LevelDebug)
-	slogger = make_logger(logging, qch)
-}
 
-// MAKE_LOGGER makes either a file logger or a syslog logger.  It
-// removes the "time" field for syslog.  See "Example (Wrapping)" in
-// the "slog" document.
-func make_logger(logging *logging_conf, qch <-chan vacuous) *slog.Logger {
 	var w1 io.Writer
 	var notime bool
 	if logging.Syslog.Log_file != "" {
@@ -78,6 +75,11 @@ func make_logger(logging *logging_conf, qch <-chan vacuous) *slog.Logger {
 		ReplaceAttr: replacer,
 	})
 
+	// Set the usual logger temporarily.  It is used to the end of
+	// this function.
+
+	slogger = slog.New(h1)
+
 	// Maker a logger for alerting.
 
 	var h2 slog.Handler = nil
@@ -98,7 +100,10 @@ func make_logger(logging *logging_conf, qch <-chan vacuous) *slog.Logger {
 		h2:    h2,
 		level: alert,
 	}
-	return slog.New(hx)
+
+	// Set the logger.
+
+	slogger = slog.New(hx)
 }
 
 const (

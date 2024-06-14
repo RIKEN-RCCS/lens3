@@ -88,13 +88,6 @@ func (e *proxy_exc) Error() string {
 	return fmt.Sprintf("%#v", e)
 }
 
-func mux_err(code int, s string) {
-	raise(&proxy_exc{
-		code:    code,
-		message: [][2]string{{"message", s}},
-	})
-}
-
 func handle() any {
 	return recover()
 }

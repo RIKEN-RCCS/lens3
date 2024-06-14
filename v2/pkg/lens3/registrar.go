@@ -37,6 +37,7 @@ import (
 	"net/http"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"slices"
 	"strconv"
@@ -358,9 +359,25 @@ func start_registrar(z *registrar) {
 func handle_registrar_exc(z *registrar, w http.ResponseWriter, rqst *http.Request) {
 	var x = recover()
 	switch err1 := x.(type) {
-	case nil:
+	case *runtime.PanicNilError, *fatal_exc:
+		slogger.Error("FATAL ERROR", "err", x)
+		slogger.Error("stacktrace:\n" + string(debug.Stack()))
+		var msg = message_internal_error
+		var code = http_500_internal_server_error
+		delay_sleep(z.conf.Registrar.Error_response_delay_ms)
+		http.Error(w, msg, code)
+		log_reg_access_by_request(rqst, code, int64(len(msg)), "-")
+		panic("(fatal)")
+	case *table_exc:
+		slogger.Error("Reg() keyval-db access error", "err", x)
+		slogger.Error("stacktrace:\n" + string(debug.Stack()))
+		var msg = message_internal_error
+		var code = http_500_internal_server_error
+		delay_sleep(z.conf.Registrar.Error_response_delay_ms)
+		http.Error(w, msg, code)
+		log_reg_access_by_request(rqst, code, int64(len(msg)), "-")
 	case *proxy_exc:
-		fmt.Println("RECOVER!", err1)
+		slogger.Error("Reg() Handled error", "err", err1)
 		var msg = map[string]string{}
 		for _, kv := range err1.message {
 			msg[kv[0]] = kv[1]
@@ -369,16 +386,14 @@ func handle_registrar_exc(z *registrar, w http.ResponseWriter, rqst *http.Reques
 		assert_fatal(err2 == nil)
 		delay_sleep(z.conf.Registrar.Error_response_delay_ms)
 		http.Error(w, string(b1), err1.code)
-		//log_access_with_user(rspn, "-")
 		log_reg_access_by_request(rqst, err1.code, int64(len(b1)), "-")
 	default:
-		fmt.Println("TRAP unhandled panic", err1)
-		fmt.Println("stacktrace:\n" + string(debug.Stack()))
-		delay_sleep(z.conf.Registrar.Error_response_delay_ms)
-		var msg = "BAD"
+		slogger.Error("Reg() Unhandled panic", "err", err1)
+		slogger.Error("stacktrace:\n" + string(debug.Stack()))
+		var msg = message_internal_error
 		var code = http_500_internal_server_error
+		delay_sleep(z.conf.Registrar.Error_response_delay_ms)
 		http.Error(w, msg, code)
-		//log_access_with_user(rspn, "-")
 		log_reg_access_by_request(rqst, code, int64(len(msg)), "-")
 	}
 }
@@ -524,7 +539,7 @@ func list_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 		slogger.Error("Reg() Multiple pools with the same id",
 			"pool", pool)
 		return_reg_error_response(z, w, r, u, http_500_internal_server_error,
-			[][2]string{message_internal_error})
+			[][2]string{message_inconsistent_db})
 		return nil
 	}
 
@@ -1015,7 +1030,7 @@ func register_new_user(z *registrar, uid string, firstsession bool) *user_record
 		return nil
 	}
 
-	slogger.Info("Reg() Registering a new user", "uid", uid)
+	slogger.Warn("Reg() Enroll a user automatically", "uid", uid)
 
 	// It doesn't care races...
 

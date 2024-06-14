@@ -19,14 +19,15 @@ const (
 	http_601_unanalyzable int = 601
 )
 
+var message_internal_error = `"(internal-error)"`
+
 // ERROR_MESSAGE is an extra error message to be returned to a clienet.
 type error_message [2]string
 
 var (
-	message_internal_error = error_message{"message", "(internal)"}
-)
+	message_inconsistent_db = error_message{
+		"message", "(internal) inconsistent db"}
 
-var (
 	message_bad_signature = error_message{
 		"message", "Bad signature"}
 	message_not_authenticated = error_message{

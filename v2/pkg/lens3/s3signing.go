@@ -71,7 +71,7 @@ const s3v4_authorization_method = "AWS4-HMAC-SHA256"
 // copying) using AWS SDK, and compares the result.
 func check_credential_in_request(q *http.Request, keypair [2]string) (bool, string) {
 	var header1 = q.Header.Get("Authorization")
-	fmt.Println("*** authorization=", header1)
+	//fmt.Println("*** authorization=", header1)
 	if header1 == "" {
 		//fmt.Println("*** empty authorization=", header1)
 		return false, "no-auth"
@@ -105,7 +105,7 @@ func check_credential_in_request(q *http.Request, keypair [2]string) (bool, stri
 		r.ContentLength = -1
 	}
 
-	fmt.Println("*** r.Host=", r.Host)
+	//fmt.Println("*** r.Host=", r.Host)
 
 	var credentials = aws.Credentials{
 		AccessKeyID:     keypair[0],
@@ -156,7 +156,7 @@ func sign_by_backend_credential(r *http.Request, be *backend_record) {
 		fmt.Println("x-amz-content-sha256(1)=", a2)
 	}
 
-	fmt.Println("*** be.Backend_ep=", be.Backend_ep)
+	//fmt.Println("*** be.Backend_ep=", be.Backend_ep)
 
 	//r.Header.Del("Accept-Encoding")
 	r.Host = be.Backend_ep

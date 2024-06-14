@@ -16,6 +16,7 @@ import (
 	"reflect"
 	"regexp"
 	"runtime"
+	"runtime/debug"
 	"slices"
 	"sort"
 	"strconv"
@@ -68,22 +69,14 @@ func panic_never() {
 	panic("(interal)")
 }
 
-// FATAL_ERROR is a panic argument to stop the service as recover()
-// does not handle this.  Usage:panic(&fatal_error{"message string"}).
-type fatal_error struct {
+// FATAL_EXC is a panic argument to stop the service as recover()
+// does not handle this.  Usage:panic(&fatal_exc{"message string"}).
+type fatal_exc struct {
 	m string
 }
 
-func (e *fatal_error) Error() string {
-	return "fatal_error:" + e.m
-}
-
-type termination_exc struct {
-	m string
-}
-
-type reg_error_exc struct {
-	m string
+func (e *fatal_exc) Error() string {
+	return fmt.Sprintf("%#v", e)
 }
 
 type proxy_exc struct {
@@ -91,25 +84,8 @@ type proxy_exc struct {
 	message [][2]string
 }
 
-type registrar_error_exc struct {
-	code    int
-	message [][2]string
-}
-
-func (e *termination_exc) Error() string {
-	return "termination_exc:" + e.m
-}
-
-func (e *reg_error_exc) Error() string {
-	return "reg_error_exc:" + e.m
-}
-
 func (e *proxy_exc) Error() string {
-	return fmt.Sprintf("proxy_exc: %v", e.message)
-}
-
-func (e *registrar_error_exc) Error() string {
-	return fmt.Sprintf("registrar_error_exc: %v", e.message)
+	return fmt.Sprintf("%#v", e)
 }
 
 func mux_err(code int, s string) {
@@ -125,14 +101,6 @@ func handle() any {
 
 func raise(e error) {
 	panic(e)
-}
-
-func termination(m string) *termination_exc {
-	return &termination_exc{m}
-}
-
-func reg_error(code int, _ string) error {
-	return &reg_error_exc{fmt.Sprintf("reg_error code=%d", code)}
 }
 
 // STRING_SORT sorts strings non-destructively.  It currently uses
@@ -493,4 +461,14 @@ func find_one[T any](mm []T, f func(T) bool) (bool, T) {
 
 func delay_sleep(ms time_in_sec) {
 	time.Sleep(time.Duration(ms) * time.Millisecond)
+}
+
+func dump_statistics() {
+	//runtime.MemProfile()
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	var g debug.GCStats
+	debug.ReadGCStats(&g)
+	fmt.Println("MemStats", m)
+	fmt.Println("GCStats", g)
 }

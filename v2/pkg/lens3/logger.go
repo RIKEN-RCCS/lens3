@@ -22,9 +22,10 @@ import (
 // be replaced by one created in configure_logger().
 var slogger = slog.Default()
 
-// CONFIGURE_LOGGER makes either a file logger or a syslog logger.  It
-// also makes a logger for alerting.  It removes the "time" field for
-// syslog.  See "Example (Wrapping)" in the "slog" document.
+// CONFIGURE_LOGGER makes a logger which is either a file logger or a
+// syslog logger.  It also makes an additional logger for alerting (by
+// MQTT).  It removes the "time" field for syslog.  See "Example
+// (Wrapping)" in the "slog" document.
 func configure_logger(logging *logging_conf, qch <-chan vacuous) {
 	slog.SetLogLoggerLevel(slog.LevelDebug)
 

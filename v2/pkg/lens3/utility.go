@@ -456,12 +456,36 @@ func delay_sleep(ms time_in_sec) {
 	time.Sleep(time.Duration(ms) * time.Millisecond)
 }
 
+func dump_statistics_periodically(period time.Duration) {
+	var ch = make(chan time.Time)
+	go tick_periodically(ch, period)
+	for {
+		select {
+		case <-ch:
+			dump_statistics()
+		}
+	}
+}
+
+// TICK_PERIODICALLY ticks on clock to the channel.  A period can be
+// time.Hour or 24*time.Hour.  It adds a ±0.5% jitter.
+func tick_periodically(ch chan<- time.Time, period time.Duration) {
+	var period1 = int64(period)
+	for {
+		var now = time.Now()
+		var jitter = time.Duration(rand.Int64N(period1/100) - (period1 / 200))
+		var next = now.Add(period + (period / 2)).Round(period).Add(jitter)
+		time.Sleep(next.Sub(now))
+		ch <- time.Now()
+	}
+}
+
 func dump_statistics() {
 	//runtime.MemProfile()
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 	var g debug.GCStats
 	debug.ReadGCStats(&g)
-	fmt.Println("MemStats", m)
-	fmt.Println("GCStats", g)
+	slogger.Info("Stats", "MemStats", m)
+	slogger.Info("Stats", "GCStats", g)
 }

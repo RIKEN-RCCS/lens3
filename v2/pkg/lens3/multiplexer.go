@@ -29,6 +29,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	//"flag"
 	//"io"
@@ -122,7 +123,7 @@ func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, qch <-ch
 }
 
 // MEMO: ReverseProxy <: Handler as it implements ServeHTTP().
-func start_multiplexer(m *multiplexer) {
+func start_multiplexer(m *multiplexer, wg *sync.WaitGroup) {
 	slogger.Debug(m.MuxEP + " start_multiplexer()")
 
 	go mux_periodic_work(m)

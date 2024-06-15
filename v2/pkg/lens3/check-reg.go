@@ -11,6 +11,7 @@ import (
 	"net/http/cookiejar"
 	"os"
 	"os/user"
+	"sync"
 	"time"
 	//"bufio"
 	//"context"
@@ -37,7 +38,10 @@ func run_registrar(n int) {
 
 	clear_everything(z.table)
 
-	go start_registrar(z)
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	go start_registrar(z, &wg)
 
 	time.Sleep(1 * time.Second)
 

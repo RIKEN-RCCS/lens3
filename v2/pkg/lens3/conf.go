@@ -34,7 +34,7 @@ type lens3_conf interface{ lens3_conf_union() }
 func (mux_conf) lens3_conf_union() {}
 func (reg_conf) lens3_conf_union() {}
 
-// MUX_CONF is a configuration of Mux.
+// MUX_CONF is a configuration of Multiplexer.
 type mux_conf struct {
 	Conf_header
 	Multiplexer multiplexer_conf `json:"multiplexer"`
@@ -42,15 +42,16 @@ type mux_conf struct {
 	Minio       minio_conf       `json:"minio"`
 	Rclone      rclone_conf      `json:"rclone"`
 	Log         access_log_conf  `json:"log"`
+	Logging     *logging_conf    `json:"logging"`
 }
 
-// REG_CONF is a configuration of Reg.
+// REG_CONF is a configuration of Registrar.
 type reg_conf struct {
 	Conf_header
 	Registrar registrar_conf  `json:"registrar"`
 	UI        UI_conf         `json:"ui"`
 	Log       access_log_conf `json:"log"`
-	Logging   logging_conf    `json:"logging"`
+	Logging   *logging_conf   `json:"logging"`
 }
 
 type Conf_header struct {
@@ -278,7 +279,9 @@ func check_reg_conf(conf *reg_conf) {
 	check_registrar_entry(&conf.Registrar)
 	check_ui_entry(&conf.UI)
 	check_access_log_entry(&conf.Log)
-	check_logging_entry(&conf.Logging)
+	if conf.Logging != nil {
+		check_logging_entry(conf.Logging)
+	}
 }
 
 func assert_slot(c bool) {

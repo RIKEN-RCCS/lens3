@@ -42,6 +42,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	//"context"
 	//"flag"
@@ -241,7 +242,7 @@ func configure_registrar(z *registrar, t *keyval_table, qch <-chan vacuous, c *r
 	z.trusted_proxies = addrs
 }
 
-func start_registrar(z *registrar) {
+func start_registrar(z *registrar, wg *sync.WaitGroup) {
 	slogger.Debug("Reg() start_registrar()")
 
 	var router = http.NewServeMux()

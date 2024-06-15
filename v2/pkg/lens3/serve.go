@@ -8,24 +8,25 @@ package lens3
 import (
 	"flag"
 	"fmt"
+	"golang.org/x/sys/unix"
+	"os"
+	"os/signal"
+	"strings"
+	"sync"
+	"time"
 	//"context"
 	//"io"
 	//"log"
-	"os"
-	"os/signal"
-	//"net"
 	//"maps"
+	//"net"
 	//"net/http"
 	//"net/http/httputil"
 	//"net/url"
 	//"os"
+	//"runtime"
 	//"strconv"
 	//"strings"
-	"golang.org/x/sys/unix"
 	//"syscall"
-	"strings"
-	"time"
-	//"runtime"
 )
 
 const lens3_version string = "v2.1"
@@ -39,138 +40,150 @@ func Run_lenticularis_mux() {
 	var args = flag.Args()
 
 	if *flag_conf == "" {
-		print_lenticularis_mux_usage()
-		os.Exit(0)
-	}
-
-	var services []string
-	switch len(args) {
-	default:
-		print_lenticularis_mux_usage()
-		os.Exit(0)
-	case 0:
-		// No argument mean "reg+mux".
-		services = []string{"reg", "mux"}
-	case 1:
-		// Check "reg", "mux", and "reg+mux" cases.
-		var regmux = strings.Split(args[0], "+")
-		switch len(regmux) {
-		default:
-			print_lenticularis_mux_usage()
-			os.Exit(0)
-		case 1, 2:
-			var regpart = regmux[0]
-			var muxpart = regmux[(len(regmux) - 1)]
-			if regpart == "reg" {
-				services = append(services, regpart)
-			}
-			if strings.HasPrefix(muxpart, "mux") {
-				var muxopt = strings.Split(muxpart, ":")
-				switch len(muxopt) {
-				case 1, 2:
-					if muxopt[0] == "mux" {
-						services = append(services, muxpart)
-					}
-				}
-			}
-			if len(services) != len(regmux) {
-				print_lenticularis_mux_usage()
-				os.Exit(0)
-			}
-		}
+		print_usage_and_exit()
 	}
 	if *flag_help {
-		print_lenticularis_mux_usage()
-		os.Exit(0)
+		print_usage_and_exit()
 	}
 	if *flag_version {
 		fmt.Println("Lens3", lens3_version)
 		os.Exit(0)
 	}
 
+	var services = [2]string{"", ""}
+	switch len(args) {
+	default:
+		print_usage_and_exit()
+	case 0:
+		// No arguments mean "reg+mux".
+		services[0] = "mux"
+		services[1] = "reg"
+	case 1:
+		// Check "mux", "reg", and "mux+reg" cases.
+		var mux_or_reg = strings.Split(args[0], "+")
+		switch len(mux_or_reg) {
+		default:
+			print_usage_and_exit()
+		case 1, 2:
+			for _, muxreg := range mux_or_reg {
+				var opt = strings.Split(muxreg, ":")
+				if (len(opt) == 1 || len(opt) == 2) && opt[0] == "mux" {
+					services[0] = muxreg
+				} else if (len(opt) == 1) && opt[0] == "reg" {
+					services[1] = muxreg
+				} else {
+					print_usage_and_exit()
+				}
+			}
+		}
+	}
+	if services[0] == "" && services[1] == "" {
+		print_usage_and_exit()
+	}
+
 	//fmt.Println("services=", services)
 	start_lenticularis_service(*flag_conf, services)
 }
 
-func start_lenticularis_service(confpath string, services []string) {
+func start_lenticularis_service(confpath string, services [2]string) {
 	var dbconf = read_db_conf(confpath)
 	var t = make_table(dbconf)
 
-	var ch_quit_service = make(chan vacuous)
-	handle_unix_signals(t, ch_quit_service)
-
-	var regconf = get_reg_conf(t, "reg")
-	configure_logger(&regconf.Logging, ch_quit_service)
-
-	for i, service := range services {
-		var run_on_main_thread = (i == len(services)-1)
-		if service == "reg" {
-			var z = the_registrar
-			configure_registrar(z, t, ch_quit_service, regconf)
-			if run_on_main_thread {
-				start_registrar(z)
-			} else {
-				go start_registrar(z)
-			}
+	var count int = 0
+	var muxconf *mux_conf = nil
+	var regconf *reg_conf = nil
+	var logconf *logging_conf = nil
+	if services[0] != "" {
+		var svc1 = services[0]
+		count++
+		muxconf = get_mux_conf(t, svc1)
+		if muxconf == nil {
+			fmt.Fprintf(os.Stderr, "No conf for %s found", svc1)
+			os.Exit(1)
 		}
-		if strings.HasPrefix(service, "mux") {
-			var muxconf = get_mux_conf(t, service)
-			var m = the_multiplexer
-			var w = the_manager
-			configure_multiplexer(m, w, t, ch_quit_service, muxconf)
-			configure_manager(w, m, t, ch_quit_service, muxconf)
-			defer w.factory.clean_at_exit()
-			if run_on_main_thread {
-				start_multiplexer(m)
-			} else {
-				go start_multiplexer(m)
-			}
+		logconf = muxconf.Logging
+	}
+	if services[1] != "" {
+		var svc2 = services[1]
+		count++
+		regconf = get_reg_conf(t, svc2)
+		if regconf == nil {
+			fmt.Fprintf(os.Stderr, "No conf for %s found", svc2)
+			os.Exit(1)
+		}
+		if logconf == nil {
+			logconf = regconf.Logging
 		}
 	}
+
+	var ch_quit_service = make(chan vacuous)
+	configure_logger(logconf, ch_quit_service)
+	handle_unix_signals(t, ch_quit_service)
+
+	var wg sync.WaitGroup
+	wg.Add(count)
+
+	// Start Multiplexer.
+
+	if services[0] != "" {
+		var m = the_multiplexer
+		var w = the_manager
+		configure_multiplexer(m, w, t, ch_quit_service, muxconf)
+		configure_manager(w, m, t, ch_quit_service, muxconf)
+		defer w.factory.clean_at_exit()
+		go start_multiplexer(m, &wg)
+	}
+
+	// Start Registrar.
+
+	if services[1] != "" {
+		var z = the_registrar
+		configure_registrar(z, t, ch_quit_service, regconf)
+		go start_registrar(z, &wg)
+	}
+
+	go dump_statistics_periodically(10 * time.Minute)
+
+	wg.Wait()
 }
 
-func print_lenticularis_mux_usage() {
-	fmt.Fprintf(os.Stderr,
-		"Usage: lenticularis-mux -c conf [reg/mux/reg+mux]\n"+
-			"  where the mux part can be mux:xxx"+
-			" to specify a different configuration.\n"+
-			"  No reg nor mux means reg+mux\n")
+func print_usage_and_exit() {
+	var usage = `Usage: lenticularis-mux -c conf [mux/reg/mux+reg]
+  where the mux part can be mux:xxx to specify a different
+  configuration.  No arguments mean mux+reg.`
+
+	fmt.Fprintf(os.Stderr, usage)
 	flag.PrintDefaults()
+	os.Exit(1)
 }
 
 func handle_unix_signals(t *keyval_table, ch_quit_service chan vacuous) {
-	var ch_sig = make(chan os.Signal, 1)
-
 	var pid = os.Getpid()
 	var pgid, err1 = unix.Getpgid(0)
 	if err1 != nil {
 		// Ignore.
+		pgid = pid
 	}
-	fmt.Printf("Set signal receivers; pid=%d pgid=%d\n", pid, pgid)
+	//slogger.Debug("Set signal receivers", "pid", pid, "pgid", pgid)
 
-	signal.Notify(ch_sig, unix.SIGINT, unix.SIGTERM, unix.SIGHUP)
+	var ch_signal = make(chan os.Signal, 1)
+	signal.Notify(ch_signal, unix.SIGINT, unix.SIGTERM, unix.SIGHUP)
 
 	go func() {
 	watchloop:
-		for signal := range ch_sig {
+		for signal := range ch_signal {
 			switch signal {
-			case unix.SIGINT:
-				fmt.Println("SIGINT")
-				break watchloop
-			case unix.SIGTERM:
-				fmt.Println("SIGTERM")
-				break watchloop
-			case unix.SIGHUP:
-				fmt.Println("SIGHUP")
+			case unix.SIGHUP, unix.SIGINT, unix.SIGTERM:
+				slogger.Error("Got signal; Stopping service", "signal", signal)
 				break watchloop
 			}
 		}
-		// (Graceful killing here).
+		// Graceful killing first.
 		close(ch_quit_service)
 		time.Sleep(100 * time.Millisecond)
-		fmt.Printf("killing by pgid=%d\n", pgid)
+		slogger.Debug("Killing by killpg", "pgid", pgid)
 		unix.Kill(-pgid, unix.SIGTERM)
 		time.Sleep(100 * time.Millisecond)
-		os.Exit(0)
+		os.Exit(1)
 	}()
 }

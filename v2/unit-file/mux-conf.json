@@ -42,5 +42,24 @@
   },
   "log": {
     "access_log_file": "/tmp/lens3-mux-access-log"
+  },
+  "logging": {
+    "syslog": {
+      "log_file": "/tmp/lens3-log",
+      "facility": "LOCAL7",
+      "level": "DEBUG",
+      "source_code": false
+    },
+    "alert": {
+      "queue": "mqtt",
+      "level": "WARNING"
+    },
+    "mqtt": {
+      "ep": "localhost:1883",
+      "client": "lens3-logger",
+      "topic": "Lens3 Alert",
+      "username": "lens3",
+      "password": "k7IwUfcKvYgaXfY9kHNoiXOP6RhTAHir9EzPbms8"
+    }
   }
 }

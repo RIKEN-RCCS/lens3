@@ -69,16 +69,9 @@ func panic_never() {
 	panic("(interal)")
 }
 
-// FATAL_EXC is a panic argument to stop the service as recover()
-// does not handle this.  Usage:panic(&fatal_exc{"message string"}).
-type fatal_exc struct {
-	m string
-}
-
-func (e *fatal_exc) Error() string {
-	return fmt.Sprintf("%#v", e)
-}
-
+// PROXY_EXC is a panic argument to escape the service towards the
+// toplevel where recover() does handle this.  Usage:
+// raise(&proxy_exc{code and "message"}).
 type proxy_exc struct {
 	code    int
 	message [][2]string

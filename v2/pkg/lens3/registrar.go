@@ -37,8 +37,6 @@ import (
 	"net/http"
 	"os/user"
 	"path/filepath"
-	"runtime"
-	"runtime/debug"
 	"slices"
 	"strconv"
 	"strings"
@@ -53,6 +51,8 @@ import (
 	//"net/url"
 	//"os"
 	//"runtime"
+	//"runtime"
+	//"runtime/debug"
 )
 
 // UI script is by Golang's embedded files.
@@ -358,45 +358,9 @@ func start_registrar(z *registrar, wg *sync.WaitGroup) {
 }
 
 func handle_registrar_exc(z *registrar, w http.ResponseWriter, rqst *http.Request) {
-	var x = recover()
-	switch err1 := x.(type) {
-	case *runtime.PanicNilError, *fatal_exc:
-		slogger.Error("FATAL ERROR", "err", x)
-		slogger.Error("stacktrace:\n" + string(debug.Stack()))
-		var msg = message_internal_error
-		var code = http_500_internal_server_error
-		delay_sleep(z.conf.Registrar.Error_response_delay_ms)
-		http.Error(w, msg, code)
-		log_reg_access_by_request(rqst, code, int64(len(msg)), "-")
-		panic("(fatal)")
-	case *table_exc:
-		slogger.Error("Reg() keyval-db access error", "err", x)
-		slogger.Error("stacktrace:\n" + string(debug.Stack()))
-		var msg = message_internal_error
-		var code = http_500_internal_server_error
-		delay_sleep(z.conf.Registrar.Error_response_delay_ms)
-		http.Error(w, msg, code)
-		log_reg_access_by_request(rqst, code, int64(len(msg)), "-")
-	case *proxy_exc:
-		slogger.Error("Reg() Handled error", "err", err1)
-		var msg = map[string]string{}
-		for _, kv := range err1.message {
-			msg[kv[0]] = kv[1]
-		}
-		var b1, err2 = json.Marshal(msg)
-		assert_fatal(err2 == nil)
-		delay_sleep(z.conf.Registrar.Error_response_delay_ms)
-		http.Error(w, string(b1), err1.code)
-		log_reg_access_by_request(rqst, err1.code, int64(len(b1)), "-")
-	default:
-		slogger.Error("Reg() Unhandled panic", "err", err1)
-		slogger.Error("stacktrace:\n" + string(debug.Stack()))
-		var msg = message_internal_error
-		var code = http_500_internal_server_error
-		delay_sleep(z.conf.Registrar.Error_response_delay_ms)
-		http.Error(w, msg, code)
-		log_reg_access_by_request(rqst, code, int64(len(msg)), "-")
-	}
+	var delay_ms = z.conf.Registrar.Error_response_delay_ms
+	var logfn = log_mux_access_by_request
+	handle_exc("Reg()", delay_ms, logfn, w, rqst)
 }
 
 func return_ui_script(z *registrar, w http.ResponseWriter, rqst *http.Request, path string) *string {
@@ -875,7 +839,7 @@ func grant_access_with_error_return(z *registrar, w http.ResponseWriter, r *http
 		slogger.Error("Reg() Frontend proxy is untrusted", "ep", peer)
 		return_reg_error_response(z, w, r, u, http_500_internal_server_error,
 			[][2]string{
-				message_Bad_proxy_configuration,
+				message_Proxy_untrusted,
 			})
 		return nil
 	}

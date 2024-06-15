@@ -85,8 +85,8 @@ var (
 var (
 	message_Lens3_not_running = error_message{
 		"message", "Lens3 is not running"}
-	message_Bad_proxy_configuration = error_message{
-		"message", "Bad proxy configuration"}
+	message_Proxy_untrusted = error_message{
+		"message", "Proxy_untrusted (bad configuration)"}
 	message_Bad_user_account = error_message{
 		"message", "Missing or bad user account"}
 	message_Bad_csrf_tokens = error_message{

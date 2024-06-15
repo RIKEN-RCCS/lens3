@@ -21,6 +21,7 @@ import (
 // SLOGGER is a logger.  It uses a default one first, but it will soon
 // be replaced by one created in configure_logger().
 var slogger = slog.Default()
+var slogger_level slog.Level = slog.LevelDebug
 
 // CONFIGURE_LOGGER makes a logger which is either a file logger or a
 // syslog logger.  It also makes an additional logger for alerting (by
@@ -80,6 +81,7 @@ func configure_logger(logging *logging_conf, qch <-chan vacuous) {
 	// this function.
 
 	slogger = slog.New(h1)
+	slogger_level = level
 
 	// Maker a logger for alerting.
 
@@ -99,12 +101,14 @@ func configure_logger(logging *logging_conf, qch <-chan vacuous) {
 	var hx = &slog_fork_handler{
 		h1:    h1,
 		h2:    h2,
-		level: alert,
+		level: level,
+		alert: alert,
 	}
 
 	// Set the logger.
 
 	slogger = slog.New(hx)
+	slogger_level = level
 }
 
 const (
@@ -155,11 +159,13 @@ func map_level_name(n string) slog.Level {
 }
 
 // SLOG_FORK_HANDLER is a handler which copies messages to two
-// handlers.  h1 is the main logger, and h2 is a logger for alerting.
+// handlers.  h1 is the main logger (with level), and h2 is a logger
+// for alerting (with alert).
 type slog_fork_handler struct {
 	h1    slog.Handler
 	h2    slog.Handler
 	level slog.Level
+	alert slog.Level
 }
 
 func (x *slog_fork_handler) Enabled(ctx context.Context, l slog.Level) bool {
@@ -171,7 +177,7 @@ func (x *slog_fork_handler) Enabled(ctx context.Context, l slog.Level) bool {
 func (x *slog_fork_handler) Handle(ctx context.Context, r slog.Record) error {
 	//fmt.Println("SLOG_FORK_HANDLER.Handle")
 	var err1 = x.h1.Handle(ctx, r)
-	if x.h2 != nil && r.Level >= x.level {
+	if x.h2 != nil && r.Level >= x.alert {
 		var skip bool = false
 		r.Attrs(func(a slog.Attr) bool {
 			if a.Key == "alert" {

@@ -19,12 +19,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"runtime"
 	"runtime/debug"
 	"slices"
 	"strconv"
@@ -124,25 +126,29 @@ func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, qch <-ch
 
 // MEMO: ReverseProxy <: Handler as it implements ServeHTTP().
 func start_multiplexer(m *multiplexer, wg *sync.WaitGroup) {
-	slogger.Debug(m.MuxEP + " start_multiplexer()")
+	//slogger.Debug(m.MuxEP + " start_multiplexer()")
 
 	go mux_periodic_work(m)
+
+	var loglogger = slog.NewLogLogger(slogger.Handler(), slogger_level)
 
 	var proxy1 = httputil.ReverseProxy{
 		Rewrite:        proxy_request_rewriter(m),
 		ModifyResponse: proxy_access_addenda(m),
+		ErrorLog:       loglogger,
+		ErrorHandler:   proxy_error_handler(m),
 	}
 	var proxy2 = make_checker_proxy(m, &proxy1)
 	m.server = &http.Server{
-		Addr:    m.ep_port,
-		Handler: proxy2,
-		//ErrorLog *log.Logger,
-		//BaseContext func(net.Listener) context.Context,
+		Addr:     m.ep_port,
+		Handler:  proxy2,
+		ErrorLog: loglogger,
+		//BaseContext: func(net.Listener) context.Context,
 	}
 
 	slogger.Info(m.MuxEP + " Start Multiplexer")
 	var err1 = m.server.ListenAndServe()
-	slogger.Info(m.MuxEP+" http.Server.ListenAndServe() done", "err", err1)
+	slogger.Error(m.MuxEP+" http.Server.ListenAndServe() done", "err", err1)
 }
 
 // PROXY_REQUEST_REWRITER is a function in ReverseProxy.Rewriter.  It
@@ -169,6 +175,36 @@ func proxy_access_addenda(m *multiplexer) func(*http.Response) error {
 		}
 		log_mux_access_by_response(rspn)
 		return nil
+	}
+}
+
+// It calls panic(http.ErrAbortHandler) to abort the processing of
+// httputil.ReverseProxy.
+func proxy_error_handler(m *multiplexer) func(http.ResponseWriter, *http.Request, error) {
+	return func(w http.ResponseWriter, rqst *http.Request, err error) {
+		//fmt.Println("*** PROXY_ERROR_HANDLER()", err)
+
+		var ctx = rqst.Context()
+		var x = ctx.Value("lens3-pool")
+		var pool, ok = x.(string)
+		if ok {
+			slogger.Error(m.MuxEP+" httputil.ReverseProxy() failed",
+				"pool", pool, "err", err)
+			slogger.Warn(m.MuxEP+" Remove a bad backend", "pool", pool)
+			//delete_backend_exclusion(m.table, pool)
+			delete_backend(m.table, pool)
+		} else {
+			slogger.Error(m.MuxEP+" httputil.ReverseProxy() failed (badly)",
+				"err", err)
+		}
+
+		var msg = message_internal_error
+		var code = http_500_internal_server_error
+		delay_sleep(m.conf.Multiplexer.Error_response_delay_ms)
+		http.Error(w, msg, code)
+		log_mux_access_by_request(rqst, code, int64(len(msg)), "-")
+
+		panic(http.ErrAbortHandler)
 	}
 }
 
@@ -294,10 +330,11 @@ func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, be *
 
 	// Tell the forwarding endpoint to httputil.ReverseProxy.
 
+	var pool = be.Pool
 	var ep = be.Backend_ep
 	var forwarding, err1 = url.Parse("http://" + ep)
 	if err1 != nil {
-		slogger.Debug(m.MuxEP+" Bad backend ep", "ep", ep, "err", err1)
+		slogger.Error(m.MuxEP+" Bad backend ep", "ep", ep, "err", err1)
 		raise(&proxy_exc{http_500_internal_server_error,
 			[][2]string{
 				message_bad_backend_ep,
@@ -305,7 +342,8 @@ func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, be *
 	}
 	var ctx1 = r.Context()
 	var ctx2 = context.WithValue(ctx1, "lens3-be", forwarding)
-	var r2 = r.WithContext(ctx2)
+	var ctx3 = context.WithValue(ctx2, "lens3-pool", pool)
+	var r2 = r.WithContext(ctx3)
 
 	proxy.ServeHTTP(w, r2)
 }
@@ -343,29 +381,54 @@ func serve_internal_access(m *multiplexer, w http.ResponseWriter, r *http.Reques
 	make_absent_buckets_in_backend(m.manager, be)
 }
 
-func handle_multiplexer_exc(m *multiplexer, w http.ResponseWriter, r *http.Request) {
+type access_logger = func(rqst *http.Request, code int, length int64, uid string)
+
+func handle_multiplexer_exc(m *multiplexer, w http.ResponseWriter, rqst *http.Request) {
+	var delay_ms = m.conf.Multiplexer.Error_response_delay_ms
+	var logfn = log_mux_access_by_request
+	handle_exc(m.MuxEP, delay_ms, logfn, w, rqst)
+}
+
+func handle_exc(prefix string, delay_ms time_in_sec, logfn access_logger, w http.ResponseWriter, rqst *http.Request) {
 	var x = recover()
 	switch err1 := x.(type) {
 	case nil:
+	case *runtime.PanicNilError:
+		slogger.Error(prefix+" FATAL ERROR", "err", err1)
+		slogger.Error("stacktrace:\n" + string(debug.Stack()))
+		var msg = message_internal_error
+		var code = http_500_internal_server_error
+		delay_sleep(delay_ms)
+		http.Error(w, msg, code)
+		logfn(rqst, code, int64(len(msg)), "-")
+		panic("(fatal)")
+	case *table_exc:
+		slogger.Error(prefix+" keyval-db access error", "err", x)
+		slogger.Error("stacktrace:\n" + string(debug.Stack()))
+		var msg = message_internal_error
+		var code = http_500_internal_server_error
+		delay_sleep(delay_ms)
+		http.Error(w, msg, code)
+		logfn(rqst, code, int64(len(msg)), "-")
 	case *proxy_exc:
-		slogger.Info(m.MuxEP+" Handle an exception", "err", err1)
+		slogger.Error(prefix+" Handled error", "err", err1)
 		var msg = map[string]string{}
 		for _, kv := range err1.message {
 			msg[kv[0]] = kv[1]
 		}
 		var b1, err2 = json.Marshal(msg)
 		assert_fatal(err2 == nil)
-		delay_sleep(m.conf.Multiplexer.Error_response_delay_ms)
+		delay_sleep(delay_ms)
 		http.Error(w, string(b1), err1.code)
-		log_mux_access_by_request(r, err1.code, int64(len(b1)), "-")
+		logfn(rqst, err1.code, int64(len(b1)), "-")
 	default:
-		slogger.Error(m.MuxEP+" Trap an unhandled panic", "err", err1)
-		slogger.Error(m.MuxEP + " stacktrace:\n" + string(debug.Stack()))
-		delay_sleep(m.conf.Multiplexer.Error_response_delay_ms)
-		var msg = "BAD"
+		slogger.Error(prefix+" Runtime panic", "err", err1)
+		slogger.Error("stacktrace:\n" + string(debug.Stack()))
+		var msg = message_internal_error
 		var code = http_500_internal_server_error
+		delay_sleep(delay_ms)
 		http.Error(w, msg, code)
-		log_mux_access_by_request(r, code, int64(len(msg)), "-")
+		logfn(rqst, code, int64(len(msg)), "-")
 	}
 }
 
@@ -479,7 +542,7 @@ func ensure_frontend_proxy_trusted(m *multiplexer, w http.ResponseWriter, r *htt
 		slogger.Error(m.MuxEP+" Frontend proxy is untrusted", "ep", peer)
 		return_mux_response(m, w, r, http_500_internal_server_error,
 			[][2]string{
-				message_Bad_proxy_configuration,
+				message_Proxy_untrusted,
 			})
 		return false
 	}
@@ -542,7 +605,6 @@ func ensure_pool_state(m *multiplexer, w http.ResponseWriter, r *http.Request, p
 		if reject_initial_state {
 			slogger.Error(m.MuxEP+" Pool is in initial state",
 				"pool", pool)
-			//raise(reg_error(403, "Pool is in initial state"))
 			return_mux_response(m, w, r, http_500_internal_server_error,
 				[][2]string{
 					message_pool_not_ready,
@@ -688,7 +750,7 @@ func return_mux_response_by_error(m *multiplexer, w http.ResponseWriter, r *http
 	case *proxy_exc:
 		return_mux_response(m, w, r, err2.code, err2.message)
 	default:
-		slogger.Error(m.MuxEP+" (interanl) Unexpected error", "err", err)
+		slogger.Error(m.MuxEP+" (internal) Unexpected error", "err", err)
 		raise(err)
 	}
 }
@@ -696,7 +758,7 @@ func return_mux_response_by_error(m *multiplexer, w http.ResponseWriter, r *http
 func mux_periodic_work(m *multiplexer) {
 	var conf = &m.conf.Multiplexer
 	if m.verbose {
-		slogger.Debug(m.MuxEP + " Periodic work started")
+		//slogger.Debug(m.MuxEP + " Periodic work started")
 	}
 	var now int64 = time.Now().Unix()
 	var mux = &mux_record{

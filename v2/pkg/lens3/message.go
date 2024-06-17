@@ -14,6 +14,7 @@ const (
 	http_404_not_found    int = 404
 
 	http_500_internal_server_error int = 500
+	http_502_bad_gateway           int = 502
 	http_503_service_unavailable   int = 503
 
 	http_601_unanalyzable int = 601

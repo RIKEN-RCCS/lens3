@@ -9,8 +9,12 @@ import (
 	"flag"
 	"fmt"
 	"golang.org/x/sys/unix"
+	"net"
+	"net/http"
+	"net/http/pprof"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -18,13 +22,9 @@ import (
 	//"io"
 	//"log"
 	//"maps"
-	//"net"
-	//"net/http"
-	//"net/http/httputil"
 	//"net/url"
 	//"os"
 	//"runtime"
-	//"strconv"
 	//"strings"
 	//"syscall"
 )
@@ -36,6 +36,7 @@ func Run_lenticularis_mux() {
 	var flag_help = flag.Bool("h", false, "Print help.")
 	var flag_conf = flag.String("c", "",
 		"A file containing keyval-db connection information (REQUIRED).")
+	var flag_pprof = flag.Int("pprof", 0, "A pprof port.")
 	flag.Parse()
 	var args = flag.Args()
 
@@ -48,6 +49,11 @@ func Run_lenticularis_mux() {
 	if *flag_version {
 		fmt.Println("Lens3", lens3_version)
 		os.Exit(0)
+	}
+
+	if *flag_pprof != 0 {
+		var port int = *flag_pprof
+		go start_pprof_service(port)
 	}
 
 	var services = [2]string{"", ""}
@@ -186,4 +192,17 @@ func handle_unix_signals(t *keyval_table, ch_quit_service chan vacuous) {
 		time.Sleep(100 * time.Millisecond)
 		os.Exit(1)
 	}()
+}
+
+func start_pprof_service(port int) {
+	var ep = net.JoinHostPort("", strconv.Itoa(port))
+	var pprofrouter = http.NewServeMux()
+	pprofrouter.HandleFunc("/debug/pprof/", pprof.Index)
+	pprofrouter.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	pprofrouter.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	pprofrouter.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	pprofrouter.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	var err1 = http.ListenAndServe(ep, pprofrouter)
+	fmt.Fprintf(os.Stderr, "Starting pprof failed: err=%v\n", err1)
+	print_usage_and_exit()
 }

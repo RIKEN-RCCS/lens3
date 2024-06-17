@@ -154,8 +154,8 @@ func (d *backend_rclone) make_command_line(port int, directory string) backend_c
 	return backend_command{argv, envs}
 }
 
-// CHECK_STARTUP decides the server state.  All messages at a start
-// are on stderr.
+// CHECK_STARTUP decides the server state.  All rclone's messages at a
+// start are on stderr.
 func (d *backend_rclone) check_startup(stream stdio_stream, mm []string) start_result {
 	if stream == on_stdout {
 		return start_result{
@@ -163,7 +163,7 @@ func (d *backend_rclone) check_startup(stream stdio_stream, mm []string) start_r
 			message:     "--",
 		}
 	}
-	fmt.Printf("rclone.check_startup2(%v)\n", mm)
+	//fmt.Printf("rclone.check_startup(%v)\n", mm)
 
 	// Check failure.  Failure messages can be both by S3 and RC.
 
@@ -189,11 +189,11 @@ func (d *backend_rclone) check_startup(stream stdio_stream, mm []string) start_r
 		var got_control = rclone_response_control_url_re.MatchString
 		var control_found, _ = find_one(mm, got_control)
 		if !control_found {
-			slogger.Warn("Mux(rclone) Got an expected message of rclone" +
-				" but not a control message")
+			slogger.Warn("Mux(rclone) Got an expected message " +
+				" but no control messages")
 		}
 		if d.verbose {
-			slogger.Debug("Mux(rclone) Got an expected message", "msg", m3)
+			slogger.Debug("Mux(rclone) Got an expected message", "output", m3)
 		}
 		return start_result{
 			start_state: start_started,
@@ -299,7 +299,7 @@ func simplify_rclone_rc_message(s []byte) *rclone_rc_result {
 	var err1 = dec.Decode(&m)
 	if err1 != nil {
 		slogger.Error("Mux(rclone) Bad message from rclone-rc",
-			"msg", s2)
+			"output", s2, "err", err1)
 		return &rclone_rc_result{nil, err1}
 	}
 	switch msg := m["error"].(type) {

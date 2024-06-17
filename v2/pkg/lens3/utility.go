@@ -31,7 +31,7 @@ import (
 
 type vacuous = struct{}
 
-// ITE if-then-else.
+// ITE is if-then-else.
 func ITE[T any](c bool, e1 T, e2 T) T {
 	if c {
 		return e1
@@ -40,33 +40,10 @@ func ITE[T any](c bool, e1 T, e2 T) T {
 	}
 }
 
-type Fatal struct {
-	Err error
-}
-
-func (e Fatal) Error() string {
-	return fmt.Sprintf("Fatal (%v)", e.Err)
-}
-
-func panic_non_nil(w any) {
-	if w != nil {
-		panic(w)
-	}
-}
-
 func assert_fatal(c bool) {
 	if !c {
 		panic("assert fail")
 	}
-}
-
-// ASSERT_NEVER just panics.
-func assert_never(m string) {
-	panic(m)
-}
-
-func panic_never() {
-	panic("(interal)")
 }
 
 // PROXY_EXC is a panic argument to escape the service towards the

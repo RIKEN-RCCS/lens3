@@ -157,12 +157,12 @@ func start_multiplexer(m *multiplexer, wg *sync.WaitGroup) {
 func proxy_request_rewriter(m *multiplexer) func(*httputil.ProxyRequest) {
 	return func(r *httputil.ProxyRequest) {
 		var ctx = r.In.Context()
-		var x = ctx.Value("lens3-be")
-		var forwarding, ok = x.(*url.URL)
+		var x1 = ctx.Value("lens3-be")
+		var forwarding, ok = x1.(*url.URL)
 		assert_fatal(ok)
-
-		//fmt.Println("*** FORWARDING=", forwarding)
-
+		if false {
+			slogger.Debug(m.MuxEP+" Forward a request", "url", forwarding)
+		}
 		r.SetURL(forwarding)
 		r.SetXForwarded()
 	}
@@ -178,33 +178,26 @@ func proxy_access_addenda(m *multiplexer) func(*http.Response) error {
 	}
 }
 
-// It calls panic(http.ErrAbortHandler) to abort the processing of
-// httputil.ReverseProxy.
+// Note that do not call panic(http.ErrAbortHandler) to abort the
+// processing of httputil.ReverseProxy.  Aborting does not send a
+// response but closes a connection.
 func proxy_error_handler(m *multiplexer) func(http.ResponseWriter, *http.Request, error) {
 	return func(w http.ResponseWriter, rqst *http.Request, err error) {
-		//fmt.Println("*** PROXY_ERROR_HANDLER()", err)
-
 		var ctx = rqst.Context()
 		var x = ctx.Value("lens3-pool")
-		var pool, ok = x.(string)
-		if ok {
-			slogger.Error(m.MuxEP+" httputil.ReverseProxy() failed",
-				"pool", pool, "err", err)
-			slogger.Warn(m.MuxEP+" Remove a bad backend", "pool", pool)
-			//delete_backend_exclusion(m.table, pool)
-			delete_backend(m.table, pool)
-		} else {
-			slogger.Error(m.MuxEP+" httputil.ReverseProxy() failed (badly)",
-				"err", err)
-		}
+		var pool, _ = x.(string)
+		slogger.Error((m.MuxEP + " httputil.ReverseProxy() failed;" +
+			" Maybe a backend record outdated"), "pool", pool, "err", err)
+		//delete_backend_exclusion(m.table, pool)
+		//delete_backend(m.table, pool)
 
 		var msg = message_internal_error
-		var code = http_500_internal_server_error
+		var code = http_502_bad_gateway
 		delay_sleep(m.conf.Multiplexer.Error_response_delay_ms)
 		http.Error(w, msg, code)
 		log_mux_access_by_request(rqst, code, int64(len(msg)), "-")
 
-		panic(http.ErrAbortHandler)
+		//panic(http.ErrAbortHandler)
 	}
 }
 
@@ -231,7 +224,10 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 			return
 		}
 
-		//fmt.Println("*** secret=", authenticated.Access_key)
+		if m.verbose {
+			slogger.Debug(m.MuxEP+" Access with authentication",
+				"access-key", authenticated.Access_key)
+		}
 
 		switch {
 		case authenticated != nil && authenticated.Secret_policy == secret_policy_internal_access:
@@ -256,7 +252,7 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 			serve_authenticated_access(m, w, r, bucket, authenticated, proxy)
 			return
 		default:
-			panic_never()
+			panic(nil)
 		}
 	})
 }

@@ -113,7 +113,7 @@ func (d *backend_minio) make_command_line(port int, directory string) backend_co
 // the error by the first fatal message.  It returns a retry response
 // only on the port-in-use error.
 func (d *backend_minio) check_startup(stream stdio_stream, ss []string) start_result {
-	fmt.Println("minio.check_startup()")
+	//fmt.Println("minio.check_startup(%v)", ss)
 	if stream == on_stderr {
 		return start_result{
 			start_state: start_ongoing,
@@ -150,11 +150,13 @@ func (d *backend_minio) check_startup(stream stdio_stream, ss []string) start_re
 	var expected_found, m2 = find_one(mm, has_expected_response)
 	if expected_found {
 		assert_fatal(m2 != nil)
-		var msg = get_string(m2, "message")
-		fmt.Println("*** EXPECTED=", msg)
+		var m3 = get_string(m2, "message")
+		if d.verbose {
+			slogger.Debug("Mux(minio) Got an expected message", "output", m3)
+		}
 		return start_result{
 			start_state: start_started,
-			message:     msg,
+			message:     m3,
 		}
 	}
 	return start_result{
@@ -164,7 +166,7 @@ func (d *backend_minio) check_startup(stream stdio_stream, ss []string) start_re
 }
 
 func (d *backend_minio) establish() error {
-	fmt.Println("minio.establish()")
+	//fmt.Println("minio.establish()")
 	var v1 = minio_mc_alias_set(d)
 	return v1.err
 }
@@ -246,7 +248,7 @@ func simplify_minio_mc_message(s []byte) *minio_mc_result {
 	var mm, ok = decode_json([]string{string(s)})
 	if !ok {
 		slogger.Error("Mux(minio) json decode failed")
-		var err1 = fmt.Errorf("MC-command returned a bad json: (%s)", s)
+		var err1 = fmt.Errorf("MC-command returned a bad json: %q", s)
 		return &minio_mc_result{nil, err1}
 	}
 
@@ -267,10 +269,10 @@ func simplify_minio_mc_message(s []byte) *minio_mc_result {
 			if m2 != "" {
 				return &minio_mc_result{nil, errors.New(m2)}
 			}
-			return &minio_mc_result{nil, fmt.Errorf("%s", m)}
+			return &minio_mc_result{nil, fmt.Errorf("%q", m)}
 		default:
 			// Unknown status.
-			return &minio_mc_result{nil, fmt.Errorf("%s", m)}
+			return &minio_mc_result{nil, fmt.Errorf("%q", m)}
 		}
 	}
 	return &minio_mc_result{mm, nil}

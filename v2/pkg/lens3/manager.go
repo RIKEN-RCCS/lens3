@@ -564,7 +564,7 @@ func wait_for_backend_come_up(w *manager, d backend) start_result {
 	}
 }
 
-// It sleeps in 1ms, 10ms, 100ms, and 1s, and keeps sleeping in 1s
+// It sleeps in 1ms, 3^1ms, 3^2ms, ... and 1s, and keeps sleeping in 1s
 // until a timeout.
 func wait_for_backend_by_race(w *manager, pool string) *backend_record {
 	slogger.Debug(w.MuxEP+" Waiting for a backend by race", "pool", pool)
@@ -579,7 +579,9 @@ func wait_for_backend_by_race(w *manager, pool string) *backend_record {
 		}
 		time.Sleep(time.Duration(sleep) * time.Millisecond)
 		if sleep < 1000 {
-			sleep = sleep * 10
+			sleep = sleep * 3
+		} else {
+			sleep = 1000
 		}
 	}
 	slogger.Debug(w.MuxEP+" Waiting for a backend by race failed", "pool", pool)

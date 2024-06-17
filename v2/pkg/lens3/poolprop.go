@@ -110,11 +110,12 @@ func gather_secrets(t *keyval_table, pool string) []*secret_record {
 }
 
 // UPDATE_POOL_STATE checks the changes of user and pool settings, and
-// updates the state.  This code should be called periodically.  It
-// returns a pair of a state and a reason.
-func update_pool_state(t *keyval_table, pool string, permitted user_approval) (pool_state, pool_reason) {
-	var desc = get_pool(t, pool)
-	if desc == nil {
+// updates the state of the pool.  It returns a pair of a state and a
+// reason.  This code should be called in the course of access
+// checking.
+func update_pool_state(t *keyval_table, pool string, awakeduration int64) (pool_state, pool_reason) {
+	var pooldata = get_pool(t, pool)
+	if pooldata == nil {
 		return pool_state_INOPERABLE, pool_reason_POOL_REMOVED
 	}
 	var state *pool_state_record = get_pool_state(t, pool)
@@ -126,45 +127,56 @@ func update_pool_state(t *keyval_table, pool string, permitted user_approval) (p
 	// Check a state transition.
 
 	switch state.State {
-	case pool_state_SUSPENDED:
-		return state.State, state.Reason
 	case pool_state_INOPERABLE:
 		return state.State, state.Reason
 	case pool_state_INITIAL:
 	case pool_state_READY:
+	case pool_state_SUSPENDED:
 	case pool_state_DISABLED:
 	default:
 		panic(nil)
 	}
 
-	var uid = desc.Owner_uid
+	var uid = pooldata.Owner_uid
 	var active, _ = check_user_is_active(t, uid)
-	if !active {
-		set_pool_state(t, pool, pool_state_DISABLED, state.Reason)
-		return pool_state_DISABLED, pool_reason_USER_INACTIVE
+	var expiration = time.Unix(pooldata.Expiration_time, 0)
+	var unexpired = time.Now().Before(expiration)
+	var online = pooldata.Online_status
+	if !(active && unexpired && online) {
+		if state.State == pool_state_DISABLED {
+			return state.State, state.Reason
+		} else {
+			state.State = pool_state_DISABLED
+			if !active {
+				state.Reason = pool_reason_USER_INACTIVE
+			} else if !unexpired {
+				state.Reason = pool_reason_POOL_EXPIRED
+			} else if !online {
+				state.Reason = pool_reason_POOL_OFFLINE
+			} else {
+				state.Reason = pool_reason_NORMAL
+			}
+			set_pool_state(t, pool, state.State, state.Reason)
+			return state.State, state.Reason
+		}
 	}
 
-	var now = time.Now().Unix()
-	var unexpired = !(desc.Expiration_time < now)
-	var online = desc.Online_status
-	var ok = (unexpired && online)
-	if ok {
-		if state.State == pool_state_DISABLED {
-			set_pool_state(t, pool, pool_state_INITIAL, pool_reason_NORMAL)
+	if state.State == pool_state_SUSPENDED {
+		var duration = (time.Duration(awakeduration/3) * time.Second)
+		var resume = time.Unix(state.Timestamp, 0).Add(duration)
+		if resume.Before(time.Now()) {
+			state.State = pool_state_INITIAL
+			state.Reason = pool_reason_NORMAL
+			set_pool_state(t, pool, state.State, state.Reason)
 		}
-		return pool_state_INITIAL, pool_reason_NORMAL
-	} else {
-		var reason pool_reason
-		if !unexpired {
-			reason = pool_reason_POOL_EXPIRED
-		} else if !online {
-			reason = pool_reason_POOL_OFFLINE
-		} else {
-			reason = pool_reason_NORMAL
-		}
-		set_pool_state(t, pool, pool_state_DISABLED, reason)
-		return pool_state_DISABLED, reason
 	}
+
+	if state.State == pool_state_DISABLED {
+		state.State = pool_state_INITIAL
+		state.Reason = pool_reason_NORMAL
+		set_pool_state(t, pool, state.State, state.Reason)
+	}
+	return state.State, state.Reason
 }
 
 func check_user_is_active(t *keyval_table, uid string) (bool, error_message) {

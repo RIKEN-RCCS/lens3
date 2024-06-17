@@ -596,7 +596,7 @@ func ensure_bucket_owner(m *multiplexer, w http.ResponseWriter, r *http.Request,
 
 func ensure_pool_state(m *multiplexer, w http.ResponseWriter, r *http.Request, pool string) bool {
 	var reject_initial_state = false
-	//AHOAHOAHO var state, _ = update_pool_state(t, pool, permitted)
+	//AHOAHOAHO var state, _ = update_pool_state(t, pool, awakeduration)
 	var state = pool_state_INITIAL //AHOAHOAHO
 	switch state {
 	case pool_state_INITIAL:

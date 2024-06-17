@@ -50,6 +50,9 @@
       "level": "DEBUG",
       "source_code": false
     },
+    "stats": {
+      "period": 600
+    },
     "alert": {
       "queue": "mqtt",
       "level": "WARNING"

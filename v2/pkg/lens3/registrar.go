@@ -1046,7 +1046,7 @@ func make_csrf_tokens(z *registrar, uid string) *csrf_token_record {
 	var ok = set_csrf_token_expiry(z.table, uid, timeout)
 	if !ok {
 		// Ignore an error.
-		slogger.Error("Mux() Bad call set_csrf_token_expiry()")
+		slogger.Error("Reg() Bad call set_csrf_token_expiry()")
 	}
 	//var x = get_csrf_token(z.table, uid)
 	//fmt.Println("make_csrf_tokens=", x)
@@ -1055,28 +1055,24 @@ func make_csrf_tokens(z *registrar, uid string) *csrf_token_record {
 
 func check_pool_state(t *keyval_table, pool string) bool {
 	var reject_initial_state = false
-	//AHOAHOAHO var state, _ = update_pool_state(t, pool, permitted)
+	//AHOAHOAHO var state, _ = update_pool_state(t, pool, awakeduration)
 	var state = pool_state_INITIAL //AHOAHOAHO
 	switch state {
 	case pool_state_INITIAL:
 		if reject_initial_state {
-			slogger.Error("Mux() is in initial state", "pool", pool)
-			//raise(reg_error(403, "Pool is in initial state"))
+			slogger.Error("Reg() Pool in initial state", "pool", pool)
 			return false
 		}
 	case pool_state_READY:
 		// Skip.
 	case pool_state_SUSPENDED:
-		//raise(reg_error(503, "Pool suspended"))
 		return false
 	case pool_state_DISABLED:
-		//raise(reg_error(403, "Pool disabled"))
 		return false
 	case pool_state_INOPERABLE:
-		//raise(reg_error(403, "Pool inoperable"))
 		return false
 	default:
-		assert_fatal(false)
+		panic(nil)
 	}
 	return true
 }

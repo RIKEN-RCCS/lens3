@@ -49,11 +49,11 @@ import (
 // running, or randomly.  It uses "us-east-1" region, which can be
 // arbitrary.
 func probe_access_mux(t *keyval_table, pool string) error {
-	var prop = get_pool(t, pool)
-	if prop == nil {
+	var pooldata = get_pool(t, pool)
+	if pooldata == nil {
 		return fmt.Errorf("Pool not found: pool=(%s)", pool)
 	}
-	var secret = get_secret(t, prop.Probe_key)
+	var secret = get_secret(t, pooldata.Probe_key)
 	if secret == nil {
 		return fmt.Errorf("Probe-key not found: pool=(%s)", pool)
 	}

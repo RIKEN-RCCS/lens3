@@ -290,8 +290,9 @@ func log_reg_access_by_request(rqst *http.Request, code int, length int64, uid s
 	log_access(reg_access_log_file, rqst, code, length, "-")
 }
 
+const common_log_time_layout = "02/Jan/2006:15:04:05 -0700"
+
 func log_access(f *os.File, rqst *http.Request, code int, length int64, uid string) {
-	var layout = "02/Jan/2006:15:04:05 -0700"
 
 	// l: RFC 1413 client identity by identd
 	// u: user
@@ -300,7 +301,7 @@ func log_access(f *os.File, rqst *http.Request, code int, length int64, uid stri
 	var h = rqst.RemoteAddr
 	var l = "-"
 	var u = uid
-	var t = time.Now().Format(layout)
+	var t = time.Now().Format(common_log_time_layout)
 	var r = fmt.Sprintf("%s %s %s", rqst.Method, rqst.URL, rqst.Proto)
 	var s = fmt.Sprintf("%d", code)
 	var b = fmt.Sprintf("%d", length)

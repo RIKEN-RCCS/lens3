@@ -142,6 +142,7 @@ type access_log_conf struct {
 
 type logging_conf struct {
 	Syslog syslog_conf `json:"syslog"`
+	Stats  stats_conf  `json:"stats"`
 	Alert  alert_conf  `json:"alert"`
 	Mqtt   mqtt_conf   `json:"mqtt"`
 }
@@ -152,6 +153,10 @@ type syslog_conf struct {
 	Facility    string `json:"facility"`
 	Level       string `json:"level"`
 	Source_line bool   `json:"source_line"`
+}
+
+type stats_conf struct {
+	Period time_in_sec `json:"period"`
 }
 
 type alert_conf struct {

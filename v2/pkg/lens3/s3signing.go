@@ -66,6 +66,8 @@ var required_headers = [3]string{
 
 const s3v4_authorization_method = "AWS4-HMAC-SHA256"
 
+const x_amz_date_layout = "20060102T150405Z"
+
 // CHECK_CREDENTIAL_IN_REQUEST checks the sign in an http request.  It
 // returns OK/NG and a simple reason.  It once signs a request (after
 // copying) using AWS SDK, and compares the result.
@@ -287,8 +289,8 @@ func check_all_digits(s string) bool {
 }
 
 // Converts an X-Amz-Date string to one parsable in RFC3339.  It
-// returns "" if a string is ill formed.  The date looks like
-// "X-Amz-Date=20240509T081007Z".  (X-Amz-Date is an acceptable string
+// returns "" if a string is ill formed.  The date format is
+// "X-Amz-Date=20060102T150405Z".  (X-Amz-Date is an acceptable string
 // by ISO-8601).
 func fix_x_amz_date(d string) string {
 	if len(d) != 16 {

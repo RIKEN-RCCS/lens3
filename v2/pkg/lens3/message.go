@@ -27,7 +27,9 @@ type error_message [2]string
 
 var (
 	message_inconsistent_db = error_message{
-		"message", "(internal) inconsistent db"}
+		"message", "(internal) inconsistent keyval-db"}
+	message_bad_db_entry = error_message{
+		"message", "(internal) Bad keyval-db entry"}
 
 	message_bad_signature = error_message{
 		"message", "Bad signature"}
@@ -72,6 +74,8 @@ var (
 		"message", "User disabled"}
 	message_no_user_account = error_message{
 		"message", "No user account"}
+	message_user_account_conflict = error_message{
+		"message", "User accounts conflict"}
 
 	message_pool_not_ready = error_message{
 		"message", "Pool not ready"}

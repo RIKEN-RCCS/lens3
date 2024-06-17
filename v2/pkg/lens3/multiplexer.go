@@ -397,9 +397,9 @@ func handle_exc(prefix string, delay_ms time_in_sec, logfn access_logger, w http
 		delay_sleep(delay_ms)
 		http.Error(w, msg, code)
 		logfn(rqst, code, int64(len(msg)), "-")
-		panic("(fatal)")
+		panic(nil)
 	case *table_exc:
-		slogger.Error(prefix+" keyval-db access error", "err", x)
+		slogger.Error(prefix+" keyval-db access error", "err", err1)
 		slogger.Error("stacktrace:\n" + string(debug.Stack()))
 		var msg = message_internal_error
 		var code = http_500_internal_server_error

@@ -8,18 +8,21 @@ package lens3
 // A table makes typed records from/to json in the keyval-db.  A table
 // consists of a set of three databases to easy manual inspection in
 // the keyval-db.
+//
+// NOTE: Errors related to configuration files are fatal.  They are in
+// the admin tool.  It calls panic(nil).
+
+// This is by "go-redis/v8".  Use "go-redis/v8" for Redis-6, and
+// "go-redis/v9" for Redis-7.
 
 import (
-	// This is by "go-redis/v8".  Use "go-redis/v8" for Redis-6, or
-	// "go-redis/v9" for Redis-7.
-
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/go-redis/redis/v8"
-	"log"
 	"time"
+	//"log"
 	//"reflect"
 )
 
@@ -346,7 +349,7 @@ func make_table(conf db_conf) *keyval_table {
 		case process_db:
 			t.prefix_to_db[k] = process
 		default:
-			panic("internal")
+			panic(nil)
 		}
 	}
 	t.db_name_to_db["setting"] = t.setting
@@ -431,19 +434,23 @@ func set_conf(t *keyval_table, conf lens3_conf) {
 	case *mux_conf:
 		var sub = conf1.Subject
 		if !(sub == "mux" || (len(sub) >= 5 && sub[:4] == "mux:")) {
-			panic("bad conf; subject≠mux")
+			slogger.Error("Bad conf; subject≠mux")
+			panic(nil)
 		}
 		//fmt.Println("set mux-conf")
 		db_set_with_prefix(t, db_conf_prefix, sub, conf1)
 	case *reg_conf:
 		var sub = conf1.Subject
 		if !(sub == "reg") {
-			panic("bad conf; subject≠reg")
+			slogger.Error("Bad conf; subject≠reg")
+			panic(nil)
 		}
 		//fmt.Println("set reg-conf")
 		db_set_with_prefix(t, db_conf_prefix, sub, conf1)
 	default:
-		log.Panicf("type: (%T) type≠mux_conf nor type≠reg_conf\n", conf)
+		slogger.Error("Bad conf; type≠mux_conf nor type≠reg_conf",
+			"type", fmt.Sprintf("%T", conf))
+		panic(nil)
 	}
 }
 
@@ -466,7 +473,8 @@ func list_confs(t *keyval_table) []*lens3_conf {
 		case sub == "reg":
 			v = get_reg_conf(t, sub)
 		default:
-			panic(fmt.Sprint("Bad subject name"))
+			slogger.Error("Bad subject name", "name", sub)
+			panic(nil)
 		}
 		if v != nil {
 			confs = append(confs, &v)
@@ -505,8 +513,12 @@ func add_user(t *keyval_table, u *user_record) {
 	if claim != "" {
 		var claiminguser = get_user_claim(t, claim)
 		if claiminguser != nil && claiminguser.Uid != uid {
-			var err2 = fmt.Errorf("A claim for {uid} conflicts with {xid}")
-			panic(err2)
+			slogger.Error("Bad conflicting uid claims",
+				"claim", claim, "uid1", uid, "uid2", claiminguser.Uid)
+			raise(&proxy_exc{http_500_internal_server_error,
+				[][2]string{
+					message_user_account_conflict,
+				}})
 		}
 		var now int64 = time.Now().Unix()
 		var data = &user_claim_record{
@@ -951,7 +963,8 @@ func set_with_unique_id_loop(t *keyval_table, prefix string, data any, generator
 		// Retry.
 		counter += 1
 		if !(counter < limit_of_id_generation_loop) {
-			panic("internal: unique key generation")
+			slogger.Error("Unique key generation failed (fatal)")
+			panic(nil)
 		}
 	}
 }
@@ -1097,8 +1110,11 @@ func load_db_data(w *redis.StringCmd, data any) bool {
 		if err1 == redis.Nil {
 			return false
 		} else {
-			// NEVER: An error condition should have been raised.
-			panic(err1)
+			slogger.Error("Bad value in the keyval-db", "err", err1)
+			raise(&proxy_exc{http_500_internal_server_error,
+				[][2]string{
+					message_bad_db_entry,
+				}})
 		}
 	}
 
@@ -1187,7 +1203,7 @@ func clear_db(t *keyval_table, db *redis.Client, prefix string) {
 func db_raw_table(t *keyval_table, name string) *redis.Client {
 	var db, ok = t.db_name_to_db[name]
 	if !ok {
-		log.Panic("bad db-name", name)
+		slogger.Error("Bad keybal-db name", "name", name)
 		return nil
 	}
 	return db
@@ -1196,12 +1212,14 @@ func db_raw_table(t *keyval_table, name string) *redis.Client {
 // SET_DB_RAW sets key-value in the keyval-db intact.
 func set_db_raw(t *keyval_table, kv [2]string) {
 	if kv[0] == "" || kv[1] == "" {
-		panic("keyval empty")
+		slogger.Error("Empty keyval to the keybal-db", "kv", kv)
+		panic(nil)
 	}
 	var prefix = kv[0][:3]
 	var db = t.prefix_to_db[prefix]
 	if db == nil {
-		panic(fmt.Sprintf("keyval-db bad prefix (%s)", prefix))
+		slogger.Error("Bad prefix to the keybal-db", "prefix", prefix)
+		panic(nil)
 	}
 	var w = db.Set(t.ctx, kv[0], kv[1], db_no_expiration)
 	raise_on_set_error(w)
@@ -1209,7 +1227,8 @@ func set_db_raw(t *keyval_table, kv [2]string) {
 
 func adm_del_db_raw(t *keyval_table, key string) {
 	if key == "" {
-		panic("keyl empty")
+		slogger.Error("Empty key to the keybal-db")
+		panic(nil)
 	}
 	//var prefix = key[:3]
 	//var db = t.prefix_to_db[prefix]
@@ -1221,7 +1240,7 @@ func adm_del_db_raw(t *keyval_table, key string) {
 		var w *redis.IntCmd = db.Del(t.ctx, key)
 		var n, err = w.Result()
 		if err == nil && n == 1 {
-			fmt.Printf("deleted in %s db\n", name)
+			fmt.Printf("deleted (%s) in the keyval-db\n", name)
 		}
 	}
 }
@@ -1232,9 +1251,13 @@ type db_raw_iterator struct {
 	iterator *redis.ScanIterator
 }
 
-// SCAN_DB_RAW returns an db_raw_iterator.
+// SCAN_DB_RAW returns a (raw) iterator of the keyval-db.  It returns
+// nil for a bad db name.
 func scan_db_raw(t *keyval_table, dbname string) *db_raw_iterator {
 	var db = db_raw_table(t, dbname)
+	if db == nil {
+		return nil
+	}
 	return &db_raw_iterator{
 		table:    t,
 		db:       db,
@@ -1242,8 +1265,9 @@ func scan_db_raw(t *keyval_table, dbname string) *db_raw_iterator {
 	}
 }
 
-// NEXT_DB_RAW returns a next entry by an iterator.  It return nil at
-// end.  It returns a single entry map.  A value is a string of json.
+// NEXT_DB_RAW returns a next entry of the iterator.  It returns a map
+// with a single entry, or returns nil at the end.  A value part is a
+// json string.
 func next_db_raw(db *db_raw_iterator) map[string]string {
 	for db.iterator.Next(db.table.ctx) {
 		var key = db.iterator.Val()
@@ -1254,7 +1278,8 @@ func next_db_raw(db *db_raw_iterator) map[string]string {
 			if err1 == redis.Nil {
 				continue
 			} else {
-				panic(err1)
+				slogger.Error("Get in the keybal-db failed", "err", err1)
+				panic(nil)
 			}
 		}
 		return map[string]string{key: string(val)}

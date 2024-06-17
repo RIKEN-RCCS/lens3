@@ -22,12 +22,12 @@ const (
 
 var message_internal_error = `"(internal-error)"`
 
-// ERROR_MESSAGE is an extra error message to be returned to a clienet.
+// ERROR_MESSAGE is an error message to be returned to the client.
 type error_message [2]string
 
 var (
 	message_inconsistent_db = error_message{
-		"message", "(internal) inconsistent keyval-db"}
+		"message", "(internal) Bad keyval-db, inconsistent"}
 	message_bad_db_entry = error_message{
 		"message", "(internal) Bad keyval-db entry"}
 

@@ -33,26 +33,26 @@ package lens3
 
 import (
 	"bytes"
-	//"errors"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	//"maps"
 	"net"
-	"time"
-	//"syscall"
-	//"os"
-	"os/exec"
-	//"path/filepath"
-	//"log"
 	"net/http"
+	"os/exec"
 	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
-	//"time"
+	"time"
+	//"errors"
+	//"io"
+	//"log"
+	//"maps"
+	//"os"
+	//"path/filepath"
 	//"reflect"
+	//"syscall"
+	//"time"
 )
 
 // Messages Patterns.  These are messages from rclone at its start-up.
@@ -248,38 +248,6 @@ func (d *backend_rclone) heartbeat(w *manager) int {
 	return code
 }
 
-// HEARTBEAT http-heads on the "/" path and returns a status code.  It
-// returns 500 on a connection failure.
-func (d *backend_rclone) heartbeat__() int {
-	//fmt.Println("rclone.heartbeat()")
-	var proc = d.get_super_part()
-
-	if d.heartbeat_client == nil {
-		var timeout = (time.Duration(proc.Heartbeat_timeout) * time.Second)
-		d.heartbeat_client = &http.Client{
-			Timeout: timeout,
-		}
-		var ep = proc.be.Backend_ep
-		d.heartbeat_url = fmt.Sprintf("http://%s/", ep)
-	}
-
-	var c = d.heartbeat_client
-	var rsp, err1 = c.Head(d.heartbeat_url)
-	if err1 != nil {
-		slogger.Debug("Mux(rclone) Heartbeat failed (http.Client.Get())",
-			"pool", proc.Pool, "err", err1)
-		return http_500_internal_server_error
-	}
-	defer rsp.Body.Close()
-	var _, err2 = io.ReadAll(rsp.Body)
-	if err2 != nil {
-		slogger.Info("Mux(rclone) Heartbeat failed (io.ReadAll())",
-			"pool", proc.Pool, "err", err2)
-		panic(err2)
-	}
-	return rsp.StatusCode
-}
-
 // RCLONE_RC_RESULT is a decoding of an output of an RC-command.  On an
 // error, it returns {nil,error}.
 type rclone_rc_result struct {
@@ -306,10 +274,13 @@ func simplify_rclone_rc_message(s []byte) *rclone_rc_result {
 	case nil:
 		// OK.
 	case string:
-		var err2 = fmt.Errorf("%s", msg)
+		var err2 = fmt.Errorf("%q", msg)
 		return &rclone_rc_result{nil, err2}
 	default:
-		panic("never")
+		var err3 = fmt.Errorf("Non-string error message: %q", m)
+		slogger.Error("Mux(rclone) Bad message from rclone-rc",
+			"err", err3)
+		return &rclone_rc_result{nil, err3}
 	}
 	return &rclone_rc_result{m, nil}
 }

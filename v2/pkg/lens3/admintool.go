@@ -12,12 +12,12 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
+	//"log"
 )
 
 func Run_lens3_admin() {
@@ -26,7 +26,7 @@ func Run_lens3_admin() {
 }
 
 type adm struct {
-	dbconf db_conf
+	dbconf *db_conf
 	table  *keyval_table
 }
 
@@ -72,7 +72,7 @@ func adm_toplevel() {
 	assert_fatal(flag_conf != nil)
 	var dbconf = read_db_conf(*flag_conf)
 	//fmt.Println(dbconf)
-	var t = make_table(dbconf)
+	var t = make_keyval_table(dbconf)
 	_ = t
 	var adm = &adm{
 		dbconf: dbconf,
@@ -81,7 +81,7 @@ func adm_toplevel() {
 
 	var subcmd = cmd_table[args[0]]
 	if subcmd == nil {
-		fmt.Printf("Command (%s) unknown.\n", args[0])
+		fmt.Fprintf(os.Stderr, "Command (%s) unknown\n", args[0])
 		cmd_help(nil, args)
 		return
 	}
@@ -100,7 +100,7 @@ func show_user(t *keyval_table, filename string) {
 
 	// var w1, err1 = os.Create(filename)
 	// if err1 != nil {
-	// 	log.Panicf("Open a file (%s) failed: err=(%v).\n",
+	// 	log.Panicf("Open a file (%s) failed: err=(%v)\n",
 	// 		filename, err1)
 	// }
 	// defer w1.Close()
@@ -116,7 +116,9 @@ func show_user(t *keyval_table, filename string) {
 		fields = append(fields, u.Groups...)
 		var err2 = e.Write(fields)
 		if err2 != nil {
-			log.Panicf("Writing csv entry failed: err=(%v).\n", err2)
+			fmt.Fprintf(os.Stderr, "Writing csv entry failed: err=(%v)\n",
+				err2)
+			panic(nil)
 		}
 	}
 
@@ -131,7 +133,9 @@ func show_user(t *keyval_table, filename string) {
 		var fields = append([]string{"DISABLE"}, disables...)
 		var err3 = e.Write(fields)
 		if err3 != nil {
-			log.Panicf("Writing csv entry failed: err=(%v).\n", err3)
+			fmt.Fprintf(os.Stderr, "Writing csv entry failed: err=(%v)\n",
+				err3)
+			panic(nil)
 		}
 	}
 }
@@ -139,8 +143,9 @@ func show_user(t *keyval_table, filename string) {
 func load_user(t *keyval_table, filename string) {
 	var r1, err1 = os.Open(filename)
 	if err1 != nil {
-		log.Panicf("Open a file (%s) failed: err=(%v).\n",
+		fmt.Fprintf(os.Stderr, "Open a file (%s) failed: err=(%v)\n",
 			filename, err1)
+		panic(nil)
 	}
 	defer r1.Close()
 	var e = csv.NewReader(r1)
@@ -148,7 +153,8 @@ func load_user(t *keyval_table, filename string) {
 	e.FieldsPerRecord = -1
 	var users, err2 = e.ReadAll()
 	if err2 != nil {
-		log.Panicf("Reading csv entry failed: err=(%v).\n", err2)
+		fmt.Fprintf(os.Stderr, "Reading csv entry failed: err=(%v)\n", err2)
+		panic(nil)
 	}
 
 	// Sort rows to process ADD rows first.
@@ -181,7 +187,8 @@ func load_user(t *keyval_table, filename string) {
 				!check_user_naming(record[1]) ||
 				!check_claim_string(record[2]) ||
 				!groupok {
-				log.Panicf("Bad user ADD entry: (%v).\n", record)
+				fmt.Fprintf(os.Stderr, "Bad user ADD entry: (%v)\n", record)
+				panic(nil)
 			}
 			//.Unix()
 			var years = 10
@@ -215,12 +222,14 @@ func load_user(t *keyval_table, filename string) {
 				return true
 			}()
 			if !ok {
-				log.Panicf("Bad user %s entry: (%v).\n", op, record)
+				fmt.Fprintf(os.Stderr, "Bad user %s entry: (%v)\n", op, record)
+				panic(nil)
 			}
 			for _, n := range record[1:] {
 				var u = get_user(t, n)
 				if u == nil {
-					log.Printf("Unknown user (%s) in %s entry\n", n, op)
+					fmt.Fprintf(os.Stderr, "Unknown user (%s) in %s entry\n",
+						n, op)
 					continue
 				}
 				switch op {
@@ -233,7 +242,8 @@ func load_user(t *keyval_table, filename string) {
 			}
 		default:
 			var op = record[0]
-			log.Panicf("Bad user %s entry: (%v).\n", op, record)
+			fmt.Fprintf(os.Stderr, "Bad user %s entry: (%v)\n", op, record)
+			panic(nil)
 		}
 	}
 }
@@ -271,11 +281,12 @@ func dump_db__(t *keyval_table) *dump_data {
 
 func print_in_json(x any) {
 	//for _, x := range list {
-	var b4, err4 = json.MarshalIndent(x, "", "    ")
-	if err4 != nil {
-		panic(err4)
+	var b1, err1 = json.MarshalIndent(x, "", "    ")
+	if err1 != nil {
+		fmt.Fprintf(os.Stderr, "json.Marshal() failed, err=(%v)\n", err1)
+		panic(nil)
 	}
-	fmt.Println(string(b4))
+	fmt.Println(string(b1))
 	//}
 }
 
@@ -284,8 +295,9 @@ func dump_in_json_to_file(filename string, users any) {
 	if filename != "" {
 		var w2, err1 = os.Create(filename)
 		if err1 != nil {
-			log.Panicf("Open a file (%s) failed: err=(%v).\n",
+			fmt.Fprintf(os.Stderr, "Open a file (%s) failed: err=(%v)\n",
 				filename, err1)
+			panic(nil)
 		}
 		defer w2.Close()
 		w1 = w2
@@ -296,15 +308,17 @@ func dump_in_json_to_file(filename string, users any) {
 	e.SetIndent("", "    ")
 	var err2 = e.Encode(users)
 	if err2 != nil {
-		log.Panicf("Writing json failed: err=(%v).\n", err2)
+		fmt.Fprintf(os.Stderr, "Writing json failed: err=(%v)\n", err2)
+		panic(nil)
 	}
 }
 
 func restore_db(t *keyval_table, filename string) {
 	var r1, err1 = os.Open(filename)
 	if err1 != nil {
-		log.Panicf("Open a file (%s) failed: err=(%v).\n",
+		fmt.Fprintf(os.Stderr, "Open a file (%s) failed: err=(%v)\n",
 			filename, err1)
+		panic(nil)
 	}
 	defer r1.Close()
 	var sc1 = bufio.NewScanner(r1)
@@ -314,7 +328,8 @@ func restore_db(t *keyval_table, filename string) {
 		kv[evenodd] = sc1.Text()
 		if evenodd == 1 {
 			if !strings.HasPrefix(kv[1], "    ") {
-				panic("missing prefix in 2nd line")
+				fmt.Fprintf(os.Stderr, "Missing prefix in 2nd line")
+				panic(nil)
 			}
 			kv[1] = strings.TrimLeft(kv[1], " ")
 			set_db_raw(t, kv)
@@ -422,18 +437,22 @@ var cmd_list = []*cmd{
 					fmt.Printf("// Conf %s\n", c.Subject)
 					var c3, err3 = json.MarshalIndent(c, "", "    ")
 					if err3 != nil {
-						panic(err3)
+						fmt.Fprintf(os.Stderr, "json.Marshal() failed: err=(%v)\n",
+							err3)
+						panic(nil)
 					}
 					fmt.Println(string(c3))
 				case *reg_conf:
 					fmt.Printf("// Conf %s\n", c.Subject)
 					var c4, err4 = json.MarshalIndent(c, "", "    ")
 					if err4 != nil {
-						panic(err4)
+						fmt.Fprintf(os.Stderr, "json.Marshal() failed: err=(%v)\n",
+							err4)
+						panic(nil)
 					}
 					fmt.Println(string(c4))
 				default:
-					panic("BAD")
+					panic(nil)
 				}
 			}
 		},
@@ -441,9 +460,14 @@ var cmd_list = []*cmd{
 
 	&cmd{
 		synopsis: "load-conf file-name.json",
-		doc:      `Loads a conf file (json) in keyval-db.`,
+
+		doc: `Loads a conf file in the keyval-db.`,
+
 		run: func(adm *adm, args []string) {
 			var conf = read_conf(args[1])
+			if conf == nil {
+				panic(nil)
+			}
 			set_conf(adm.table, conf)
 		},
 	},
@@ -495,7 +519,7 @@ var cmd_list = []*cmd{
 			for _, name := range list {
 				var d = gather_pool_prop(adm.table, name)
 				if d == nil {
-					fmt.Printf("No pool found for pool=(%s)", name)
+					fmt.Fprintf(os.Stderr, "No pool found for pool=(%s)", name)
 				} else {
 					poolprops = append(poolprops, d)
 				}

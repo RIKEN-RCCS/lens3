@@ -6,18 +6,19 @@
 package lens3
 
 // Configuration Files.  The configurations are stored in the
-// keyval-db.  Conf files are read and checked against the structures.
-// It accepts extra fields.
+// keyval-db.  Configuration files are read and checked against the
+// structures.  It accepts extra fields.  Reading configuration files
+// are by the admin tool, and the errors are fatal.
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	//"io"
-	"log"
 	"os"
 	"reflect"
 	"slices"
+	//"io"
+	//"log"
 	//"time"
 )
 
@@ -202,12 +203,13 @@ var backend_list = []backend_name{
 
 const bad_message = "Bad json conf file."
 
-// READ_DB_CONF reads a conf file for the keyval table.
-func read_db_conf(filepath string) db_conf {
+// READ_DB_CONF reads a conf file for the keyval-db.
+func read_db_conf(filepath string) *db_conf {
 	var b1, err1 = os.ReadFile(filepath)
 	if err1 != nil {
-		log.Panicf("Reading a conf file failed: file=(%s), err=(%v)",
-			filepath, err1)
+		slogger.Error("Reading a db conf file failed",
+			"file", filepath, "err", err1)
+		return nil
 	}
 	var b2 = bytes.NewReader(b1)
 	var d = json.NewDecoder(b2)
@@ -215,26 +217,31 @@ func read_db_conf(filepath string) db_conf {
 	var conf db_conf
 	var err2 = d.Decode(&conf)
 	if err2 != nil {
-		log.Panic(err2)
+		slogger.Error("Reading a db conf file failed",
+			"file", filepath, "err", err2)
+		return nil
 	}
 	if conf.Ep == "" || conf.Password == "" {
-		log.Panic("conf.redis.ep or conf.redis.password missing")
+		slogger.Error("Reading a db conf file failed",
+			"file", filepath, "err", fmt.Errorf("empty entries"))
+		return nil
 	}
-	check_db_entry(&conf)
-	return conf
+	return &conf
 }
 
-// Read_conf reads a configuration file and checks a structure is
+// READ_CONF reads a configuration file and checks a structure is
 // properly filled.
 func read_conf(filename string) lens3_conf {
 	var json1, err1 = os.ReadFile(filename)
 	if err1 != nil {
-		panic(err1)
+		slogger.Error("os.ReadFile() failed", "file", filename)
+		return nil
 	}
 	var conf1 = make(map[string]any)
 	var err2 = json.Unmarshal(json1, &conf1)
 	if err2 != nil {
-		panic(err2)
+		slogger.Error("Bad json format", "file", filename, "err", err2)
+		return nil
 	}
 
 	var sub = conf1["subject"].(string)[:3]
@@ -243,7 +250,8 @@ func read_conf(filename string) lens3_conf {
 		var muxconf mux_conf
 		var err3 = json.Unmarshal(json1, &muxconf)
 		if err3 != nil {
-			panic(fmt.Sprint("Bad json conf file:", err3))
+			slogger.Error("Bad json format", "file", filename, "err", err3)
+			return nil
 		}
 		//fmt.Println("MUX CONF is", muxconf)
 		check_mux_conf(&muxconf)
@@ -252,13 +260,15 @@ func read_conf(filename string) lens3_conf {
 		var regconf reg_conf
 		var err4 = json.Unmarshal(json1, &regconf)
 		if err4 != nil {
-			panic(fmt.Sprint("Bad json conf file:", err4))
+			slogger.Error("Bad json format", "file", filename, "err", err4)
+			return nil
 		}
 		//fmt.Println("REG CONF is", regconf)
 		check_reg_conf(&regconf)
 		return &regconf
 	default:
-		log.Panicf("Bad json conf file: Bad subject field (%s).", sub)
+		slogger.Error("Bad conf file, bad subject",
+			"file", filename, "subject", sub)
 		return nil
 	}
 }
@@ -284,19 +294,6 @@ func check_reg_conf(conf *reg_conf) {
 	}
 }
 
-func assert_slot(c bool) {
-	if !c {
-		panic(fmt.Errorf("Bad conf file."))
-	}
-}
-
-func check_db_entry(e *db_conf) {
-	if len(e.Ep) > 0 && len(e.Password) > 0 {
-	} else {
-		log.Panic(fmt.Errorf(bad_message))
-	}
-}
-
 func check_field_required_and_positive(t any, slot string) {
 	var t1 = reflect.ValueOf(t)
 	var s = t1.FieldByName(slot)
@@ -314,11 +311,13 @@ func check_field_required_and_positive(t any, slot string) {
 	case reflect.Int64:
 		var x1 = s.Int()
 		if !(!s.IsZero() && x1 > 0) {
-			log.Panicf("field (%s) is required in %T.", slot, t)
+			slogger.Error(fmt.Sprintf("field %s is required in %T", slot, t))
+			panic(nil)
 		}
 	case reflect.String:
 		if s.IsZero() {
-			log.Panicf("field (%s) is required in %T.", slot, t)
+			slogger.Error(fmt.Sprintf("field %s is required in %T", slot, t))
+			panic(nil)
 		}
 	}
 }
@@ -340,7 +339,8 @@ func check_multiplexer_entry(e *multiplexer_conf) {
 		check_field_required_and_positive(*e, slot)
 	}
 	if !slices.Contains(backend_list, e.Backend) {
-		panic(fmt.Errorf(bad_message))
+		slogger.Error("Bad backend name", "name", e.Backend)
+		panic(nil)
 	}
 }
 
@@ -370,10 +370,12 @@ func check_registrar_entry(e *registrar_conf) {
 		check_field_required_and_positive(*e, slot)
 	}
 	if !slices.Contains(claim_conversions, e.Claim_uid_map) {
-		panic(fmt.Errorf(bad_message))
+		slogger.Error("Bad claim mapping", "name", e.Claim_uid_map)
+		panic(nil)
 	}
 	if !slices.Contains(backend_list, e.Backend) {
-		panic(fmt.Errorf(bad_message))
+		slogger.Error("Bad backend name", "name", e.Backend)
+		panic(nil)
 	}
 }
 
@@ -401,7 +403,8 @@ func check_minio_entry(e *minio_conf) {
 	if len(e.Minio) > 0 && len(e.Mc) > 0 {
 		// OK.
 	} else {
-		panic(fmt.Errorf(bad_message))
+		slogger.Error("Bad backend entry (minio)", "entry", e)
+		panic(nil)
 	}
 }
 
@@ -409,7 +412,8 @@ func check_rclone_entry(e *rclone_conf) {
 	if len(e.Rclone) > 0 {
 		// OK.
 	} else {
-		panic(fmt.Errorf(bad_message))
+		slogger.Error("Bad backend entry (rclone)", "entry", e)
+		panic(nil)
 	}
 }
 
@@ -418,7 +422,8 @@ func check_ui_entry(e *UI_conf) {
 		len(e.Footer_banner) > 0 {
 		// OK.
 	} else {
-		panic(fmt.Errorf(bad_message))
+		slogger.Error("Bad S3 endpoint", "entry", e)
+		panic(nil)
 	}
 }
 
@@ -439,11 +444,11 @@ func check_logging_entry(e *logging_conf) {
 }
 
 func check_syslog_entry(e *syslog_conf) {
-	if len(e.Facility) > 0 &&
-		len(e.Level) > 0 {
+	if len(e.Facility) > 0 && len(e.Level) > 0 {
 		// OK.
 	} else {
-		panic(fmt.Errorf(bad_message))
+		slogger.Error("Bad syslog entry", "entry", e)
+		panic(nil)
 	}
 }
 
@@ -451,7 +456,8 @@ func check_alert_entry(e *alert_conf) {
 	if len(e.Level) > 0 {
 		// OK.
 	} else {
-		panic(fmt.Errorf(bad_message))
+		slogger.Error("Bad alert entry", "entry", e)
+		panic(nil)
 	}
 }
 
@@ -459,7 +465,8 @@ func check_mqtt_entry(e *mqtt_conf) {
 	if len(e.Ep) > 0 {
 		// OK.
 	} else {
-		panic(fmt.Errorf(bad_message))
+		slogger.Error("Bad MQTT entry", "entry", e)
+		panic(nil)
 	}
 }
 

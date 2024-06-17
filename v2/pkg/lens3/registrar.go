@@ -237,7 +237,8 @@ func configure_registrar(z *registrar, t *keyval_table, qch <-chan vacuous, c *r
 	var addrs []net.IP = convert_hosts_to_addrs(conf.Trusted_proxy_list)
 	slogger.Debug("Reg() Trusted proxies", "ip", addrs)
 	if len(addrs) == 0 {
-		panic("No trusted proxies")
+		slogger.Error("Reg() No trusted proxies")
+		panic(nil)
 	}
 	z.trusted_proxies = addrs
 }
@@ -1094,9 +1095,7 @@ func check_pool_owner__(t *keyval_table, uid string, pool string) bool {
 // the posix sense).
 func check_make_pool_arguments(z *registrar, u *user_record, pool string, data any) reg_error_message {
 	var args, ok = data.(*make_pool_arguments)
-	if !ok {
-		panic("(internal)")
-	}
+	assert_fatal(ok)
 
 	// Check bucket-directory path.
 
@@ -1130,9 +1129,8 @@ func check_make_pool_arguments(z *registrar, u *user_record, pool string, data a
 
 func check_make_bucket_arguments(z *registrar, u *user_record, pool string, data any) reg_error_message {
 	var args, ok = data.(*make_bucket_arguments)
-	if !ok {
-		panic("(internal)")
-	}
+	assert_fatal(ok)
+
 	// Check Bucket.
 	if !check_bucket_naming(args.Bucket) {
 		return reg_error_message{
@@ -1152,9 +1150,8 @@ func check_make_bucket_arguments(z *registrar, u *user_record, pool string, data
 
 func check_make_secret_arguments(z *registrar, u *user_record, pool string, data any) reg_error_message {
 	var args, ok = data.(*make_secret_arguments)
-	if !ok {
-		panic("(internal)")
-	}
+	assert_fatal(ok)
+
 	// Check Secret_policy.
 	if slices.Index(secret_policy_ui_list, args.Secret_policy) == -1 {
 		return reg_error_message{
@@ -1588,7 +1585,8 @@ func return_json_repsonse(z *registrar, w http.ResponseWriter, rqst *http.Reques
 	assert_fatal(u != nil)
 	var v1, err1 = json.Marshal(value)
 	if err1 != nil {
-		panic(err1)
+		slogger.Error("Reg() json.Marshal() failed", "err", err1)
+		panic(nil)
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	//io.WriteString(w, string(v1))

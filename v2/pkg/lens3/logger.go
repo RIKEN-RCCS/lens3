@@ -37,7 +37,7 @@ func configure_logger(logging *logging_conf, qch <-chan vacuous) {
 		var w2, err1 = os.OpenFile(f, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
 		if err1 != nil {
 			slog.Error("Opening a log file failed", "file", f, "err", err1)
-			panic("")
+			panic(nil)
 		}
 		w1 = w2
 		notime = false
@@ -48,7 +48,7 @@ func configure_logger(logging *logging_conf, qch <-chan vacuous) {
 		var w2, err2 = syslog.New(p, "lenticularis")
 		if err2 != nil {
 			slog.Error("Opening syslog failed", "err", err2)
-			panic("")
+			panic(nil)
 		}
 		w1 = w2
 		notime = true
@@ -253,7 +253,7 @@ func open_log_for_mux(f string) {
 	var s, err1 = os.OpenFile(f, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
 	if err1 != nil {
 		slogger.Error("Mux() Opening a log file failed", "err", err1)
-		panic("")
+		panic(nil)
 	}
 	mux_access_log_file = s
 }
@@ -262,7 +262,7 @@ func open_log_for_reg(f string) {
 	var s, err1 = os.OpenFile(f, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
 	if err1 != nil {
 		slogger.Error("Reg() Opening a log file failed: err=(%v)", err1)
-		panic("")
+		panic(nil)
 	}
 	reg_access_log_file = s
 }
@@ -319,8 +319,9 @@ func log_access(f *os.File, rqst *http.Request, code int, length int64, uid stri
 		case reg_access_log_file:
 			key = "Reg()"
 		default:
-			panic("")
+			panic(nil)
 		}
-		slogger.Error((key + " Wrinting to a log failed"), "file", f, "err", err1)
+		slogger.Error((key + " Wrinting to access log failed"),
+			"file", f, "err", err1)
 	}
 }

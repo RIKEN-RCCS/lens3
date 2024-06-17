@@ -101,7 +101,8 @@ func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, qch <-ch
 	} else {
 		var h, err1 = os.Hostname()
 		if err1 != nil {
-			panic(err1)
+			slogger.Error(m.MuxEP+" os.Hostname() failed", "err", err1)
+			panic(nil)
 		}
 		host = h
 	}
@@ -119,7 +120,8 @@ func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, qch <-ch
 	var addrs []net.IP = convert_hosts_to_addrs(conf.Trusted_proxy_list)
 	slogger.Debug(m.MuxEP+" Trusted proxies", "ip", addrs)
 	if len(addrs) == 0 {
-		panic("No trusted proxies")
+		slogger.Error(m.MuxEP + " No trusted proxies")
+		panic(nil)
 	}
 	m.trusted_proxies = addrs
 }
@@ -398,14 +400,14 @@ func handle_exc(prefix string, delay_ms time_in_sec, logfn access_logger, w http
 		http.Error(w, msg, code)
 		logfn(rqst, code, int64(len(msg)), "-")
 		panic(nil)
-	case *table_exc:
-		slogger.Error(prefix+" keyval-db access error", "err", err1)
-		slogger.Error("stacktrace:\n" + string(debug.Stack()))
-		var msg = message_internal_error
-		var code = http_500_internal_server_error
-		delay_sleep(delay_ms)
-		http.Error(w, msg, code)
-		logfn(rqst, code, int64(len(msg)), "-")
+		// case *table_exc:
+		// 	slogger.Error(prefix+" keyval-db access error", "err", err1)
+		// 	slogger.Error("stacktrace:\n" + string(debug.Stack()))
+		// 	var msg = message_internal_error
+		// 	var code = http_500_internal_server_error
+		// 	delay_sleep(delay_ms)
+		// 	http.Error(w, msg, code)
+		// 	logfn(rqst, code, int64(len(msg)), "-")
 	case *proxy_exc:
 		slogger.Error(prefix+" Handled error", "err", err1)
 		var msg = map[string]string{}

@@ -213,15 +213,6 @@ type mux_record struct {
 // "us:" + uid Entry (DB_USER_TIMESTAMP_PREFIX).
 // type int64
 
-type table_exc struct {
-	m string
-	e error
-}
-
-func (e *table_exc) Error() string {
-	return "table_exc:" + e.m
-}
-
 // BUCKET_POLICY is a public-access policy attached to a bucket.  "rw"
 // is PUBLIC, "ro" is DOWNLOAD, and "wo" is UPLOAD.
 type bucket_policy string
@@ -312,8 +303,8 @@ const (
 
 const db_no_expiration = 0
 
-// MAKE_TABLE makes keyval-db clients.
-func make_table(conf db_conf) *keyval_table {
+// MAKE_KEYVAL_TABLE makes keyval-db clients.
+func make_keyval_table(conf *db_conf) *keyval_table {
 	var ep = conf.Ep
 	var pw = conf.Password
 
@@ -372,21 +363,36 @@ func make_table(conf db_conf) *keyval_table {
 
 func raise_on_marshaling_error(err error) {
 	if err != nil {
-		raise(&table_exc{m: "json-marshal errs", e: err})
+		slogger.Error("json.Marshal() on db entry failed", "err", err)
+		raise(&proxy_exc{
+			http_500_internal_server_error,
+			[][2]string{
+				message_bad_db_entry,
+			}})
 	}
 }
 
 func raise_on_set_error(w *redis.StatusCmd) {
 	var err = w.Err()
 	if err != nil {
-		raise(&table_exc{m: "set errs", e: err})
+		slogger.Error("db-set() failed", "err", err)
+		raise(&proxy_exc{
+			http_500_internal_server_error,
+			[][2]string{
+				message_bad_db_entry,
+			}})
 	}
 }
 
 func raise_on_setnx_error(w *redis.BoolCmd) {
 	var err = w.Err()
 	if err != nil {
-		raise(&table_exc{m: "setnx errs", e: err})
+		slogger.Error("db-setnx() failed", "err", err)
+		raise(&proxy_exc{
+			http_500_internal_server_error,
+			[][2]string{
+				message_bad_db_entry,
+			}})
 	}
 }
 
@@ -395,14 +401,24 @@ func raise_on_setnx_error(w *redis.BoolCmd) {
 func raise_on_get_error(w *redis.StringCmd) {
 	var err = w.Err()
 	if err != nil && err != redis.Nil {
-		raise(&table_exc{m: "get errs", e: err})
+		slogger.Error("db-get() failed", "err", err)
+		raise(&proxy_exc{
+			http_500_internal_server_error,
+			[][2]string{
+				message_bad_db_entry,
+			}})
 	}
 }
 
 func check_on_del_failure(w *redis.IntCmd) bool {
 	var n, err = w.Result()
 	if err != nil {
-		raise(&table_exc{m: "del errs", e: err})
+		slogger.Error("db-del() failed", "err", err)
+		raise(&proxy_exc{
+			http_500_internal_server_error,
+			[][2]string{
+				message_bad_db_entry,
+			}})
 	}
 	return n == 1
 }
@@ -410,10 +426,20 @@ func check_on_del_failure(w *redis.IntCmd) bool {
 func raise_on_del_failure(w *redis.IntCmd) {
 	var n, err = w.Result()
 	if err != nil {
-		raise(&table_exc{m: "del errs", e: err})
+		slogger.Error("db-del() failed", "err", err)
+		raise(&proxy_exc{
+			http_500_internal_server_error,
+			[][2]string{
+				message_bad_db_entry,
+			}})
 	}
 	if n != 1 {
-		raise(&table_exc{m: "del no entry"})
+		slogger.Error("db-del() no entry")
+		raise(&proxy_exc{
+			http_500_internal_server_error,
+			[][2]string{
+				message_bad_db_entry,
+			}})
 	}
 }
 
@@ -422,7 +448,12 @@ func raise_on_del_failure(w *redis.IntCmd) {
 func check_on_expire_failure(w *redis.BoolCmd) bool {
 	var ok, err = w.Result()
 	if err != nil {
-		raise(&table_exc{m: "expire errs", e: err})
+		slogger.Error("db-expire() failed", "err", err)
+		raise(&proxy_exc{
+			http_500_internal_server_error,
+			[][2]string{
+				message_bad_db_entry,
+			}})
 	}
 	return ok
 }
@@ -515,7 +546,8 @@ func add_user(t *keyval_table, u *user_record) {
 		if claiminguser != nil && claiminguser.Uid != uid {
 			slogger.Error("Bad conflicting uid claims",
 				"claim", claim, "uid1", uid, "uid2", claiminguser.Uid)
-			raise(&proxy_exc{http_500_internal_server_error,
+			raise(&proxy_exc{
+				http_500_internal_server_error,
 				[][2]string{
 					message_user_account_conflict,
 				}})
@@ -1131,8 +1163,12 @@ func load_db_data(w *redis.StringCmd, data any) bool {
 	d.DisallowUnknownFields()
 	var err2 = d.Decode(data)
 	if err2 != nil {
-		slogger.Error("Bad json data in the keyval-db", "err", err2)
-		raise(&table_exc{m: "json-unmarshal errs", e: err2})
+		slogger.Error("json.Decode failed", "err", err2)
+		raise(&proxy_exc{
+			http_500_internal_server_error,
+			[][2]string{
+				message_bad_db_entry,
+			}})
 	}
 	return true
 }

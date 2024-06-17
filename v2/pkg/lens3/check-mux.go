@@ -25,7 +25,7 @@ import (
 func run_service() {
 	/*
 		var dbconf = read_db_conf("conf.json")
-		var t = make_table(dbconf)
+		var t = make_keyval_table(dbconf)
 		var muxconf = get_mux_conf(t, "mux")
 		var regconf = get_reg_conf(t, "reg")
 

@@ -42,7 +42,7 @@ func ITE[T any](c bool, e1 T, e2 T) T {
 
 func assert_fatal(c bool) {
 	if !c {
-		panic("assert fail")
+		panic(nil)
 	}
 }
 

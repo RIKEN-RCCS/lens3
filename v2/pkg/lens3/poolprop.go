@@ -123,26 +123,18 @@ func update_pool_state(t *keyval_table, pool string, permitted user_approval) (p
 		return pool_state_INOPERABLE, pool_reason_POOL_REMOVED
 	}
 
-	switch state.State {
-	case pool_state_SUSPENDED:
-		return state.State, state.Reason
-	case pool_state_INOPERABLE:
-		return state.State, state.Reason
-	default:
-	}
-
 	// Check a state transition.
 
 	switch state.State {
 	case pool_state_SUSPENDED:
-		panic("internal")
+		return state.State, state.Reason
 	case pool_state_INOPERABLE:
-		panic("internal")
+		return state.State, state.Reason
 	case pool_state_INITIAL:
 	case pool_state_READY:
 	case pool_state_DISABLED:
 	default:
-		panic("internal")
+		panic(nil)
 	}
 
 	var uid = desc.Owner_uid

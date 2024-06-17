@@ -93,7 +93,11 @@ func Run_lenticularis_mux() {
 
 func start_lenticularis_service(confpath string, services [2]string) {
 	var dbconf = read_db_conf(confpath)
-	var t = make_table(dbconf)
+	if dbconf == nil {
+		fmt.Fprintf(os.Stderr, "Reading db conf filed: %q\n", confpath)
+		os.Exit(1)
+	}
+	var t = make_keyval_table(dbconf)
 
 	var count int = 0
 	var muxconf *mux_conf = nil
@@ -104,7 +108,7 @@ func start_lenticularis_service(confpath string, services [2]string) {
 		count++
 		muxconf = get_mux_conf(t, svc1)
 		if muxconf == nil {
-			fmt.Fprintf(os.Stderr, "No conf for %s found", svc1)
+			fmt.Fprintf(os.Stderr, "No conf for %s found\n", svc1)
 			os.Exit(1)
 		}
 		logconf = muxconf.Logging
@@ -114,7 +118,7 @@ func start_lenticularis_service(confpath string, services [2]string) {
 		count++
 		regconf = get_reg_conf(t, svc2)
 		if regconf == nil {
-			fmt.Fprintf(os.Stderr, "No conf for %s found", svc2)
+			fmt.Fprintf(os.Stderr, "No conf for %s found\n", svc2)
 			os.Exit(1)
 		}
 		if logconf == nil {

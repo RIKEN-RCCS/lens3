@@ -26,7 +26,6 @@ package lens3
 import (
 	"bufio"
 	"context"
-	//"fmt"
 	"golang.org/x/sys/unix"
 	"log"
 	"math/rand/v2"
@@ -36,9 +35,9 @@ import (
 	"strconv"
 	"sync"
 	"time"
-	//"strings"
 	//"bytes"
 	//"encoding/json"
+	//"fmt"
 	//"io"
 	//"log/slog"
 	//"os"
@@ -47,6 +46,7 @@ import (
 	//"reflect"
 	//"reflect"
 	//"runtime"
+	//"strings"
 	//"syscall"
 	//"testing"
 	//"time"
@@ -226,7 +226,7 @@ func configure_manager(w *manager, m *multiplexer, t *keyval_table, q chan vacuo
 	default:
 		slogger.Error(w.MuxEP+" Configuration error, unknown backend",
 			"backend", c.Multiplexer.Backend)
-		log.Panic("")
+		panic(nil)
 	}
 
 	w.factory.configure(c)
@@ -312,11 +312,8 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 	var proc *backend_delegate = d.get_super_part()
 	initialize_backend_delegate(w, proc, pooldata)
 
-	// The following fields are set in starting a backend.
-
-	// proc.cmd
-	// proc.ch_stdio
-	// proc.ch_quit_backend
+	// The following fields are set in starting a backend: {proc.cmd,
+	// proc.ch_stdio, proc.ch_quit_backend}
 
 	var available_ports = list_available_ports(w, proc.use_n_ports)
 
@@ -328,7 +325,9 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 		var r1 = try_start_backend(w, d, port)
 		switch r1.start_state {
 		case start_ongoing:
-			panic("internal")
+			slogger.Error(w.MuxEP+" Starting a backend failed (timeout)",
+				"pool", pool)
+			return nil
 		case start_started:
 			// OK.
 		case start_to_retry:
@@ -395,7 +394,8 @@ func try_start_backend(w *manager, d backend, port int) start_result {
 	var proc = d.get_super_part()
 	var thishost, _, err1 = net.SplitHostPort(w.mux_ep)
 	if err1 != nil {
-		panic(err1)
+		slogger.Error(w.MuxEP+" Bad endpoint of Mux", "ep", w.mux_ep)
+		panic(nil)
 	}
 	proc.be.Backend_ep = net.JoinHostPort(thishost, strconv.Itoa(port))
 	if proc.verbose {
@@ -415,13 +415,12 @@ func try_start_backend(w *manager, d backend, port int) start_result {
 	var envs = append(w.environ, command.envs...)
 
 	slogger.Debug(w.MuxEP+" Run a backend", "pool", proc.Pool, "argv", argv)
-	// logger.debugf("Mux(pool=%s) Run a server: argv=%v; envs=%v.",
-	// proc.pool, argv, envs)
 
 	var ctx = context.Background()
 	var cmd = exec.CommandContext(ctx, argv[0], argv[1:]...)
 	if cmd == nil {
-		panic("cmd=nil")
+		slogger.Error(w.MuxEP + " exec.Command() returned nil")
+		panic(nil)
 	}
 	assert_fatal(cmd.SysProcAttr == nil)
 
@@ -488,7 +487,7 @@ func wait_for_backend_come_up(w *manager, d backend) start_result {
 		drain_start_messages_to_log(w, proc.Pool, msg_stdout, msg_stderr)
 	}()
 
-	var timeout = time.Duration(proc.Backend_start_timeout) * time.Second
+	var timeout = (time.Duration(proc.Backend_start_timeout) * time.Second)
 	var ch_timeout = time.After(timeout)
 	for {
 		select {
@@ -802,11 +801,15 @@ func list_available_ports(w *manager, use_n_ports int) []int {
 		assert_fatal(be.Mux_ep == w.mux_ep)
 		var _, ps, err1 = net.SplitHostPort(be.Backend_ep)
 		if err1 != nil {
-			panic(err1)
+			slogger.Error(w.MuxEP+" Bad endpoint",
+				"ep", be.Backend_ep, "err", err1)
+			panic(nil)
 		}
 		var port, err2 = strconv.Atoi(ps)
 		if err2 != nil {
-			panic(err2)
+			slogger.Error(w.MuxEP+" Bad endpoint",
+				"ep", be.Backend_ep, "err", err2)
+			panic(nil)
 		}
 		used = append(used, port)
 	}

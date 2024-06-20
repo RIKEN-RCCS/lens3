@@ -25,6 +25,7 @@ var message_internal_error = `"(internal-error)"`
 // ERROR_MESSAGE is an error message to be returned to the client.
 type error_message [2]string
 
+// Error messages returned to clients by Multiplexer.
 var (
 	message_inconsistent_db = error_message{
 		"message", "(internal) Bad keyval-db, inconsistent"}
@@ -37,9 +38,9 @@ var (
 		"message", "Not authenticated"}
 	message_not_authorized = error_message{
 		"message", "Not authorized"}
-	message_unknown_credential = error_message{
+	message_unknown_credential__ = error_message{
 		"message", "Unknown credential"}
-	message_bad_credential = error_message{
+	message_bad_credential__ = error_message{
 		"message", "Bad credential"}
 
 	message_backend_not_running = error_message{
@@ -49,8 +50,8 @@ var (
 	message_cannot_start_backend = error_message{
 		"message", "Cannot start backend"}
 
-	message_no_bucket_name = error_message{
-		"message", "No bucket name"}
+	message_access_rejected = error_message{
+		"message", "Rejected"}
 	message_bad_bucket_name = error_message{
 		"message", "Bad bucket name"}
 	message_no_named_bucket = error_message{
@@ -87,35 +88,39 @@ var (
 		"message", "Pool inoperable"}
 )
 
+// Error messages returned to clients by Registrar.
 var (
 	message_Lens3_not_running = error_message{
 		"message", "Lens3 is not running"}
 	message_Proxy_untrusted = error_message{
 		"message", "Proxy_untrusted (bad configuration)"}
-	message_Bad_user_account = error_message{
-		"message", "Missing or bad user account"}
 	message_Bad_csrf_tokens = error_message{
 		"message", "Missing or bad csrf-tokens"}
-	message_No_pool = error_message{
-		"message", "No pool"}
-	message_No_bucket = error_message{
-		"message", "No bucket"}
-	message_No_secret = error_message{
-		"message", "No secret"}
-	message_Not_pool_owner = error_message{
-		"message", "Not pool owner"}
-	message_Not_bucket_owner = error_message{
-		"message", "Not bucket owner"}
-	message_Not_secret_owner = error_message{
-		"message", "Not secret owner"}
+
 	message_Arguments_not_empty = error_message{
 		"message", "Arguments not empty"}
 	message_Bad_body_encoding = error_message{
 		"message", "Bad body encoding"}
+
+	message_Bad_user_account = error_message{
+		"message", "Missing or bad user account"}
 	message_Bad_group = error_message{
 		"message", "Bad group"}
-	message_Bad_pool = error_message{
-		"message", "Bad pool"}
+	message_No_pool = error_message{
+		"message", "No pool"}
+	message_Bad_pool_state = error_message{
+		"message", "Bad pool state"}
+
+	message_No_bucket = error_message{
+		"message", "No bucket"}
+	message_No_secret = error_message{
+		"message", "No secret"}
+
+	message_Not_bucket_owner = error_message{
+		"message", "Not bucket owner"}
+	message_Not_secret_owner = error_message{
+		"message", "Not secret owner"}
+
 	message_Bad_buckets_directory = error_message{
 		"message", "Buckets-directory is not absolute"}
 	message_Bad_bucket = error_message{
@@ -126,6 +131,7 @@ var (
 		"message", "Bad policy"}
 	message_Bad_expiration = error_message{
 		"message", "Bad expiration"}
+
 	message_Bucket_already_taken = error_message{
 		"message", "Bucket already taken"}
 	message_Buckets_directory_already_taken = error_message{

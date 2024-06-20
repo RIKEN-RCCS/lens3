@@ -119,6 +119,7 @@ type manager_conf struct {
 	backend_linger_ms         time_in_sec
 	watch_gap_minimal         time_in_sec
 	manager_expiration        time_in_sec
+	busy_suspension_duration  time_in_sec
 }
 
 type minio_conf struct {

@@ -14,6 +14,7 @@ import (
 	"net/http/pprof"
 	"os"
 	"os/signal"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -29,7 +30,7 @@ import (
 	//"syscall"
 )
 
-const lens3_version string = "v2.1"
+const lens3_version string = "v2.1.1"
 
 func Run_lenticularis_mux() {
 	var flag_version = flag.Bool("v", false, "Lens3 version.")
@@ -50,7 +51,6 @@ func Run_lenticularis_mux() {
 		fmt.Println("Lens3", lens3_version)
 		os.Exit(0)
 	}
-
 	if *flag_pprof != 0 {
 		var port int = *flag_pprof
 		go start_pprof_service(port)
@@ -129,6 +129,9 @@ func start_lenticularis_service(confpath string, services [2]string) {
 	var ch_quit_service = make(chan vacuous)
 	configure_logger(logconf, ch_quit_service)
 	handle_unix_signals(t, ch_quit_service)
+
+	slogger.Info("Lens3", "version", lens3_version,
+		"golang.version", runtime.Version())
 
 	var wg sync.WaitGroup
 	wg.Add(count)

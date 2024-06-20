@@ -21,7 +21,6 @@ import (
 // SLOGGER is a logger.  It uses a default one first, but it will soon
 // be replaced by one created in configure_logger().
 var slogger = slog.Default()
-var slogger_level slog.Level = slog.LevelDebug
 
 // CONFIGURE_LOGGER makes a logger which is either a file logger or a
 // syslog logger.  It also makes an additional logger for alerting (by
@@ -77,11 +76,10 @@ func configure_logger(logging *logging_conf, qch <-chan vacuous) {
 		ReplaceAttr: replacer,
 	})
 
-	// Set the usual logger temporarily.  It is used to the end of
+	// Set the usual logger temporarily.  It is used until the end of
 	// this function.
 
 	slogger = slog.New(h1)
-	slogger_level = level
 
 	// Maker a logger for alerting.
 
@@ -108,7 +106,20 @@ func configure_logger(logging *logging_conf, qch <-chan vacuous) {
 	// Set the logger.
 
 	slogger = slog.New(hx)
-	slogger_level = level
+}
+
+// FETCH_SLOGGER_LEVEL returns a log level of an slog_fork_handler.
+// It returns slog.LevelDebug when it is not an slog_fork_handler.
+func fetch_slogger_level(logger *slog.Logger) slog.Level {
+	var h = logger.Handler()
+	switch logger1 := h.(type) {
+	default:
+		//fmt.Println("slogger_level()= default")
+		return slog.LevelDebug
+	case *slog_fork_handler:
+		//fmt.Println("slogger_level()=", logger1.level)
+		return logger1.level
+	}
 }
 
 const (
@@ -159,8 +170,8 @@ func map_level_name(n string) slog.Level {
 }
 
 // SLOG_FORK_HANDLER is a handler which copies messages to two
-// handlers.  h1 is the main logger (with level), and h2 is a logger
-// for alerting (with alert).
+// handlers.  h1 is for main logging (with level), and h2 is for
+// alerting (with alert).
 type slog_fork_handler struct {
 	h1    slog.Handler
 	h2    slog.Handler
@@ -277,22 +288,24 @@ func open_log_for_reg(f string) {
 //  200 333 "-" "aws-cli/1.18.156 Python/3.6.8
 //  Linux/4.18.0-513.18.1.el8_9.x86_64 botocore/1.18.15"
 
-func log_mux_access_by_response(rspn *http.Response) {
+func log_mux_access_by_response(rspn *http.Response, auth string) {
 	var rqst = rspn.Request
-	log_access(mux_access_log_file, rqst, rspn.StatusCode, rspn.ContentLength, "-")
+	log_access("mux", rqst, rspn.StatusCode, rspn.ContentLength, "-", auth)
 }
 
-func log_mux_access_by_request(rqst *http.Request, code int, length int64, uid string) {
-	log_access(mux_access_log_file, rqst, code, length, "-")
+func log_mux_access_by_request(rqst *http.Request, code int, length int64, uid string, auth string) {
+	log_access("mux", rqst, code, length, "-", auth)
 }
 
-func log_reg_access_by_request(rqst *http.Request, code int, length int64, uid string) {
-	log_access(reg_access_log_file, rqst, code, length, "-")
+func log_reg_access_by_request(rqst *http.Request, code int, length int64, uid string, auth string) {
+	log_access("reg", rqst, code, length, "-", auth)
 }
 
 const common_log_time_layout = "02/Jan/2006:15:04:05 -0700"
 
-func log_access(f *os.File, rqst *http.Request, code int, length int64, uid string) {
+// LOG_ACCESS logs accesses for both Multiplexer and Registrar.  The
+// AUTH is an access-key, and it is always "-" for Registrar.
+func log_access(src string, rqst *http.Request, code int, length int64, uid string, auth string) {
 
 	// l: RFC 1413 client identity by identd
 	// u: user
@@ -308,21 +321,31 @@ func log_access(f *os.File, rqst *http.Request, code int, length int64, uid stri
 	var rf = "-"
 	var ua = rqst.Header.Get("User-Agent")
 
-	var msg = fmt.Sprintf((`%s %s %s [%s] %q` + ` %s %s %q %q` + "\n"),
-		h, l, u, t, r,
-		s, b, rf, ua)
-	var _, err1 = f.WriteString(msg)
-	if err1 != nil {
-		var key string
-		switch f {
-		case mux_access_log_file:
-			key = "Mux()"
-		case reg_access_log_file:
-			key = "Reg()"
-		default:
-			panic(nil)
+	switch src {
+	case "mux":
+		var f *os.File = mux_access_log_file
+		var msg1 = fmt.Sprintf(
+			("%s %s %s [%s] %q" + " %s %s %q %q" + " auth=%q" + "\n"),
+			h, l, u, t, r,
+			s, b, rf, ua,
+			auth)
+		var _, err1 = f.WriteString(msg1)
+		if err1 != nil {
+			slogger.Error("Mux() Wrinting access log failed",
+				"err", err1)
 		}
-		slogger.Error((key + " Wrinting to access log failed"),
-			"file", f, "err", err1)
+	case "reg":
+		var f *os.File = reg_access_log_file
+		var msg2 = fmt.Sprintf(
+			("%s %s %s [%s] %q" + " %s %s %q %q" + "\n"),
+			h, l, u, t, r,
+			s, b, rf, ua)
+		var _, err2 = f.WriteString(msg2)
+		if err2 != nil {
+			slogger.Error("Reg() Wrinting access log failed",
+				"err", err2)
+		}
+	default:
+		panic(nil)
 	}
 }

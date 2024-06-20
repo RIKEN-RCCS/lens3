@@ -360,7 +360,7 @@ func start_registrar(z *registrar, wg *sync.WaitGroup) {
 
 func handle_registrar_exc(z *registrar, w http.ResponseWriter, rqst *http.Request) {
 	var delay_ms = z.conf.Registrar.Error_response_delay_ms
-	var logfn = log_mux_access_by_request
+	var logfn = log_reg_access_by_request
 	handle_exc("Reg()", delay_ms, logfn, w, rqst)
 }
 
@@ -372,7 +372,7 @@ func return_ui_script(z *registrar, w http.ResponseWriter, rqst *http.Request, p
 		var code = http_500_internal_server_error
 		http.Error(w, msg, code)
 		//log_access_with_user(rspn, "-")
-		log_reg_access_by_request(rqst, code, int64(len(msg)), "-")
+		log_reg_access_by_request(rqst, code, int64(len(msg)), "-", "-")
 		return nil
 	}
 	var parameters = (`<script type="text/javascript">const base_path_="` +
@@ -389,7 +389,7 @@ func return_ui_script(z *registrar, w http.ResponseWriter, rqst *http.Request, p
 		wf.Flush()
 	}
 	//log_access_with_user(rspn, "-")
-	log_reg_access_by_request(rqst, 200, int64(len(data2)), "-")
+	log_reg_access_by_request(rqst, 200, int64(len(data2)), "-", "-")
 	return &data2
 }
 
@@ -401,7 +401,7 @@ func return_file(z *registrar, w http.ResponseWriter, rqst *http.Request, path s
 		var code = http_500_internal_server_error
 		http.Error(w, msg, code)
 		//log_access_with_user(rspn, "-")
-		log_reg_access_by_request(rqst, code, int64(len(msg)), "-")
+		log_reg_access_by_request(rqst, code, int64(len(msg)), "-", "-")
 		return nil
 	}
 	var _, err2 = w.Write(data1)
@@ -413,19 +413,20 @@ func return_file(z *registrar, w http.ResponseWriter, rqst *http.Request, path s
 		wf.Flush()
 	}
 	//log_access_with_user(rspn, "-")
-	log_reg_access_by_request(rqst, 200, int64(len(data1)), "-")
+	log_reg_access_by_request(rqst, 200, int64(len(data1)), "-", "-")
 	return &data1
 }
 
 // RETURN_USER_INFO returns a response for GET "/user-info".  This
 // request is assumed as the first request, and it initializes the
-// CSRF state.  It makes a list of groups when a user was added
-// automatically, because groups may change from time to time.  The
-// groups may be empty.
+// CSRF state.  u.Ephemeral=true means the user was added
+// automatically.  It makes a list of groups each time for such a
+// user, because groups may be changed.  The groups may be empty.
 func return_user_info(z *registrar, w http.ResponseWriter, r *http.Request) *user_info_response {
 	var conf = &z.conf.Registrar
 	var opr = "user-info"
-	var u = grant_access_with_error_return(z, w, r, "", true)
+
+	var u = check_user_access_with_error_return(z, w, r, "", true)
 	if u == nil {
 		return nil
 	}
@@ -476,7 +477,8 @@ func return_user_info(z *registrar, w http.ResponseWriter, r *http.Request) *use
 // given pool-name, or a list of pools owned by a user for "".
 func list_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request, pool string) *pool_list_response {
 	var opr = "list-pool"
-	var u = grant_access_with_error_return(z, w, r, pool, false)
+
+	var u = check_user_access_with_error_return(z, w, r, pool, false)
 	if u == nil {
 		return nil
 	}
@@ -494,7 +496,8 @@ func list_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 	}
 
 	if pool != "" && len(poollist) == 0 {
-		return_reg_error_response(z, w, r, u, http_400_bad_request,
+		return_reg_error_response(z, w, r, u,
+			http_400_bad_request,
 			[][2]string{
 				message_No_pool,
 				{"pool", pool},
@@ -504,7 +507,8 @@ func list_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 	if pool != "" && len(poollist) > 1 {
 		slogger.Error("Reg() Multiple pools with the same id",
 			"pool", pool)
-		return_reg_error_response(z, w, r, u, http_500_internal_server_error,
+		return_reg_error_response(z, w, r, u,
+			http_500_internal_server_error,
 			[][2]string{message_inconsistent_db})
 		return nil
 	}
@@ -527,7 +531,7 @@ func list_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request) *pool_prop_response {
 	var opr = "make-pool"
 
-	var u = grant_access_with_error_return(z, w, r, "", false)
+	var u = check_user_access_with_error_return(z, w, r, "", false)
 	if u == nil {
 		return nil
 	}
@@ -559,7 +563,8 @@ func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 	if !ok {
 		var _ = delete_pool_name_unconditionally(z.table, pool)
 		var owner = find_owner_of_pool(z, holder)
-		return_reg_error_response(z, w, r, u, http_400_bad_request,
+		return_reg_error_response(z, w, r, u,
+			http_400_bad_request,
 			[][2]string{
 				message_Buckets_directory_already_taken,
 				{"path", path},
@@ -606,7 +611,8 @@ func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 
 func delete_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request, pool string) *success_response {
 	var opr = "delete-pool"
-	var u = grant_access_with_error_return(z, w, r, pool, false)
+
+	var u = check_user_access_with_error_return(z, w, r, pool, false)
 	if u == nil {
 		return nil
 	}
@@ -616,7 +622,8 @@ func delete_pool_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 
 	var ok = deregister_pool(z.table, pool)
 	if !ok {
-		return_reg_error_response(z, w, r, u, http_400_bad_request,
+		return_reg_error_response(z, w, r, u,
+			http_400_bad_request,
 			[][2]string{
 				message_No_pool,
 				{"pool", pool},
@@ -642,7 +649,7 @@ func delete_pool_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 func make_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request, pool string) *pool_prop_response {
 	var opr = "make-bucket"
 
-	var u = grant_access_with_error_return(z, w, r, pool, false)
+	var u = check_user_access_with_error_return(z, w, r, pool, false)
 	if u == nil {
 		return nil
 	}
@@ -672,7 +679,8 @@ func make_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 	var ok1, holder = set_ex_bucket(z.table, name, bucket)
 	if !ok1 {
 		var owner = find_owner_of_pool(z, holder)
-		return_reg_error_response(z, w, r, u, http_400_bad_request,
+		return_reg_error_response(z, w, r, u,
+			http_400_bad_request,
 			[][2]string{
 				message_Bucket_already_taken,
 				{"owner", owner},
@@ -692,7 +700,8 @@ func make_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 
 func delete_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request, pool string, bucket string) *pool_prop_response {
 	var opr = "delete-bucket"
-	var u = grant_access_with_error_return(z, w, r, pool, false)
+
+	var u = check_user_access_with_error_return(z, w, r, pool, false)
 	if u == nil {
 		return nil
 	}
@@ -705,7 +714,8 @@ func delete_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *h
 
 	var ok1 = delete_bucket_unconditionally(z.table, bucket)
 	if !ok1 {
-		return_reg_error_response(z, w, r, u, http_404_not_found,
+		return_reg_error_response(z, w, r, u,
+			http_404_not_found,
 			[][2]string{
 				message_No_bucket,
 				{"bucket", bucket},
@@ -718,7 +728,8 @@ func delete_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *h
 
 func make_secret_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request, pool string) *pool_prop_response {
 	var opr = "make-secret"
-	var u = grant_access_with_error_return(z, w, r, pool, false)
+
+	var u = check_user_access_with_error_return(z, w, r, pool, false)
 	if u == nil {
 		return nil
 	}
@@ -747,7 +758,8 @@ func make_secret_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 
 func delete_secret_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request, pool string, secret string) *pool_prop_response {
 	var opr = "delete-secret"
-	var u = grant_access_with_error_return(z, w, r, pool, false)
+
+	var u = check_user_access_with_error_return(z, w, r, pool, false)
 	if u == nil {
 		return nil
 	}
@@ -762,7 +774,8 @@ func delete_secret_and_return_response(z *registrar, w http.ResponseWriter, r *h
 	var ok = delete_secret_key_unconditionally(z.table, secret)
 	if !ok {
 		slogger.Info("Reg() delete_secret_key() failed (ignored)")
-		return_reg_error_response(z, w, r, u, http_400_bad_request,
+		return_reg_error_response(z, w, r, u,
+			http_400_bad_request,
 			[][2]string{
 				message_Bad_secret,
 				{"secret", secret},
@@ -791,10 +804,11 @@ func return_pool_prop(z *registrar, w http.ResponseWriter, r *http.Request, u *u
 	return rspn
 }
 
-// GRANT_ACCESS_WITH_ERROR_RETURN checks an access to a pool by a user
-// is granted.  It returns a user record on success.  It does not
-// check the pool-state on deleting a pool.
-func grant_access_with_error_return(z *registrar, w http.ResponseWriter, r *http.Request, pool string, firstsession bool) *user_record {
+// CHECK_USER_ACCESS_WITH_ERROR_RETURN checks an access to a pool by a
+// user is granted.  It returns a user record. Or, it returns nil when
+// access is not granted.  Call it without a pool when deleting a
+// pool.
+func check_user_access_with_error_return(z *registrar, w http.ResponseWriter, r *http.Request, pool string, firstsession bool) *user_record {
 	var conf = &z.conf.Registrar
 	_ = conf
 
@@ -803,29 +817,16 @@ func grant_access_with_error_return(z *registrar, w http.ResponseWriter, r *http
 	fmt.Println(";; X-Remote-User=", r.Header.Get("X-Remote-User"))
 	fmt.Println(";; X-Csrf-Token=", r.Header.Get("X-Csrf-Token"))
 
-	// Check the user.
-
-	var x_remote_user = r.Header.Get("X-Remote-User")
-	var uid = map_claim_to_uid(z, x_remote_user)
-	var u = check_user_account(z, uid, firstsession)
-	if u == nil {
-		slogger.Warn("Reg() User is not active", "uid", uid)
-		var dummy = &user_record{
-			Uid: "-",
-		}
-		return_reg_error_response(z, w, r, dummy, http_401_unauthorized,
-			[][2]string{
-				message_Bad_user_account,
-				{"state", "inactive"},
-			})
-		return nil
+	var dummy = &user_record{
+		Uid: "-",
 	}
 
 	// Check if Lens3 is working.
 
 	if !check_lens3_is_running(z.table) {
 		slogger.Error("Reg() Lens3 is not running")
-		return_reg_error_response(z, w, r, u, http_500_internal_server_error,
+		return_reg_error_response(z, w, r, dummy,
+			http_500_internal_server_error,
 			[][2]string{
 				message_Lens3_not_running,
 			})
@@ -838,9 +839,26 @@ func grant_access_with_error_return(z *registrar, w http.ResponseWriter, r *http
 	var peer = r.RemoteAddr
 	if !check_frontend_proxy_trusted(z.trusted_proxies, peer) {
 		slogger.Error("Reg() Frontend proxy is untrusted", "ep", peer)
-		return_reg_error_response(z, w, r, u, http_500_internal_server_error,
+		return_reg_error_response(z, w, r, dummy,
+			http_500_internal_server_error,
 			[][2]string{
 				message_Proxy_untrusted,
+			})
+		return nil
+	}
+
+	// Check the user.
+
+	var x_remote_user = r.Header.Get("X-Remote-User")
+	var uid = map_claim_to_uid(z, x_remote_user)
+	var u = check_user_account(z, uid, firstsession)
+	if u == nil {
+		slogger.Warn("Reg() User is not active", "uid", uid)
+		return_reg_error_response(z, w, r, dummy,
+			http_401_unauthorized,
+			[][2]string{
+				message_Bad_user_account,
+				{"state", "inactive"},
 			})
 		return nil
 	}
@@ -849,7 +867,8 @@ func grant_access_with_error_return(z *registrar, w http.ResponseWriter, r *http
 		var ok = check_csrf_tokens(z, w, r, uid)
 		if !ok {
 			slogger.Warn("Reg() Bad csrf tokens", "uid", uid)
-			return_reg_error_response(z, w, r, u, http_401_unauthorized,
+			return_reg_error_response(z, w, r, u,
+				http_401_unauthorized,
 				[][2]string{
 					message_Bad_csrf_tokens,
 				})
@@ -861,13 +880,15 @@ func grant_access_with_error_return(z *registrar, w http.ResponseWriter, r *http
 		return u
 	}
 
-	// Check the pool given a pool-name.
+	// Check the pool given a pool name.  A FAILURE OF CHECKS MEANS
+	// SOMEONE MIGHT HAVE FORGED A REQUEST.
 
 	if !check_pool_naming(pool) {
-		slogger.Debug("Reg() Bad pool", "uid", uid, "pool", pool)
-		return_reg_error_response(z, w, r, u, http_401_unauthorized,
+		slogger.Error("Reg() Bad pool name", "uid", uid, "pool", pool)
+		return_reg_error_response(z, w, r, u,
+			http_401_unauthorized,
 			[][2]string{
-				message_Bad_pool,
+				message_No_pool,
 				{"pool", pool},
 			})
 		return nil
@@ -875,30 +896,50 @@ func grant_access_with_error_return(z *registrar, w http.ResponseWriter, r *http
 
 	var pooldata = get_pool(z.table, pool)
 	if pooldata == nil {
-		slogger.Debug("Reg() No pool", "uid", uid, "pool", pool)
-		return_reg_error_response(z, w, r, u, http_401_unauthorized,
+		slogger.Error("Reg() No pool", "uid", uid, "pool", pool)
+		return_reg_error_response(z, w, r, u,
+			http_401_unauthorized,
 			[][2]string{
 				message_No_pool,
 				{"pool", pool},
 			})
 		return nil
 	}
+
 	if pooldata.Owner_uid != u.Uid {
-		slogger.Debug("Reg() Not pool owner", "uid", uid, "pool", pool)
-		return_reg_error_response(z, w, r, u, http_401_unauthorized,
+		slogger.Error("Reg() Not pool owner",
+			"uid", uid, "pool", pool)
+		return_reg_error_response(z, w, r, u,
+			http_401_unauthorized,
 			[][2]string{
-				message_Not_pool_owner,
+				message_No_pool,
 				{"pool", pool},
 			})
 		return nil
 	}
 
-	var DO_CHECK_POOL_STATE = false //AHOAHOAHO
-	if pool != "" && DO_CHECK_POOL_STATE {
-		if !check_pool_state(z.table, pool) {
-			//return nil
-		}
+	var state, reason = check_pool_state(z.table, pool)
+	switch state {
+	case pool_state_INITIAL, pool_state_READY:
+		// OK.
+	case pool_state_SUSPENDED:
+		// OK.
+	case pool_state_DISABLED, pool_state_INOPERABLE:
+		slogger.Debug("Reg() Bad pool state", "pool", pool,
+			"state", state, "reason", reason)
+		return_reg_error_response(z, w, r, u,
+			http_401_unauthorized,
+			[][2]string{
+				message_Bad_pool_state,
+				{"pool", pool},
+				{"state", string(state)},
+				{"reason", string(reason)},
+			})
+		return nil
+	default:
+		panic(nil)
 	}
+
 	return u
 }
 
@@ -947,13 +988,15 @@ func check_user_account(z *registrar, uid string, firstsession bool) *user_recor
 
 	// Regiter a new user record.
 
-	var u2 = register_new_user(z, uid, firstsession)
+	var u2 = enroll_new_user(z, uid, firstsession)
 	return u2
 }
 
-// REGISTER_NEW_USER registers a user at an access to the registrar.
-// It checks the unix account.  The new record has empty groups.
-func register_new_user(z *registrar, uid string, firstsession bool) *user_record {
+// ENROLL_NEW_USER registers a user at an access to Registrar.  It
+// adds a user record with Ephemeral=true.  It checks the existence of
+// the unix account.  The new record has empty groups.  It doesn't
+// care races in adding a new record.
+func enroll_new_user(z *registrar, uid string, firstsession bool) *user_record {
 	var conf = &z.conf.Registrar
 	var approving = (conf.User_approval == user_default_allow && firstsession)
 	assert_fatal(approving)
@@ -997,8 +1040,6 @@ func register_new_user(z *registrar, uid string, firstsession bool) *user_record
 	}
 
 	slogger.Warn("Reg() Enroll a user automatically", "uid", uid)
-
-	// It doesn't care races...
 
 	assert_fatal(conf.User_expiration_days > 0)
 	var days = conf.User_expiration_days
@@ -1051,39 +1092,6 @@ func make_csrf_tokens(z *registrar, uid string) *csrf_token_record {
 	//var x = get_csrf_token(z.table, uid)
 	//fmt.Println("make_csrf_tokens=", x)
 	return data
-}
-
-func check_pool_state(t *keyval_table, pool string) bool {
-	var reject_initial_state = false
-	//AHOAHOAHO var state, _ = update_pool_state(t, pool, awakeduration)
-	var state = pool_state_INITIAL //AHOAHOAHO
-	switch state {
-	case pool_state_INITIAL:
-		if reject_initial_state {
-			slogger.Error("Reg() Pool in initial state", "pool", pool)
-			return false
-		}
-	case pool_state_READY:
-		// Skip.
-	case pool_state_SUSPENDED:
-		return false
-	case pool_state_DISABLED:
-		return false
-	case pool_state_INOPERABLE:
-		return false
-	default:
-		panic(nil)
-	}
-	return true
-}
-
-func check_pool_owner__(t *keyval_table, uid string, pool string) bool {
-	var pooldata = get_pool(t, pool)
-	if pooldata != nil && pooldata.Owner_uid == uid {
-		return true
-	} else {
-		return false
-	}
 }
 
 // CHECK_MAKE_POOL_ARGUMENTS checks the entires of buckets_directory
@@ -1179,7 +1187,8 @@ func check_empty_arguments_with_error_return(z *registrar, w http.ResponseWriter
 		if z.verbose && err1 == nil {
 			slogger.Debug("Reg() Garbage in request body")
 		}
-		return_reg_error_response(z, w, r, u, http_400_bad_request,
+		return_reg_error_response(z, w, r, u,
+			http_400_bad_request,
 			[][2]string{
 				message_Arguments_not_empty,
 			})
@@ -1193,7 +1202,8 @@ func check_bucket_owner_with_error_return(z *registrar, w http.ResponseWriter, r
 	}
 	var b *bucket_record = get_bucket(z.table, bucket)
 	if b == nil {
-		return_reg_error_response(z, w, r, u, http_404_not_found,
+		return_reg_error_response(z, w, r, u,
+			http_404_not_found,
 			[][2]string{
 				message_No_bucket,
 				{"bucket", bucket},
@@ -1201,7 +1211,8 @@ func check_bucket_owner_with_error_return(z *registrar, w http.ResponseWriter, r
 		return false
 	}
 	if b.Pool != pool {
-		return_reg_error_response(z, w, r, u, http_401_unauthorized,
+		return_reg_error_response(z, w, r, u,
+			http_401_unauthorized,
 			[][2]string{
 				message_Not_bucket_owner,
 				{"bucket", bucket},
@@ -1214,7 +1225,8 @@ func check_bucket_owner_with_error_return(z *registrar, w http.ResponseWriter, r
 func check_bucket_naming_with_error_return(z *registrar, w http.ResponseWriter, r *http.Request, u *user_record, bucket string) bool {
 	var ok = check_bucket_naming(bucket)
 	if !ok {
-		return_reg_error_response(z, w, r, u, http_400_bad_request,
+		return_reg_error_response(z, w, r, u,
+			http_400_bad_request,
 			[][2]string{
 				message_Bad_bucket,
 				{"bucket", bucket},
@@ -1229,7 +1241,8 @@ func check_secret_owner_with_error_return(z *registrar, w http.ResponseWriter, r
 	}
 	var b *secret_record = get_secret(z.table, secret)
 	if b == nil {
-		return_reg_error_response(z, w, r, u, http_404_not_found,
+		return_reg_error_response(z, w, r, u,
+			http_404_not_found,
 			[][2]string{
 				message_No_secret,
 				{"secret", secret},
@@ -1237,7 +1250,8 @@ func check_secret_owner_with_error_return(z *registrar, w http.ResponseWriter, r
 		return false
 	}
 	if b.Pool != pool {
-		return_reg_error_response(z, w, r, u, http_401_unauthorized,
+		return_reg_error_response(z, w, r, u,
+			http_401_unauthorized,
 			[][2]string{
 				message_Not_secret_owner,
 				{"secret", secret},
@@ -1250,7 +1264,8 @@ func check_secret_owner_with_error_return(z *registrar, w http.ResponseWriter, r
 func check_access_key_naming_with_error_return(z *registrar, w http.ResponseWriter, r *http.Request, u *user_record, secret string) bool {
 	var ok = check_access_key_naming(secret)
 	if !ok {
-		return_reg_error_response(z, w, r, u, http_400_bad_request,
+		return_reg_error_response(z, w, r, u,
+			http_400_bad_request,
 			[][2]string{
 				message_Bad_secret,
 				{"secret", secret},
@@ -1264,7 +1279,8 @@ type checker_fn func(z *registrar, u *user_record, pool string, data any) reg_er
 func decode_request_body_with_error_return(z *registrar, w http.ResponseWriter, r *http.Request, u *user_record, pool string, opr string, data any, check checker_fn) bool {
 	var ok1 = decode_request_body(z, r, data)
 	if !ok1 {
-		return_reg_error_response(z, w, r, u, http_400_bad_request,
+		return_reg_error_response(z, w, r, u,
+			http_400_bad_request,
 			[][2]string{
 				message_Bad_body_encoding,
 				{"op", opr},
@@ -1273,7 +1289,8 @@ func decode_request_body_with_error_return(z *registrar, w http.ResponseWriter, 
 	}
 	var msg = check(z, u, pool, data)
 	if msg != nil {
-		return_reg_error_response(z, w, r, u, http_400_bad_request,
+		return_reg_error_response(z, w, r, u,
+			http_400_bad_request,
 			msg)
 		return false
 	}
@@ -1594,7 +1611,7 @@ func return_json_repsonse(z *registrar, w http.ResponseWriter, rqst *http.Reques
 	if ok {
 		wf.Flush()
 	}
-	log_reg_access_by_request(rqst, 200, int64(len(v1)), u.Uid)
+	log_reg_access_by_request(rqst, 200, int64(len(v1)), u.Uid, "_")
 	return
 }
 
@@ -1616,5 +1633,5 @@ func return_reg_error_response(z *registrar, w http.ResponseWriter, rqst *http.R
 	delay_sleep(z.conf.Registrar.Error_response_delay_ms)
 	http.Error(w, string(b1), code)
 	//log_access_with_user(rspn, u.Uid)
-	log_reg_access_by_request(rqst, code, int64(len(b1)), u.Uid)
+	log_reg_access_by_request(rqst, code, int64(len(b1)), u.Uid, "-")
 }

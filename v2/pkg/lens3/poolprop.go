@@ -6,22 +6,22 @@
 package lens3
 
 import (
-	// "fmt"
-	// "flag"
-	// "context"
-	// "io"
-	// "log"
-	// "os"
-	// "net"
-	// "net/http"
-	// "net/http/httputil"
-	// "net/url"
-	// "math/big"
-	// "strings"
-	"time"
-	// "runtime"
-	// "slices"
-	"os/user"
+// "fmt"
+// "flag"
+// "context"
+// "io"
+// "log"
+// "os"
+// "net"
+// "net/http"
+// "net/http/httputil"
+// "net/url"
+// "math/big"
+// "strings"
+// "time"
+// "runtime"
+// "slices"
+// "os/user"
 )
 
 // POOL_PROP is a description of a pool, a merge of the properties in
@@ -107,99 +107,4 @@ func gather_secrets(t *keyval_table, pool string) []*secret_record {
 	//return (big.NewInt(x.Timestamp).Cmp(big.NewInt(y.Timestamp)))
 	//})
 	return keys1
-}
-
-// UPDATE_POOL_STATE checks the changes of user and pool settings, and
-// updates the state of the pool.  It returns a pair of a state and a
-// reason.  This code should be called in the course of access
-// checking.
-func update_pool_state(t *keyval_table, pool string, awakeduration int64) (pool_state, pool_reason) {
-	var pooldata = get_pool(t, pool)
-	if pooldata == nil {
-		return pool_state_INOPERABLE, pool_reason_POOL_REMOVED
-	}
-	var state *pool_state_record = get_pool_state(t, pool)
-	if state == nil {
-		slogger.Error("Pool state not found", "pool", pool)
-		return pool_state_INOPERABLE, pool_reason_POOL_REMOVED
-	}
-
-	// Check a state transition.
-
-	switch state.State {
-	case pool_state_INOPERABLE:
-		return state.State, state.Reason
-	case pool_state_INITIAL:
-	case pool_state_READY:
-	case pool_state_SUSPENDED:
-	case pool_state_DISABLED:
-	default:
-		panic(nil)
-	}
-
-	var uid = pooldata.Owner_uid
-	var active, _ = check_user_is_active(t, uid)
-	var expiration = time.Unix(pooldata.Expiration_time, 0)
-	var unexpired = time.Now().Before(expiration)
-	var online = pooldata.Online_status
-	if !(active && unexpired && online) {
-		if state.State == pool_state_DISABLED {
-			return state.State, state.Reason
-		} else {
-			state.State = pool_state_DISABLED
-			if !active {
-				state.Reason = pool_reason_USER_INACTIVE
-			} else if !unexpired {
-				state.Reason = pool_reason_POOL_EXPIRED
-			} else if !online {
-				state.Reason = pool_reason_POOL_OFFLINE
-			} else {
-				state.Reason = pool_reason_NORMAL
-			}
-			set_pool_state(t, pool, state.State, state.Reason)
-			return state.State, state.Reason
-		}
-	}
-
-	if state.State == pool_state_SUSPENDED {
-		var duration = (time.Duration(awakeduration/3) * time.Second)
-		var resume = time.Unix(state.Timestamp, 0).Add(duration)
-		if resume.Before(time.Now()) {
-			state.State = pool_state_INITIAL
-			state.Reason = pool_reason_NORMAL
-			set_pool_state(t, pool, state.State, state.Reason)
-		}
-	}
-
-	if state.State == pool_state_DISABLED {
-		state.State = pool_state_INITIAL
-		state.Reason = pool_reason_NORMAL
-		set_pool_state(t, pool, state.State, state.Reason)
-	}
-	return state.State, state.Reason
-}
-
-func check_user_is_active(t *keyval_table, uid string) (bool, error_message) {
-	var now int64 = time.Now().Unix()
-	var ui = get_user(t, uid)
-	if ui == nil {
-		slogger.Warn("User not found", "user", uid)
-		return false, message_user_not_registered
-	}
-	if !ui.Enabled || ui.Expiration_time < now {
-		return false, message_user_disabled
-	}
-
-	var _, err1 = user.Lookup(uid)
-	if err1 != nil {
-		switch err1.(type) {
-		case user.UnknownUserError:
-		default:
-		}
-		slogger.Warn("user.Lookup() fails", "user", uid, "err", err1)
-		return false, message_no_user_account
-	}
-	// (uu.Uid : string, uu.Gid : string)
-
-	return true, error_message{}
 }

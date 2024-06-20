@@ -37,8 +37,8 @@ type keyval_table struct {
 
 const limit_of_id_generation_loop = 30
 
-// Prefixes attached to db keys.  The records in values are associated
-// to these prefixes.
+// Prefixes attached to db keys.  The records of values corresponds to
+// these prefixes.
 const (
 	db_conf_prefix       = "cf:"
 	db_user_data_prefix  = "uu:"
@@ -138,8 +138,25 @@ type pool_record struct {
 	Timestamp         int64  `json:"timestamp"`
 }
 
+// "de:" + pool-name Entry (DB_BACKEND_DATA_PREFIX).  A pair of
+// root_access and root_secret is a credential for accessing a
+// backend.  A state ranges only in a subset {pool_state_READY,
+// pool_state_SUSPENDED}.  Timestamp is a start time.  Constraint:
+// (key≡backend_record.Pool).
+type backend_record struct {
+	Pool        string     `json:"pool"`
+	Backend_ep  string     `json:"backend_ep"`
+	Backend_pid int        `json:"backend_pid"`
+	State       pool_state `json:"state"`
+	Root_access string     `json:"root_access"`
+	Root_secret string     `json:"root_secret"`
+	Mux_ep      string     `json:"mux_ep"`
+	Mux_pid     int        `json:"mux_pid"`
+	Timestamp   int64      `json:"timestamp"`
+}
+
 // "dx:" + pool-name Entry (DB_BACKEND_EXCLUSION_PREFIX).  This entry
-// is a temporarily created mutex to run a single backend.
+// is temporarily created to mutex to run a single backend.
 type backend_exclusion_record struct {
 	Mux_ep    string `json:"mux_ep"`
 	Timestamp int64  `json:"timestamp"`
@@ -152,21 +169,6 @@ type pool_state_record struct {
 	State     pool_state  `json:"state"`
 	Reason    pool_reason `json:"reason"`
 	Timestamp int64       `json:"timestamp"`
-}
-
-// "de:" + pool-name Entry (DB_BACKEND_DATA_PREFIX).  A pair of
-// root_access and root_secret is a credential for accessing a
-// backend.  Timestamp is a start time.  Constraint:
-// (key≡backend_record.Pool).
-type backend_record struct {
-	Pool        string `json:"pool"`
-	Backend_ep  string `json:"backend_ep"`
-	Backend_pid int    `json:"backend_pid"`
-	Root_access string `json:"root_access"`
-	Root_secret string `json:"root_secret"`
-	Mux_ep      string `json:"mux_ep"`
-	Mux_pid     int    `json:"mux_pid"`
-	Timestamp   int64  `json:"timestamp"`
 }
 
 // "bd:" + directory Entry (DB_DIRECTORY_PREFIX).  Constraint:
@@ -271,7 +273,7 @@ const (
 // POOL_REASON is a set of reasons of state transitions.  It may
 // include other messages from a backend server.  POOL_REMOVED is not
 // stored in the state of a pool.  EXEC_FAILED and SETUP_FAILED will
-// be appended to another reason.
+// be appended with a specific reason.
 type pool_reason string
 
 const (
@@ -281,20 +283,20 @@ const (
 
 	/* Reasons for SUSPENDED are: */
 
-	pool_reason_BACKEND_BUSY pool_reason = "backend busy"
+	pool_reason_SERVER_BUSY pool_reason = "server busy"
 
 	/* Reasons for DISABLED are: */
 
-	pool_reason_POOL_EXPIRED  pool_reason = "pool expired"
 	pool_reason_USER_INACTIVE pool_reason = "user inactive"
+	pool_reason_POOL_EXPIRED  pool_reason = "pool expired"
 	pool_reason_POOL_OFFLINE  pool_reason = "pool offline"
 
 	/* Reasons for INOPERABLE are: */
 
 	pool_reason_POOL_REMOVED pool_reason = "pool removed"
-	//pool_reason_USER_REMOVED pool_reason = "user removed"
 	pool_reason_EXEC_FAILED  pool_reason = "start failed: "
 	pool_reason_SETUP_FAILED pool_reason = "initialization failed: "
+	//pool_reason_USER_REMOVED pool_reason = "user removed"
 
 	// Other reasons are exceptions and messages from a backend.
 
@@ -365,10 +367,12 @@ func raise_on_marshaling_error(err error) {
 	if err != nil {
 		slogger.Error("json.Marshal() on db entry failed", "err", err)
 		raise(&proxy_exc{
+			"-",
 			http_500_internal_server_error,
 			[][2]string{
 				message_bad_db_entry,
-			}})
+			},
+		})
 	}
 }
 
@@ -377,6 +381,7 @@ func raise_on_set_error(w *redis.StatusCmd) {
 	if err != nil {
 		slogger.Error("db-set() failed", "err", err)
 		raise(&proxy_exc{
+			"-",
 			http_500_internal_server_error,
 			[][2]string{
 				message_bad_db_entry,
@@ -389,6 +394,7 @@ func raise_on_setnx_error(w *redis.BoolCmd) {
 	if err != nil {
 		slogger.Error("db-setnx() failed", "err", err)
 		raise(&proxy_exc{
+			"-",
 			http_500_internal_server_error,
 			[][2]string{
 				message_bad_db_entry,
@@ -403,6 +409,7 @@ func raise_on_get_error(w *redis.StringCmd) {
 	if err != nil && err != redis.Nil {
 		slogger.Error("db-get() failed", "err", err)
 		raise(&proxy_exc{
+			"-",
 			http_500_internal_server_error,
 			[][2]string{
 				message_bad_db_entry,
@@ -415,6 +422,7 @@ func check_on_del_failure(w *redis.IntCmd) bool {
 	if err != nil {
 		slogger.Error("db-del() failed", "err", err)
 		raise(&proxy_exc{
+			"-",
 			http_500_internal_server_error,
 			[][2]string{
 				message_bad_db_entry,
@@ -428,6 +436,7 @@ func raise_on_del_failure(w *redis.IntCmd) {
 	if err != nil {
 		slogger.Error("db-del() failed", "err", err)
 		raise(&proxy_exc{
+			"-",
 			http_500_internal_server_error,
 			[][2]string{
 				message_bad_db_entry,
@@ -436,6 +445,7 @@ func raise_on_del_failure(w *redis.IntCmd) {
 	if n != 1 {
 		slogger.Error("db-del() no entry")
 		raise(&proxy_exc{
+			"-",
 			http_500_internal_server_error,
 			[][2]string{
 				message_bad_db_entry,
@@ -450,6 +460,7 @@ func check_on_expire_failure(w *redis.BoolCmd) bool {
 	if err != nil {
 		slogger.Error("db-expire() failed", "err", err)
 		raise(&proxy_exc{
+			"-",
 			http_500_internal_server_error,
 			[][2]string{
 				message_bad_db_entry,
@@ -547,6 +558,7 @@ func add_user(t *keyval_table, u *user_record) {
 			slogger.Error("Bad conflicting uid claims",
 				"claim", claim, "uid1", uid, "uid2", claiminguser.Uid)
 			raise(&proxy_exc{
+				"-",
 				http_500_internal_server_error,
 				[][2]string{
 					message_user_account_conflict,
@@ -1143,7 +1155,9 @@ func load_db_data(w *redis.StringCmd, data any) bool {
 			return false
 		} else {
 			slogger.Error("Bad value in the keyval-db", "err", err1)
-			raise(&proxy_exc{http_500_internal_server_error,
+			raise(&proxy_exc{
+				"-",
+				http_500_internal_server_error,
 				[][2]string{
 					message_bad_db_entry,
 				}})
@@ -1165,6 +1179,7 @@ func load_db_data(w *redis.StringCmd, data any) bool {
 	if err2 != nil {
 		slogger.Error("json.Decode failed", "err", err2)
 		raise(&proxy_exc{
+			"-",
 			http_500_internal_server_error,
 			[][2]string{
 				message_bad_db_entry,

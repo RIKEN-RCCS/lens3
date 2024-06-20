@@ -232,13 +232,15 @@ func configure_manager(w *manager, m *multiplexer, t *keyval_table, q chan vacuo
 	w.factory.configure(c)
 }
 
-// INITIALIZE_BACKEND_DELEGATE initializes the super part of a backend.
+// INITIALIZE_BACKEND_DELEGATE initializes the super part of a
+// backend.  The ep and pid of a backend are set later.
 func initialize_backend_delegate(w *manager, proc *backend_delegate, pooldata *pool_record) {
 	proc.pool_record = *pooldata
 	proc.be = &backend_record{
 		Pool:        pooldata.Pool,
 		Backend_ep:  "",
 		Backend_pid: 0,
+		State:       pool_state_READY,
 		Root_access: generate_access_key(),
 		Root_secret: generate_secret_key(),
 		Mux_ep:      w.multiplexer.mux_ep,
@@ -294,6 +296,9 @@ func start_backend(w *manager, pool string) backend {
 }
 
 // START_BACKEND_IN_MUTEXED starts a backend, trying available ports.
+// It fails when all ports are tried and failed.  In that case, a
+// dummy backend record is stored in the keyval-db, to block a backend
+// from further starting for a while.
 func start_backend_in_mutexed(w *manager, pool string) backend {
 	//fmt.Println("start_backend()")
 	//delete_backend(w.table, pool)
@@ -311,6 +316,7 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 
 	var proc *backend_delegate = d.get_super_part()
 	initialize_backend_delegate(w, proc, pooldata)
+	var be *backend_record = proc.be
 
 	// The following fields are set in starting a backend: {proc.cmd,
 	// proc.ch_stdio, proc.ch_quit_backend}
@@ -367,21 +373,38 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 
 		d.establish()
 
-		make_absent_buckets_in_backend(w, proc.be)
+		make_absent_buckets_in_backend(w, be)
 
 		go ping_backend(w, d)
 
 		var now int64 = time.Now().Unix()
-		proc.be.Timestamp = now
-		set_backend(w.table, proc.Pool, proc.be)
+		be.Timestamp = now
+		set_backend(w.table, pool, be)
 		return d
 	}
 
 	// All ports are tried and failed.
 
 	slogger.Warn(w.MuxEP+" A backend SUSPENDED (no ports)", "pool", pool)
+
+	var now int64 = time.Now().Unix()
+	var dummy = &backend_record{
+		Pool:        pool,
+		Backend_ep:  "",
+		Backend_pid: 0,
+		State:       pool_state_SUSPENDED,
+		Root_access: "",
+		Root_secret: "",
+		Mux_ep:      w.multiplexer.mux_ep,
+		Mux_pid:     w.multiplexer.mux_pid,
+		Timestamp:   now,
+	}
+	var expiry = int64(proc.Backend_awake_duration / 3)
+	set_backend(w.table, pool, dummy)
+	set_backend_expiry(w.table, proc.Pool, expiry)
+
 	var state = pool_state_SUSPENDED
-	var reason = pool_reason_BACKEND_BUSY
+	var reason = pool_reason_SERVER_BUSY
 	set_pool_state(w.table, pool, state, reason)
 	return nil
 }

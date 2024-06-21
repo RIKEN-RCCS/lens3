@@ -230,14 +230,14 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 
 		var authenticated, err1 = check_authenticated(m, r)
 		if err1 != nil {
-			return_mux_response_by_error(m, w, r, err1)
+			return_mux_error_response(m, w, r, err1)
 			return
 		}
 		var auth = ITE(authenticated != nil, authenticated.Access_key, "-")
 
 		var bucket, err2 = check_bucket_in_path(m, w, r, auth)
 		if err2 != nil {
-			return_mux_response_by_error(m, w, r, err2)
+			return_mux_error_response(m, w, r, err2)
 			return
 		}
 
@@ -259,7 +259,7 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 					message_access_rejected,
 				},
 			}
-			return_mux_response_by_error(m, w, r, err4)
+			return_mux_error_response(m, w, r, err4)
 			// return_mux_response(m, w, r,
 			//  http_400_bad_request,
 			// 	[][2]string{
@@ -275,7 +275,7 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 					message_bucket_listing_forbidden,
 				},
 			}
-			return_mux_response_by_error(m, w, r, err5)
+			return_mux_error_response(m, w, r, err5)
 			// return_mux_response(m, w, r,
 			//  http_403_forbidden,
 			// 	[][2]string{
@@ -534,7 +534,7 @@ func ensure_backend_running(m *multiplexer, w http.ResponseWriter, r *http.Reque
 					message_cannot_start_backend,
 				},
 			}
-			return_mux_response_by_error(m, w, r, err1)
+			return_mux_error_response(m, w, r, err1)
 			// return_mux_response(m, w, r,
 			// 	http_500_internal_server_error,
 			// 	[][2]string{
@@ -553,7 +553,7 @@ func ensure_backend_running(m *multiplexer, w http.ResponseWriter, r *http.Reque
 				message_backend_not_running,
 			},
 		}
-		return_mux_response_by_error(m, w, r, err2)
+		return_mux_error_response(m, w, r, err2)
 		// return_mux_response(m, w, r,
 		// 	http_500_internal_server_error,
 		// 	[][2]string{
@@ -576,7 +576,7 @@ func ensure_pool_existence(m *multiplexer, w http.ResponseWriter, r *http.Reques
 				message_nonexisting_pool,
 			},
 		}
-		return_mux_response_by_error(m, w, r, err1)
+		return_mux_error_response(m, w, r, err1)
 		// return_mux_response(m, w, r,
 		//  http_404_not_found,
 		// 	[][2]string{
@@ -597,7 +597,7 @@ func ensure_user_is_active(m *multiplexer, w http.ResponseWriter, r *http.Reques
 				reason,
 			},
 		}
-		return_mux_response_by_error(m, w, r, err1)
+		return_mux_error_response(m, w, r, err1)
 		// return_mux_response(m, w, r,
 		//  http_401_unauthorized,
 		// 	[][2]string{
@@ -620,15 +620,15 @@ func ensure_frontend_proxy_trusted(m *multiplexer, w http.ResponseWriter, r *htt
 			"-",
 			http_500_internal_server_error,
 			[][2]string{
-				//message_Proxy_untrusted,
+				//message_proxy_untrusted,
 				message_access_rejected,
 			},
 		}
-		return_mux_response_by_error(m, w, r, err1)
+		return_mux_error_response(m, w, r, err1)
 		// return_mux_response(m, w, r,
 		//  http_500_internal_server_error,
 		// 	[][2]string{
-		// 		message_Proxy_untrusted,
+		// 		message_proxy_untrusted,
 		// 	})
 		return false
 	}
@@ -670,7 +670,7 @@ func ensure_bucket_not_expired(m *multiplexer, w http.ResponseWriter, r *http.Re
 				message_bucket_expired,
 			},
 		}
-		return_mux_response_by_error(m, w, r, err1)
+		return_mux_error_response(m, w, r, err1)
 		// return_mux_response(m, w, r,
 		// 	http_400_bad_request,
 		// 	[][2]string{
@@ -690,7 +690,7 @@ func ensure_bucket_owner(m *multiplexer, w http.ResponseWriter, r *http.Request,
 				message_not_authorized,
 			},
 		}
-		return_mux_response_by_error(m, w, r, err1)
+		return_mux_error_response(m, w, r, err1)
 		// return_mux_response(m, w, r,
 		//  http_401_unauthorized,
 		// 	[][2]string{
@@ -716,7 +716,7 @@ func ensure_pool_state(m *multiplexer, w http.ResponseWriter, r *http.Request, p
 				message_pool_suspended,
 			},
 		}
-		return_mux_response_by_error(m, w, r, err1)
+		return_mux_error_response(m, w, r, err1)
 		// return_mux_response(m, w, r,
 		// 	http_503_service_unavailable,
 		// 	[][2]string{
@@ -733,7 +733,7 @@ func ensure_pool_state(m *multiplexer, w http.ResponseWriter, r *http.Request, p
 				message_pool_disabled,
 			},
 		}
-		return_mux_response_by_error(m, w, r, err2)
+		return_mux_error_response(m, w, r, err2)
 		// return_mux_response(m, w, r,
 		// 	http_403_forbidden,
 		// 	[][2]string{
@@ -750,7 +750,7 @@ func ensure_pool_state(m *multiplexer, w http.ResponseWriter, r *http.Request, p
 				message_pool_inoperable,
 			},
 		}
-		return_mux_response_by_error(m, w, r, err3)
+		return_mux_error_response(m, w, r, err3)
 		// return_mux_response(m, w, r,
 		// 	http_500_internal_server_error,
 		// 	[][2]string{
@@ -793,7 +793,7 @@ func ensure_permission_by_secret(m *multiplexer, w http.ResponseWriter, r *http.
 				message_no_permission,
 			},
 		}
-		return_mux_response_by_error(m, w, r, err1)
+		return_mux_error_response(m, w, r, err1)
 		// return_mux_response(m, w, r,
 		// 	http_403_forbidden,
 		// 	[][2]string{
@@ -832,7 +832,7 @@ func ensure_permission_by_bucket(m *multiplexer, w http.ResponseWriter, r *http.
 				message_no_permission,
 			},
 		}
-		return_mux_response_by_error(m, w, r, err1)
+		return_mux_error_response(m, w, r, err1)
 		// return_mux_response(m, w, r,
 		// 	http_403_forbidden,
 		// 	[][2]string{
@@ -871,7 +871,7 @@ func pick_bucket_in_path(m *multiplexer, r *http.Request, auth string) (string, 
 //func return_mux_response(m *multiplexer, w http.ResponseWriter,
 //	r *http.Request, code int, message [][2]string)
 
-func return_mux_response_by_error(m *multiplexer, w http.ResponseWriter, r *http.Request, err error) {
+func return_mux_error_response(m *multiplexer, w http.ResponseWriter, r *http.Request, err error) {
 	switch err1 := err.(type) {
 	default:
 		slogger.Error(m.MuxEP+" Unexpected error (internal)", "err", err)
@@ -1042,6 +1042,7 @@ func check_user_is_active(t *keyval_table, uid string) (bool, error_message) {
 		switch err1.(type) {
 		case user.UnknownUserError:
 		default:
+			slogger.Error("user.Lookup() Bad error", "user", uid, "err", err1)
 		}
 		slogger.Warn("user.Lookup() fails", "user", uid, "err", err1)
 		return false, message_no_user_account

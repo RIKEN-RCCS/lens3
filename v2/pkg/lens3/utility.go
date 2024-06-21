@@ -7,7 +7,6 @@ package lens3
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -23,6 +22,7 @@ import (
 	"strings"
 	"time"
 	//"context"
+	//"errors"
 	//"github.com/go-redis/redis/v8"
 	//"log"
 	//"log/syslog"
@@ -376,17 +376,21 @@ func check_int_in_ranges(pairs [][2]int, v int) bool {
 	return false
 }
 
-var garbage_in_input_stream_error = errors.New("garbage_in_stream")
-
-// CHECK_STREAM_EOF checks is the input stream is empty.  It returns
-// nil on EOF.  IT READS ONE BYTE.
+// CHECK_STREAM_EOF checks is the input stream is empty.  It actually
+// reads the stream.  It returns an error if garbage is in the stream.
+// Note that checking by reading zero bytes ([]byte{}) is not
+// accurate.
 func check_stream_eof(is io.Reader) error {
-	var _, err2 = is.Read([]byte{9})
-	if err2 == io.EOF {
+	var b = make([]byte, 1024)
+	var n, err1 = is.Read(b)
+	if n == 0 && err1 == io.EOF {
 		return nil
-	} else {
-		return ITE(err2 != nil, err2, garbage_in_input_stream_error)
 	}
+	if err1 != nil {
+		return err1
+	}
+	var err2 = fmt.Errorf("Garbage-in-request: %q", string(b[:n]))
+	return err2
 }
 
 func check_frontend_proxy_trusted(trusted []net.IP, peer string) bool {

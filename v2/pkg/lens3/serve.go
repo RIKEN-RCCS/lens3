@@ -130,7 +130,7 @@ func start_lenticularis_service(confpath string, services [2]string) {
 	configure_logger(logconf, ch_quit_service)
 	handle_unix_signals(t, ch_quit_service)
 
-	slogger.Info("Lens3", "version", lens3_version,
+	slogger.Info("Lenticularis-S3", "version", lens3_version,
 		"golang.version", runtime.Version())
 
 	var wg sync.WaitGroup

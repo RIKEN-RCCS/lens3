@@ -1,4 +1,4 @@
-"""Lens3-Api Client."""
+"""Lens3-Registrar Client."""
 
 # Copyright 2022-2024 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
@@ -75,27 +75,30 @@ def _verbose_print(*args):
     pass
 
 
-class Api_Client():
+class Reg_Client():
     """Http-client.  It represents an access endpoint."""
 
     def __init__(self, client_json):
-        """Creates a Client with a client setting file.  A credential pair is
-        required in the setting.  The key part of a credential
-        determines the authentication method.
-        "mod_auth_openidc_session" is for Apache OIDC, "x-remote-user"
-        for bypassing authentication, or else for
-        basic-authentication.  Bypassing means directly connecting to
-        Lens3-Mux.  The endpoint must be a localhost for using
-        bypassing.  For basic-authentication, the key part is a user
-        name.
+        """Creates a Client with a client setting file.  A credential is
+        required in the setting, and it should be given by a pair.
+        The key part of a pair determines the authentication method.
+        There are three methods: Apache OIDC, basic authentication,
+        and no-authentication.  For Apache OIDC, the key is
+        "mod_auth_openidc_session" and a value is a cookie value.  For
+        basic authentication, a key is user name and a value is a
+        password.  For no-authentication, the key is "x-remote-user"
+        and a value is a user name.  No-authentication means directly
+        connecting to Lens3-Mux.  The endpoint must be a localhost for
+        using no-authentication.
         """
+
         self.running_host = platform.node()
         with open(client_json) as f:
             ci = json.loads(f.read())
             pass
         self.conf = ci
         self.urlopen_error_message = b""
-        self.api_ep = ci["api_ep"]
+        self.reg_ep = ci["reg_ep"]
         self.s3_ep = ci["s3_ep"]
         self.ssl_verify = ci.get("ssl_verify", True)
         self.cred_cookie = ""
@@ -120,6 +123,7 @@ class Api_Client():
         pass
 
     def do_access(self, method, path, data):
+        """Calls urlopen() with specified arguments."""
         headers = dict()
         headers.update(self.headers)
         if data is not None:
@@ -143,7 +147,7 @@ class Api_Client():
         #headers["X-REAL-IP"] = self.running_host
         #headers["X-Forwarded-For"] = self.running_host
         #headers["REMOTE-ADDR"] = self.running_host
-        url = f"{self.api_ep}{path}"
+        url = f"{self.reg_ep}{path}"
         req = Request(url, headers=headers, method=method, data=data)
         _verbose_print(f"request.headers={req.header_items()}")
         _verbose_print(f"url={url}; request={req}")
@@ -185,8 +189,8 @@ class Api_Client():
         pass
 
 
-class Lens3_Client(Api_Client):
-    """Lens3-Api client.  It defines API operations."""
+class Lens3_Client(Reg_Client):
+    """Lens3-Registrar client.  It defines Registrar operations."""
 
     bkt_policy_set = {"none", "public", "upload", "download"}
     key_policy_set = {"readwrite", "readonly", "writeonly"}
@@ -203,7 +207,7 @@ class Lens3_Client(Api_Client):
         self.home = ci.get("home")
         pass
 
-    # Lens3-Api Primitives.
+    # Lens3-Registrar Oprations.
 
     def get_user_info(self):
         path = "/user-info"
@@ -246,9 +250,9 @@ class Lens3_Client(Api_Client):
     def delete_pool(self, pool):
         assert self.csrf_token is not None
         path = f"/pool/{pool}"
-        body = dict()
-        data = json.dumps(body).encode()
-        reply = self.do_access("DELETE", path, data=data)
+        #body = dict()
+        #data = json.dumps(body).encode()
+        reply = self.do_access("DELETE", path, data=None)
         return None
 
     def make_bucket(self, pool, bucket, policy):
@@ -266,9 +270,9 @@ class Lens3_Client(Api_Client):
     def delete_bucket(self, pool, bucket):
         assert self.csrf_token is not None
         path = f"/pool/{pool}/bucket/{bucket}"
-        body = dict()
-        data = json.dumps(body).encode()
-        reply = self.do_access("DELETE", path, data=data)
+        #body = dict()
+        #data = json.dumps(body).encode()
+        reply = self.do_access("DELETE", path, data=None)
         desc = reply["pool_desc"]
         return desc
 
@@ -286,13 +290,13 @@ class Lens3_Client(Api_Client):
 
     def delete_secret(self, pool, key):
         path = f"/pool/{pool}/secret/{key}"
-        body = dict()
-        data = json.dumps(body).encode()
-        reply = self.do_access("DELETE", path, data=data)
+        #body = dict()
+        #data = json.dumps(body).encode()
+        reply = self.do_access("DELETE", path, data=None)
         desc = reply["pool_desc"]
         return desc
 
-    # Auxiliary.
+    # Auxiliary Functions.
 
     def find_pool(self, directory):
         pools = self.list_pools()
@@ -321,7 +325,7 @@ class Lens3_Client(Api_Client):
 
 
 def _main():
-    # client = Api_Client("client.json")
+    # client = Reg_Client("client.json")
     # path = "/user-info"
     # client.do_access("GET", path, data=None)
     client = Lens3_Client("client.json")

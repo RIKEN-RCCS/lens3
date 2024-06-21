@@ -71,8 +71,8 @@ const x_amz_date_layout = "20060102T150405Z"
 // CHECK_CREDENTIAL_IN_REQUEST checks the sign in an http request.  It
 // returns OK/NG and a simple reason.  It once signs a request (after
 // copying) using AWS SDK, and compares the result.
-func check_credential_in_request(q *http.Request, keypair [2]string) (bool, string) {
-	var header1 = q.Header.Get("Authorization")
+func check_credential_in_request(rqst1 *http.Request, keypair [2]string) (bool, string) {
+	var header1 = rqst1.Header.Get("Authorization")
 	//fmt.Println("*** authorization=", header1)
 	if header1 == "" {
 		//fmt.Println("*** empty authorization=", header1)
@@ -86,7 +86,7 @@ func check_credential_in_request(q *http.Request, keypair [2]string) (bool, stri
 
 	var service = auth_passed.credential[3]
 	var region = auth_passed.credential[2]
-	var datestring = fix_x_amz_date(q.Header.Get("X-Amz-Date"))
+	var datestring = fix_x_amz_date(rqst1.Header.Get("X-Amz-Date"))
 	var date, errx = time.Parse(time.RFC3339, datestring)
 	if errx != nil {
 		//fmt.Println("*** bad date=", auth_passed)
@@ -95,19 +95,19 @@ func check_credential_in_request(q *http.Request, keypair [2]string) (bool, stri
 
 	// Copy the request.  Note that Golang's copy is shallow.
 
-	var r = *q
-	r.Header = maps.Clone(q.Header)
+	var rqst2 = *rqst1
+	rqst2.Header = maps.Clone(rqst1.Header)
 
 	// Filter out except the specified headers for signing.
 
-	maps.DeleteFunc(r.Header, func(k string, v []string) bool {
+	maps.DeleteFunc(rqst2.Header, func(k string, v []string) bool {
 		return slices.Index(auth_passed.signedheaders, k) == -1
 	})
 	if slices.Index(auth_passed.signedheaders, "Content-Length") == -1 {
-		r.ContentLength = -1
+		rqst2.ContentLength = -1
 	}
 
-	//fmt.Println("*** r.Host=", r.Host)
+	rqst2.Header["Host"] = []string{rqst1.Header.Get("X-Forwarded-Host")}
 
 	var credentials = aws.Credentials{
 		AccessKeyID:     keypair[0],
@@ -117,8 +117,7 @@ func check_credential_in_request(q *http.Request, keypair [2]string) (bool, stri
 		//CanExpire bool
 		//Expires time.Time
 	}
-	var hash = r.Header.Get("X-Amz-Content-Sha256")
-	//fmt.Println("*** X-Amz-Content-Sha256=", hash)
+	var hash = rqst2.Header.Get("X-Amz-Content-Sha256")
 	if hash == "" {
 		// It is a bad idea to use a hash for an empty payload.
 		hash = empty_payload_hash_sha256
@@ -129,18 +128,33 @@ func check_credential_in_request(q *http.Request, keypair [2]string) (bool, stri
 	var timeout = time.Duration(10 * time.Second)
 	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	var err1 = s.SignHTTP(ctx, credentials, &r,
+	var err1 = s.SignHTTP(ctx, credentials, &rqst2,
 		hash, service, region, date)
 	if err1 != nil {
 		slogger.Info("Mux() signer.SignHTTP() failed", "err", err1)
-		return false, "bad-sign"
+		return false, "cannot-sign"
 	}
 
-	var header2 = r.Header.Get("Authorization")
+	var header2 = rqst2.Header.Get("Authorization")
 	var auth_forged authorization_s3v4 = scan_aws_authorization(header2)
 
 	var ok = auth_passed.signature == auth_forged.signature
 	if !ok {
+		slogger.Info("Mux() Bad authorization, signs unmatch",
+			"access-key1", auth_passed.credential[0],
+			"auth1", auth_passed, "auth2", auth_forged)
+
+		fmt.Println("*** Authorization Unmatch")
+		fmt.Printf("*** key pair=%q %q\n", keypair[0], keypair[1])
+		fmt.Printf("*** rqst1.Header=%q\n", rqst1.Header)
+		fmt.Printf("*** rqst2.Header=%q\n", rqst2.Header)
+		var headers = auth_passed.signedheaders
+		for _, h := range headers {
+			var v1 = rqst1.Header.Get(h)
+			var v2 = rqst2.Header.Get(h)
+			fmt.Printf("*** Header=%s v1=%q v2=%q\n", h, v1, v2)
+		}
+
 		return false, "bad-sign"
 	}
 	return true, ""

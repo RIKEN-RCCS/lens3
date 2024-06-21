@@ -251,7 +251,9 @@ func configure_registrar(z *registrar, t *keyval_table, qch <-chan vacuous, c *r
 }
 
 func start_registrar(z *registrar, wg *sync.WaitGroup) {
-	slogger.Debug("Reg() start_registrar()")
+	if z.verbose {
+		slogger.Debug("Reg() start_registrar()")
+	}
 
 	var router = http.NewServeMux()
 	z.server = &http.Server{
@@ -1233,10 +1235,9 @@ func check_make_secret_arguments(z *registrar, u *user_record, pool string, data
 func check_empty_arguments_with_error_return(z *registrar, w http.ResponseWriter, r *http.Request, u *user_record, pool string, opr string) bool {
 	var is = r.Body
 	var err1 = check_stream_eof(is)
-	if err1 == nil {
-		return true
-	} else {
-		slogger.Info("Reg() Garbage in request body")
+	if err1 != nil {
+		slogger.Info("Reg() Garbage after json data in request body",
+			"err", err1)
 		var err2 = &proxy_exc{
 			u.Uid,
 			http_400_bad_request,
@@ -1247,6 +1248,7 @@ func check_empty_arguments_with_error_return(z *registrar, w http.ResponseWriter
 		return_reg_error_response(z, w, r, u, err2)
 		return false
 	}
+	return true
 }
 
 func check_bucket_owner_with_error_return(z *registrar, w http.ResponseWriter, r *http.Request, u *user_record, pool string, bucket string, opr string) bool {
@@ -1347,6 +1349,9 @@ func check_access_key_naming_with_error_return(z *registrar, w http.ResponseWrit
 
 type checker_fn func(z *registrar, u *user_record, pool string, data any) reg_error_message
 
+// DECODE_REQUEST_BODY_WITH_ERROR_RETURN reads the body into the data.
+// It return true if decoding succeeds.  Any garbage after json data
+// is an error.
 func decode_request_body_with_error_return(z *registrar, w http.ResponseWriter, r *http.Request, u *user_record, pool string, opr string, data any, check checker_fn) bool {
 	var ok1 = decode_request_body(z, r, data)
 	if !ok1 {
@@ -1380,20 +1385,21 @@ func decode_request_body(z *registrar, r *http.Request, data any) bool {
 	d.DisallowUnknownFields()
 	var err1 = d.Decode(data)
 	if err1 != nil {
-		if z.verbose && err1 == nil {
-			slogger.Debug("Reg() Error in reading request body", "err", err1)
-		}
+		slogger.Debug("Reg() Error in reading request body", "err", err1)
 		return false
 	}
 	if !check_fields_filled(data) {
-		if z.verbose {
-			slogger.Debug("Reg() Unfilled entries in request body")
-		}
+		slogger.Debug("Reg() Unfilled fields in request body",
+			"data", data)
 		return false
 	}
 	// Check EOF.  Garbage data means an error.
 	var is = d.Buffered()
 	var err2 = check_stream_eof(is)
+	if err2 != nil {
+		slogger.Info("Reg() Garbage after json data in request body",
+			"err", err2)
+	}
 	return (err2 == nil)
 }
 

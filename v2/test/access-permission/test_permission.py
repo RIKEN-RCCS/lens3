@@ -15,7 +15,6 @@ sys.path.append("../lib/")
 
 from lens3_client import Lens3_Client
 from lens3_client import random_string
-# from test_api import Test_Base
 
 
 _verbose = True
@@ -113,6 +112,7 @@ class Access_Test():
         desc2 = self.client.find_pool(self.working_directory)
         bktslist = desc2["buckets"]
         for b in bktslist:
+            # _verbose_print(f";;; b={b}")
             policy = b["bkt_policy"]
             self.buckets[policy] = b["name"]
             pass
@@ -141,7 +141,6 @@ class Access_Test():
         assert len(keyslist2) == len(self.client.key_policy_set)
         # s3 = boto3.resource("s3")
         for k in keyslist2:
-            _verbose_print(f"*** key={k}")
             access2 = k["access_key"]
             secret2 = k["secret_key"]
             policy2 = k["key_policy"]
@@ -151,7 +150,9 @@ class Access_Test():
             client1 = session1.resource(
                 service_name="s3",
                 endpoint_url=self.client.s3_ep,
+                config=botocore.config.Config(signature_version="s3v4"),
                 verify=self.client.ssl_verify)
+            _verbose_print(f";;; s3-client {policy2}; {access2}, {secret2}")
             self.s3_clients[expired][policy2] = client1
             pass
         assert self.s3_clients[expired].keys() == self.client.key_policy_set
@@ -173,7 +174,7 @@ class Access_Test():
         desc3 = self.client.make_secret(self.another_pool, policy3, expiration)
         keyslist3 = [k for k in desc3["secrets"]
                      if k["expiration_time"] == expiration]
-        _verbose_print(f"*** keyslist3={keyslist3}")
+        # _verbose_print(f";;; keyslist3={keyslist3}")
         assert len(keyslist3) == 1
         k3 = keyslist3[0]
         access3 = k3["access_key"]
@@ -197,9 +198,10 @@ class Access_Test():
         with open("gomi-file0.txt", "rb") as f:
             data = f.read()
             pass
-        expired = 0
-        s3 = self.s3_clients[expired]["readwrite"]
+        unexpired = 0
+        s3 = self.s3_clients[unexpired]["readwrite"]
         for (policy, bucket) in self.buckets.items():
+            _verbose_print(f";;; Store to bucket={bucket}")
             s3.Bucket(bucket).put_object(Key="gomi-file0.txt", Body=data)
             pass
         pass

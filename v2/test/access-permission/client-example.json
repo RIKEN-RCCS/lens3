@@ -1,0 +1,10 @@
+{
+  "s3_ep": "https://lens3.example.com",
+  "reg_ep": "https://lens3.example.com/lens3.sts",
+  "gid": "some-group",
+  "home": "/home/some-user/pool-test",
+  "cred": {"mod_auth_openidc_session": "some-uuid"},
+  "ssl_verify": true,
+  "pools_count": 35,
+  "backend_duration": 900
+}

@@ -5,15 +5,14 @@
 
 package lens3
 
-// Lens3 uses Paho for MQTT v5 (although that version of Paho seems
-// not widely used).  Do not confuse Paho for v3 with v5.
+// Lens3 uses Paho for MQTT v5.  Do not confuse Paho for v3 with v5.
 
 // MQTT V3
 // https://pkg.go.dev/github.com/eclipse/paho.mqtt.golang
 // MQTT V5
 // https://pkg.go.dev/github.com/eclipse/paho.golang
 
-// MEMO: password with moqquitto
+// MEMO: Setup passwords for mosquitto
 //
 // % mosquitto_passwd -c password.txt lens3
 // % mosquitto_passwd -b password.txt lens3 password

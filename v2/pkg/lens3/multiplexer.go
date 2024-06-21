@@ -186,9 +186,11 @@ func proxy_access_addenda(m *multiplexer) func(*http.Response) error {
 		}
 		var ctx = rspn.Request.Context()
 		var x = ctx.Value("lens3-pool-auth")
-		var poolauth, _ = x.([]string)
-		//var pool = ITE(poolauth != nil, poolauth[0], "")
-		var auth = ITE(poolauth != nil, poolauth[1], "")
+		var poolauth, ok = x.([]string)
+		var auth string = ""
+		if ok {
+			auth = poolauth[1]
+		}
 		log_mux_access_by_response(rspn, auth)
 		return nil
 	}
@@ -198,9 +200,13 @@ func proxy_error_handler(m *multiplexer) func(http.ResponseWriter, *http.Request
 	return func(w http.ResponseWriter, rqst *http.Request, err error) {
 		var ctx = rqst.Context()
 		var x = ctx.Value("lens3-pool-auth")
-		var poolauth, _ = x.([]string)
-		var pool = ITE(poolauth != nil, poolauth[0], "")
-		var auth = ITE(poolauth != nil, poolauth[1], "")
+		var poolauth, ok = x.([]string)
+		var pool = ""
+		var auth = ""
+		if ok {
+			pool = poolauth[0]
+			auth = poolauth[1]
+		}
 		slogger.Error((m.MuxEP + " httputil.ReverseProxy() failed;" +
 			" Maybe a backend record outdated"), "pool", pool, "err", err)
 		//delete_backend_exclusion(m.table, pool)
@@ -233,7 +239,10 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 			return_mux_error_response(m, w, r, err1)
 			return
 		}
-		var auth = ITE(authenticated != nil, authenticated.Access_key, "-")
+		var auth string = "-"
+		if authenticated != nil {
+			auth = authenticated.Access_key
+		}
 
 		var bucket, err2 = check_bucket_in_path(m, w, r, auth)
 		if err2 != nil {
@@ -297,7 +306,10 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 
 func serve_authenticated_access(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record, secret *secret_record, proxy http.Handler) {
 	assert_fatal(bucket != nil && secret != nil)
-	var auth = ITE(secret != nil, secret.Access_key, "-")
+	var auth = "-"
+	if secret != nil {
+		auth = secret.Access_key
+	}
 	var now int64 = time.Now().Unix()
 	if !ensure_bucket_owner(m, w, r, bucket, secret, auth) {
 		return
@@ -1042,7 +1054,8 @@ func check_user_is_active(t *keyval_table, uid string) (bool, error_message) {
 		switch err1.(type) {
 		case user.UnknownUserError:
 		default:
-			slogger.Error("user.Lookup() Bad error", "user", uid, "err", err1)
+			slogger.Error("user.Lookup() returns a bad error",
+				"user", uid, "err", err1)
 		}
 		slogger.Warn("user.Lookup() fails", "user", uid, "err", err1)
 		return false, message_no_user_account

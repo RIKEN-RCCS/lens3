@@ -112,10 +112,10 @@ func (d *backend_minio) make_command_line(port int, directory string) backend_co
 // of an error with messages "level=FATAL", it diagnoses the cause of
 // the error by the first fatal message.  It returns a retry response
 // only on the port-in-use error.
-func (d *backend_minio) check_startup(stream stdio_stream, ss []string) start_result {
+func (d *backend_minio) check_startup(stream stdio_stream, ss []string) *start_result {
 	//fmt.Println("minio.check_startup(%v)", ss)
 	if stream == on_stderr {
-		return start_result{
+		return &start_result{
 			start_state: start_ongoing,
 			message:     "--",
 		}
@@ -123,7 +123,7 @@ func (d *backend_minio) check_startup(stream stdio_stream, ss []string) start_re
 	var mm, _ = decode_json(ss)
 	//fmt.Printf("mm=%T\n", mm)
 	if len(mm) == 0 {
-		return start_result{
+		return &start_result{
 			start_state: start_ongoing,
 			message:     "--",
 		}
@@ -135,12 +135,12 @@ func (d *backend_minio) check_startup(stream stdio_stream, ss []string) start_re
 		var msg = get_string(m1, "message")
 		switch {
 		case strings.HasPrefix(msg, minio_response_port_in_use):
-			return start_result{
+			return &start_result{
 				start_state: start_to_retry,
 				message:     msg,
 			}
 		default:
-			return start_result{
+			return &start_result{
 				start_state: start_failed,
 				message:     msg,
 			}
@@ -154,12 +154,12 @@ func (d *backend_minio) check_startup(stream stdio_stream, ss []string) start_re
 		if d.verbose {
 			slogger.Debug("Mux(minio) Got an expected message", "output", m3)
 		}
-		return start_result{
+		return &start_result{
 			start_state: start_started,
 			message:     m3,
 		}
 	}
-	return start_result{
+	return &start_result{
 		start_state: start_ongoing,
 		message:     "--",
 	}
@@ -259,7 +259,7 @@ func simplify_minio_mc_message(s []byte) *minio_mc_result {
 		case "error":
 			if len(mm) != 1 {
 				slogger.Warn("Mux(minio) MC-command with multiple errors",
-					"msg", mm)
+					"stdout", mm)
 			}
 			var m1 = get_string(m, "error", "cause", "error", "Code")
 			if m1 != "" {

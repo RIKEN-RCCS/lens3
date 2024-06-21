@@ -81,10 +81,11 @@ func configure_logger(logging *logging_conf, qch <-chan vacuous) {
 
 	slogger = slog.New(h1)
 
-	// Maker a logger for alerting.
+	// Make a logger for alerting.
 
 	var h2 slog.Handler = nil
 	var alert slog.Level = slog.LevelInfo
+
 	var mqtt *mqtt_client = nil
 	if strings.EqualFold(logging.Alert.Queue, "mqtt") {
 		mqtt = configure_mqtt(&logging.Mqtt, qch)

@@ -156,9 +156,9 @@ func (d *backend_rclone) make_command_line(port int, directory string) backend_c
 
 // CHECK_STARTUP decides the server state.  All rclone's messages at a
 // start are on stderr.
-func (d *backend_rclone) check_startup(stream stdio_stream, mm []string) start_result {
+func (d *backend_rclone) check_startup(stream stdio_stream, mm []string) *start_result {
 	if stream == on_stdout {
-		return start_result{
+		return &start_result{
 			start_state: start_ongoing,
 			message:     "--",
 		}
@@ -195,29 +195,29 @@ func (d *backend_rclone) check_startup(stream stdio_stream, mm []string) start_r
 		if d.verbose {
 			slogger.Debug("Mux(rclone) Got an expected message", "output", m3)
 		}
-		return start_result{
+		return &start_result{
 			start_state: start_started,
 			message:     m3,
 		}
 	}
 
-	return start_result{
+	return &start_result{
 		start_state: start_ongoing,
 		message:     "--",
 	}
 }
 
-func check_rclone_port_in_use(m string, re *regexp.Regexp) start_result {
+func check_rclone_port_in_use(m string, re *regexp.Regexp) *start_result {
 	var w1 = re.FindStringSubmatch(m)
 	assert_fatal(w1 != nil && len(w1) == 2)
 	var port_in_use = rclone_response_port_in_use_re.MatchString(w1[1])
 	if port_in_use {
-		return start_result{
+		return &start_result{
 			start_state: start_to_retry,
 			message:     m,
 		}
 	} else {
-		return start_result{
+		return &start_result{
 			start_state: start_failed,
 			message:     m,
 		}

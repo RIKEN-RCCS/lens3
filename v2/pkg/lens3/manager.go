@@ -1,4 +1,4 @@
-/* A sentinel of an S3-server process. */
+/* A sentinel of an S3 server process. */
 
 // Copyright 2022-2024 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
@@ -110,7 +110,7 @@ type backend interface {
 	// specific message.  The first argument indicates stdout or
 	// stderr by values on_stdout and on_stderr.  The passed strings
 	// are accumulated ones all from the start.
-	check_startup(stdio_stream, []string) start_result
+	check_startup(stdio_stream, []string) *start_result
 
 	// ESTABLISH does a server specific initialization at its start.
 	establish() error
@@ -340,7 +340,7 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 			continue
 		case start_failed:
 			slogger.Error(w.MuxEP+" Starting a backend failed",
-				"pool", pool, "msg", r1.message)
+				"pool", pool, "stdout", r1.message)
 			return nil
 		}
 
@@ -360,7 +360,7 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 		}()
 		if !ok {
 			slogger.Warn(w.MuxEP+" Starting a backend failed",
-				"pool", pool, "msg", "manager is in shutdown")
+				"pool", pool, "reason", "manager is in shutdown")
 			tell_stop_backend(w, d)
 			return nil
 		}
@@ -413,7 +413,7 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 // timeout.  A message from the backend is one that indicates a
 // success/failure.  Note that it changes a cancel function from
 // SIGKILL to SIGTERM to make it work with sudo.
-func try_start_backend(w *manager, d backend, port int) start_result {
+func try_start_backend(w *manager, d backend, port int) *start_result {
 	var proc = d.get_super_part()
 	var thishost, _, err1 = net.SplitHostPort(w.mux_ep)
 	if err1 != nil {
@@ -472,7 +472,7 @@ func try_start_backend(w *manager, d backend, port int) start_result {
 	var err3 = cmd.Start()
 	if err3 != nil {
 		slogger.Error("exec.Command.Start() failed", "err", err3)
-		return start_result{
+		return &start_result{
 			start_state: start_failed,
 			message:     err3.Error(),
 		}
@@ -483,7 +483,7 @@ func try_start_backend(w *manager, d backend, port int) start_result {
 
 	if proc.verbose {
 		slogger.Debug(w.MuxEP+" A backend started",
-			"pool", proc.Pool, "state", r1.start_state, "msg", r1.message)
+			"pool", proc.Pool, "state", r1.start_state, "stdout", r1.message)
 	}
 
 	assert_fatal(r1.start_state != start_ongoing)
@@ -496,7 +496,7 @@ func try_start_backend(w *manager, d backend, port int) start_result {
 // outputs too many messages, (4) reaches a timeout, (5) closes both
 // stdout+stderr.  It returns STARTED/FAILED/TO_RETRY.  It reads the
 // stdio channels as much as available.
-func wait_for_backend_come_up(w *manager, d backend) start_result {
+func wait_for_backend_come_up(w *manager, d backend) *start_result {
 	var proc *backend_delegate = d.get_super_part()
 	// fmt.Printf("WAIT_FOR_BACKEND_COME_UP() svr=%T proc=%T\n", svr, proc)
 
@@ -516,7 +516,7 @@ func wait_for_backend_come_up(w *manager, d backend) start_result {
 		select {
 		case msg1, ok1 := <-proc.ch_stdio:
 			if !ok1 {
-				return start_result{
+				return &start_result{
 					start_state: start_failed,
 					message:     "pipe closed",
 				}
@@ -572,14 +572,14 @@ func wait_for_backend_come_up(w *manager, d backend) start_result {
 				}
 			}
 			if !(len(msg_stdout) < 500 && len(msg_stderr) < 500) {
-				return start_result{
+				return &start_result{
 					start_state: start_failed,
 					message:     "stdout/stderr flooding",
 				}
 			}
 			continue
 		case <-ch_timeout:
-			return start_result{
+			return &start_result{
 				start_state: start_failed,
 				message:     "timeout",
 			}
@@ -790,9 +790,9 @@ func disgorge_stdio_to_log(w *manager, proc *backend_delegate) {
 		//var m = strings.TrimSpace(x1.string)
 		var m = x1.string
 		if x1.stdio_stream == on_stdout {
-			slogger.Info(w.MuxEP+" stdout message", "pool", pool, "msg", m)
+			slogger.Info(w.MuxEP+" stdout message", "pool", pool, "stdout", m)
 		} else {
-			slogger.Info(w.MuxEP+" stderr message", "pool", pool, "msg", m)
+			slogger.Info(w.MuxEP+" stderr message", "pool", pool, "stderr", m)
 		}
 	}
 	if proc.verbose {
@@ -806,10 +806,10 @@ func drain_start_messages_to_log(w *manager, pool string, stdouts []string, stde
 	// fmt.Println("drain_start_messages_to_log()")
 	var s string
 	for _, s = range stdouts {
-		slogger.Info(w.MuxEP+" stdout message", "pool", pool, "msg", s)
+		slogger.Info(w.MuxEP+" stdout message", "pool", pool, "stdout", s)
 	}
 	for _, s = range stderrs {
-		slogger.Info(w.MuxEP+" stderr message", "pool", pool, "msg", s)
+		slogger.Info(w.MuxEP+" stderr message", "pool", pool, "stderr", s)
 	}
 }
 

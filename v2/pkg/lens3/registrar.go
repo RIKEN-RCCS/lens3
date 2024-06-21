@@ -152,7 +152,7 @@ type secret_data_ui struct {
 	Pool            string `json:"owner"`
 	Access_key      string `json:"access_key"`
 	Secret_key      string `json:"secret_key"`
-	Secret_policy   string `json:"secret_policy"`
+	Secret_policy   string `json:"key_policy"`
 	Expiration_time int64  `json:"expiration_time"`
 	Timestamp       int64  `json:"modification_time"`
 }
@@ -259,17 +259,6 @@ func start_registrar(z *registrar, wg *sync.WaitGroup) {
 	router.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
 		slogger.Debug("Reg() GET /")
-		//	defer func() {
-		//		var x = recover()
-		//		switch e := x.(type) {
-		//		case nil:
-		//		case *proxy_exc:
-		//			fmt.Println("RECOVER!", e)
-		//			http.Error(w, e.m, e.code)
-		//		default:
-		//			http.Error(w, "BAD", http_500_internal_server_error)
-		//		}
-		//	}()
 		http.Redirect(w, r, "./ui/index.html", http.StatusSeeOther)
 	})
 
@@ -294,19 +283,21 @@ func start_registrar(z *registrar, wg *sync.WaitGroup) {
 	})
 
 	router.HandleFunc("GET /user-info", func(w http.ResponseWriter, r *http.Request) {
-		slogger.Debug("Reg() GET /user-info")
 		defer handle_registrar_exc(z, w, r)
+		slogger.Debug("Reg() GET /user-info")
 		var _ = return_user_info(z, w, r)
 	})
 
 	router.HandleFunc("GET /pool", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
+		slogger.Debug("Reg() GET /pool")
 		var _ = list_pool_and_return_response(z, w, r, "")
 	})
 
 	router.HandleFunc("GET /pool/{pool}", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
 		var pool = r.PathValue("pool")
+		slogger.Debug("Reg() GET /pool", "pool", pool)
 		var _ = list_pool_and_return_response(z, w, r, pool)
 	})
 
@@ -314,12 +305,14 @@ func start_registrar(z *registrar, wg *sync.WaitGroup) {
 
 	router.HandleFunc("POST /pool", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
+		slogger.Debug("Reg() POST /pool")
 		var _ = make_pool_and_return_response(z, w, r)
 	})
 
 	router.HandleFunc("DELETE /pool/{pool}", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
 		var pool = r.PathValue("pool")
+		slogger.Debug("Reg() DELETE /pool", "pool", pool)
 		var _ = delete_pool_and_return_response(z, w, r, pool)
 	})
 
@@ -328,6 +321,7 @@ func start_registrar(z *registrar, wg *sync.WaitGroup) {
 	router.HandleFunc("PUT /pool/{pool}/bucket", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
 		var pool = r.PathValue("pool")
+		slogger.Debug("Reg() PUT /pool/*/bucket", "pool", pool)
 		var _ = make_bucket_and_return_response(z, w, r, pool)
 	})
 
@@ -335,6 +329,8 @@ func start_registrar(z *registrar, wg *sync.WaitGroup) {
 		defer handle_registrar_exc(z, w, r)
 		var pool = r.PathValue("pool")
 		var bucket = r.PathValue("bucket")
+		slogger.Debug("Reg() DELETE /pool/*/bucket", "pool", pool,
+			"bucket", bucket)
 		var _ = delete_bucket_and_return_response(z, w, r, pool, bucket)
 	})
 
@@ -343,6 +339,7 @@ func start_registrar(z *registrar, wg *sync.WaitGroup) {
 	router.HandleFunc("POST /pool/{pool}/secret", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
 		var pool = r.PathValue("pool")
+		slogger.Debug("Reg() POST /pool/*/secret", "pool", pool)
 		var _ = make_secret_and_return_response(z, w, r, pool)
 	})
 
@@ -350,6 +347,8 @@ func start_registrar(z *registrar, wg *sync.WaitGroup) {
 		defer handle_registrar_exc(z, w, r)
 		var pool = r.PathValue("pool")
 		var secret = r.PathValue("secret")
+		slogger.Debug("Reg() DELETE /pool/*/secret", "pool", pool,
+			"secret", secret)
 		var _ = delete_secret_and_return_response(z, w, r, pool, secret)
 	})
 

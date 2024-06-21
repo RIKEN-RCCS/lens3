@@ -688,7 +688,13 @@ func set_ex_buckets_directory(t *keyval_table, path string, dir *bucket_director
 	}
 	// Race, return failure.
 	var holder = get_buckets_directory(t, path)
-	return false, ITE(holder != nil, holder.Pool, "")
+	var holder_pool string
+	if holder != nil {
+		holder_pool = holder.Pool
+	} else {
+		holder_pool = ""
+	}
+	return false, holder_pool
 }
 
 func get_buckets_directory(t *keyval_table, path string) *bucket_directory_record {
@@ -870,7 +876,13 @@ func set_ex_bucket(t *keyval_table, bucket string, data *bucket_record) (bool, s
 	}
 	// Race, return failure.
 	var holder = get_bucket(t, bucket)
-	return false, ITE(holder != nil, holder.Pool, "")
+	var holder_pool string
+	if holder != nil {
+		holder_pool = holder.Pool
+	} else {
+		holder_pool = ""
+	}
+	return false, holder_pool
 }
 
 func get_bucket(t *keyval_table, bucket string) *bucket_record {
@@ -1057,12 +1069,11 @@ func delete_secret_key__(t *keyval_table, key string) {
 }
 
 // LIST_SECRETS_OF_POOL lists secrets (access-keys) of a pool.  It
-// restores the access-key part in the record.  A probe-key is an
-// access-key but doesn't have a corresponding secret-key.
+// includes a probe-key (which is created and used internally).
 func list_secrets_of_pool(t *keyval_table, pool string) []*secret_record {
 	var prefix = db_secret_prefix
 	var keyi = scan_table(t, prefix, "*")
-	var descs = []*secret_record{}
+	var accume = []*secret_record{}
 	for keyi.Next(t.ctx) {
 		var key = keyi.Key()
 		var d = get_secret(t, key)
@@ -1070,10 +1081,13 @@ func list_secrets_of_pool(t *keyval_table, pool string) []*secret_record {
 			// Race.  It is not an error.
 			continue
 		}
-		d.Access_key = key
-		descs = append(descs, d)
+		if d.Pool != pool {
+			continue
+		}
+		// d.Access_key = key
+		accume = append(accume, d)
 	}
-	return descs
+	return accume
 }
 
 func set_csrf_token(t *keyval_table, uid string, token *csrf_token_record) {

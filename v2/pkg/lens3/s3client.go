@@ -143,7 +143,7 @@ func make_bucket_in_backend(w *manager, be *backend_record, bucket *bucket_recor
 	var timeout = (time.Duration(w.Backend_timeout_ms) * time.Millisecond)
 	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	var v, err1 = client.CreateBucket(ctx,
+	var _, err1 = client.CreateBucket(ctx,
 		&s3.CreateBucketInput{
 			Bucket: aws.String(bucket.Bucket),
 		})
@@ -152,7 +152,7 @@ func make_bucket_in_backend(w *manager, be *backend_record, bucket *bucket_recor
 			"bucket", bucket.Bucket, "err", err1)
 		return false
 	}
-	fmt.Println("CreateBucket()=", v)
+	//fmt.Println("CreateBucket()=", v)
 	return true
 }
 

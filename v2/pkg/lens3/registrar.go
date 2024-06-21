@@ -142,10 +142,10 @@ type pool_prop_ui struct {
 }
 
 type bucket_data_ui struct {
-	Pool          string        `json:"pool"`
-	Bucket        string        `json:"name"`
-	Bucket_policy bucket_policy `json:"bkt_policy"`
-	Timestamp     int64         `json:"modification_time"`
+	Pool          string `json:"pool"`
+	Bucket        string `json:"name"`
+	Bucket_policy string `json:"bkt_policy"`
+	Timestamp     int64  `json:"modification_time"`
 }
 
 type secret_data_ui struct {
@@ -201,6 +201,13 @@ var bucket_policy_ui_list = []string{
 	bucket_policy_ui_RW,
 }
 
+var export_bucket_policy_to_ui = map[bucket_policy]string{
+	bucket_policy_NONE: bucket_policy_ui_NONE,
+	bucket_policy_WO:   bucket_policy_ui_WO,
+	bucket_policy_RO:   bucket_policy_ui_RO,
+	bucket_policy_RW:   bucket_policy_ui_RW,
+}
+
 const (
 	secret_policy_ui_RW string = "readwrite"
 	secret_policy_ui_RO string = "readonly"
@@ -213,7 +220,7 @@ var secret_policy_ui_list = []string{
 	secret_policy_ui_WO,
 }
 
-var map_secret_policy_to_ui = map[secret_policy]string{
+var export_secret_policy_to_ui = map[secret_policy]string{
 	secret_policy_RW: secret_policy_ui_RW,
 	secret_policy_RO: secret_policy_ui_RO,
 	secret_policy_WO: secret_policy_ui_WO,
@@ -1229,9 +1236,7 @@ func check_empty_arguments_with_error_return(z *registrar, w http.ResponseWriter
 	if err1 == nil {
 		return true
 	} else {
-		if z.verbose && err1 == nil {
-			slogger.Debug("Reg() Garbage in request body")
-		}
+		slogger.Info("Reg() Garbage in request body")
 		var err2 = &proxy_exc{
 			u.Uid,
 			http_400_bad_request,
@@ -1438,7 +1443,7 @@ func copy_bucket_data_to_ui(m []*bucket_record) []*bucket_data_ui {
 		var u = &bucket_data_ui{
 			Pool:          d.Pool,
 			Bucket:        d.Bucket,
-			Bucket_policy: d.Bucket_policy,
+			Bucket_policy: export_bucket_policy_to_ui[d.Bucket_policy],
 			Timestamp:     d.Timestamp,
 		}
 		buckets = append(buckets, u)
@@ -1456,7 +1461,7 @@ func copy_secret_data_to_ui(m []*secret_record) []*secret_data_ui {
 			Pool:            d.Pool,
 			Access_key:      d.Access_key,
 			Secret_key:      d.Secret_key,
-			Secret_policy:   map_secret_policy_to_ui[d.Secret_policy],
+			Secret_policy:   export_secret_policy_to_ui[d.Secret_policy],
 			Expiration_time: d.Expiration_time,
 			Timestamp:       d.Timestamp,
 		}
@@ -1617,8 +1622,10 @@ func deregister_user(t *keyval_table, uid string) {
 // NOTHING TO A BACKEND.  That is, it does not remove or disable
 // buckets in the backend.
 func deregister_pool(t *keyval_table, pool string) bool {
+	//fmt.Println("deregister_pool()", pool)
 	var p = gather_pool_prop(t, pool)
 	if p == nil {
+		slogger.Info("Reg() Deleting a non-existing pool", "pool", pool)
 		return false
 	}
 
@@ -1628,29 +1635,29 @@ func deregister_pool(t *keyval_table, pool string) bool {
 	var ok1 = delete_buckets_directory_unconditionally(t, path)
 	if !ok1 {
 		slogger.Info("Reg() Deleting a buckets directory failed (ignored)",
-			"path", path)
+			"pool", pool, "path", path)
 	}
 
 	// Delete buckets.
 
 	var bkts = p.Buckets
 	for _, b := range bkts {
-		assert_fatal(b.Pool == p.pool_record.Pool)
+		assert_fatal(b.Pool == pool)
 		var ok2 = delete_bucket_unconditionally(t, b.Bucket)
 		if !ok2 {
 			slogger.Info("Reg() Deleting a bucket failed (ignored)",
-				"bucket", b.Bucket)
+				"pool", pool, "bucket", b.Bucket)
 		}
 	}
 
 	// Delete access-keys.
 
 	for _, k := range p.Secrets {
-		assert_fatal(k.Pool == p.pool_record.Pool)
+		assert_fatal(k.Pool == pool)
 		var ok = delete_secret_key_unconditionally(t, k.Access_key)
 		if !ok {
-			slogger.Info("Reg() Deleting a secret-key failed (ignored)",
-				"key", k.Access_key)
+			slogger.Info("Reg() Deleting an access-key failed (ignored)",
+				"pool", pool, "secret", k.Access_key)
 		}
 	}
 

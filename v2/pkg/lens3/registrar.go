@@ -233,11 +233,10 @@ func configure_registrar(z *registrar, t *keyval_table, qch <-chan vacuous, c *r
 	z.table = t
 	z.ch_quit_service = qch
 	z.conf = c
-	z.verbose = true
+	//z.verbose = true
 
 	var conf = &z.conf.Registrar
 	open_log_for_reg(c.Log.Access_log_file)
-	//z.mqtt = configure_mqtt(&c.Logging.Mqtt, qch)
 
 	z.ep_port = net.JoinHostPort("", strconv.Itoa(conf.Port))
 
@@ -363,7 +362,7 @@ func start_registrar(z *registrar, wg *sync.WaitGroup) {
 
 	slogger.Info("Reg() Start Registrar", "ep", z.ep_port)
 	var err1 = z.server.ListenAndServe()
-	slogger.Info("Reg() http.Server.ListenAndServe() done", "err", err1)
+	slogger.Error("Reg() http.Server.ListenAndServe() DONE", "err", err1)
 }
 
 func handle_registrar_exc(z *registrar, w http.ResponseWriter, rqst *http.Request) {
@@ -886,16 +885,16 @@ func check_user_access_with_error_return(z *registrar, w http.ResponseWriter, r 
 
 	// Check the user.
 
-	var uid = map_claim_to_uid(z, x_remote_user)
+	var uid = convert_claim_to_uid(z, x_remote_user)
 	var u = check_user_account(z, uid, firstsession)
 	if u == nil {
-		slogger.Warn("Reg() User is not active", "uid", uid)
+		var xuid string = ITE(uid != "", uid, x_remote_user)
+		slogger.Warn("Reg() User is not active", "uid", xuid)
 		var err3 = &proxy_exc{
-			u.Uid,
+			xuid,
 			http_401_unauthorized,
 			[][2]string{
 				message_bad_user_account,
-				{"state", "inactive"},
 			},
 		}
 		return_reg_error_response(z, w, r, dummy, err3)
@@ -1005,9 +1004,14 @@ func check_lens3_is_running(t *keyval_table) bool {
 
 // CHECK_USER_ACCOUNT checks the user account is active.  It may
 // register a new user record, when it is the first session under
-// default-allow setting (that is, conf.User_approval=allow).
+// default-allow setting (that is, conf.User_approval=allow).  It
+// deals with an erroneous uid="" but returns nil.
 func check_user_account(z *registrar, uid string, firstsession bool) *user_record {
 	var conf = &z.conf.Registrar
+
+	if uid == "" {
+		return nil
+	}
 
 	// Reject unregistered users.
 
@@ -1403,9 +1407,28 @@ func decode_request_body(z *registrar, r *http.Request, data any) bool {
 	return (err2 == nil)
 }
 
-func map_claim_to_uid(z *registrar, x_remote_user string) string {
-	//AHOAHOAHO
-	return x_remote_user
+// CONVERT_CLAIM_TO_UID converts a name (x_remote_user) to an uid.  It
+// returns "" on errors.
+func convert_claim_to_uid(z *registrar, x_remote_user string) string {
+	var conf = &z.conf.Registrar
+	switch conf.Claim_uid_map {
+	case claim_uid_map_id:
+		return x_remote_user
+	case claim_uid_map_email_name:
+		var v = strings.Split(x_remote_user, "@")
+		if len(v) != 2 {
+			return ""
+		}
+		return v[0]
+	case claim_uid_map_map:
+		var x *user_claim_record = get_user_claim(z.table, x_remote_user)
+		if x == nil {
+			return ""
+		}
+		return x.Uid
+	default:
+		panic(nil)
+	}
 }
 
 func copy_user_record_to_ui(z *registrar, u *user_record, groups []string) *user_info_ui {

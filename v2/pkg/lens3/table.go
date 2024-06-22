@@ -617,7 +617,7 @@ func set_user_claim(t *keyval_table, claim string, uid *user_claim_record) {
 	db_set_with_prefix(t, db_user_claim_prefix, claim, uid)
 }
 
-// GET_CLAIM_USER maps a claim to a uid, or returns il.
+// GET_CLAIM_USER maps a claim to a uid, or returns nil.
 func get_user_claim(t *keyval_table, claim string) *user_claim_record {
 	assert_fatal(claim != "")
 	var data user_claim_record

@@ -10,7 +10,7 @@ This document describes setting for Lenticularis-S3 (Lens3).
 
 The steps are:
 * Prepare prerequisite software and install Lens3
-* Set up a proxy (Apache httpd)
+* Set up a proxy (Apache-HTTPD)
 * Start Redis
 * Start Lens3-Mux (a Multiplexer service)
 * Start Lens3-Reg (a Registrar service)
@@ -98,8 +98,8 @@ $ python3 --version
 $ update-alternatives --display python3
 ```
 
-Install a proxy, either Apache or NGINX.  Install Apache (with
-optional OpenID Connect).
+Install a proxy, either Apache-HTTPD or NGINX.  Install Apache-HTTPD
+(with optional OpenID Connect).
 
 ```
 # dnf install httpd mod_ssl mod_proxy_html
@@ -244,10 +244,9 @@ Lens3-Mux requires {"Host", "X-Forwarded-For", "X-Forwarded-Host",
 (for keep-alive) is forced unset for Lens3-Mux.
 
 These are all practically standard headers.  Note {"X-Forwarded-For",
-"X-Forwarded-Host", "X-Forwarded-Server"} are implicitly set by Apache
-HTTPD.
+"X-Forwarded-Host", "X-Forwarded-Server"} are implicitly set by Apache-HTTPD.
 
-## CASE1: Proxy by Apache
+## CASE1: Proxy by Apache-HTTPD
 
 Set up a configuration file with the needed authentication, and
 (re)start the service.
@@ -270,10 +269,10 @@ can be found in $TOP/apache/.  Copy one as
 
 A note for proxy setting: A trailing slash in
 ProxyPass/ProxyPassReverse lines is necessary (in both the pattern
-part and the URL part as noted in Apache documents).  It instructs the
-proxy to forward directory accesses to Lens3-Reg.  As a consequence,
-accesses by "https://lens3.exmaple.com/lens3.sts" (without a slash)
-will fail.
+part and the URL part as noted in Apache-HTTPD documents).  It
+instructs the proxy to forward directory accesses to Lens3-Reg.  As a
+consequence, accesses by "https://lens3.exmaple.com/lens3.sts"
+(without a slash) will fail.
 
 ```
 ProxyPass /lens3.sts/ http://localhost:8004/
@@ -281,7 +280,7 @@ ProxyPassReverse /lens3.sts/ http://localhost:8004/
 ```
 
 For OIDC (OpenID Connect) authentication, there is a good tutorial for
-setting Apache with Keyclock -- "3. Configure OnDemand to authenticate
+setting Apache-HTTPD with Keyclock -- "3. Configure OnDemand to authenticate
 with Keycloak".  See below.
 
 [https://osc.github.io/ood-documentation/.../install_mod_auth_openidc.html](https://osc.github.io/ood-documentation/latest/authentication/tutorial-oidc-keycloak-rhel7/install_mod_auth_openidc.html)
@@ -305,16 +304,16 @@ Or, prepare passwords for basic authentication.
 # ......
 ```
 
-Start Apache HTTPD.
+Start Apache-HTTPD.
 
 ```
 # systemctl enable httpd
 # systemctl start httpd
 ```
 
-### Other Settings for Apache (Tips)
+### Other Settings for Apache-HTTPD (Tips)
 
-To add a cert for Apache, copy the cert and edit the configuration
+To add a cert for Apache-HTTPD, copy the cert and edit the configuration
 file.  Change the lines of cert and key in
 "/etc/httpd/conf.d/ssl.conf".
 

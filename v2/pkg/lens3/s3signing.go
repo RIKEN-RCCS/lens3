@@ -27,24 +27,16 @@ package lens3
 //   https://docs.aws.amazon.com/AmazonS3/latest/API/RESTCommonRequestHeaders.html
 
 import (
-	"fmt"
-	//"flag"
 	"context"
-	//"io"
-	//"log"
-	//"os"
-	//"net"
+	"fmt"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	signer "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"maps"
 	"net/http"
-	//"net/http/httputil"
-	//"net/url"
 	"regexp"
 	"slices"
 	"strings"
 	"time"
-	//"runtime"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	signer "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 )
 
 // S3V4_AUTHORIZATION is Authorization header entries.
@@ -68,9 +60,14 @@ const s3v4_authorization_method = "AWS4-HMAC-SHA256"
 
 const x_amz_date_layout = "20060102T150405Z"
 
+const (
+	empty_payload_hash_sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+)
+
 // CHECK_CREDENTIAL_IN_REQUEST checks the sign in an http request.  It
 // returns OK/NG and a simple reason.  It once signs a request (after
-// copying) using AWS SDK, and compares the result.
+// copying) using AWS SDK, and compares the result.  It substitutes
+// "Host" by "X-Forwarded-Host" if it is missing.
 func check_credential_in_request(rqst1 *http.Request, keypair [2]string) (bool, string) {
 	var header1 = rqst1.Header.Get("Authorization")
 	//fmt.Println("*** authorization=", header1)
@@ -106,8 +103,9 @@ func check_credential_in_request(rqst1 *http.Request, keypair [2]string) (bool, 
 	if slices.Index(auth_passed.signedheaders, "Content-Length") == -1 {
 		rqst2.ContentLength = -1
 	}
-
-	rqst2.Header["Host"] = []string{rqst1.Header.Get("X-Forwarded-Host")}
+	if rqst2.Host == "" {
+		rqst2.Host = rqst1.Header.Get("X-Forwarded-Host")
+	}
 
 	var credentials = aws.Credentials{
 		AccessKeyID:     keypair[0],
@@ -131,7 +129,7 @@ func check_credential_in_request(rqst1 *http.Request, keypair [2]string) (bool, 
 	var err1 = s.SignHTTP(ctx, credentials, &rqst2,
 		hash, service, region, date)
 	if err1 != nil {
-		slogger.Info("Mux() signer.SignHTTP() failed", "err", err1)
+		slogger.Error("Mux() signer.SignHTTP() failed", "err", err1)
 		return false, "cannot-sign"
 	}
 
@@ -141,40 +139,35 @@ func check_credential_in_request(rqst1 *http.Request, keypair [2]string) (bool, 
 	var ok = auth_passed.signature == auth_forged.signature
 	if !ok {
 		slogger.Info("Mux() Bad authorization, signs unmatch",
-			"access-key1", auth_passed.credential[0],
+			"access-key1", auth_passed.credential[0])
+		slogger.Debug("Mux() Bad authorization, signs unmatch",
 			"auth1", auth_passed, "auth2", auth_forged)
-
-		fmt.Println("*** Authorization Unmatch")
-		fmt.Printf("*** key pair=%q %q\n", keypair[0], keypair[1])
-		fmt.Printf("*** rqst1.Header=%q\n", rqst1.Header)
-		fmt.Printf("*** rqst2.Header=%q\n", rqst2.Header)
-		var headers = auth_passed.signedheaders
-		for _, h := range headers {
-			var v1 = rqst1.Header.Get(h)
-			var v2 = rqst2.Header.Get(h)
-			fmt.Printf("*** Header=%s v1=%q v2=%q\n", h, v1, v2)
-		}
-
 		return false, "bad-sign"
 	}
 	return true, ""
 }
 
 // SIGN_BY_BACKEND_CREDENTIAL replaces an authorization header in an
-// http request for the backend.
-func sign_by_backend_credential(r *http.Request, be *backend_record) {
+// http request for the backend.  It returns an error code from
+// signer.Signer.SignHTTP().
+func sign_by_backend_credential(r *http.Request, be *backend_record) error {
 	if false {
-		fmt.Println("r.Host(1)=", r.Host)
-		fmt.Println("r.Header(1)=", r.Header)
-		var a1 = r.Header.Get("Authorization")
-		fmt.Println("Authorization(1)=", a1)
-		var a2 = r.Header.Get("x-amz-content-sha256")
-		fmt.Println("x-amz-content-sha256(1)=", a2)
+		fmt.Printf("*** r.Host(1)=%v\n", r.Host)
+		fmt.Printf("*** Authorization(1)=%v\n", r.Header.Get("Authorization"))
+		fmt.Printf("*** r.Header(1)=%v\n", r.Header)
 	}
 
 	//fmt.Println("*** be.Backend_ep=", be.Backend_ep)
 
-	//r.Header.Del("Accept-Encoding")
+	r.Header.Del("Accept-Encoding")
+	r.Header.Del("Amz-Sdk-Invocation-Id")
+	r.Header.Del("Amz-Sdk-Request")
+	r.Header.Del("Connection")
+	//r.Header.Del("Content-Length")
+	r.Header.Del("X-Forwarded-For")
+	r.Header.Del("X-Forwarded-Host")
+	r.Header.Del("X-Forwarded-Server")
+
 	r.Host = be.Backend_ep
 	var credentials = aws.Credentials{
 		AccessKeyID:     be.Root_access,
@@ -200,17 +193,14 @@ func sign_by_backend_credential(r *http.Request, be *backend_record) {
 	defer cancel()
 	var err1 = s.SignHTTP(ctx, credentials, r,
 		hash, service, region, date)
-	assert_fatal(err1 == nil)
 
 	if false {
-		fmt.Println("date(2)=", date)
-		fmt.Println("r.Host(2)=", r.Host)
-		fmt.Println("r.Header(2)=", r.Header)
-		var a3 = r.Header.Get("Authorization")
-		fmt.Println("Authorization(2)=", a3)
-		var a4 = r.Header.Get("x-amz-content-sha256")
-		fmt.Println("x-amz-content-sha256(2)=", a4)
+		fmt.Printf("*** r.Host(2)=%v\n", r.Host)
+		fmt.Printf("*** Authorization(2)=%#v\n", r.Header.Get("Authorization"))
+		fmt.Printf("*** r.Header(2)=%v\n", r.Header)
 	}
+
+	return err1
 }
 
 // SCAN_AWS_AUTHORIZATION extracts elements in an "Authorization"

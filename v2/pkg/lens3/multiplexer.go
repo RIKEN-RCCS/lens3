@@ -85,21 +85,15 @@ type multiplexer struct {
 // THE_MULTIPLEXER is the single multiplexer instance.
 var the_multiplexer = &multiplexer{}
 
-const (
-	empty_payload_hash_sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-)
-
 func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, qch <-chan vacuous, c *mux_conf) {
 	m.table = t
 	m.manager = w
 	m.conf = c
 	m.ch_quit_service = qch
-	m.verbose = true
-	//m.multiplexer_conf = conf.Multiplexer
+	//m.verbose = true
 
 	var conf = &m.conf.Multiplexer
 	open_log_for_mux(c.Log.Access_log_file)
-	//m.mqtt = configure_mqtt(&c.Logging.Mqtt, qch)
 
 	var host string
 	if conf.Mux_node_name != "" {
@@ -159,12 +153,12 @@ func start_multiplexer(m *multiplexer, wg *sync.WaitGroup) {
 
 	slogger.Info(m.MuxEP + " Start Multiplexer")
 	var err1 = m.server.ListenAndServe()
-	slogger.Error(m.MuxEP+" http.Server.ListenAndServe() done", "err", err1)
+	slogger.Error(m.MuxEP+" http.Server.ListenAndServe() DONE", "err", err1)
 }
 
-// PROXY_REQUEST_REWRITER is a function in ReverseProxy.Rewriter.  It
-// receives forwarding information from a forwarding-proxy via the
-// context value "lens3-be".
+// PROXY_REQUEST_REWRITER is a function for ReverseProxy.Rewriter.  It
+// receives the forwarding url from a filtering proxy via the context
+// value "lens3-be".
 func proxy_request_rewriter(m *multiplexer) func(*httputil.ProxyRequest) {
 	return func(r *httputil.ProxyRequest) {
 		var ctx = r.In.Context()
@@ -179,8 +173,9 @@ func proxy_request_rewriter(m *multiplexer) func(*httputil.ProxyRequest) {
 	}
 }
 
-// PROXY_ACCESS_ADDENDA makes a callback which is called at sending a
-// response by httputil.ReverseProxy.  It generates an access log.
+// PROXY_ACCESS_ADDENDA makes a callback that is called at sending a
+// response by httputil.ReverseProxy.  It is to generate an access
+// log.
 func proxy_access_addenda(m *multiplexer) func(*http.Response) error {
 	return func(rspn *http.Response) error {
 		if rspn.StatusCode != 200 {
@@ -374,15 +369,25 @@ func serve_anonymous_access(m *multiplexer, w http.ResponseWriter, r *http.Reque
 func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, be *backend_record, auth string, proxy http.Handler) {
 	// Replace an authorization header.
 
-	sign_by_backend_credential(r, be)
+	var err1 = sign_by_backend_credential(r, be)
+	if err1 != nil {
+		slogger.Error(m.MuxEP+" aws.signer.SignHTTP() failed", "err", err1)
+		raise(&proxy_exc{
+			auth,
+			http_500_internal_server_error,
+			[][2]string{
+				message_sign_failed,
+			},
+		})
+	}
 
 	// Tell the forwarding endpoint to httputil.ReverseProxy.
 
 	var pool = be.Pool
 	var ep = be.Backend_ep
-	var forwarding, err1 = url.Parse("http://" + ep)
-	if err1 != nil {
-		slogger.Error(m.MuxEP+" Bad backend ep", "ep", ep, "err", err1)
+	var forwarding, err2 = url.Parse("http://" + ep)
+	if err2 != nil {
+		slogger.Error(m.MuxEP+" Bad backend ep", "ep", ep, "err", err2)
 		raise(&proxy_exc{
 			auth,
 			http_500_internal_server_error,
@@ -395,6 +400,11 @@ func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, be *
 	var ctx2 = context.WithValue(ctx1, "lens3-be", forwarding)
 	var ctx3 = context.WithValue(ctx2, "lens3-pool-auth", []string{pool, auth})
 	var r2 = r.WithContext(ctx3)
+
+	if m.verbose {
+		slogger.Debug(m.MuxEP+" Forward a request", "pool", pool, "key", auth,
+			"method", r.Method, "resource", r.RequestURI)
+	}
 
 	proxy.ServeHTTP(w, r2)
 }
@@ -496,7 +506,7 @@ func check_authenticated(m *multiplexer, r *http.Request) (*secret_record, *prox
 	var auth string = cred.credential[0]
 	var secret *secret_record = get_secret(m.table, auth)
 	if secret == nil {
-		slogger.Info(m.MuxEP+" Unknown credential", "access-key", auth)
+		slogger.Info(m.MuxEP+" Unknown credential", "key", auth)
 		var err1 = &proxy_exc{
 			"-",
 			http_401_unauthorized,
@@ -511,7 +521,7 @@ func check_authenticated(m *multiplexer, r *http.Request) (*secret_record, *prox
 	var ok, reason = check_credential_in_request(r, keypair)
 	if !ok {
 		slogger.Info(m.MuxEP+" Bad credential",
-			"reason", reason, "access-key", auth)
+			"key", auth, "reason", reason)
 		var err2 = &proxy_exc{
 			"-",
 			http_401_unauthorized,

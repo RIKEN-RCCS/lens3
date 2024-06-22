@@ -126,6 +126,11 @@ func start_lenticularis_service(confpath string, services [2]string) {
 		}
 	}
 
+	if logconf == nil {
+		fmt.Fprintf(os.Stderr, "No conf for logging\n")
+		os.Exit(1)
+	}
+
 	var ch_quit_service = make(chan vacuous)
 	configure_logger(logconf, ch_quit_service)
 	handle_unix_signals(t, ch_quit_service)
@@ -143,6 +148,7 @@ func start_lenticularis_service(confpath string, services [2]string) {
 		var w = the_manager
 		configure_multiplexer(m, w, t, ch_quit_service, muxconf)
 		configure_manager(w, m, t, ch_quit_service, muxconf)
+		m.verbose = logconf.Syslog.Verbose
 		defer w.factory.clean_at_exit()
 		go start_multiplexer(m, &wg)
 	}
@@ -152,6 +158,7 @@ func start_lenticularis_service(confpath string, services [2]string) {
 	if services[1] != "" {
 		var z = the_registrar
 		configure_registrar(z, t, ch_quit_service, regconf)
+		z.verbose = logconf.Syslog.Verbose
 		go start_registrar(z, &wg)
 	}
 

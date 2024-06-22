@@ -7,7 +7,7 @@
     "port": 8003,
     "front_host": "localhost",
     "trusted_proxy_list": [
-      "localhost"
+      "localhost", "fgkvm-010-128-008-030.fdcs.r-ccs.riken.jp"
     ],
     "mux_node_name": "localhost",
     "mux_ep_update_interval": 307,
@@ -48,7 +48,8 @@
       "log_file": "/tmp/lens3-log",
       "facility": "LOCAL7",
       "level": "DEBUG",
-      "source_code": false
+      "verbose": true,
+      "source_line": false
     },
     "stats": {
       "period": 600

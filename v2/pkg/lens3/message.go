@@ -27,6 +27,8 @@ type error_message [2]string
 
 // Error messages returned to clients by Multiplexer.
 var (
+	// http_401_unauthorized
+
 	message_access_rejected = error_message{
 		"message", "Rejected"}
 
@@ -37,14 +39,8 @@ var (
 
 	message_not_authorized = error_message{
 		"message", "Not authorized"}
-	message_bad_signature__ = error_message{
-		"message", "Bad signature"}
-	message_not_authenticated__ = error_message{
-		"message", "Not authenticated"}
-	message_unknown_credential__ = error_message{
-		"message", "Unknown credential"}
-	message_bad_credential__ = error_message{
-		"message", "Bad credential"}
+
+	// http_500_internal_server_error
 
 	message_backend_not_running = error_message{
 		"message", "Backend not running"}
@@ -52,6 +48,8 @@ var (
 		"message", "Bad backend ep"}
 	message_cannot_start_backend = error_message{
 		"message", "Cannot start backend"}
+	message_sign_failed = error_message{
+		"message", "Signing by aws.signer failed"}
 
 	message_no_permission = error_message{
 		"message", "No permission"}

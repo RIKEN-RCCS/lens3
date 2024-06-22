@@ -129,6 +129,12 @@ func check_access_key_naming(s string) bool {
 		access_key_naming_good_re.MatchString(s))
 }
 
+var claim_name_good_re = regexp.MustCompile(`^[-_a-zA-Z0-9.:@%]{0,256}$`)
+
+func check_claim_name(s string) bool {
+	return claim_name_good_re.MatchString(s)
+}
+
 func init() {
 }
 

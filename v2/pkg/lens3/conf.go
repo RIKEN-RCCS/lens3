@@ -153,6 +153,7 @@ type syslog_conf struct {
 	Log_file    string `json:"log_file"`
 	Facility    string `json:"facility"`
 	Level       string `json:"level"`
+	Verbose     bool   `json:"verbose"`
 	Source_line bool   `json:"source_line"`
 }
 
@@ -175,10 +176,10 @@ type mqtt_conf struct {
 
 type time_in_sec int64
 
+// CLAIM_UID_MAP is one of {"id", "email-name", "map"}.
 type claim_uid_map string
 
 const (
-	// claim_uid_map is one of {"id", "email-name", "map"}.
 	claim_uid_map_id         claim_uid_map = "id"
 	claim_uid_map_email_name claim_uid_map = "email-name"
 	claim_uid_map_map        claim_uid_map = "map"

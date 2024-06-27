@@ -509,7 +509,7 @@ func check_authenticated(m *multiplexer, r *http.Request) (*secret_record, *prox
 		slogger.Info(m.MuxEP+" Unknown credential", "key", auth)
 		var err1 = &proxy_exc{
 			"-",
-			http_401_unauthorized,
+			http_403_forbidden,
 			[][2]string{
 				message_access_rejected,
 			},
@@ -524,7 +524,7 @@ func check_authenticated(m *multiplexer, r *http.Request) (*secret_record, *prox
 			"key", auth, "reason", reason)
 		var err2 = &proxy_exc{
 			"-",
-			http_401_unauthorized,
+			http_403_forbidden,
 			[][2]string{
 				message_access_rejected,
 			},
@@ -616,14 +616,14 @@ func ensure_user_is_active(m *multiplexer, w http.ResponseWriter, r *http.Reques
 	if !ok {
 		var err1 = &proxy_exc{
 			auth,
-			http_401_unauthorized,
+			http_403_forbidden,
 			[][2]string{
 				reason,
 			},
 		}
 		return_mux_error_response(m, w, r, err1)
 		// return_mux_response(m, w, r,
-		//  http_401_unauthorized,
+		//  http_403_forbidden,
 		// 	[][2]string{
 		// 		reason,
 		// 	})
@@ -709,14 +709,14 @@ func ensure_bucket_owner(m *multiplexer, w http.ResponseWriter, r *http.Request,
 	if bucket.Pool != secret.Pool {
 		var err1 = &proxy_exc{
 			auth,
-			http_401_unauthorized,
+			http_403_forbidden,
 			[][2]string{
 				message_not_authorized,
 			},
 		}
 		return_mux_error_response(m, w, r, err1)
 		// return_mux_response(m, w, r,
-		//  http_401_unauthorized,
+		//  http_403_forbidden,
 		// 	[][2]string{
 		// 		message_not_authorized,
 		// 	})
@@ -997,7 +997,7 @@ func check_pool_state(t *keyval_table, pool string) (pool_state, pool_reason) {
 
 	var uid = pooldata.Owner_uid
 	var active, _ = check_user_is_active(t, uid)
-	var online = pooldata.Online_status
+	var online = pooldata.Enabled
 	var expiration = time.Unix(pooldata.Expiration_time, 0)
 	var unexpired = time.Now().Before(expiration)
 

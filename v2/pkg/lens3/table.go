@@ -133,7 +133,7 @@ type pool_record struct {
 	Owner_uid         string `json:"owner_uid"`
 	Owner_gid         string `json:"owner_gid"`
 	Probe_key         string `json:"probe_key"`
-	Online_status     bool   `json:"online_status"`
+	Enabled           bool   `json:"enabled"`
 	Expiration_time   int64  `json:"expiration_time"`
 	Timestamp         int64  `json:"timestamp"`
 }

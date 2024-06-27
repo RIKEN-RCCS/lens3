@@ -615,7 +615,7 @@ func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 		Owner_uid:         u.Uid,
 		Owner_gid:         args.Owner_gid,
 		Probe_key:         probe,
-		Online_status:     true,
+		Enabled:           true,
 		Expiration_time:   expiration,
 		Timestamp:         now,
 	}
@@ -842,9 +842,9 @@ func check_user_access_with_error_return(z *registrar, w http.ResponseWriter, r 
 	_ = conf
 
 	fmt.Println(";; r.RemoteAddr=", r.RemoteAddr)
-	fmt.Println(";; X-Real-Ip=", r.Header.Get("X-Real-Ip"))
 	fmt.Println(";; X-Remote-User=", r.Header.Get("X-Remote-User"))
 	fmt.Println(";; X-Csrf-Token=", r.Header.Get("X-Csrf-Token"))
+	//fmt.Println(";; X-Real-Ip=", r.Header.Get("X-Real-Ip"))
 
 	var x_remote_user = r.Header.Get("X-Remote-User")
 	var dummy = &user_record{
@@ -1451,14 +1451,14 @@ func copy_pool_prop_to_ui(d *pool_prop) *pool_prop_ui {
 		Owner_uid:         d.Owner_uid,
 		Owner_gid:         d.Owner_gid,
 		Probe_key:         d.Probe_key,
-		Online_status:     d.Online_status,
+		Online_status:     d.pool_record.Enabled,
 		Expiration_time:   d.pool_record.Expiration_time,
 		Timestamp:         d.pool_record.Timestamp,
 		// POOL_PROP
 		Buckets: copy_bucket_data_to_ui(d.Buckets),
 		Secrets: copy_secret_data_to_ui(d.Secrets),
 		// USER_RECORD
-		User_enabled_status: d.Enabled,
+		User_enabled_status: d.user_record.Enabled,
 		// POOL_STATE_RECORD
 		Backend_state:  d.State,
 		Backend_reason: d.Reason,

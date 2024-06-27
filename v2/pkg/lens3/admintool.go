@@ -65,7 +65,7 @@ func adm_toplevel() {
 
 	var args = flag.Args()
 	if len(args) == 0 {
-		cmd_help(nil, args)
+		cmd_help(nil, false)
 		return
 	}
 
@@ -79,13 +79,29 @@ func adm_toplevel() {
 		table:  t,
 	}
 
-	var subcmd = cmd_table[args[0]]
-	if subcmd == nil {
-		fmt.Fprintf(os.Stderr, "Command (%s) unknown\n", args[0])
-		cmd_help(nil, args)
+	if strings.EqualFold(args[0], "help") {
+		if len(args) == 1 {
+			cmd_help(nil, true)
+			return
+		}
+		var c1 = cmd_table[args[1]]
+		if c1 == nil {
+			fmt.Fprintf(os.Stderr, "Command (%s) unknown\n", args[1])
+			cmd_help(nil, false)
+			return
+		}
+		fmt.Println(c1.synopsis)
+		fmt.Println("\t" + c1.doc)
 		return
 	}
-	subcmd.run(adm, args)
+
+	var c2 = cmd_table[args[0]]
+	if c2 == nil {
+		fmt.Fprintf(os.Stderr, "Command (%s) unknown\n", args[0])
+		cmd_help(nil, false)
+		return
+	}
+	c2.run(adm, args)
 }
 
 func show_user(t *keyval_table, filename string) {
@@ -417,17 +433,26 @@ func show_unix_time(s1 string) {
 }
 
 // (cmd_help cannot be in cmd_list, which makes a reference-cycle).
-func cmd_help(adm *adm, args []string) {
+func cmd_help(adm *adm, doc bool) {
 	fmt.Println("List of commands:")
+	fmt.Println("help [command]")
+	if doc {
+		fmt.Println("	Prints help.")
+	}
 	for _, c := range cmd_list {
 		fmt.Println(c.synopsis)
+		if doc {
+			fmt.Println("\t" + c.doc)
+		}
 	}
 }
 
 var cmd_list = []*cmd{
 	&cmd{
 		synopsis: "show-conf",
-		doc:      `Prints all conf data in keyval-db.`,
+
+		doc: `Prints all configuration data in keyval-db.`,
+
 		run: func(adm *adm, args []string) {
 			var conflist = list_confs(adm.table)
 			for _, e := range conflist {
@@ -461,7 +486,7 @@ var cmd_list = []*cmd{
 	&cmd{
 		synopsis: "load-conf file-name.json",
 
-		doc: `Loads a conf file in the keyval-db.`,
+		doc: `Loads a configuration file in the keyval-db.`,
 
 		run: func(adm *adm, args []string) {
 			var conf = read_conf(args[1])
@@ -473,10 +498,20 @@ var cmd_list = []*cmd{
 	},
 
 	&cmd{
+		synopsis: "kill-conf name",
+
+		doc: `Removes a named configuration in the keyval-db.`,
+
+		run: func(adm *adm, args []string) {
+			delete_conf(adm.table, args[1])
+		},
+	},
+
+	&cmd{
 		synopsis: "show-user",
 
-		doc: `Prints users in csv format.  It lists ADD rows first,
-        and then a DISABLE row.`,
+		doc: `Prints users in csv format.  It lists ADD rows first, and then a
+	DISABLE row.`,
 
 		run: func(adm *adm, args []string) {
 			show_user(adm.table, "")
@@ -486,19 +521,18 @@ var cmd_list = []*cmd{
 	&cmd{
 		synopsis: "load-user file-name.csv",
 
-		doc: `Loads users in csv format.  It adds or deletes users as
-        in the list.  It reads rows starting with one of: "ADD",
-        "MODIFY", "DELETE", "ENABLE", or "DISABLE".  Add and modify
-        are almost the same.  Add rows consist of:
-        ADD,uid,claim,group,... (the rest is a group list).  The claim
-        is an X-Remote-User key or empty.  A group list needs at least
-        one entry.  Adding and modifying work differently on existing
-        users.  Adding resets the user and deletes the pools owned.
-        Modifying keeps the pools.  DELETE, ENABLE and DISABLE take
-        rows of a uid list: DELETE,uid,...  It processes all
-        add/modify rows first, then the delete, enable, and disable in
-        this order.  Do not put spaces around a comma or trailing
-        commas in csv.`,
+		doc: `Loads users in csv format.  It adds or deletes users as in the
+	list.  It reads rows starting with one of: "ADD", "MODIFY",
+	"DELETE", "ENABLE", or "DISABLE".  Add and modify are almost the
+	same.  Add rows consist of: ADD,uid,claim,group,... (the rest is a
+	group list).  The claim is an X-Remote-User key or empty.  A group
+	list needs at least one entry.  Adding and modifying work
+	differently on existing users.  Adding resets the user and deletes
+	the pools owned.  Modifying keeps the pools.  DELETE, ENABLE and
+	DISABLE take rows of a uid list: DELETE,uid,...  It processes all
+	add/modify rows first, then the delete, enable, and disable in
+	this order.  Do not put spaces around a comma or trailing commas
+	in csv.`,
 
 		run: func(adm *adm, args []string) {
 			load_user(adm.table, args[1])
@@ -506,8 +540,32 @@ var cmd_list = []*cmd{
 	},
 
 	&cmd{
+		synopsis: "stop-user true/false uid",
+
+		doc: `Disables or enables a user.  Use load-user usually.`,
+
+		run: func(adm *adm, args []string) {
+			var disabling, err = strconv.ParseBool(args[1])
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Bad boolean (%s)", args[1])
+				return
+			}
+			var uid = args[2]
+			var u *user_record = get_user(adm.table, uid)
+			if u == nil {
+				fmt.Fprintf(os.Stderr, "No user found for (%s)", uid)
+				return
+			}
+			u.Enabled = !disabling
+			set_user_raw(adm.table, u)
+		},
+	},
+
+	&cmd{
 		synopsis: "show-pool [pool-name ...]",
-		doc:      `Prints pools.  It shows all pools without arguments.`,
+
+		doc: `Prints pools.  It shows all pools without arguments.`,
+
 		run: func(adm *adm, args []string) {
 			var list []string
 			if len(args) == 1 {
@@ -519,7 +577,7 @@ var cmd_list = []*cmd{
 			for _, name := range list {
 				var d = gather_pool_prop(adm.table, name)
 				if d == nil {
-					fmt.Fprintf(os.Stderr, "No pool found for pool=(%s)", name)
+					fmt.Fprintf(os.Stderr, "No pool found for (%s)", name)
 				} else {
 					poolprops = append(poolprops, d)
 				}
@@ -531,8 +589,48 @@ var cmd_list = []*cmd{
 	},
 
 	&cmd{
+		synopsis: "stop-pool true/false pool-name",
+
+		doc: `Disables or enables a pool.`,
+
+		run: func(adm *adm, args []string) {
+			var disabling, err = strconv.ParseBool(args[1])
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Bad boolean (%s)", args[1])
+				return
+			}
+			var pool = args[2]
+			var p *pool_record = get_pool(adm.table, pool)
+			if p == nil {
+				fmt.Fprintf(os.Stderr, "No pool found for (%s)", pool)
+				return
+			}
+			p.Enabled = !disabling
+			set_pool(adm.table, pool, p)
+		},
+	},
+
+	&cmd{
+		synopsis: "kill-pool pool-name",
+
+		doc: `Removes a pool.`,
+
+		run: func(adm *adm, args []string) {
+			var pool = args[1]
+			var p *pool_record = get_pool(adm.table, pool)
+			if p == nil {
+				fmt.Fprintf(os.Stderr, "No pool found for (%s)", pool)
+				return
+			}
+			deregister_pool(adm.table, pool)
+		},
+	},
+
+	&cmd{
 		synopsis: "show-bucket",
-		doc:      `Prints all buckets.`,
+
+		doc: `Prints all buckets.`,
+
 		run: func(adm *adm, args []string) {
 			var bkts = list_buckets(adm.table, "")
 			//for _, x := range bkts {
@@ -542,8 +640,25 @@ var cmd_list = []*cmd{
 	},
 
 	&cmd{
+		synopsis: "kill-bucket bucket-name",
+
+		doc: `Removes a bucket.`,
+
+		run: func(adm *adm, args []string) {
+			var bkt = args[1]
+			var ok = delete_bucket_unconditionally(adm.table, bkt)
+			if !ok {
+				fmt.Fprintf(os.Stderr, "No bucket found for (%s)", bkt)
+				return
+			}
+		},
+	},
+
+	&cmd{
 		synopsis: "show-directory",
-		doc:      `Prints all buckets-directories.`,
+
+		doc: `Prints all buckets-directories.`,
+
 		run: func(adm *adm, args []string) {
 			var dirs = list_buckets_directories(adm.table)
 			print_in_json(dirs)
@@ -555,8 +670,32 @@ var cmd_list = []*cmd{
 	},
 
 	&cmd{
+		synopsis: "show-be",
+
+		doc: `Prints all running backends.`,
+
+		run: func(adm *adm, args []string) {
+			var bes []*backend_record = list_backends(adm.table, "*")
+			print_in_json(bes)
+		},
+	},
+
+	&cmd{
+		synopsis: "show-mux",
+
+		doc: `Prints all running Multiplexers.`,
+
+		run: func(adm *adm, args []string) {
+			var muxs []*mux_record = list_mux_eps(adm.table)
+			print_in_json(muxs)
+		},
+	},
+
+	&cmd{
 		synopsis: "dump-user [file-name.json]",
-		doc:      `Dumps users for restoring.`,
+
+		doc: `Dumps users for restoring.`,
+
 		run: func(adm *adm, args []string) {
 			//fmt.Println("// dumping...")
 			var userlist = list_users(adm.table)
@@ -579,7 +718,9 @@ var cmd_list = []*cmd{
 
 	&cmd{
 		synopsis: "dump-pool [file-name.json]",
-		doc:      `Dumps pools for restoring.`,
+
+		doc: `Dumps pools for restoring.`,
+
 		run: func(adm *adm, args []string) {
 			//fmt.Println("// dumping...")
 			var poollist = list_pools(adm.table, "*")
@@ -603,10 +744,9 @@ var cmd_list = []*cmd{
 	&cmd{
 		synopsis: "dump-db",
 
-		doc: `Dumps all key-value pairs in keyval-db.  It is a
-		repeatation of key-value pairs, with a value part is idented
-		by four whitespaces.  Keys are strings and values are records
-		in json.`,
+		doc: `Dumps all key-value pairs in keyval-db.  It is a repeatation of
+	key-value pairs, with a value part is idented by four whitespaces.
+	Keys are strings and values are records in json.`,
 
 		run: func(adm *adm, args []string) {
 			dump_db(adm.table)
@@ -616,9 +756,9 @@ var cmd_list = []*cmd{
 	&cmd{
 		synopsis: "restore-db file-name.txt",
 
-		doc: `Restores key-value entries in keyval-db from a file.  A
-		file should contain a repeatation of key-value pairs.  See the
-		doc on dump-db about the output format.`,
+		doc: `Restores key-value entries in keyval-db from a file.  A file
+	should contain a repeatation of key-value pairs.  See the doc on
+	dump-db about the output format.`,
 
 		run: func(adm *adm, args []string) {
 			restore_db(adm.table, args[1])
@@ -627,15 +767,19 @@ var cmd_list = []*cmd{
 
 	&cmd{
 		synopsis: "remove-db-entry key",
-		doc:      `Removes an entry in the keyval-db by a key.`,
+
+		doc: `Removes an entry in the keyval-db by a key.`,
+
 		run: func(adm *adm, args []string) {
 			delete_db_entry(adm.table, args[1])
 		},
 	},
 
 	&cmd{
-		synopsis: "wipe-out-db 'everything' (type literally)",
-		doc:      `Removes everything in the keyval-db.`,
+		synopsis: "wipe-out-db everything (type literally)",
+
+		doc: `Removes everything in the keyval-db.`,
+
 		run: func(adm *adm, args []string) {
 			wipe_out_db(adm.table, args[1])
 		},
@@ -643,8 +787,9 @@ var cmd_list = []*cmd{
 
 	&cmd{
 		synopsis: "probe-mux pool",
-		doc: `Accesses one Mux for probing a pool.  It starts a
-		backend.`,
+
+		doc: `Accesses one Mux for probing a pool.  It starts a backend.`,
+
 		run: func(adm *adm, args []string) {
 			probe_mux(adm.table, args[1])
 		},
@@ -652,7 +797,9 @@ var cmd_list = []*cmd{
 
 	&cmd{
 		synopsis: "show-unix-time 'yyyy-mm-dd hh:mm:ss' or int64",
-		doc:      `Converts time in int64.`,
+
+		doc: `Converts time in int64.`,
+
 		run: func(adm *adm, args []string) {
 			show_unix_time(args[1])
 		},

@@ -149,7 +149,9 @@ func check_credential_in_request(rqst1 *http.Request, keypair [2]string) (bool, 
 
 // SIGN_BY_BACKEND_CREDENTIAL replaces an authorization header in an
 // http request for the backend.  It returns an error code from
-// signer.Signer.SignHTTP().
+// signer.Signer.SignHTTP().  Note that it drops the headers added by
+// a frontend proxy, which may confuse the signer in the backend.  It
+// also drops some other headers (not necessary).
 func sign_by_backend_credential(r *http.Request, be *backend_record) error {
 	if false {
 		fmt.Printf("*** r.Host(1)=%v\n", r.Host)
@@ -163,7 +165,6 @@ func sign_by_backend_credential(r *http.Request, be *backend_record) error {
 	r.Header.Del("Amz-Sdk-Invocation-Id")
 	r.Header.Del("Amz-Sdk-Request")
 	r.Header.Del("Connection")
-	//r.Header.Del("Content-Length")
 	r.Header.Del("X-Forwarded-For")
 	r.Header.Del("X-Forwarded-Host")
 	r.Header.Del("X-Forwarded-Server")

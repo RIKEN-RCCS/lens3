@@ -49,52 +49,129 @@ class Respn(enum.Enum):
 # (key-policy, buket-policy, op, expectation)
 
 _expectations = [
-    ("nokey", "download", "head",     Respn.OK),
-    ("nokey", "download", "get",     Respn.OK),
-    ("nokey", "download", "put",     Respn("403")),
-    ("nokey", "none", "get",         Respn("403")),
-    ("nokey", "none", "put",         Respn("403")),
-    ("nokey", "public", "get",       Respn.OK),
-    ("nokey", "public", "put",       Respn.OK),
-    ("nokey", "upload", "get",       Respn("403")),
-    ("nokey", "upload", "put",       Respn.OK),
+    ("nokey", "download", "head",       Respn.OK),
+    ("nokey", "download", "get",        Respn.OK),
+    ("nokey", "download", "put",        Respn("403")),
+    ("nokey", "download", "delete",     Respn("403")),
+    ("nokey", "download", "post",       Respn("403")),
 
-    ("badkey", "download", "get",    Respn("403")),
-    ("badkey", "download", "put",    Respn("403")),
-    ("badkey", "none", "get",        Respn("403")),
-    ("badkey", "none", "put",        Respn("403")),
-    ("badkey", "public", "get",      Respn("403")),
-    ("badkey", "public", "put",      Respn("403")),
-    ("badkey", "upload", "get",      Respn("403")),
-    ("badkey", "upload", "put",      Respn("403")),
+    ("nokey", "none", "head",           Respn("403")),
+    ("nokey", "none", "get",            Respn("403")),
+    ("nokey", "none", "put",            Respn("403")),
+    ("nokey", "none", "delete",         Respn("403")),
+    ("nokey", "none", "post",           Respn("403")),
 
-    ("readonly", "download", "get",  Respn.OK),
-    ("readonly", "download", "put",  Respn("403")),
-    ("readonly", "none", "get",      Respn.OK),
-    ("readonly", "none", "put",      Respn("403")),
-    ("readonly", "public", "get",    Respn.OK),
-    ("readonly", "public", "put",    Respn("403")),
-    ("readonly", "upload", "get",    Respn.OK),
-    ("readonly", "upload", "put",    Respn("403")),
+    ("nokey", "public", "head",         Respn.OK),
+    ("nokey", "public", "get",          Respn.OK),
+    ("nokey", "public", "put",          Respn.OK),
+    ("nokey", "public", "delete",       Respn.OK),
+    ("nokey", "public", "post",         Respn.OK),
 
-    ("readwrite", "download", "get", Respn.OK),
-    ("readwrite", "download", "put", Respn.OK),
-    ("readwrite", "none", "get",     Respn.OK),
-    ("readwrite", "none", "put",     Respn.OK),
-    ("readwrite", "public", "get",   Respn.OK),
-    ("readwrite", "public", "put",   Respn.OK),
-    ("readwrite", "upload", "get",   Respn.OK),
-    ("readwrite", "upload", "put",   Respn.OK),
+    ("nokey", "upload", "head",         Respn("403")),
+    ("nokey", "upload", "get",          Respn("403")),
+    ("nokey", "upload", "put",          Respn.OK),
+    ("nokey", "upload", "delete",       Respn.OK),
+    ("nokey", "upload", "post",         Respn.OK),
 
-    ("writeonly", "download", "get", Respn("403")),
-    ("writeonly", "download", "put", Respn.OK),
-    ("writeonly", "none", "get",     Respn("403")),
-    ("writeonly", "none", "put",     Respn.OK),
-    ("writeonly", "public", "get",   Respn("403")),
-    ("writeonly", "public", "put",   Respn.OK),
-    ("writeonly", "upload", "get",   Respn("403")),
-    ("writeonly", "upload", "put",   Respn.OK),
+    ("badkey", "download", "head",      Respn("403")),
+    ("badkey", "download", "get",       Respn("403")),
+    ("badkey", "download", "put",       Respn("403")),
+    ("badkey", "download", "delete",    Respn("403")),
+    ("badkey", "download", "post",      Respn("403")),
+
+    ("badkey", "none", "head",          Respn("403")),
+    ("badkey", "none", "get",           Respn("403")),
+    ("badkey", "none", "put",           Respn("403")),
+    ("badkey", "none", "delete",        Respn("403")),
+    ("badkey", "none", "post",          Respn("403")),
+
+    ("badkey", "public", "head",        Respn("403")),
+    ("badkey", "public", "get",         Respn("403")),
+    ("badkey", "public", "put",         Respn("403")),
+    ("badkey", "public", "delete",      Respn("403")),
+    ("badkey", "public", "post",        Respn("403")),
+
+    ("badkey", "upload", "head",        Respn("403")),
+    ("badkey", "upload", "get",         Respn("403")),
+    ("badkey", "upload", "put",         Respn("403")),
+    ("badkey", "upload", "delete",      Respn("403")),
+    ("badkey", "upload", "post",        Respn("403")),
+
+    ("readonly", "download", "head",    Respn.OK),
+    ("readonly", "download", "get",     Respn.OK),
+    ("readonly", "download", "put",     Respn("403")),
+    ("readonly", "download", "delete",  Respn("403")),
+    ("readonly", "download", "post",    Respn("403")),
+
+    ("readonly", "none", "head",        Respn.OK),
+    ("readonly", "none", "get",         Respn.OK),
+    ("readonly", "none", "put",         Respn("403")),
+    ("readonly", "none", "delete",      Respn("403")),
+    ("readonly", "none", "post",        Respn("403")),
+
+    ("readonly", "public", "head",      Respn.OK),
+    ("readonly", "public", "get",       Respn.OK),
+    ("readonly", "public", "put",       Respn("403")),
+    ("readonly", "public", "delete",    Respn("403")),
+    ("readonly", "public", "post",      Respn("403")),
+
+    ("readonly", "upload", "head",      Respn.OK),
+    ("readonly", "upload", "get",       Respn.OK),
+    ("readonly", "upload", "put",       Respn("403")),
+    ("readonly", "upload", "delete",    Respn("403")),
+    ("readonly", "upload", "post",      Respn("403")),
+
+    ("readwrite", "download", "head",   Respn.OK),
+    ("readwrite", "download", "get",    Respn.OK),
+    ("readwrite", "download", "put",    Respn.OK),
+    ("readwrite", "download", "delete", Respn.OK),
+    ("readwrite", "download", "post",   Respn.OK),
+
+    ("readwrite", "none", "head",       Respn.OK),
+    ("readwrite", "none", "get",        Respn.OK),
+    ("readwrite", "none", "put",        Respn.OK),
+    ("readwrite", "none", "delete",     Respn.OK),
+    ("readwrite", "none", "post",       Respn.OK),
+
+    ("readwrite", "public", "head",     Respn.OK),
+    ("readwrite", "public", "get",      Respn.OK),
+    ("readwrite", "public", "put",      Respn.OK),
+    ("readwrite", "public", "delete",   Respn.OK),
+    ("readwrite", "public", "post",     Respn.OK),
+
+    ("readwrite", "upload", "head",     Respn.OK),
+    ("readwrite", "upload", "get",      Respn.OK),
+    ("readwrite", "upload", "put",      Respn.OK),
+    ("readwrite", "upload", "delete",   Respn.OK),
+    ("readwrite", "upload", "post",     Respn.OK),
+
+    ("writeonly", "download", "head",   Respn("403")),
+    ("writeonly", "download", "get",    Respn("403")),
+    ("writeonly", "download", "put",    Respn.OK),
+    ("writeonly", "download", "delete", Respn.OK),
+    ("writeonly", "download", "post",   Respn.OK),
+
+    ("writeonly", "none", "head",       Respn("403")),
+    ("writeonly", "none", "get",        Respn("403")),
+    ("writeonly", "none", "put",        Respn.OK),
+    ("writeonly", "none", "delete",     Respn.OK),
+    ("writeonly", "none", "post",       Respn.OK),
+
+    ("writeonly", "public", "head",     Respn("403")),
+    ("writeonly", "public", "get",      Respn("403")),
+    ("writeonly", "public", "put",      Respn.OK),
+    ("writeonly", "public", "delete",   Respn.OK),
+    ("writeonly", "public", "post",     Respn.OK),
+
+    ("writeonly", "upload", "head",     Respn("403")),
+    ("writeonly", "upload", "get",      Respn("403")),
+    ("writeonly", "upload", "put",      Respn.OK),
+    ("writeonly", "upload", "delete",   Respn.OK),
+    ("writeonly", "upload", "post",     Respn.OK),
 ]
+
+
+_UNEXPIRED = 0
 
 
 class Access_Test():
@@ -170,7 +247,7 @@ class Access_Test():
         desc2 = self.client.find_pool(self.working_directory)
         bktslist = desc2["buckets"]
         for b in bktslist:
-            # _verbose_print(f";;; b={b}")
+            # _verbose_print(f";; b={b}")
             policy = b["bkt_policy"]
             self.buckets[policy] = b["name"]
             pass
@@ -200,19 +277,10 @@ class Access_Test():
         keyslist2 = [k for k in desc2["secrets"]
                      if k["expiration_time"] == expiration]
         assert len(keyslist2) == len(self.client.key_policy_set)
-        # s3 = boto3.resource("s3")
         for k in keyslist2:
             access2 = k["access_key"]
             secret2 = k["secret_key"]
             policy2 = k["key_policy"]
-            #- session1 = boto3.Session(
-            #-     aws_access_key_id=access2,
-            #-     aws_secret_access_key=secret2)
-            #- client1 = session1.resource(
-            #-     service_name="s3",
-            #-     endpoint_url=self.client.s3_ep,
-            #-     config=botocore.config.Config(signature_version="s3v4"),
-            #-     verify=self.client.ssl_verify)
             client1 = boto3.client(
                 service_name="s3",
                 region_name=region,
@@ -220,7 +288,7 @@ class Access_Test():
                 aws_access_key_id=access2,
                 aws_secret_access_key=secret2,
                 config=botocore.config.Config(signature_version="s3v4"))
-            _verbose_print(f";;; s3-client {policy2}; {access2}, {secret2}")
+            _verbose_print(f";; s3-client {policy2}; {access2}, {secret2}")
             self.s3_clients[expired][policy2] = client1
             pass
         assert self.s3_clients[expired].keys() == self.client.key_policy_set
@@ -229,12 +297,6 @@ class Access_Test():
         # (2) Make an S3 client without a key (for public access).
         #
 
-        #- session2 = boto3.Session()
-        #- client2 = session2.resource(
-        #-     service_name="s3",
-        #-     endpoint_url=self.client.s3_ep,
-        #-     config=botocore.config.Config(signature_version=botocore.UNSIGNED),
-        #-     verify=self.client.ssl_verify)
         client2 = boto3.client(
             service_name="s3",
             region_name=region,
@@ -251,18 +313,11 @@ class Access_Test():
         desc3 = self.client.make_secret(self.another_pool, policy3, expiration)
         keyslist3 = [k for k in desc3["secrets"]
                      if k["expiration_time"] == expiration]
-        # _verbose_print(f";;; keyslist3={keyslist3}")
+        # _verbose_print(f";; keyslist3={keyslist3}")
         assert len(keyslist3) == 1
         k3 = keyslist3[0]
         access3 = k3["access_key"]
         secret3 = k3["secret_key"]
-        #- session3 = boto3.Session(
-        #-     aws_access_key_id=access3,
-        #-     aws_secret_access_key=secret3)
-        #- client3 = session3.resource(
-        #-     service_name="s3",
-        #-     endpoint_url=self.client.s3_ep,
-        #-     verify=self.client.ssl_verify)
         client3 = boto3.client(
             service_name="s3",
             region_name=region,
@@ -271,7 +326,7 @@ class Access_Test():
             aws_secret_access_key=secret3,
             config=botocore.config.Config(signature_version="s3v4"))
         self.s3_clients[expired]["badkey"] = client3
-        print(f"s3clients[expired={expired}]={client3}")
+        #print(f"s3clients[expired={expired}]={client3}")
         pass
 
     def put_file_in_buckets(self):
@@ -282,10 +337,9 @@ class Access_Test():
         with open("gomi-file0.txt", "rb") as f:
             data = f.read()
             pass
-        unexpired = 0
-        s3 = self.s3_clients[unexpired]["readwrite"]
+        s3 = self.s3_clients[_UNEXPIRED]["readwrite"]
         for (policy, bucket) in self.buckets.items():
-            _verbose_print(f";;; Store to bucket={bucket}")
+            _verbose_print(f";; Store to bucket={bucket}")
             #- s3.Bucket(bucket).put_object(Key="gomi-file0.txt", Body=data)
             s3.put_object(
                 Body=data,
@@ -300,41 +354,57 @@ class Access_Test():
             data0 = f.read()
             pass
         for (key, bkt, op, expectation) in _expectations:
-            #time.sleep(10)
+            bucket = self.buckets[bkt]
+            # Copy a file each time for delete operations.
+            s3rw = self.s3_clients[_UNEXPIRED]["readwrite"]
+            s3rw.put_object(
+                Body=data0,
+                Bucket=bucket,
+                Key="gomi-file0.txt")
             # Fix an expectation for an expired key.
             if expired == 1 and key not in {"nokey", "badkey"}:
                 expectation = Respn("403")
                 pass
-            expiration = "" if expired == 0 else ", expired"
-            print(f"Accessing ({op}) a {bkt}-bucket"
-                  f" with a {key}-key{expiration}.")
+            #expiration = "" if expired == 0 else ", expired"
+            #print(f"Accessing ({op}) a {bkt}-bucket"
+            #      f" with a {key}-key{expiration}.")
             s3 = self.s3_clients[expired][key]
-            bucketname = self.buckets[bkt]
-            #- bucket = s3.Bucket(bucketname)
-            #- obj = bucket.Object("gomi-file0.txt")
-            assert op in {"head", "get", "put"}
+            assert op in {"head", "get", "put", "delete", "post"}
             result = Respn.OK
             try:
-                if op == "put":
-                    #- obj.put(Body=data0)
-                    response = s3.put_object(
-                        Body=data0,
-                        Bucket=bucketname,
+                if op == "head":
+                    response = s3.head_object(
+                        Bucket=bucket,
                         Key="gomi-file0.txt")
+                    len1 = response["ContentLength"]
+                    assert len(data0) == len1
                 elif op == "get":
-                    #- response = obj.get()
                     response = s3.get_object(
-                        Bucket=bucketname,
+                        Bucket=bucket,
                         Key="gomi-file0.txt")
                     data1 = response["Body"].read()
                     assert data0 == data1
-                elif op == "head":
-                    response = s3.head_object(
-                        Bucket=bucketname,
+                elif op == "put":
+                    response = s3.put_object(
+                        Body=data0,
+                        Bucket=bucket,
                         Key="gomi-file0.txt")
-                    print("response=", response)
-                    len1 = response["ContentLength"]
-                    assert len(data0) == len1
+                elif op == "delete":
+                    response = s3.delete_object(
+                        Bucket=bucket,
+                        Key="gomi-file0.txt")
+                elif op == "post":
+                    response = s3.delete_objects(
+                        Bucket=bucket,
+                        Delete={
+                            "Objects": [
+                                {
+                                    "Key": "gomi-file0.txt"
+                                },
+                            ]
+                        })
+                else:
+                    assert False
             except botocore.exceptions.ClientError as e:
                 #except urllib.error.HTTPError as e:
                 error = e.response["Error"]["Code"]
@@ -343,6 +413,9 @@ class Access_Test():
             else:
                 result = Respn.OK
                 pass
+            flag = "" if expired == 0 else "/expired"
+            print(f"Accessing {bkt}-bucket with {key}-key{flag}"
+                  f" by {op}: {result}")
             if not result == expectation:
                 print(f"result={result}; expectation={expectation}")
                 pass
@@ -413,19 +486,16 @@ class Access_Test():
             error = e.response["Error"]["Code"]
             assert error == "404"
             pass
-        # r = s3.delete_bucket(Bucket=bucket)
-        # print(f"delete_bucket={r}")
 
         #
         # (4) List objects.
         #
 
         bucketname = self.buckets["none"]
-        #- bucket = s3.Bucket(bucketname)
-        #- r = list(bucket.objects.all())
         r = s3.list_objects_v2(
             Bucket=bucketname)
-        print(f"bucket.objects.all()={r}")
+        objects = r["Contents"]
+        # print(f"bucket.objects.all()={objects}")
 
         #
         # (5) Upload/download objects.
@@ -435,13 +505,8 @@ class Access_Test():
         subprocess.run(["rm", "-f", "gomi-file0.txt", "gomi-file1.txt"])
         subprocess.run(["touch", "gomi-file0.txt"])
         subprocess.run(["shred", "-n", "1", "-s", "64K", "gomi-file0.txt"])
-        # upload_file(file, key); download_file(key, file)
-        #- r = bucket.upload_file("gomi-file0.txt", "gomi-file1.txt")
-        #- r = bucket.download_file("gomi-file1.txt", "gomi-file1.txt")
         r = s3.upload_file("gomi-file0.txt", bucketname, "gomi-file1.txt")
         r = s3.download_file(bucketname, "gomi-file1.txt", "gomi-file1.txt")
-        #- object = bucket.Object("gomi-file1.txt")
-        #- r = object.delete()
         r = s3.delete_object(
             Bucket=bucketname,
             Key="gomi-file1.txt")
@@ -459,8 +524,6 @@ class Access_Test():
             subprocess.run(["touch", src6])
             subprocess.run(["shred", "-n", "1", "-s", f"{size}", src6])
             name = f"gomi-file{i+3}.txt"
-            #- r = bucket.upload_file(src6, name)
-            #- r = bucket.download_file(name, dst6)
             r = s3.upload_file(src6, bucketname, name)
             r = s3.download_file(bucketname, name, dst6)
             with open(src6, "rb") as f:

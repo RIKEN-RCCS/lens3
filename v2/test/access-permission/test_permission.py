@@ -3,6 +3,9 @@
 # Copyright 2022-2024 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
+# Boto3 API reference is
+# https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html
+
 import enum
 import sys
 import time
@@ -46,50 +49,51 @@ class Respn(enum.Enum):
 # (key-policy, buket-policy, op, expectation)
 
 _expectations = [
-    ("nokey", "download", "r",     Respn.OK),
-    ("nokey", "download", "w",     Respn("403")),
-    ("nokey", "none", "r",         Respn("403")),
-    ("nokey", "none", "w",         Respn("403")),
-    ("nokey", "public", "r",       Respn.OK),
-    ("nokey", "public", "w",       Respn.OK),
-    ("nokey", "upload", "r",       Respn("403")),
-    ("nokey", "upload", "w",       Respn.OK),
+    ("nokey", "download", "head",     Respn.OK),
+    ("nokey", "download", "get",     Respn.OK),
+    ("nokey", "download", "put",     Respn("403")),
+    ("nokey", "none", "get",         Respn("403")),
+    ("nokey", "none", "put",         Respn("403")),
+    ("nokey", "public", "get",       Respn.OK),
+    ("nokey", "public", "put",       Respn.OK),
+    ("nokey", "upload", "get",       Respn("403")),
+    ("nokey", "upload", "put",       Respn.OK),
 
-    ("badkey", "download", "r",    Respn("403")),
-    ("badkey", "download", "w",    Respn("403")),
-    ("badkey", "none", "r",        Respn("403")),
-    ("badkey", "none", "w",        Respn("403")),
-    ("badkey", "public", "r",      Respn("403")),
-    ("badkey", "public", "w",      Respn("403")),
-    ("badkey", "upload", "r",      Respn("403")),
-    ("badkey", "upload", "w",      Respn("403")),
+    ("badkey", "download", "get",    Respn("403")),
+    ("badkey", "download", "put",    Respn("403")),
+    ("badkey", "none", "get",        Respn("403")),
+    ("badkey", "none", "put",        Respn("403")),
+    ("badkey", "public", "get",      Respn("403")),
+    ("badkey", "public", "put",      Respn("403")),
+    ("badkey", "upload", "get",      Respn("403")),
+    ("badkey", "upload", "put",      Respn("403")),
 
-    ("readonly", "download", "r",  Respn.OK),
-    ("readonly", "download", "w",  Respn("403")),
-    ("readonly", "none", "r",      Respn.OK),
-    ("readonly", "none", "w",      Respn("403")),
-    ("readonly", "public", "r",    Respn.OK),
-    ("readonly", "public", "w",    Respn("403")),
-    ("readonly", "upload", "r",    Respn.OK),
-    ("readonly", "upload", "w",    Respn("403")),
+    ("readonly", "download", "get",  Respn.OK),
+    ("readonly", "download", "put",  Respn("403")),
+    ("readonly", "none", "get",      Respn.OK),
+    ("readonly", "none", "put",      Respn("403")),
+    ("readonly", "public", "get",    Respn.OK),
+    ("readonly", "public", "put",    Respn("403")),
+    ("readonly", "upload", "get",    Respn.OK),
+    ("readonly", "upload", "put",    Respn("403")),
 
-    ("readwrite", "download", "r", Respn.OK),
-    ("readwrite", "download", "w", Respn.OK),
-    ("readwrite", "none", "r",     Respn.OK),
-    ("readwrite", "none", "w",     Respn.OK),
-    ("readwrite", "public", "r",   Respn.OK),
-    ("readwrite", "public", "w",   Respn.OK),
-    ("readwrite", "upload", "r",   Respn.OK),
-    ("readwrite", "upload", "w",   Respn.OK),
+    ("readwrite", "download", "get", Respn.OK),
+    ("readwrite", "download", "put", Respn.OK),
+    ("readwrite", "none", "get",     Respn.OK),
+    ("readwrite", "none", "put",     Respn.OK),
+    ("readwrite", "public", "get",   Respn.OK),
+    ("readwrite", "public", "put",   Respn.OK),
+    ("readwrite", "upload", "get",   Respn.OK),
+    ("readwrite", "upload", "put",   Respn.OK),
 
-    ("writeonly", "download", "r", Respn("403")),
-    ("writeonly", "download", "w", Respn.OK),
-    ("writeonly", "none", "r",     Respn("403")),
-    ("writeonly", "none", "w",     Respn.OK),
-    ("writeonly", "public", "r",   Respn("403")),
-    ("writeonly", "public", "w",   Respn.OK),
-    ("writeonly", "upload", "r",   Respn("403")),
-    ("writeonly", "upload", "w",   Respn.OK),
+    ("writeonly", "download", "get", Respn("403")),
+    ("writeonly", "download", "put", Respn.OK),
+    ("writeonly", "none", "get",     Respn("403")),
+    ("writeonly", "none", "put",     Respn.OK),
+    ("writeonly", "public", "get",   Respn("403")),
+    ("writeonly", "public", "put",   Respn.OK),
+    ("writeonly", "upload", "get",   Respn("403")),
+    ("writeonly", "upload", "put",   Respn.OK),
 ]
 
 
@@ -175,6 +179,7 @@ class Access_Test():
 
     def make_s3_clients(self, expired):
         """Makes S3 clients one for each access-key (for each policy)."""
+        region = "us-east-1"
         assert expired == 0 or expired == 1
         now = int(time.time())
         if expired == 0:
@@ -182,9 +187,11 @@ class Access_Test():
         else:
             expiration = now + 10
             pass
+
         #
-        # Make an S3 client for each access-key.
+        # (1) Make an S3 client for each access-key.
         #
+
         for policy in self.client.key_policy_set:
             print(f"Making an access-key with policy={policy} expired={expired}")
             self.client.make_secret(self.working_pool, policy, expiration)
@@ -198,31 +205,47 @@ class Access_Test():
             access2 = k["access_key"]
             secret2 = k["secret_key"]
             policy2 = k["key_policy"]
-            session1 = boto3.Session(
-                aws_access_key_id=access2,
-                aws_secret_access_key=secret2)
-            client1 = session1.resource(
+            #- session1 = boto3.Session(
+            #-     aws_access_key_id=access2,
+            #-     aws_secret_access_key=secret2)
+            #- client1 = session1.resource(
+            #-     service_name="s3",
+            #-     endpoint_url=self.client.s3_ep,
+            #-     config=botocore.config.Config(signature_version="s3v4"),
+            #-     verify=self.client.ssl_verify)
+            client1 = boto3.client(
                 service_name="s3",
+                region_name=region,
                 endpoint_url=self.client.s3_ep,
-                config=botocore.config.Config(signature_version="s3v4"),
-                verify=self.client.ssl_verify)
+                aws_access_key_id=access2,
+                aws_secret_access_key=secret2,
+                config=botocore.config.Config(signature_version="s3v4"))
             _verbose_print(f";;; s3-client {policy2}; {access2}, {secret2}")
             self.s3_clients[expired][policy2] = client1
             pass
         assert self.s3_clients[expired].keys() == self.client.key_policy_set
+
         #
-        # Make an S3 client for public access (without a key).
+        # (2) Make an S3 client without a key (for public access).
         #
-        session2 = boto3.Session()
-        client2 = session2.resource(
+
+        #- session2 = boto3.Session()
+        #- client2 = session2.resource(
+        #-     service_name="s3",
+        #-     endpoint_url=self.client.s3_ep,
+        #-     config=botocore.config.Config(signature_version=botocore.UNSIGNED),
+        #-     verify=self.client.ssl_verify)
+        client2 = boto3.client(
             service_name="s3",
+            region_name=region,
             endpoint_url=self.client.s3_ep,
-            config=botocore.config.Config(signature_version=botocore.UNSIGNED),
-            verify=self.client.ssl_verify)
+            config=botocore.config.Config(signature_version=botocore.UNSIGNED))
         self.s3_clients[expired]["nokey"] = client2
+
         #
-        # Make an S3 client with an unusable key (a key for another pool).
+        # (3) Make an S3 client with an unusable key (a key for another pool).
         #
+
         policy3 = "readwrite"
         assert policy3 in self.client.key_policy_set
         desc3 = self.client.make_secret(self.another_pool, policy3, expiration)
@@ -233,15 +256,22 @@ class Access_Test():
         k3 = keyslist3[0]
         access3 = k3["access_key"]
         secret3 = k3["secret_key"]
-        session3 = boto3.Session(
-            aws_access_key_id=access3,
-            aws_secret_access_key=secret3)
-        client3 = session3.resource(
+        #- session3 = boto3.Session(
+        #-     aws_access_key_id=access3,
+        #-     aws_secret_access_key=secret3)
+        #- client3 = session3.resource(
+        #-     service_name="s3",
+        #-     endpoint_url=self.client.s3_ep,
+        #-     verify=self.client.ssl_verify)
+        client3 = boto3.client(
             service_name="s3",
+            region_name=region,
             endpoint_url=self.client.s3_ep,
-            verify=self.client.ssl_verify)
+            aws_access_key_id=access3,
+            aws_secret_access_key=secret3,
+            config=botocore.config.Config(signature_version="s3v4"))
         self.s3_clients[expired]["badkey"] = client3
-        print(f"s3clients[expired={expired}]={self.s3_clients[expired]}")
+        print(f"s3clients[expired={expired}]={client3}")
         pass
 
     def put_file_in_buckets(self):
@@ -256,7 +286,11 @@ class Access_Test():
         s3 = self.s3_clients[unexpired]["readwrite"]
         for (policy, bucket) in self.buckets.items():
             _verbose_print(f";;; Store to bucket={bucket}")
-            s3.Bucket(bucket).put_object(Key="gomi-file0.txt", Body=data)
+            #- s3.Bucket(bucket).put_object(Key="gomi-file0.txt", Body=data)
+            s3.put_object(
+                Body=data,
+                Bucket=bucket,
+                Key="gomi-file0.txt")
             pass
         pass
 
@@ -276,17 +310,31 @@ class Access_Test():
                   f" with a {key}-key{expiration}.")
             s3 = self.s3_clients[expired][key]
             bucketname = self.buckets[bkt]
-            bucket = s3.Bucket(bucketname)
-            obj = bucket.Object("gomi-file0.txt")
-            assert op in {"w", "r"}
+            #- bucket = s3.Bucket(bucketname)
+            #- obj = bucket.Object("gomi-file0.txt")
+            assert op in {"head", "get", "put"}
             result = Respn.OK
             try:
-                if op == "w":
-                    obj.put(Body=data0)
-                else:
-                    response = obj.get()
+                if op == "put":
+                    #- obj.put(Body=data0)
+                    response = s3.put_object(
+                        Body=data0,
+                        Bucket=bucketname,
+                        Key="gomi-file0.txt")
+                elif op == "get":
+                    #- response = obj.get()
+                    response = s3.get_object(
+                        Bucket=bucketname,
+                        Key="gomi-file0.txt")
                     data1 = response["Body"].read()
                     assert data0 == data1
+                elif op == "head":
+                    response = s3.head_object(
+                        Bucket=bucketname,
+                        Key="gomi-file0.txt")
+                    print("response=", response)
+                    len1 = response["ContentLength"]
+                    assert len(data0) == len1
             except botocore.exceptions.ClientError as e:
                 #except urllib.error.HTTPError as e:
                 error = e.response["Error"]["Code"]
@@ -342,7 +390,8 @@ class Access_Test():
         #
 
         try:
-            r = list(s3.buckets.all())
+            #- r = list(s3.buckets.all())
+            r = list(s3.list_buckets())
             print(f"buckets.all()={r}")
         except botocore.exceptions.ClientError as e:
             error = e.response["Error"]["Code"]
@@ -364,18 +413,18 @@ class Access_Test():
             error = e.response["Error"]["Code"]
             assert error == "404"
             pass
-
         # r = s3.delete_bucket(Bucket=bucket)
         # print(f"delete_bucket={r}")
-
-        bucketname = self.buckets["none"]
 
         #
         # (4) List objects.
         #
 
-        bucket = s3.Bucket(bucketname)
-        r = list(bucket.objects.all())
+        bucketname = self.buckets["none"]
+        #- bucket = s3.Bucket(bucketname)
+        #- r = list(bucket.objects.all())
+        r = s3.list_objects_v2(
+            Bucket=bucketname)
         print(f"bucket.objects.all()={r}")
 
         #
@@ -387,10 +436,15 @@ class Access_Test():
         subprocess.run(["touch", "gomi-file0.txt"])
         subprocess.run(["shred", "-n", "1", "-s", "64K", "gomi-file0.txt"])
         # upload_file(file, key); download_file(key, file)
-        r = bucket.upload_file("gomi-file0.txt", "gomi-file1.txt")
-        r = bucket.download_file("gomi-file1.txt", "gomi-file1.txt")
-        object = bucket.Object("gomi-file1.txt")
-        r = object.delete()
+        #- r = bucket.upload_file("gomi-file0.txt", "gomi-file1.txt")
+        #- r = bucket.download_file("gomi-file1.txt", "gomi-file1.txt")
+        r = s3.upload_file("gomi-file0.txt", bucketname, "gomi-file1.txt")
+        r = s3.download_file(bucketname, "gomi-file1.txt", "gomi-file1.txt")
+        #- object = bucket.Object("gomi-file1.txt")
+        #- r = object.delete()
+        r = s3.delete_object(
+            Bucket=bucketname,
+            Key="gomi-file1.txt")
 
         #
         # (6) Upload/download files with varying sizes.
@@ -405,8 +459,10 @@ class Access_Test():
             subprocess.run(["touch", src6])
             subprocess.run(["shred", "-n", "1", "-s", f"{size}", src6])
             name = f"gomi-file{i+3}.txt"
-            r = bucket.upload_file(src6, name)
-            r = bucket.download_file(name, dst6)
+            #- r = bucket.upload_file(src6, name)
+            #- r = bucket.download_file(name, dst6)
+            r = s3.upload_file(src6, bucketname, name)
+            r = s3.download_file(bucketname, name, dst6)
             with open(src6, "rb") as f:
                 data0 = f.read()
                 pass

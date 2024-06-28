@@ -531,6 +531,21 @@ func check_authenticated(m *multiplexer, r *http.Request) (*secret_record, *prox
 		}
 		return nil, err2
 	}
+	var now = time.Now()
+	var expiration = time.Unix(secret.Expiration_time, 0)
+	if !now.Before(expiration) {
+		var reason = "expired"
+		slogger.Info(m.MuxEP+" Bad credential",
+			"key", auth, "reason", reason)
+		var err3 = &proxy_exc{
+			"-",
+			http_403_forbidden,
+			[][2]string{
+				message_access_rejected,
+			},
+		}
+		return nil, err3
+	}
 	return secret, nil
 }
 

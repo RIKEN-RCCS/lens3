@@ -39,6 +39,60 @@ class Respn(enum.Enum):
     pass
 
 
+# Expected responses.  Expectations in the table are fixed for
+# expired access keys as Respn("403") (excluding nokey and other
+# keys).
+#
+# (key-policy, buket-policy, op, expectation)
+
+_expectations = [
+    ("nokey", "download", "r",     Respn.OK),
+    ("nokey", "download", "w",     Respn("403")),
+    ("nokey", "none", "r",         Respn("403")),
+    ("nokey", "none", "w",         Respn("403")),
+    ("nokey", "public", "r",       Respn.OK),
+    ("nokey", "public", "w",       Respn.OK),
+    ("nokey", "upload", "r",       Respn("403")),
+    ("nokey", "upload", "w",       Respn.OK),
+
+    ("badkey", "download", "r",    Respn("403")),
+    ("badkey", "download", "w",    Respn("403")),
+    ("badkey", "none", "r",        Respn("403")),
+    ("badkey", "none", "w",        Respn("403")),
+    ("badkey", "public", "r",      Respn("403")),
+    ("badkey", "public", "w",      Respn("403")),
+    ("badkey", "upload", "r",      Respn("403")),
+    ("badkey", "upload", "w",      Respn("403")),
+
+    ("readonly", "download", "r",  Respn.OK),
+    ("readonly", "download", "w",  Respn("403")),
+    ("readonly", "none", "r",      Respn.OK),
+    ("readonly", "none", "w",      Respn("403")),
+    ("readonly", "public", "r",    Respn.OK),
+    ("readonly", "public", "w",    Respn("403")),
+    ("readonly", "upload", "r",    Respn.OK),
+    ("readonly", "upload", "w",    Respn("403")),
+
+    ("readwrite", "download", "r", Respn.OK),
+    ("readwrite", "download", "w", Respn.OK),
+    ("readwrite", "none", "r",     Respn.OK),
+    ("readwrite", "none", "w",     Respn.OK),
+    ("readwrite", "public", "r",   Respn.OK),
+    ("readwrite", "public", "w",   Respn.OK),
+    ("readwrite", "upload", "r",   Respn.OK),
+    ("readwrite", "upload", "w",   Respn.OK),
+
+    ("writeonly", "download", "r", Respn("403")),
+    ("writeonly", "download", "w", Respn.OK),
+    ("writeonly", "none", "r",     Respn("403")),
+    ("writeonly", "none", "w",     Respn.OK),
+    ("writeonly", "public", "r",   Respn("403")),
+    ("writeonly", "public", "w",   Respn.OK),
+    ("writeonly", "upload", "r",   Respn("403")),
+    ("writeonly", "upload", "w",   Respn.OK),
+]
+
+
 class Access_Test():
     """S3 Access Test.  It tests various combinations of key policies and
     bucket policies.  Some uses keys that are expired -- they are
@@ -186,7 +240,7 @@ class Access_Test():
             service_name="s3",
             endpoint_url=self.client.s3_ep,
             verify=self.client.ssl_verify)
-        self.s3_clients[expired]["other"] = client3
+        self.s3_clients[expired]["badkey"] = client3
         print(f"s3clients[expired={expired}]={self.s3_clients[expired]}")
         pass
 
@@ -206,71 +260,15 @@ class Access_Test():
             pass
         pass
 
-    # Expected responses.  Expectations in the table are fixed for
-    # expired access keys as Respn("403") (excluding nokey and other
-    # keys).
-
-    expectations = [
-        # (op, buket-policy, key-policy, expectation)
-        ("w", "none", "nokey",     Respn("401")),
-        ("w", "none", "other",     Respn("403")),
-        ("w", "none", "readwrite", Respn.OK),
-        ("w", "none", "readonly",  Respn("AccessDenied")),
-        #("w", "none", "readonly",  Respn("503")),
-        ("w", "none", "writeonly", Respn.OK),
-        ("r", "none", "nokey",     Respn("401")),
-        ("r", "none", "other",     Respn("403")),
-        ("r", "none", "readwrite", Respn.OK),
-        ("r", "none", "readonly",  Respn.OK),
-        ("r", "none", "writeonly", Respn("AccessDenied")),
-
-        ("w", "upload", "nokey",     Respn.OK),
-        ("w", "upload", "other",     Respn("403")),
-        ("w", "upload", "readwrite", Respn.OK),
-        ("w", "upload", "readonly",  Respn("AccessDenied")),
-        #("w", "upload", "readonly",  Respn("503")),
-        ("w", "upload", "writeonly", Respn.OK),
-        ("r", "upload", "nokey",     Respn("AccessDenied")),
-        ("r", "upload", "other",     Respn("403")),
-        ("r", "upload", "readwrite", Respn.OK),
-        ("r", "upload", "readonly",  Respn.OK),
-        ("r", "upload", "writeonly", Respn("AccessDenied")),
-
-        ("w", "download", "nokey",     Respn("AccessDenied")),
-        #("w", "download", "nokey",     Respn("503")),
-        ("w", "download", "other",     Respn("403")),
-        ("w", "download", "readwrite", Respn.OK),
-        ("w", "download", "readonly",  Respn("AccessDenied")),
-        #("w", "download", "readonly",  Respn("503")),
-        ("w", "download", "writeonly", Respn.OK),
-        ("r", "download", "nokey",     Respn.OK),
-        ("r", "download", "other",     Respn("403")),
-        ("r", "download", "readwrite", Respn.OK),
-        ("r", "download", "readonly",  Respn.OK),
-        ("r", "download", "writeonly", Respn("AccessDenied")),
-
-        ("w", "public", "nokey",     Respn.OK),
-        ("w", "public", "other",     Respn("403")),
-        ("w", "public", "readwrite", Respn.OK),
-        ("w", "public", "readonly",  Respn("AccessDenied")),
-        #("w", "public", "readonly",  Respn("503")),
-        ("w", "public", "writeonly", Respn.OK),
-        ("r", "public", "nokey",     Respn.OK),
-        ("r", "public", "other",     Respn("403")),
-        ("r", "public", "readwrite", Respn.OK),
-        ("r", "public", "readonly",  Respn.OK),
-        ("r", "public", "writeonly", Respn("AccessDenied"))
-    ]
-
     def get_put_by_varying_policies(self, expired):
         assert expired == 0 or expired == 1
         with open("gomi-file0.txt", "rb") as f:
             data0 = f.read()
             pass
-        for (op, bkt, key, expectation) in self.expectations:
+        for (key, bkt, op, expectation) in _expectations:
             #time.sleep(10)
             # Fix an expectation for an expired key.
-            if expired == 1 and key not in {"nokey", "other"}:
+            if expired == 1 and key not in {"nokey", "badkey"}:
                 expectation = Respn("403")
                 pass
             expiration = "" if expired == 0 else ", expired"
@@ -348,7 +346,7 @@ class Access_Test():
             print(f"buckets.all()={r}")
         except botocore.exceptions.ClientError as e:
             error = e.response["Error"]["Code"]
-            assert error == "401"
+            assert error == "403"
             pass
         bucket = ("lenticularis-oddity-" + random_string(6))
         while bucket in self.working_buckets:

@@ -3,7 +3,7 @@
   "version": "v2.1",
   "aws_signature": "AWS4-HMAC-SHA256",
   "multiplexer": {
-    "backend": "rclone",
+    "backend": "minio",
     "port": 8003,
     "front_host": "localhost",
     "trusted_proxy_list": [

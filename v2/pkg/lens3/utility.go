@@ -443,7 +443,7 @@ func dump_statistics_periodically(period time.Duration) {
 	for {
 		select {
 		case <-ch:
-			dump_statistics()
+			dump_statistics(false)
 		}
 	}
 }
@@ -461,12 +461,36 @@ func tick_periodically(ch chan<- time.Time, period time.Duration) {
 	}
 }
 
-func dump_statistics() {
+func dump_statistics(verbose bool) {
 	//runtime.MemProfile()
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
-	var g debug.GCStats
-	debug.ReadGCStats(&g)
-	slogger.Info("Stats", "MemStats", m)
-	slogger.Info("Stats", "GCStats", g)
+	var ms = struct {
+		HeapAlloc   uint64
+		HeapSys     uint64
+		HeapObjects uint64
+		HeapInuse   uint64
+		StackInuse  uint64
+		OtherSys    uint64
+		NumGC       uint32
+		NumForcedGC uint32
+	}{
+		HeapAlloc:   m.HeapAlloc,
+		HeapInuse:   m.HeapInuse,
+		HeapSys:     m.HeapSys,
+		StackInuse:  m.StackInuse,
+		OtherSys:    m.OtherSys,
+		HeapObjects: m.HeapObjects,
+		NumGC:       m.NumGC,
+		NumForcedGC: m.NumForcedGC,
+	}
+	slogger.Info("MemStats", "Summary", ms)
+	if verbose {
+		slogger.Info("MemStats", "MemStats", m)
+	}
+	if verbose {
+		var g debug.GCStats
+		debug.ReadGCStats(&g)
+		slogger.Info("GCStats", "GCStats", g)
+	}
 }

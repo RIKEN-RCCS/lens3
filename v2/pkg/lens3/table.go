@@ -192,13 +192,12 @@ type bucket_record struct {
 // "sx:" + secret Entry (DB_SECRET_PREFIX).  Constraint:
 // (key≡secret_record.Access_key).
 type secret_record struct {
-	Pool          string        `json:"pool"`
-	Access_key    string        `json:"access_key"`
-	Secret_key    string        `json:"secret_key"`
-	Secret_policy secret_policy `json:"secret_policy"`
-	//Internal_use    bool          `json:"internal_use"`
-	Expiration_time int64 `json:"expiration_time"`
-	Timestamp       int64 `json:"timestamp"`
+	Pool            string        `json:"pool"`
+	Access_key      string        `json:"access_key"`
+	Secret_key      string        `json:"secret_key"`
+	Secret_policy   secret_policy `json:"secret_policy"`
+	Expiration_time int64         `json:"expiration_time"`
+	Timestamp       int64         `json:"timestamp"`
 }
 
 // "mu:" + mux-ep Entry (DB_MUX_EP_PREFIX).  Constraint:

@@ -1227,7 +1227,7 @@ func check_make_secret_arguments(z *registrar, u *user_record, pool string, data
 	var days = conf.Secret_expiration_days
 	var e = time.Unix(args.Expiration_time, 0)
 	var now = time.Now()
-	if !(e.After(now.AddDate(0, 0, -1)) && e.Before(now.AddDate(0, 0, days))) {
+	if !(now.AddDate(0, 0, -1).Before(e) && e.Before(now.AddDate(0, 0, days))) {
 		return reg_error_message{
 			message_bad_expiration,
 			{"expiration", e.Format(time.DateOnly)},
@@ -1564,15 +1564,18 @@ func intern_ui_bucket_policy(policy string) bucket_policy {
 	}
 }
 
+// EXTEND_USER_EXPIRATION_TIME extends user's validity by the
+// specified days.
 func extend_user_expiration_time(z *registrar, u *user_record) {
 	var conf = &z.conf.Registrar
 	assert_fatal(conf.User_expiration_days > 0)
+	var old_expiration = time.Unix(u.Expiration_time, 0)
 	var days = conf.User_expiration_days
-	var expiration = time.Now().AddDate(0, 0, days).Unix()
-	if u.Expiration_time < expiration {
-		u.Expiration_time = expiration
+	var new_expiration = time.Now().AddDate(0, 0, days)
+	if old_expiration.Before(new_expiration) {
+		u.Expiration_time = new_expiration.Unix()
+		set_user_raw(z.table, u)
 	}
-	set_user_raw(z.table, u)
 }
 
 func list_groups_of_user(z *registrar, uid string) []string {

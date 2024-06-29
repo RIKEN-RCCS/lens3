@@ -3,9 +3,8 @@
   "version": "v2.1",
   "aws_signature": "AWS4-HMAC-SHA256",
   "registrar": {
-    "backend": "rclone",
     "port": 8004,
-    "front_host": "localhost",
+    "server_ep": "localhost:8004",
     "trusted_proxy_list": [
       "localhost"
     ],

@@ -1,7 +1,5 @@
 # Access Permission Test
 
-test_permission.py
-
 ## Description
 
 [test_permission.py](test_permission.py) checks permission of

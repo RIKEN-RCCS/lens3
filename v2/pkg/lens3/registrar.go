@@ -24,6 +24,16 @@ package lens3
 // cookie part is subsumed by authenitication by httpd).  See
 // https://github.com/aekasitt/fastapi-csrf-protect
 
+// NOTE: Arrays are initialed by "make(type,0)" if they are to be
+// returned to UI in json.  It is a trick to make a json entry
+// "key:[]" instead of "key:null".
+
+// NOTE: An URL to http.Redirect includes a host:port that matches the
+// pattern in the Apache "ProxyPassReverse" directive.  Otherwise,
+// rewriting by the proxy fails.  A status code can be one of
+// {StatusMovedPermanently(301), StatusSeeOther(303),
+// StatusTemporaryRedirect(307), StatusPermanentRedirect(308)}.
+
 // NOTE???: Maybe, consider adding a "Retry-After" header for 503
 // error.
 
@@ -32,7 +42,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"os/user"
@@ -44,6 +53,7 @@ import (
 	"time"
 	//"context"
 	//"flag"
+	//"io"
 	//"log"
 	//"maps"
 	//"math/rand/v2"
@@ -55,8 +65,7 @@ import (
 	//"runtime/debug"
 )
 
-// UI script is by Golang's embedded files.
-
+// UI scripts are stored in Golang's embedded files.
 import "embed"
 
 //go:embed ui
@@ -266,28 +275,36 @@ func start_registrar(z *registrar, wg *sync.WaitGroup) {
 
 	router.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
-		slogger.Debug("Reg() GET /")
-		http.Redirect(w, r, "./ui/index.html", http.StatusSeeOther)
+		var ep = z.conf.Registrar.Server_ep
+		var newurl = "http://" + ep + "/ui/index.html"
+		slogger.Debug("Reg() GET /", "redirect", newurl)
+		http.Redirect(w, r, newurl, http.StatusTemporaryRedirect)
 	})
 
 	router.HandleFunc("GET /ui/index.html", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
-		var _ = return_ui_script(z, w, r, "ui/index.html")
+		slogger.Debug("Reg() GET /ui/index.html")
+		//var _ = return_ui_script(z, w, r, "ui/index.html")
+		var _ = return_file(z, w, r, r.URL.Path, true, &efs1)
 	})
 
 	router.HandleFunc("GET /ui2/index.html", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
-		var _ = return_ui_script(z, w, r, "ui2/index.html")
+		slogger.Debug("Reg() GET /ui2/index.html")
+		//var _ = return_ui_script(z, w, r, "ui2/index.html")
+		var _ = return_file(z, w, r, r.URL.Path, true, &efs2)
 	})
 
 	router.HandleFunc("GET /ui/", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
-		var _ = return_file(z, w, r, r.URL.Path, &efs1)
+		slogger.Debug("Reg() GET /ui/", "path", r.URL.Path)
+		var _ = return_file(z, w, r, r.URL.Path, false, &efs1)
 	})
 
 	router.HandleFunc("GET /ui2/", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
-		var _ = return_file(z, w, r, r.URL.Path, &efs2)
+		slogger.Debug("Reg() GET /ui2/", "path", r.URL.Path)
+		var _ = return_file(z, w, r, r.URL.Path, false, &efs2)
 	})
 
 	router.HandleFunc("GET /user-info", func(w http.ResponseWriter, r *http.Request) {
@@ -371,47 +388,60 @@ func handle_registrar_exc(z *registrar, w http.ResponseWriter, rqst *http.Reques
 	handle_exc("Reg()", delay_ms, logfn, w, rqst)
 }
 
-func return_ui_script(z *registrar, w http.ResponseWriter, rqst *http.Request, path string) *string {
-	var data1, err1 = efs1.ReadFile(path)
+func return_file(z *registrar, w http.ResponseWriter, rqst *http.Request, path string, modify_script bool, efs *embed.FS) *[]byte {
+	var path1 string
+	if len(path) >= 1 && path[0] == '/' {
+		path1 = path[1:]
+	} else {
+		path1 = path
+	}
+	var data1, err1 = efs.ReadFile(path1)
 	if err1 != nil {
+		slogger.Error("Reg() Reading UI files failed",
+			"path", path1, "err", err1)
 		delay_sleep(z.conf.Registrar.Error_response_delay_ms)
 		var msg = "BAD"
 		var code = http_500_internal_server_error
 		http.Error(w, msg, code)
-		//log_access_with_user(rspn, "-")
 		log_reg_access_by_request(rqst, code, int64(len(msg)), "-", "-")
 		return nil
 	}
-	var parameters = (`<script type="text/javascript">const base_path_="` +
-		z.conf.Registrar.Base_path + `";</script>`)
-	var data2 = strings.Replace(string(data1),
-		"PLACE_BASE_PATH_SETTING_HERE", parameters, 1)
-	//fmt.Println(string(data2))
-	var _, err2 = io.WriteString(w, data2)
-	if err2 != nil {
-		slogger.Error("Reg() Writing reply failed", "err", err2)
-	}
-	var wf, ok = w.(http.Flusher)
-	if ok {
-		wf.Flush()
-	}
-	//log_access_with_user(rspn, "-")
-	log_reg_access_by_request(rqst, 200, int64(len(data2)), "-", "-")
-	return &data2
-}
 
-func return_file(z *registrar, w http.ResponseWriter, rqst *http.Request, path string, efs1 *embed.FS) *[]byte {
-	var data1, err1 = efs1.ReadFile(path)
-	if err1 != nil {
-		delay_sleep(z.conf.Registrar.Error_response_delay_ms)
-		var msg = "BAD"
-		var code = http_500_internal_server_error
-		http.Error(w, msg, code)
-		//log_access_with_user(rspn, "-")
-		log_reg_access_by_request(rqst, code, int64(len(msg)), "-", "-")
-		return nil
+	var data2 []byte
+	if modify_script {
+		var parameters = (`<script type="text/javascript">const base_path_="` +
+			z.conf.Registrar.Base_path + `";</script>`)
+		var x = strings.Replace(string(data1),
+			"PLACE_BASE_PATH_SETTING_HERE", parameters, 1)
+		//fmt.Println(string(x))
+		data2 = []byte(x)
+	} else {
+		data2 = data1
 	}
-	var _, err2 = w.Write(data1)
+
+	switch filepath.Ext(path1) {
+	case ".html":
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	case ".css":
+		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+	case ".js":
+		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+	default:
+		//favicon.ico -> "image/png"
+		//materialdesignicons-webfont.ttf
+		//materialdesignicons-webfont.eot
+		//materialdesignicons-webfont.woff
+		//materialdesignicons-webfont.woff2 -> "font/woff2"
+		//materialdesignicons.css.map -> "text/plain"
+		var ct = http.DetectContentType(data2)
+		if z.verbose {
+			slogger.Debug("Reg() http.DetectContentType()",
+				"path", path1, "type", ct)
+		}
+		w.Header().Set("Content-Type", (ct + "; charset=utf-8"))
+	}
+
+	var _, err2 = w.Write(data2)
 	if err2 != nil {
 		slogger.Error("Reg() Writing reply failed", "err", err2)
 	}
@@ -419,8 +449,7 @@ func return_file(z *registrar, w http.ResponseWriter, rqst *http.Request, path s
 	if ok {
 		wf.Flush()
 	}
-	//log_access_with_user(rspn, "-")
-	log_reg_access_by_request(rqst, 200, int64(len(data1)), "-", "-")
+	log_reg_access_by_request(rqst, 200, int64(len(data2)), "-", "-")
 	return &data1
 }
 
@@ -494,7 +523,7 @@ func list_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 	}
 
 	var namelist = list_pools(z.table, ITE(pool == "", "*", pool))
-	var poollist []*pool_prop_ui
+	var poollist []*pool_prop_ui = make([]*pool_prop_ui, 0)
 	for _, name := range namelist {
 		var d = gather_pool_prop(z.table, name)
 		if d != nil && d.Owner_uid == u.Uid {
@@ -1467,7 +1496,7 @@ func copy_pool_prop_to_ui(d *pool_prop) *pool_prop_ui {
 }
 
 func copy_bucket_data_to_ui(m []*bucket_record) []*bucket_data_ui {
-	var buckets []*bucket_data_ui
+	var buckets []*bucket_data_ui = make([]*bucket_data_ui, 0)
 	for _, d := range m {
 		var u = &bucket_data_ui{
 			Pool:          d.Pool,
@@ -1481,7 +1510,7 @@ func copy_bucket_data_to_ui(m []*bucket_record) []*bucket_data_ui {
 }
 
 func copy_secret_data_to_ui(m []*secret_record) []*secret_data_ui {
-	var secrets []*secret_data_ui
+	var secrets []*secret_data_ui = make([]*secret_data_ui, 0)
 	for _, d := range m {
 		if d.Secret_policy == secret_policy_internal_access {
 			continue
@@ -1712,8 +1741,12 @@ func return_json_repsonse(z *registrar, w http.ResponseWriter, rqst *http.Reques
 		slogger.Error("Reg() json.Marshal() failed", "err", err1)
 		panic(nil)
 	}
+
+	if true {
+		fmt.Printf("*** Response=%#v\n", string(v1))
+	}
+
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	//io.WriteString(w, string(v1))
 	var _, err2 = w.Write(v1)
 	if err2 != nil {
 		slogger.Error("Reg() Writing reply failed", "err", err2)

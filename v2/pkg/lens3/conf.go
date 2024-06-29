@@ -65,11 +65,10 @@ type Conf_header struct {
 // is optional.  NOTE: Trusted_proxy_list should include the frontend
 // proxies and the Mux hosts.
 type multiplexer_conf struct {
-	Backend                 backend_name `json:"backend"`
 	Port                    int          `json:"port"`
-	Front_host              string       `json:"front_host"`
 	Trusted_proxy_list      []string     `json:"trusted_proxy_list"`
 	Mux_node_name           string       `json:"mux_node_name"`
+	Backend                 backend_name `json:"backend"`
 	Mux_ep_update_interval  time_in_sec  `json:"mux_ep_update_interval"`
 	Forwarding_timeout      time_in_sec  `json:"forwarding_timeout"`
 	Probe_access_timeout    time_in_sec  `json:"probe_access_timeout"`
@@ -78,10 +77,11 @@ type multiplexer_conf struct {
 	Backend_timeout_ms      time_in_sec  `json:"backend_timeout_ms"`
 }
 
+// REGISTRAR_CONF is a Registrar configuration.  SERVER_EP is a
+// host:port that is used by the frontend proxy to refer to Registrar.
 type registrar_conf struct {
-	Backend                 backend_name  `json:"backend"`
 	Port                    int           `json:"port"`
-	Front_host              string        `json:"front_host"`
+	Server_ep               string        `json:"server_ep"`
 	Trusted_proxy_list      []string      `json:"trusted_proxy_list"`
 	Base_path               string        `json:"base_path"`
 	Claim_uid_map           claim_uid_map `json:"claim_uid_map"`
@@ -331,11 +331,11 @@ func check_field_required_and_positive(t any, slot string) {
 
 func check_multiplexer_entry(e *multiplexer_conf) {
 	for _, slot := range []string{
-		"Backend",
 		"Port",
-		"Front_host",
+		//"Front_host",
 		//"Trusted_proxy_list",
 		//"Mux_node_name",
+		"Backend",
 		"Mux_ep_update_interval",
 		"Forwarding_timeout",
 		"Probe_access_timeout",
@@ -353,9 +353,9 @@ func check_multiplexer_entry(e *multiplexer_conf) {
 
 func check_registrar_entry(e *registrar_conf) {
 	for _, slot := range []string{
-		"Backend",
+		//"Backend",
 		"Port",
-		"Front_host",
+		"Server_ep",
 		// "Trusted_proxy_list",
 		// "Base_path",
 		"Claim_uid_map",
@@ -378,10 +378,6 @@ func check_registrar_entry(e *registrar_conf) {
 	}
 	if !slices.Contains(claim_conversions, e.Claim_uid_map) {
 		slogger.Error("Bad claim mapping", "name", e.Claim_uid_map)
-		panic(nil)
-	}
-	if !slices.Contains(backend_list, e.Backend) {
-		slogger.Error("Bad backend name", "name", e.Backend)
 		panic(nil)
 	}
 }

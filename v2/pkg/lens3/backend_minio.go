@@ -1,4 +1,4 @@
-/* S3-server delegate for MinIO. */
+/* S3 Server Delegate for MinIO. */
 
 // Copyright 2022-2024 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
@@ -6,23 +6,23 @@
 package lens3
 
 import (
-	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
+	//"bytes"
+	//"context"
 	//"encoding/json"
 	//"log"
 	//"maps"
+	//"os/exec"
 	//"reflect"
 	//"syscall"
 	//"time"
@@ -279,10 +279,7 @@ func simplify_minio_mc_message(s []byte) *minio_mc_result {
 }
 
 // EXECUTE_MINIO_MC_CMD runs an MC-command and checks its output.
-// Note that a timeout kills the process by SIGKILL.  MEMO: Timeout of
-// context returns "context.deadlineExceededError".
-func execute_minio_mc_cmd(d *backend_minio, name string, command []string) *minio_mc_result {
-	//var proc = d.get_super_part()
+func execute_minio_mc_cmd(d *backend_minio, synopsis string, command []string) *minio_mc_result {
 	assert_fatal(d.mc_alias != "" && d.mc_config_dir != "")
 	var argv = []string{
 		d.Mc,
@@ -290,48 +287,19 @@ func execute_minio_mc_cmd(d *backend_minio, name string, command []string) *mini
 		fmt.Sprintf("--config-dir=%s", d.mc_config_dir),
 	}
 	argv = append(argv, command...)
-	var timeout = (time.Duration(d.Backend_timeout_ms) * time.Millisecond)
-	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	var cmd = exec.CommandContext(ctx, argv[0], argv[1:]...)
-	var stdoutb, stderrb bytes.Buffer
-	cmd.Stdin = nil
-	cmd.Stdout = &stdoutb
-	cmd.Stderr = &stderrb
-	cmd.Env = *d.environ
-	var err1 = cmd.Run()
-	//fmt.Println("cmd.Run()=", err1)
-	var wstatus = cmd.ProcessState.ExitCode()
-	var stdouts = strings.TrimSpace(stdoutb.String())
-	var stderrs = strings.TrimSpace(stderrb.String())
-	switch err2 := err1.(type) {
-	case nil:
-		// OK.
-		if d.verbose {
-			slogger.Debug("Mux(minio) MC-command done",
-				"cmd", argv, "exit", wstatus,
-				"stdout", stdouts, "stderr", stderrs)
-		}
-	case *exec.ExitError:
-		// Not successful.
-		if wstatus == -1 {
-			slogger.Error("Mux(minio) MC-command signaled/unfinished",
-				"cmd", argv, "err", err2,
-				"stdout", stdouts, "stderr", stderrs)
-			return &minio_mc_result{nil, err2}
-		}
-	default:
-		// Error.
-		slogger.Error("Mux(minio) MC-command failed",
-			"cmd", argv, "err", err1,
-			"stdout", stdouts, "stderr", stderrs)
+
+	var stdouts, stderrs, err1 = execute_command(synopsis, argv, d.environ,
+		int64(d.Backend_timeout_ms), "Mux(minio)", d.verbose)
+	if err1 != nil {
+		return &minio_mc_result{nil, err1}
 	}
+
 	var v1 = simplify_minio_mc_message([]byte(stdouts))
 	if v1.err == nil {
 		if d.verbose {
-			slogger.Debug("Mux(minio) MC-command OK", "cmd", command)
+			slogger.Debug("Mux(minio) MC-command Okay", "cmd", command)
 		} else {
-			slogger.Debug("Mux(minio) MC-command OK", "cmd", name)
+			slogger.Debug("Mux(minio) MC-command Okay", "cmd", synopsis)
 		}
 	} else {
 		slogger.Error("Mux(minio) MC-command failed",
@@ -345,7 +313,6 @@ func minio_mc_alias_set(d *backend_minio) *minio_mc_result {
 	assert_fatal(d.mc_alias == "" && d.mc_config_dir == "")
 	var rnd = strings.ToLower(random_string(12))
 	var url = fmt.Sprintf("http://%s", d.be.Backend_ep)
-	//d.mc_config_dir = tempfile.TemporaryDirectory()
 	var dir, err1 = os.MkdirTemp("", "lens3-mc-")
 	if err1 != nil {
 		slogger.Error("Mux(minio) os.MkdirTemp() failed", "err", err1)

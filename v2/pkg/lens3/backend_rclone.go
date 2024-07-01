@@ -1,4 +1,4 @@
-/* S3-server delegate for rclone serve s3. */
+/* S3 Server Delegate for Rclone "rclone serve s3". */
 
 // Copyright 2022-2024 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
@@ -32,26 +32,26 @@ package lens3
 // subdirectories are "vfs/local" and "vfsMeta/local".
 
 import (
-	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
-	"os/exec"
 	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
-	"time"
+	//"bytes"
+	//"context"
 	//"errors"
 	//"io"
 	//"log"
 	//"maps"
 	//"os"
+	//"os/exec"
 	//"path/filepath"
 	//"reflect"
 	//"syscall"
+	//"time"
 	//"time"
 )
 
@@ -286,9 +286,7 @@ func simplify_rclone_rc_message(s []byte) *rclone_rc_result {
 }
 
 // EXECUTE_RCLONE_RC_CMD runs an RC-command and checks its output.
-// Note that a timeout kills the process by SIGKILL.  MEMO: Timeout of
-// context returns "context.deadlineExceededError".
-func execute_rclone_rc_cmd(d *backend_rclone, name string, command []string) *rclone_rc_result {
+func execute_rclone_rc_cmd(d *backend_rclone, synopsis string, command []string) *rclone_rc_result {
 	var port = net.JoinHostPort("", strconv.Itoa(d.rc_port))
 	var argv = []string{
 		d.Rclone, "rc",
@@ -297,51 +295,21 @@ func execute_rclone_rc_cmd(d *backend_rclone, name string, command []string) *rc
 		"--pass", d.rc_pass,
 	}
 	argv = append(argv, command...)
-	var timeout = (time.Duration(d.Backend_timeout_ms) * time.Millisecond)
-	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	var cmd = exec.CommandContext(ctx, argv[0], argv[1:]...)
-	var stdoutb, stderrb bytes.Buffer
-	cmd.Stdin = nil
-	cmd.Stdout = &stdoutb
-	cmd.Stderr = &stderrb
-	cmd.Env = *d.environ
-	var err1 = cmd.Run()
-	//fmt.Println("cmd.Run()=", err1)
-	var wstatus = cmd.ProcessState.ExitCode()
-	var stdouts = strings.TrimSpace(stdoutb.String())
-	var stderrs = strings.TrimSpace(stderrb.String())
-	switch err2 := err1.(type) {
-	case nil:
-		// OK.
-		if d.verbose {
-			slogger.Debug("Mux(rclone) RC-command done",
-				"cmd", argv, "exit", wstatus,
-				"stdout", stdouts, "stderr", stderrs)
-		}
-	case *exec.ExitError:
-		// NOT SUCCESSFUL.
-		if wstatus == -1 {
-			slogger.Error("Mux(rclone) RC-command signaled/unfinished",
-				"cmd", argv, "err", err2,
-				"stdout", stdouts, "stderr", stderrs)
-			return &rclone_rc_result{nil, err2}
-		}
-	default:
-		// ERROR.
-		slogger.Error("Mux(rclone) RC-command faile",
-			"cmd", argv, "err", err1,
-			"stdout", stdouts, "stderr", stderrs)
+
+	var stdouts, stderrs, err1 = execute_command(synopsis, argv, d.environ,
+		int64(d.Backend_timeout_ms), "Mux(rclone)", d.verbose)
+	if err1 != nil {
 		return &rclone_rc_result{nil, err1}
 	}
+
 	var v1 = simplify_rclone_rc_message([]byte(stdouts))
 	if v1.err == nil {
 		if d.verbose {
-			slogger.Debug("Mux(rclone) RC-command OK",
+			slogger.Debug("Mux(rclone) RC-command Okay",
 				"cmd", command)
 		} else {
-			slogger.Debug("Mux(rclone) RC-command OK",
-				"cmd", name)
+			slogger.Debug("Mux(rclone) RC-command Okay",
+				"cmd", synopsis)
 		}
 	} else {
 		slogger.Error("Mux(rclone) RC-command failed",

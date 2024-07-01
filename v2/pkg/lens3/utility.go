@@ -6,12 +6,15 @@
 package lens3
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand/v2"
 	"net"
 	"os"
+	"os/exec"
 	"reflect"
 	"regexp"
 	"runtime"
@@ -21,7 +24,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	//"context"
 	//"errors"
 	//"github.com/go-redis/redis/v8"
 	//"log"
@@ -330,6 +332,56 @@ var claim_string_good_re = regexp.MustCompile(`^[-_a-zA-Z0-9.:@%]{0,256}$`)
 
 func check_claim_string(claim string) bool {
 	return claim_string_good_re.MatchString(claim)
+}
+
+// EXECUTE_COMMAND runs a controlling command of the backend.  It
+// returns a message from stdout+stderr and an error.  Note that a
+// timeout kills the process by SIGKILL.  MEMO: Timeout of context
+// returns "context.deadlineExceededError".
+func execute_command(synopsis string, argv []string, environ []string, timeout_ms int64, prefix string, verbose bool) (string, string, error) {
+	var timeout = (time.Duration(timeout_ms) * time.Millisecond)
+	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	var cmd = exec.CommandContext(ctx, argv[0], argv[1:]...)
+	var stdoutb, stderrb bytes.Buffer
+	cmd.Stdin = nil
+	cmd.Stdout = &stdoutb
+	cmd.Stderr = &stderrb
+	cmd.Env = environ
+	var err1 = cmd.Run()
+	//fmt.Println("cmd.Run()=", err1)
+	var wstatus = cmd.ProcessState.ExitCode()
+	var stdouts = strings.TrimSpace(stdoutb.String())
+	var stderrs = strings.TrimSpace(stderrb.String())
+	switch err2 := err1.(type) {
+	case nil:
+		// OK.
+		if verbose {
+			slogger.Debug(prefix+" Command done",
+				"cmd", argv, "exit", wstatus,
+				"stdout", stdouts, "stderr", stderrs)
+		}
+	case *exec.ExitError:
+		// Not successful.
+		if wstatus == -1 {
+			slogger.Error(prefix+" Command signaled/unfinished",
+				"cmd", argv, "err", err2,
+				"stdout", stdouts, "stderr", stderrs)
+			return "", "", err2
+		} else {
+			slogger.Error(prefix+" Command failed",
+				"cmd", argv, "err", err2,
+				"stdout", stdouts, "stderr", stderrs)
+			return "", "", err2
+		}
+	default:
+		// Error.
+		slogger.Error(prefix+" Command failed to run",
+			"cmd", argv, "err", err1,
+			"stdout", stdouts, "stderr", stderrs)
+		return "", "", err1
+	}
+	return stdouts, stderrs, nil
 }
 
 // CHECK_FIELDS_FILLED checks if all fields of a structure is

@@ -133,7 +133,7 @@ type backend_delegate struct {
 	verbose bool
 
 	// ENVIRON is the shared one in the_manager.
-	environ *[]string
+	environ []string
 
 	// The following fields {cmd,ch_stdio,ch_quit_backend} are set
 	// when starting a backend.
@@ -248,7 +248,7 @@ func initialize_backend_delegate(w *manager, proc *backend_delegate, pooldata *p
 		Timestamp:   0,
 	}
 	proc.verbose = true
-	proc.environ = &w.environ
+	proc.environ = w.environ
 	proc.manager_conf = &w.manager_conf
 }
 

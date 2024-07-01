@@ -385,17 +385,23 @@ func check_int_in_ranges(pairs [][2]int, v int) bool {
 // CHECK_STREAM_EOF checks is the input stream is empty.  It actually
 // reads the stream.  It returns an error if garbage is in the stream.
 // Note that checking by reading zero bytes ([]byte{}) is not
-// accurate.
-func check_stream_eof(is io.Reader) error {
-	var b = make([]byte, 1024)
+// accurate.  ACCEPT_JSON_EMPTY=true allows UI's bug in sending "{}"
+// as an empty body.
+func check_stream_eof(is io.Reader, accept_json_empty bool) error {
+	var size = 512
+	var b = make([]byte, size)
 	var n, err1 = is.Read(b)
 	if n == 0 && err1 == io.EOF {
 		return nil
 	}
-	if err1 != nil {
+	if err1 != nil && err1 != io.EOF {
 		return err1
 	}
-	var err2 = fmt.Errorf("Garbage-in-request: %q", string(b[:n]))
+	var s = strings.TrimSpace(string(b[:n]))
+	if accept_json_empty && n < size && (s == "" || s == "{}") {
+		return nil
+	}
+	var err2 = fmt.Errorf("Garbage in request: %q", s)
 	return err2
 }
 

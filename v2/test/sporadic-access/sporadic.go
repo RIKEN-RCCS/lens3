@@ -175,7 +175,7 @@ func main() {
 		var f = ((float64(conf.Fluctuation) / 100.0) *
 			(2.0*rand.Float64() - 1.0))
 		var d = (float64(conf.Period) * (1.0 + f))
-		var sec = (time.Duration(float64(conf.Period)*d) * time.Second)
+		var sec = time.Duration(d * float64(time.Second))
 		fmt.Println("Sleeping in", sec, "...")
 		time.Sleep(sec)
 	}

@@ -1,7 +1,7 @@
 ## makefile
 
 all::
-	@echo Run make build
+	@echo 'Run "make get" and "make build"'
 
 build::
 	go build
@@ -16,4 +16,4 @@ get::
 	go get github.com/aws/aws-sdk-go-v2/service/s3
 
 init::
-	go mod init sporadic
+	go mod init sporadic-access

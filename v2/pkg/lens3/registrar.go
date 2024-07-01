@@ -1267,9 +1267,9 @@ func check_make_secret_arguments(z *registrar, u *user_record, pool string, data
 
 func check_empty_arguments_with_error_return(z *registrar, w http.ResponseWriter, r *http.Request, u *user_record, pool string, opr string) bool {
 	var is = r.Body
-	var err1 = check_stream_eof(is)
+	var err1 = check_stream_eof(is, true)
 	if err1 != nil {
-		slogger.Info("Reg() Garbage after json data in request body",
+		slogger.Info("Reg() Garbage in an empty request body",
 			"err", err1)
 		var err2 = &proxy_exc{
 			u.Uid,
@@ -1428,7 +1428,7 @@ func decode_request_body(z *registrar, r *http.Request, data any) bool {
 	}
 	// Check EOF.  Garbage data means an error.
 	var is = d.Buffered()
-	var err2 = check_stream_eof(is)
+	var err2 = check_stream_eof(is, false)
 	if err2 != nil {
 		slogger.Info("Reg() Garbage after json data in request body",
 			"err", err2)
@@ -1730,10 +1730,12 @@ func deregister_pool(t *keyval_table, pool string) bool {
 	return true
 }
 
-// NOTE: It cannot obtain a response object.  http.ResponseWriter is
-// an instance of http.response, but it is not public.  Note that also
-// the field http.Request.Response is null.  Niether a context does
-// not have a response.  http.RoundTrip is on the client side.
+// RETURN_JSON_REPSONSE returns a success response (200).  NOTE: It is
+// not possible to obtain a response object from http.ResponseWriter.
+// http.ResponseWriter is an instance of http.response, but it is not
+// public.  Also, the field http.Request.Response is null.  Niether, a
+// context does not have a response.  http.RoundTrip is on the client
+// side.
 func return_json_repsonse(z *registrar, w http.ResponseWriter, rqst *http.Request, u *user_record, value any) {
 	assert_fatal(u != nil)
 	var v1, err1 = json.Marshal(value)
@@ -1742,7 +1744,7 @@ func return_json_repsonse(z *registrar, w http.ResponseWriter, rqst *http.Reques
 		panic(nil)
 	}
 
-	if true {
+	if false {
 		fmt.Printf("*** Response=%#v\n", string(v1))
 	}
 

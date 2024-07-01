@@ -39,6 +39,7 @@ package lens3
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -51,7 +52,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	//"context"
 	//"flag"
 	//"io"
 	//"log"
@@ -259,6 +259,7 @@ func configure_registrar(z *registrar, t *keyval_table, qch <-chan vacuous, c *r
 }
 
 func start_registrar(z *registrar, wg *sync.WaitGroup) {
+	defer wg.Done()
 	if z.verbose {
 		slogger.Debug("Reg() start_registrar()")
 	}
@@ -376,6 +377,14 @@ func start_registrar(z *registrar, wg *sync.WaitGroup) {
 			"secret", secret)
 		var _ = delete_secret_and_return_response(z, w, r, pool, secret)
 	})
+
+	go func() {
+		var ctx = context.Background()
+		select {
+		case <-z.ch_quit_service:
+			z.server.Shutdown(ctx)
+		}
+	}()
 
 	slogger.Info("Reg() Start Registrar", "ep", z.ep_port)
 	var err1 = z.server.ListenAndServe()

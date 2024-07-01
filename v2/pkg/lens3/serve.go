@@ -168,6 +168,7 @@ func start_lenticularis_service(confpath string, services [2]string) {
 	}
 
 	wg.Wait()
+	slogger.Info("Lenticularis-S3 service stop")
 }
 
 func print_usage_and_exit() {
@@ -206,7 +207,9 @@ func handle_unix_signals(t *keyval_table, ch_quit_service chan vacuous) {
 		time.Sleep(100 * time.Millisecond)
 		slogger.Debug("Killing by killpg", "pgid", pgid)
 		unix.Kill(-pgid, unix.SIGTERM)
-		time.Sleep(100 * time.Millisecond)
+		// When servers fail to quit, force to exit.
+		time.Sleep(5000 * time.Millisecond)
+		slogger.Error("Force exit as shutdown failed")
 		os.Exit(1)
 	}()
 }

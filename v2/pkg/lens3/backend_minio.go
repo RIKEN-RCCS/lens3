@@ -79,7 +79,7 @@ func (fa *backend_factory_minio) make_delegate(pool string) backend {
 }
 
 func (fa *backend_factory_minio) clean_at_exit() {
-	clean_tmp()
+	clean_minio_tmp()
 }
 
 func finalize_backend_minio(d *backend_minio) {
@@ -348,18 +348,22 @@ func minio_mc_admin_service_stop(d *backend_minio) *minio_mc_result {
 	return v1
 }
 
-func clean_tmp() {
+func clean_minio_tmp() {
 	var d = os.TempDir()
 	var pattern = fmt.Sprintf("%s/lens3-mc-*", d)
 	var matches, err1 = filepath.Glob(pattern)
-	assert_fatal(err1 != nil)
-	// (err1 == nil || err1 == filepath.ErrBadPattern)
+	if err1 != nil {
+		// (err1 : filepath.ErrBadPattern).
+		slogger.Error("Mux(minio) filepath.Glob() failed",
+			"pattern", pattern, "err", err1)
+		return
+	}
 	for _, p := range matches {
 		slogger.Debug("Mux(minio) Clean by os.RemoveAll()", "path", p)
 		var err2 = os.RemoveAll(p)
 		if err2 != nil {
 			// (err2 : *os.PathError).
-			slogger.Warn("Mux(minio) os.RemoveAll() failed",
+			slogger.Error("Mux(minio) os.RemoveAll() failed",
 				"path", p, "err", err2)
 		}
 	}

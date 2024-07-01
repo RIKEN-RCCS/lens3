@@ -128,6 +128,7 @@ func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, qch <-ch
 
 // MEMO: ReverseProxy <: Handler as it implements ServeHTTP().
 func start_multiplexer(m *multiplexer, wg *sync.WaitGroup) {
+	defer wg.Done()
 	if m.verbose {
 		slogger.Debug(m.MuxEP + " start_multiplexer()")
 	}
@@ -150,6 +151,14 @@ func start_multiplexer(m *multiplexer, wg *sync.WaitGroup) {
 		ErrorLog: loglogger,
 		//BaseContext: func(net.Listener) context.Context,
 	}
+
+	go func() {
+		var ctx = context.Background()
+		select {
+		case <-m.ch_quit_service:
+			m.server.Shutdown(ctx)
+		}
+	}()
 
 	slogger.Info(m.MuxEP + " Start Multiplexer")
 	var err1 = m.server.ListenAndServe()

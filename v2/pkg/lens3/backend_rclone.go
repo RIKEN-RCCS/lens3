@@ -126,7 +126,6 @@ func (fa *backend_factory_rclone) make_delegate(pool string) backend {
 }
 
 func (fa *backend_factory_rclone) clean_at_exit() {
-	clean_tmp()
 }
 
 func finalize_backend_rclone(d *backend_rclone) {

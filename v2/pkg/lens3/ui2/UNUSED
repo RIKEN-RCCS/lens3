@@ -1,0 +1,103 @@
+var make_new_pool_button_app = new Vue({
+  el: "#make_new_pool_button",
+  methods: {
+    kick_add_new_pool: () => {
+      pool_data.pool_make_mode = true;
+      api_get_user_info();
+    },
+  },
+});
+
+var show_pool_list_button_app = new Vue({
+  el: "#show_pool_list_button",
+  data: server_response_data,
+  methods: {
+    kick_show_pool_list: () => {
+      pool_data.pool_make_mode = false;
+      api_list_pools();
+    },
+  },
+});
+
+var pool_section_app = new Vue({
+  el: "#pool_section",
+  data: pool_data,
+  methods: {
+    kick_make_pool: () => {
+      pool_data.pool_make_mode = false;
+      api_make_pool();
+    },
+  },
+});
+
+var buckets_section_app = new Vue({
+  el: "#buckets_section",
+  data: pool_data,
+  methods: {
+    kick_make_bucket: api_make_bucket,
+    kick_delete_bucket: api_delete_bucket,
+  },
+});
+
+var keys_section_app = new Vue({
+  el: "#keys_section",
+  data: pool_data,
+  methods: {
+    kick_make_secret: api_make_secret,
+    kick_copy_to_clipboard: copy_to_clipboard,
+    kick_delete_secret: api_delete_secret,
+  },
+});
+
+var pool_list_section_data = {
+  pool_data_visible: true,
+  pool_desc_list: [],
+  pool_li_list: [],
+};
+
+var pool_list_section_app = new Vue({
+  el: "#pool_list_section",
+  data: pool_list_section_data,
+  methods: {
+    kick_edit_pool: run_edit_pool,
+    kick_delete_pool: api_delete_pool,
+  }
+});
+
+/* Server Response. */
+
+var server_response_data = {
+  status: "---",
+  reason: "---",
+  message: "---",
+  time: "---",
+};
+
+var server_response_app = new Vue({
+  el: "#server_response",
+  data: server_response_data,
+  methods: {
+    kick_show_pool_list: api_list_pools,
+    kick_debug: run_dump,
+  },
+});
+
+
+
+================================================================
+
+
+      <div id="pool_name_section">
+        <div>
+          <span class="label">Buckets directory (absolute path):</span>
+          <input v-model="buckets_directory" size="30" disabled />
+        </div>
+        <div>
+          <span class="label">User:</span>
+          <input v-model="user" size="30" disabled />
+        </div>
+        <div>
+          <span class="label">Group:</span>
+          <input v-model="group" size="30" disabled />
+        </div>
+      </div>

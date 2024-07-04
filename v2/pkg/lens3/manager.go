@@ -35,21 +35,6 @@ import (
 	"strconv"
 	"sync"
 	"time"
-	//"bytes"
-	//"encoding/json"
-	//"fmt"
-	//"io"
-	//"log/slog"
-	//"os"
-	//"os/signal"
-	//"os/user"
-	//"reflect"
-	//"reflect"
-	//"runtime"
-	//"strings"
-	//"syscall"
-	//"testing"
-	//"time"
 )
 
 // MANAGER keeps track of backend processes.  Manager is a single
@@ -261,7 +246,7 @@ func stop_running_backends(w *manager) {
 		w.process = nil
 		w.shutdown_in_progress = true
 	}()
-	//var bes = list_backends_under_manager(w)
+	//var belist = list_backends_under_manager(w)
 	for _, d := range processes {
 		tell_stop_backend(w, d)
 	}
@@ -297,8 +282,9 @@ func start_backend(w *manager, pool string) backend {
 
 // START_BACKEND_IN_MUTEXED starts a backend, trying available ports.
 // It fails when all ports are tried and failed.  In that case, a
-// dummy backend record is stored in the keyval-db, to block a backend
-// from further starting for a while.
+// dummy record (with State=pool_state_SUSPENDED) is inserted in the
+// keyval-db, which will block a further backend from starting for a
+// while.
 func start_backend_in_mutexed(w *manager, pool string) backend {
 	//fmt.Println("start_backend()")
 	//delete_backend(w.table, pool)
@@ -316,7 +302,6 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 
 	var proc *backend_delegate = d.get_super_part()
 	initialize_backend_delegate(w, proc, pooldata)
-	var be *backend_record = proc.be
 
 	// The following fields are set in starting a backend: {proc.cmd,
 	// proc.ch_stdio, proc.ch_quit_backend}
@@ -373,13 +358,13 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 
 		d.establish()
 
-		make_absent_buckets_in_backend(w, be)
+		make_absent_buckets_in_backend(w, proc.be)
 
 		go ping_backend(w, d)
 
 		var now int64 = time.Now().Unix()
-		be.Timestamp = now
-		set_backend(w.table, pool, be)
+		proc.be.Timestamp = now
+		set_backend(w.table, pool, proc.be)
 		return d
 	}
 
@@ -403,9 +388,9 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 	set_backend(w.table, pool, dummy)
 	set_backend_expiry(w.table, proc.Pool, expiry)
 
-	var state = pool_state_SUSPENDED
-	var reason = pool_reason_SERVER_BUSY
-	set_pool_state(w.table, pool, state, reason)
+	//var state = pool_state_SUSPENDED
+	//var reason = pool_reason_SERVER_BUSY
+	//set_pool_state(w.table, pool, state, reason)
 	return nil
 }
 
@@ -682,7 +667,7 @@ func ping_backend(w *manager, d backend) {
 
 		// Check lifetime.
 
-		var ts = get_access_timestamp(w.table, proc.Pool)
+		var ts = get_pool_timestamp(w.table, proc.Pool)
 		var lifetime = time.Unix(ts, 0).Add(duration)
 		if lifetime.Before(time.Now()) {
 			slogger.Debug(w.MuxEP+" Awake time elapsed", "pool", proc.Pool)
@@ -814,15 +799,15 @@ func drain_start_messages_to_log(w *manager, pool string, stdouts []string, stde
 }
 
 // LIST_AVAILABLE_PORTS lists ports available.  It drops the ports
-// used by backends running on this host locally.  It uses each
-// integer skipping by use_n_ports.  It randomizes the order of the
-// list.
+// used by backends running under this Multiplexer locally.  It uses
+// each integer skipping by use_n_ports.  It randomizes the order of
+// the list.
 func list_available_ports(w *manager, use_n_ports int) []int {
 	assert_fatal(use_n_ports == 1 || use_n_ports == 2)
 
-	var bes = list_backends_under_manager(w)
+	var belist = list_backends_under_manager(w)
 	var used []int
-	for _, be := range bes {
+	for _, be := range belist {
 		assert_fatal(be.Mux_ep == w.mux_ep)
 		var _, ps, err1 = net.SplitHostPort(be.Backend_ep)
 		if err1 != nil {
@@ -854,12 +839,17 @@ func list_available_ports(w *manager, use_n_ports int) []int {
 }
 
 func list_backends_under_manager(w *manager) []*backend_record {
-	var allbes = list_backends(w.table, "*")
+	var belist = list_backends(w.table, "*")
 	var list []*backend_record
-	for _, be := range allbes {
-		if be.Mux_ep == w.mux_ep {
-			list = append(list, be)
+	for _, be := range belist {
+		if be.Mux_ep != w.mux_ep {
+			continue
 		}
+		if be.State == pool_state_SUSPENDED {
+			// Skip a dummy entry.
+			continue
+		}
+		list = append(list, be)
 	}
 	return list
 }
@@ -926,12 +916,12 @@ func make_absent_buckets_in_backend(w *manager, be *backend_record) {
 	slogger.Debug(w.MuxEP+" Check existing buckets in backend",
 		"pool", be.Pool, "buckets", buckets_exsting)
 
-	var now int64 = time.Now().Unix()
+	var now = time.Now()
 	for _, b := range buckets_needed {
 		if slices.Contains(buckets_exsting, b.Bucket) {
 			continue
 		}
-		if b.Expiration_time < now {
+		if time.Unix(b.Expiration_time, 0).Before(now) {
 			continue
 		}
 

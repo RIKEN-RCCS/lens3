@@ -17,15 +17,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	//"bytes"
-	//"context"
-	//"encoding/json"
-	//"log"
-	//"maps"
-	//"os/exec"
-	//"reflect"
-	//"syscall"
-	//"time"
 )
 
 // Message prefixes from MinIO at its start-up.

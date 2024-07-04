@@ -1,24 +1,22 @@
-/* Lens3-Mux Main. */
+/* Lens3-Multiplexer.  Main part of Lens3. */
 
 // Copyright 2022-2024 RIKEN R-CCS.
 // SPDX-License-Identifier: BSD-2-Clause
 
 package lens3
 
-// Multiplexer is a proxy to backend S3 servers -- Lens3's main part.
+// Multiplexer is a proxy to backend S3 servers.
 
 // NOTE: A request can be obtained from http.Response.Request in
 // httputil.ReverseProxy.ModifyResponse, even although it is for
 // server-side responses and the document says: "This is only
 // populated for Client requests."
 
-// NOTE: Do not call panic(http.ErrAbortHandler) to abort the
-// processing of httputil.ReverseProxy.ErrorHandler.  Aborting does
-// not send a response but closes a connection.
+// NOTE: Do not call panic(http.ErrAbortHandler) to abort processing
+// in httputil.ReverseProxy.ErrorHandler.  Aborting does not send a
+// response but closes a connection.
 
-// MEMO:
-//
-// http.HandlerFunc is a function type.  It is
+// MEMO: http.HandlerFunc is a function type.  It is
 // (ResponseWriter,*Request)→unit
 
 import (
@@ -40,12 +38,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	//"flag"
-	//"io"
-	//"log"
-	//"maps"
-	//"os"
-	//"runtime"
 )
 
 // MULTIPLEXER is a single object, "the_multiplexer".
@@ -135,9 +127,7 @@ func start_multiplexer(m *multiplexer, wg *sync.WaitGroup) {
 
 	go mux_periodic_work(m)
 
-	var level = fetch_slogger_level(slogger)
-	var loglogger = slog.NewLogLogger(slogger.Handler(), level)
-
+	var loglogger = slog.NewLogLogger(slogger.Handler(), slog.LevelError)
 	var proxy1 = httputil.ReverseProxy{
 		Rewrite:        proxy_request_rewriter(m),
 		ModifyResponse: proxy_access_addenda(m),
@@ -568,7 +558,7 @@ func ensure_lens3_is_running__(t *keyval_table) bool {
 // it updates an access timestamp before checking a backend.  It is to
 // avoid a race in the start and stop of a backend.
 func ensure_backend_running(m *multiplexer, w http.ResponseWriter, r *http.Request, pool string, auth string) *backend_record {
-	set_access_timestamp(m.table, pool)
+	set_pool_timestamp(m.table, pool)
 
 	var be1 = get_backend(m.table, pool)
 	if be1 == nil {
@@ -653,6 +643,7 @@ func ensure_user_is_active(m *multiplexer, w http.ResponseWriter, r *http.Reques
 		// 	})
 		return false
 	}
+	set_user_timestamp(m.table, uid)
 	return true
 }
 
@@ -988,35 +979,43 @@ func mux_periodic_work(m *multiplexer) {
 
 // CHECK_POOL_STATE checks the changes of user and pool settings.  It
 // returns a state and a reason.  It also updates the state of the
-// pool.  This code should be called in the pass of access checking.
+// pool.  This routine should be called in access checking.
 func check_pool_state(t *keyval_table, pool string) (pool_state, pool_reason) {
 	var pooldata = get_pool(t, pool)
 	if pooldata == nil {
 		return pool_state_INOPERABLE, pool_reason_POOL_REMOVED
 	}
-	var state *pool_state_record = get_pool_state(t, pool)
-	if state == nil {
-		slogger.Warn("Pool state not found (ignored)", "pool", pool)
-		var now int64 = time.Now().Unix()
-		state = &pool_state_record{
-			Pool:      pool,
-			State:     pool_state_INITIAL,
-			Reason:    pool_reason_NORMAL,
-			Timestamp: now,
-		}
-		set_pool_state(t, pool, state.State, state.Reason)
-	}
 
-	// Check a state transition.
+	//var state *pool_state_record = get_pool_state(t, pool)
+	// if state == nil {
+	// 	slogger.Warn("Pool state not found (ignored)", "pool", pool)
+	// 	var now int64 = time.Now().Unix()
+	// 	state = &pool_state_record{
+	// 		Pool:      pool,
+	// 		State:     pool_state_INITIAL,
+	// 		Reason:    pool_reason_NORMAL,
+	// 		Timestamp: now,
+	// 	}
+	// 	set_pool_state(t, pool, state.State, state.Reason)
+	// }
 
-	switch state.State {
-	case pool_state_INITIAL, pool_state_READY:
-	case pool_state_SUSPENDED:
-	case pool_state_DISABLED:
-	case pool_state_INOPERABLE:
-		return state.State, state.Reason
-	default:
-		panic(nil)
+	// switch state.State {
+	// case pool_state_INITIAL, pool_state_READY:
+	// case pool_state_SUSPENDED:
+	// case pool_state_DISABLED:
+	// case pool_state_INOPERABLE:
+	// 	return state.State, state.Reason
+	// default:
+	// 	panic(nil)
+	// }
+
+	// Check a state by the pool and user setting.
+
+	var state = &pool_state_record{
+		Pool:      pool,
+		State:     pool_state_INITIAL,
+		Reason:    pool_reason_NORMAL,
+		Timestamp: 0,
 	}
 
 	var uid = pooldata.Owner_uid
@@ -1026,52 +1025,56 @@ func check_pool_state(t *keyval_table, pool string) (pool_state, pool_reason) {
 	var unexpired = time.Now().Before(expiration)
 
 	if !(active && online && unexpired) {
-		if state.State != pool_state_DISABLED {
-			state.State = pool_state_DISABLED
-			if !active {
-				state.Reason = pool_reason_USER_INACTIVE
-			} else if !online {
-				state.Reason = pool_reason_POOL_OFFLINE
-			} else if !unexpired {
-				state.Reason = pool_reason_POOL_EXPIRED
-			} else {
-				panic(nil)
-			}
-			set_pool_state(t, pool, state.State, state.Reason)
-			return state.State, state.Reason
+		//if state.State != pool_state_DISABLED {
+		state.State = pool_state_DISABLED
+		if !active {
+			state.Reason = pool_reason_USER_INACTIVE
+		} else if !online {
+			state.Reason = pool_reason_POOL_OFFLINE
+		} else if !unexpired {
+			state.Reason = pool_reason_POOL_EXPIRED
+		} else {
+			panic(nil)
 		}
+		//set_pool_state(t, pool, state.State, state.Reason)
+		//return state.State, state.Reason
+		//}
 		return state.State, state.Reason
 	}
 
+	// Check a state by a running backend.
+
 	var be = get_backend(t, pool)
-	if be != nil {
+	if be == nil {
+		switch state.State {
+		case pool_state_INITIAL, pool_state_READY:
+			return state.State, state.Reason
+		case pool_state_SUSPENDED:
+			state.State = pool_state_INITIAL
+			state.Reason = pool_reason_NORMAL
+			//set_pool_state(t, pool, state.State, state.Reason)
+			return state.State, state.Reason
+		case pool_state_DISABLED:
+			return state.State, state.Reason
+		case pool_state_INOPERABLE:
+			panic(nil)
+		default:
+			panic(nil)
+		}
+	} else {
 		switch be.State {
 		case pool_state_INITIAL:
 			panic(nil)
 		case pool_state_READY:
-			return pool_state_READY, pool_reason_NORMAL
+			return be.State, pool_reason_NORMAL
 		case pool_state_SUSPENDED:
-			return pool_state_SUSPENDED, pool_reason_SERVER_BUSY
+			return be.State, pool_reason_SERVER_BUSY
 		case pool_state_DISABLED, pool_state_INOPERABLE:
 			panic(nil)
 		default:
 			panic(nil)
 		}
 	}
-
-	switch state.State {
-	case pool_state_INITIAL, pool_state_READY:
-	case pool_state_SUSPENDED:
-	case pool_state_DISABLED:
-		state.State = pool_state_INITIAL
-		state.Reason = pool_reason_NORMAL
-		set_pool_state(t, pool, state.State, state.Reason)
-	case pool_state_INOPERABLE:
-		panic(nil)
-	default:
-		panic(nil)
-	}
-	return state.State, state.Reason
 }
 
 func check_user_is_active(t *keyval_table, uid string) (bool, error_message) {

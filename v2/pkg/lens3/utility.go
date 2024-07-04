@@ -24,11 +24,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	//"errors"
-	//"github.com/go-redis/redis/v8"
-	//"log"
-	//"log/syslog"
-	//"slices"
 )
 
 type vacuous = struct{}

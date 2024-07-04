@@ -29,11 +29,6 @@ import (
 	"github.com/eclipse/paho.golang/paho"
 	"net/url"
 	"time"
-	//"github.com/eclipse/paho.mqtt.golang"
-	//"os"
-	//"os/signal"
-	//"strconv"
-	//"syscall"
 )
 
 type mqtt_client struct {

@@ -19,15 +19,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	//"context"
-	//"io"
-	//"log"
-	//"maps"
-	//"net/url"
-	//"os"
-	//"runtime"
-	//"strings"
-	//"syscall"
 )
 
 const lens3_version string = "v2.1.1"

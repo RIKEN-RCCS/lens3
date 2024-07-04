@@ -26,21 +26,6 @@ import (
 	"github.com/aws/smithy-go"
 	"math/rand/v2"
 	"time"
-	//"errors"
-	//"flag"
-	//"github.com/aws/smithy-go"
-	//"io"
-	//"log"
-	//"maps"
-	//"net"
-	//"net/http"
-	//"net/http/httputil"
-	//"net/url"
-	//"os"
-	//"regexp"
-	//"runtime"
-	//"slices"
-	//"strings"
 )
 
 // PROBE_ACCESS_MUX accesses a Mux from Registrar or other

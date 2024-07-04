@@ -17,9 +17,6 @@ import (
 	"os"
 	"reflect"
 	"slices"
-	//"io"
-	//"log"
-	//"time"
 )
 
 // DB_CONF is a pair of an endpoint and a password to access the

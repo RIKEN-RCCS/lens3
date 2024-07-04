@@ -12,15 +12,16 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
-	//"log"
 )
 
 func Run_lens3_admin() {
+	slog.SetLogLoggerLevel(slog.LevelDebug)
 	make_adm_command_table()
 	adm_toplevel()
 }
@@ -106,7 +107,7 @@ func adm_toplevel() {
 
 func show_user(t *keyval_table, filename string) {
 	var userlist = list_users(t)
-	var users []*user_record
+	var users []*user_record = make([]*user_record, 0)
 	for _, uid := range userlist {
 		var i = get_user(t, uid)
 		if i != nil {
@@ -138,7 +139,7 @@ func show_user(t *keyval_table, filename string) {
 		}
 	}
 
-	var disables []string
+	var disables []string = make([]string, 0)
 	for _, u := range users {
 		if u.Ephemeral || u.Enabled {
 			continue
@@ -270,7 +271,7 @@ func dump_db__(t *keyval_table) *dump_data {
 	var confs = list_confs(t)
 	// Collect users:
 	var userlist = list_users(t)
-	var users []*user_record
+	var users []*user_record = make([]*user_record, 0)
 	for _, uid := range userlist {
 		var i = get_user(t, uid)
 		if i != nil {
@@ -279,19 +280,18 @@ func dump_db__(t *keyval_table) *dump_data {
 	}
 	// Collect pools:
 	var poollist = list_pools(t, "*")
-	//fmt.Println("poollist=", poollist)
-	var poolprops []*pool_prop
+	var pools []*pool_prop = make([]*pool_prop, 0)
 	for _, pool := range poollist {
 		var i = gather_pool_prop(t, pool)
 		//fmt.Println("pool=", i)
 		if i != nil {
-			poolprops = append(poolprops, i)
+			pools = append(pools, i)
 		}
 	}
 	return &dump_data{
 		Confs: confs,
 		Users: users,
-		Pools: poolprops,
+		Pools: pools,
 	}
 }
 
@@ -344,7 +344,7 @@ func restore_db(t *keyval_table, filename string) {
 		kv[evenodd] = sc1.Text()
 		if evenodd == 1 {
 			if !strings.HasPrefix(kv[1], "    ") {
-				fmt.Fprintf(os.Stderr, "Missing prefix in 2nd line")
+				fmt.Fprintf(os.Stderr, "Missing prefix in 2nd line\n")
 				panic(nil)
 			}
 			kv[1] = strings.TrimLeft(kv[1], " ")
@@ -547,13 +547,13 @@ var cmd_list = []*cmd{
 		run: func(adm *adm, args []string) {
 			var disabling, err = strconv.ParseBool(args[1])
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Bad boolean (%s)", args[1])
+				fmt.Fprintf(os.Stderr, "Bad boolean (%s)\n", args[1])
 				return
 			}
 			var uid = args[2]
 			var u *user_record = get_user(adm.table, uid)
 			if u == nil {
-				fmt.Fprintf(os.Stderr, "No user found for (%s)", uid)
+				fmt.Fprintf(os.Stderr, "No user found for (%s)\n", uid)
 				return
 			}
 			u.Enabled = !disabling
@@ -564,25 +564,29 @@ var cmd_list = []*cmd{
 	&cmd{
 		synopsis: "show-pool [pool-name ...]",
 
-		doc: `Prints pools.  It shows all pools without arguments.`,
+		doc: `Prints pools.  It shows all pools given no arguments.`,
 
 		run: func(adm *adm, args []string) {
-			var list []string
+			var poollist []string
 			if len(args) == 1 {
-				list = list_pools(adm.table, "*")
+				poollist = list_pools(adm.table, "*")
 			} else {
-				list = args[1:]
+				poollist = args[1:]
 			}
-			var poolprops []*pool_prop
-			for _, name := range list {
+			var pools []*pool_prop = make([]*pool_prop, 0)
+			for _, name := range poollist {
 				var d = gather_pool_prop(adm.table, name)
 				if d == nil {
-					fmt.Fprintf(os.Stderr, "No pool found for (%s)", name)
+					fmt.Fprintf(os.Stderr, "No pool found for (%s)\n", name)
 				} else {
-					poolprops = append(poolprops, d)
+					pools = append(pools, d)
 				}
 			}
-			for _, x := range poolprops {
+			slices.SortFunc(pools, func(a, b *pool_prop) int {
+				return strings.Compare(
+					a.Buckets_directory, b.Buckets_directory)
+			})
+			for _, x := range pools {
 				print_in_json(x)
 			}
 		},
@@ -596,13 +600,13 @@ var cmd_list = []*cmd{
 		run: func(adm *adm, args []string) {
 			var disabling, err = strconv.ParseBool(args[1])
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Bad boolean (%s)", args[1])
+				fmt.Fprintf(os.Stderr, "Bad boolean (%s)\n", args[1])
 				return
 			}
 			var pool = args[2]
 			var p *pool_record = get_pool(adm.table, pool)
 			if p == nil {
-				fmt.Fprintf(os.Stderr, "No pool found for (%s)", pool)
+				fmt.Fprintf(os.Stderr, "No pool found for (%s)\n", pool)
 				return
 			}
 			p.Enabled = !disabling
@@ -611,18 +615,19 @@ var cmd_list = []*cmd{
 	},
 
 	&cmd{
-		synopsis: "kill-pool pool-name",
+		synopsis: "kill-pool pool-name ...",
 
-		doc: `Removes a pool.`,
+		doc: `Removes pools.`,
 
 		run: func(adm *adm, args []string) {
-			var pool = args[1]
-			var p *pool_record = get_pool(adm.table, pool)
-			if p == nil {
-				fmt.Fprintf(os.Stderr, "No pool found for (%s)", pool)
-				return
+			for _, pool := range args[1:] {
+				var p *pool_record = get_pool(adm.table, pool)
+				if p == nil {
+					fmt.Fprintf(os.Stderr, "No pool found for (%s)\n", pool)
+					continue
+				}
+				deregister_pool(adm.table, pool)
 			}
-			deregister_pool(adm.table, pool)
 		},
 	},
 
@@ -648,7 +653,7 @@ var cmd_list = []*cmd{
 			var bkt = args[1]
 			var ok = delete_bucket_unconditionally(adm.table, bkt)
 			if !ok {
-				fmt.Fprintf(os.Stderr, "No bucket found for (%s)", bkt)
+				fmt.Fprintf(os.Stderr, "No bucket found for (%s)\n", bkt)
 				return
 			}
 		},
@@ -675,8 +680,8 @@ var cmd_list = []*cmd{
 		doc: `Prints all running backends.`,
 
 		run: func(adm *adm, args []string) {
-			var bes []*backend_record = list_backends(adm.table, "*")
-			print_in_json(bes)
+			var belist []*backend_record = list_backends(adm.table, "*")
+			print_in_json(belist)
 		},
 	},
 
@@ -692,6 +697,26 @@ var cmd_list = []*cmd{
 	},
 
 	&cmd{
+		synopsis: "show-timestamp pool/user",
+
+		doc: `Prints last access timestamps of pools/users.`,
+
+		run: func(adm *adm, args []string) {
+			var pairs []*name_timestamp_pair
+			switch args[1] {
+			case "pool":
+				pairs = list_pool_timestamps(adm.table)
+			case "user":
+				pairs = list_user_timestamps(adm.table)
+			default:
+				fmt.Fprintf(os.Stderr, "pool or user (%s)\n", args[1])
+				return
+			}
+			print_in_json(pairs)
+		},
+	},
+
+	&cmd{
 		synopsis: "dump-user [file-name.json]",
 
 		doc: `Dumps users for restoring.`,
@@ -699,7 +724,7 @@ var cmd_list = []*cmd{
 		run: func(adm *adm, args []string) {
 			//fmt.Println("// dumping...")
 			var userlist = list_users(adm.table)
-			var users []*user_record
+			var users []*user_record = make([]*user_record, 0)
 			for _, uid := range userlist {
 				var i = get_user(adm.table, uid)
 				if i != nil {
@@ -724,20 +749,21 @@ var cmd_list = []*cmd{
 		run: func(adm *adm, args []string) {
 			//fmt.Println("// dumping...")
 			var poollist = list_pools(adm.table, "*")
-			var poolprops []*pool_prop
+			var pools []*pool_prop = make([]*pool_prop, 0)
 			for _, pool := range poollist {
 				var i = gather_pool_prop(adm.table, pool)
 				if i != nil {
-					poolprops = append(poolprops, i)
+					pools = append(pools, i)
 				}
 			}
+
 			var filename string
 			if len(args) == 1 {
 				filename = ""
 			} else {
 				filename = args[1]
 			}
-			dump_in_json_to_file(filename, poolprops)
+			dump_in_json_to_file(filename, pools)
 		},
 	},
 
@@ -786,7 +812,7 @@ var cmd_list = []*cmd{
 	},
 
 	&cmd{
-		synopsis: "probe-mux pool",
+		synopsis: "probe-mux pool-name",
 
 		doc: `Accesses one Mux for probing a pool.  It starts a backend.`,
 

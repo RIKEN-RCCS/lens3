@@ -111,7 +111,7 @@ func configure_logger(logging *logging_conf, qch <-chan vacuous) {
 
 // FETCH_SLOGGER_LEVEL returns a log level of an slog_fork_handler.
 // It returns slog.LevelDebug when it is not an slog_fork_handler.
-func fetch_slogger_level(logger *slog.Logger) slog.Level {
+func fetch_slogger_level__(logger *slog.Logger) slog.Level {
 	var h = logger.Handler()
 	switch logger1 := h.(type) {
 	default:

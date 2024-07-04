@@ -21,9 +21,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/go-redis/redis/v8"
+	"slices"
 	"time"
-	//"log"
-	//"reflect"
 )
 
 type keyval_table struct {
@@ -236,8 +235,8 @@ const (
 )
 
 type name_timestamp_pair struct {
-	name      string
-	timestamp int64
+	Name      string `json:"name"`
+	Timestamp int64  `json:"timestamp"`
 }
 
 type routing_bucket_desc_keys__ struct {
@@ -504,7 +503,7 @@ func delete_conf(t *keyval_table, sub string) {
 func list_confs(t *keyval_table) []*lens3_conf {
 	var prefix = db_conf_prefix
 	var keyi = scan_table(t, prefix, "*")
-	var confs []*lens3_conf
+	var confs []*lens3_conf = make([]*lens3_conf, 0)
 	for keyi.Next(t.ctx) {
 		var sub = keyi.Key()
 		var v lens3_conf
@@ -605,11 +604,11 @@ func delete_user(t *keyval_table, uid string) {
 func list_users(t *keyval_table) []string {
 	var prefix = db_user_data_prefix
 	var keyi = scan_table(t, prefix, "*")
-	var uu []string
+	var users []string = make([]string, 0)
 	for keyi.Next(t.ctx) {
-		uu = append(uu, keyi.Key())
+		users = append(users, keyi.Key())
 	}
-	return uu
+	return users
 }
 
 func set_user_claim(t *keyval_table, claim string, uid *user_claim_record) {
@@ -668,7 +667,7 @@ func delete_pool(t *keyval_table, pool string) {
 func list_pools(t *keyval_table, pool string) []string {
 	var prefix = db_pool_data_prefix
 	var keyi = scan_table(t, prefix, pool)
-	var pools []string
+	var pools []string = make([]string, 0)
 	for keyi.Next(t.ctx) {
 		pools = append(pools, keyi.Key())
 	}
@@ -725,22 +724,22 @@ func list_buckets_directories(t *keyval_table) []*bucket_directory_record {
 	var prefix = db_directory_prefix
 	var keyi = scan_table(t, prefix, "*")
 	//var bkts []*pool_directory
-	var bkts []*bucket_directory_record
+	var dirs []*bucket_directory_record = make([]*bucket_directory_record, 0)
 	for keyi.Next(t.ctx) {
 		var path = keyi.Key()
 		var dir = get_buckets_directory(t, path)
 		if dir != nil {
-			bkts = append(bkts, dir)
+			dirs = append(dirs, dir)
 			// bkts = append(bkts, &pool_directory{
 			// 	pool:      dir.Pool,
 			// 	directory: path,
 			// })
 		}
 	}
-	return bkts
+	return dirs
 }
 
-func set_pool_state(t *keyval_table, pool string, state pool_state, reason pool_reason) {
+func set_pool_state__(t *keyval_table, pool string, state pool_state, reason pool_reason) {
 	var now int64 = time.Now().Unix()
 	var data = &pool_state_record{
 		Pool:      pool,
@@ -755,13 +754,13 @@ func set_pool_state_raw(t *keyval_table, pool string, state *pool_state_record) 
 	db_set_with_prefix(t, db_pool_state_prefix, pool, state)
 }
 
-func get_pool_state(t *keyval_table, pool string) *pool_state_record {
+func get_pool_state__(t *keyval_table, pool string) *pool_state_record {
 	var data pool_state_record
 	var ok = db_get_with_prefix(t, db_pool_state_prefix, pool, &data)
 	return ITE(ok, &data, nil)
 }
 
-func delete_pool_state(t *keyval_table, pool string) {
+func delete_pool_state__(t *keyval_table, pool string) {
 	db_del_with_prefix(t, db_pool_state_prefix, pool)
 }
 
@@ -818,7 +817,7 @@ func delete_backend(t *keyval_table, pool string) {
 func list_backends(t *keyval_table, pool string) []*backend_record {
 	var prefix = db_backend_data_prefix
 	var ki = scan_table(t, prefix, pool)
-	var procs []*backend_record
+	var procs []*backend_record = make([]*backend_record, 0)
 	for ki.Next(t.ctx) {
 		var id = ki.Key()
 		var p = get_backend(t, id)
@@ -853,15 +852,15 @@ func delete_mux_ep(t *keyval_table, mux_ep string) {
 func list_mux_eps(t *keyval_table) []*mux_record {
 	var prefix = db_mux_ep_prefix
 	var keyi = scan_table(t, prefix, "*")
-	var descs []*mux_record
+	var muxs []*mux_record = make([]*mux_record, 0)
 	for keyi.Next(t.ctx) {
 		var ep = keyi.Key()
 		var d = get_mux_ep(t, ep)
 		if d != nil {
-			descs = append(descs, d)
+			muxs = append(muxs, d)
 		}
 	}
-	return descs
+	return muxs
 }
 
 // SET_EX_BUCKET atomically sets a bucket.  It returns OK or NG.
@@ -899,7 +898,7 @@ func delete_bucket_unconditionally(t *keyval_table, bucket string) bool {
 func list_buckets(t *keyval_table, pool string) []*bucket_record {
 	var prefix = db_bucket_prefix
 	var keyi = scan_table(t, prefix, "*")
-	var descs []*bucket_record
+	var bkts []*bucket_record = make([]*bucket_record, 0)
 	for keyi.Next(t.ctx) {
 		var key = keyi.Key()
 		var d = get_bucket(t, key)
@@ -908,42 +907,55 @@ func list_buckets(t *keyval_table, pool string) []*bucket_record {
 		}
 		assert_fatal(d.Bucket == key)
 		if pool == "" || d.Pool == pool {
-			descs = append(descs, d)
+			bkts = append(bkts, d)
 		}
 	}
-	return descs
+	return bkts
 }
 
-func set_access_timestamp(t *keyval_table, pool string) {
+func set_pool_timestamp(t *keyval_table, pool string) {
 	var now int64 = time.Now().Unix()
 	db_set_with_prefix(t, db_pool_timestamp_prefix, pool, now)
 }
 
-func get_access_timestamp(t *keyval_table, pool string) int64 {
+func get_pool_timestamp(t *keyval_table, pool string) int64 {
 	var data int64
 	var ok = db_get_with_prefix(t, db_pool_timestamp_prefix, pool, &data)
 	return ITE(ok, data, 0)
 }
 
-func delete_access_timestamp(t *keyval_table, pool string) {
+func delete_pool_timestamp(t *keyval_table, pool string) {
 	db_del_with_prefix(t, db_pool_timestamp_prefix, pool)
 }
 
-// LIST_ACCESS_TIMESTAMPS returns a list of (pool-id, ts) pairs.
-func list_access_timestamps(t *keyval_table) []name_timestamp_pair {
-	var prefix = db_pool_timestamp_prefix
-	var keyi = scan_table(t, prefix, "*")
-	var descs []name_timestamp_pair
-	for keyi.Next(t.ctx) {
-		var pool = keyi.Key()
-		var ts = get_access_timestamp(t, pool)
+// LIST_POOL_TIMESTAMPS returns a list of (pool-id, ts) pairs.
+func list_pool_timestamps(t *keyval_table) []*name_timestamp_pair {
+	var poollist = list_pools(t, "*")
+	var pairs []*name_timestamp_pair = make([]*name_timestamp_pair, 0)
+	for _, pool := range poollist {
+		var ts = get_pool_timestamp(t, pool)
 		if ts == 0 {
-			slogger.Info("intenal: list_access_timestamps failed")
+			slogger.Debug("intenal: list_pool_timestamps failed",
+				"pool", pool)
 			continue
 		}
-		descs = append(descs, name_timestamp_pair{pool, ts})
+		pairs = append(pairs, &name_timestamp_pair{pool, ts})
 	}
-	return descs
+	return pairs
+}
+
+func clean_pool_timestamps(t *keyval_table) {
+	var poollist = list_pools(t, "*")
+	var prefix = db_pool_timestamp_prefix
+	var keyi = scan_table(t, prefix, "*")
+	for keyi.Next(t.ctx) {
+		var pool = keyi.Key()
+		if !slices.Contains(poollist, pool) {
+			slogger.Error("clean_pool_timestamps() Remove remaining entry",
+				"pool", pool)
+			delete_pool_timestamp(t, pool)
+		}
+	}
 }
 
 func set_user_timestamp(t *keyval_table, uid string) {
@@ -963,20 +975,33 @@ func delete_user_timestamp(t *keyval_table, uid string) {
 }
 
 // LIST_USER_TIMESTAMPS returns a list of (uid, ts) pairs.
-func list_user_timestamps(t *keyval_table) []name_timestamp_pair {
-	var prefix = db_user_timestamp_prefix
-	var keyi = scan_table(t, prefix, "*")
-	var descs []name_timestamp_pair
-	for keyi.Next(t.ctx) {
-		var uid = keyi.Key()
+func list_user_timestamps(t *keyval_table) []*name_timestamp_pair {
+	var userlist = list_users(t)
+	var pairs []*name_timestamp_pair = make([]*name_timestamp_pair, 0)
+	for _, uid := range userlist {
 		var ts = get_user_timestamp(t, uid)
 		if ts == 0 {
-			slogger.Info("intenal: list_user_timestamps failed")
+			slogger.Debug("intenal: list_user_timestamps failed",
+				"user", uid)
 			continue
 		}
-		descs = append(descs, name_timestamp_pair{uid, ts})
+		pairs = append(pairs, &name_timestamp_pair{uid, ts})
 	}
-	return descs
+	return pairs
+}
+
+func clean_user_timestamps(t *keyval_table) {
+	var userlist = list_users(t)
+	var prefix = db_user_timestamp_prefix
+	var keyi = scan_table(t, prefix, "*")
+	for keyi.Next(t.ctx) {
+		var uid = keyi.Key()
+		if !slices.Contains(userlist, uid) {
+			slogger.Error("clean_user_timestamps() remove a remaining entry",
+				"user", uid)
+			delete_user_timestamp(t, uid)
+		}
+	}
 }
 
 // SET_WITH_UNIQUE_POOL_NAME makes a random unique id for a pool-name or an
@@ -1072,7 +1097,7 @@ func delete_secret_key__(t *keyval_table, key string) {
 func list_secrets_of_pool(t *keyval_table, pool string) []*secret_record {
 	var prefix = db_secret_prefix
 	var keyi = scan_table(t, prefix, "*")
-	var accume = []*secret_record{}
+	var secrets []*secret_record = make([]*secret_record, 0)
 	for keyi.Next(t.ctx) {
 		var key = keyi.Key()
 		var d = get_secret(t, key)
@@ -1084,9 +1109,9 @@ func list_secrets_of_pool(t *keyval_table, pool string) []*secret_record {
 			continue
 		}
 		// d.Access_key = key
-		accume = append(accume, d)
+		secrets = append(secrets, d)
 	}
-	return accume
+	return secrets
 }
 
 func set_csrf_token(t *keyval_table, uid string, token *csrf_token_record) {

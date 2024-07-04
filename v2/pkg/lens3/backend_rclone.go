@@ -40,19 +40,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	//"bytes"
-	//"context"
-	//"errors"
-	//"io"
-	//"log"
-	//"maps"
-	//"os"
-	//"os/exec"
-	//"path/filepath"
-	//"reflect"
-	//"syscall"
-	//"time"
-	//"time"
 )
 
 // Messages Patterns.  These are messages from rclone at its start-up.

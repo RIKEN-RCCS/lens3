@@ -1,4 +1,4 @@
-/* Lens3-Reg.  Registrar of buckets and secrets via a Web-API. */
+/* Lens3-Registrar.  Registrar of buckets and secrets. */
 
 // Copyright 2022-2024 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
@@ -16,12 +16,10 @@ package lens3
 //   separators=(",", ":"),
 // ).encode("utf-8")
 
-// Registrar uses a "double submit cookie" for CSRF prevention used in
-// fastapi_csrf_protect.  It uses a cookie+header pair.  A cookie is
-// "fastapi-csrf-token" and a header is "X-Csrf-Token".  The CSRF
-// state of a client is set by a response of "GET /user_info".
-// (However, this implementes only the header part, assuming the
-// cookie part is subsumed by authenitication by httpd).  See
+// Registrar uses a "double submit cookie" for CSRF prevention, that
+// is used in fastapi_csrf_protect.  It uses a cookie+header pair.  A
+// cookie is "fastapi-csrf-token" and a header is "X-Csrf-Token".  A
+// response of GET "/user_info" sets the CSRF state of a client.  See
 // https://github.com/aekasitt/fastapi-csrf-protect
 
 // NOTE: Arrays are initialed by "make(type,0)" if they are to be
@@ -34,7 +32,7 @@ package lens3
 // {StatusMovedPermanently(301), StatusSeeOther(303),
 // StatusTemporaryRedirect(307), StatusPermanentRedirect(308)}.
 
-// NOTE???: Maybe, consider adding a "Retry-After" header for 503
+// NOTE: ??? Maybe, consider adding a "Retry-After" header for 503
 // error.
 
 import (
@@ -52,17 +50,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	//"flag"
-	//"io"
-	//"log"
-	//"maps"
-	//"math/rand/v2"
-	//"net/http/httputil"
-	//"net/url"
-	//"os"
-	//"runtime"
-	//"runtime"
-	//"runtime/debug"
 )
 
 // UI scripts are stored in Golang's embedded files.
@@ -285,14 +272,12 @@ func start_registrar(z *registrar, wg *sync.WaitGroup) {
 	router.HandleFunc("GET /ui/index.html", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
 		slogger.Debug("Reg() GET /ui/index.html")
-		//var _ = return_ui_script(z, w, r, "ui/index.html")
 		var _ = return_file(z, w, r, r.URL.Path, true, &efs1)
 	})
 
 	router.HandleFunc("GET /ui2/index.html", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
 		slogger.Debug("Reg() GET /ui2/index.html")
-		//var _ = return_ui_script(z, w, r, "ui2/index.html")
 		var _ = return_file(z, w, r, r.URL.Path, true, &efs2)
 	})
 
@@ -518,8 +503,8 @@ func return_user_info(z *registrar, w http.ResponseWriter, r *http.Request) *use
 	return rspn
 }
 
-// LIST_POOL_AND_RETURN_RESPONSE returns a record of a pool with a
-// given pool-name, or a list of pools owned by a user for "".
+// LIST_POOL_AND_RETURN_RESPONSE returns a record of a pool, given a
+// pool-name, or a list of pools owned by a user if pool="".
 func list_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request, pool string) *pool_list_response {
 	var opr = "list-pool"
 
@@ -658,7 +643,7 @@ func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 		Timestamp:         now,
 	}
 	set_pool(z.table, pool, pooldata)
-	set_pool_state(z.table, pool, pool_state_INITIAL, pool_reason_NORMAL)
+	//set_pool_state(z.table, pool, pool_state_INITIAL, pool_reason_NORMAL)
 
 	var rspn = return_pool_prop(z, w, r, u, pool)
 	return rspn

@@ -8,6 +8,9 @@ import sys
 import time
 import json
 import urllib.error
+import subprocess
+import botocore
+import boto3
 
 sys.path.append("../lib/")
 
@@ -23,7 +26,7 @@ def _check_lens3_message(code, s):
     """
     try:
         d = json.loads(s)
-    except json.JSONDecodeError as ex:
+    except json.JSONDecodeError as x:
         d = dict()
         pass
     reason = d.get("reason", "")
@@ -91,10 +94,10 @@ class Busy_Test():
                 try:
                     pool = self.registrar.make_pool(name)
                     break
-                except urllib.error.HTTPError as ex:
-                    print(f"Making a pool got an exception: ({ex})")
+                except urllib.error.HTTPError as x:
+                    print(f"Making a pool got an exception: ({x})")
                     msg = self.registrar.urlopen_error_message
-                    how = _check_lens3_message(ex.code, msg)
+                    how = _check_lens3_message(x.code, msg)
                     if how == "server-busy":
                         got400 += 1
                         print(f"SERVER BUSY, SLEEP IN {self.duration} SEC...")
@@ -123,8 +126,8 @@ class Busy_Test():
                 try:
                     self.registrar.make_bucket(pid, bucket, bucket_policy)
                     break
-                except urllib.error.HTTPError as ex:
-                    print(f"Making a bucket got an exception: ({ex})")
+                except urllib.error.HTTPError as x:
+                    print(f"Making a bucket got an exception: ({x})")
                     msg = self.registrar.urlopen_error_message
                     how = _check_lens3_message(ex.code, msg)
                     if how == "server-busy":
@@ -141,8 +144,8 @@ class Busy_Test():
                 try:
                     self.registrar.make_secret(pid, secret_policy, expiration)
                     break
-                except urllib.error.HTTPError as ex:
-                    print(f"Making a secret got an exception: ({ex})")
+                except urllib.error.HTTPError as x:
+                    print(f"Making a secret got an exception: ({x})")
                     msg = self.registrar.urlopen_error_message
                     how = _check_lens3_message(ex.code, msg)
                     if how == "server-busy":
@@ -217,16 +220,26 @@ class Busy_Test():
             for i in range(self.n_pools):
                 s3 = self.clients[i]
                 bucket = self.buckets[i]
-                try:
-                    response = s3.put_object(
-                        Body=data,
-                        Bucket=bucket,
-                        Key="gomi-file0.txt")
-                except botocore.exceptions.ClientError as x:
-                    print("ClientError", x)
-                    pass
-                except Exception as x:
-                    print("Exception", x)
+                # Loop for taking exceptions.
+                while True:
+                    try:
+                        response = s3.put_object(
+                            Body=data,
+                            Bucket=bucket,
+                            Key="gomi-file0.txt")
+                        break
+                    except botocore.exceptions.ClientError as x:
+                        pool = self.pools[i]["pool_name"]
+                        print(f"*** pool={pool} ClientError {x}")
+                        code = x.response["ResponseMetadata"]["HTTPStatusCode"]
+                        print("*** ClientError.Code", code)
+                        if code != 503:
+                            return
+                        time.sleep(max(self.duration / 10, 60))
+                        continue
+                    except Exception as x:
+                        print("*** Exception", x)
+                        raise
                     pass
                 pass
             pass

@@ -98,23 +98,42 @@ class Reg_Client():
             pass
         self.conf = ci
         self.urlopen_error_message = b""
-        self.reg_ep = ci["reg_ep"]
-        self.s3_ep = ci["s3_ep"]
-        self.ssl_verify = ci.get("ssl_verify", True)
+        self.s3_ep = self.conf["s3_ep"]
+        self.reg_ep = self.conf["reg_ep"]
+        self.ssl_verify = self.conf.get("ssl_verify", True)
         self.cred_cookie = ""
         self.csrf_token = ""
         self.csrf_cookie = ""
-        cred = ci.get("cred")
+        auth = self.conf.get("auth")
+        assert auth is not None
+        cred = self.conf.get("cred")
         assert cred is not None
-        (k1, v1) = next(iter(cred.items()))
-        if k1 not in {"mod_auth_openidc_session", "x-remote-user"}:
+        # (k1, v1) = next(iter(cred.items()))
+        # if k1 not in {"mod_auth_openidc_session", "x-remote-user"}:
+        #     self.cred_cookie = ""
+        #     token = _basic_auth_token(k1, v1)
+        #     self.headers = {"AUTHORIZATION": token}
+        # elif k1 == "mod_auth_openidc_session":
+        #     self.cred_cookie = v1
+        #     self.headers = {}
+        # elif k1 == "x-remote-user":
+        #     self.cred_cookie = ""
+        #     self.headers = {"X-REMOTE-USER": v1}
+        # else:
+        #     assert False
+        #     pass
+        if auth == "oidc":
+            #"mod_auth_openidc_session"
+            v1 = cred[0]
+            self.cred_cookie = v1
+            self.headers = {}
+        elif auth == "basic":
+            (k1, v1) = tuple(cred)
             self.cred_cookie = ""
             token = _basic_auth_token(k1, v1)
             self.headers = {"AUTHORIZATION": token}
-        elif k1 == "mod_auth_openidc_session":
-            self.cred_cookie = v1
-            self.headers = {}
-        elif k1 == "x-remote-user":
+        elif auth == "x-remote-user":
+            v1 = cred[0]
             self.cred_cookie = ""
             self.headers = {"X-REMOTE-USER": v1}
         else:

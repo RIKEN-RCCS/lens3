@@ -5,5 +5,7 @@
   "home": "/home/some-user/pool-test",
   "auth": "oidc",
   "cred": ["some-uuid"],
-  "ssl_verify": true
+  "ssl_verify": true,
+  "pools_count": 35,
+  "backend_awake_duration": 300
 }

@@ -36,6 +36,29 @@ class Lens3_Error(Exception):
     pass
 
 
+def check_lens3_message(code, s):
+    """Checks if the error reason is a known one.  It returns one of
+    {"pool-taken", "bucket-taken", "server-busy", "unknown"}.  It
+    checks the "reason" part in the message.  One message is:
+    "Buckets-directory is already used: path=({path}), holder={uid}".
+    """
+    try:
+        d = json.loads(s)
+    except json.JSONDecodeError as x:
+        d = dict()
+        pass
+    reason = d.get("reason", "")
+    if code == 400 and reason.startswith("Buckets-directory is already used"):
+        return "pool-taken"
+    elif code == 403 and reason.startswith("Bucket name taken"):
+        return "bucket-taken"
+    elif code == 503 and reason.startswith("Cannot start backend for pool"):
+        return "server-busy"
+    else:
+        return "unknown"
+    pass
+
+
 def _basic_auth_token(user, password):
     basic = f"{user}:{password}"
     s = base64.b64encode(basic.encode()).decode()
@@ -75,21 +98,19 @@ def _verbose_print(*args):
     pass
 
 
-class Reg_Client():
+class _Lens3_Client():
     """Http-client.  It represents an access endpoint."""
 
     def __init__(self, client_json):
-        """Creates a Client with a client setting file.  A credential is
-        required in the setting, and it should be given by a pair.
-        The key part of a pair determines the authentication method.
-        There are three methods: Apache OIDC, basic authentication,
-        and no-authentication.  For Apache OIDC, the key is
-        "mod_auth_openidc_session" and a value is a cookie value.  For
-        basic authentication, a key is user name and a value is a
-        password.  For no-authentication, the key is "x-remote-user"
-        and a value is a user name.  No-authentication means directly
-        connecting to Lens3-Mux.  The endpoint must be a localhost for
-        using no-authentication.
+        """Creates an http client with a client setting file.  A credential is
+        required in the setting.  There are three authentication
+        methods: basic, Apache OIDC, and no authentication.  For basic
+        authentication, a credential is a pair of a user name and a
+        password.  For OIDC, a credential is a cookie value in
+        "mod_auth_openidc_session".  For no authentication, a
+        credential is a user name, which is set in the http header
+        "x-remote-user".  The endpoint must be a localhost for no
+        authentication.
         """
 
         self.running_host = platform.node()
@@ -208,7 +229,7 @@ class Reg_Client():
         pass
 
 
-class Lens3_Client(Reg_Client):
+class Lens3_Registrar(_Lens3_Client):
     """Lens3-Registrar client.  It defines Registrar operations."""
 
     bkt_policy_set = {"none", "public", "upload", "download"}
@@ -216,14 +237,14 @@ class Lens3_Client(Reg_Client):
 
     def __init__(self, client_json):
         super().__init__(client_json)
-        with open(client_json) as f:
-            ci = json.loads(f.read())
-            pass
+        # with open(client_json) as f:
+        #    ci = json.loads(f.read())
+        #    pass
         # _verbose_print(f"client_setting={ci}")
         self.api_version = "v1.2"
         self._verbose = False
-        self.gid = ci.get("gid")
-        self.home = ci.get("home")
+        self.gid = self.conf.get("gid")
+        self.home = self.conf.get("home")
         pass
 
     # Lens3-Registrar Oprations.
@@ -344,12 +365,9 @@ class Lens3_Client(Reg_Client):
 
 
 def _main():
-    # client = Reg_Client("client.json")
-    # path = "/user-info"
-    # client.do_access("GET", path, data=None)
-    client = Lens3_Client("client.json")
-    v = client.get_user_info()
-    print(f"client.get_user_info={v}")
+    registrar = Lens3_Registrar("client.json")
+    v = registrar.get_user_info()
+    print(f"registrar.get_user_info={v}")
     pass
 
 
@@ -358,3 +376,4 @@ def _main():
 
 if __name__ == "__main__":
     _main()
+    pass

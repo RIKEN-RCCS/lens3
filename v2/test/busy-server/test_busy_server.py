@@ -14,31 +14,9 @@ import boto3
 
 sys.path.append("../lib/")
 
-from lens3_client import Lens3_Client
+from lens3_client import Lens3_Registrar
+from lens3_client import check_lens3_message
 from lens3_client import random_string
-
-
-def _check_lens3_message(code, s):
-    """Checks if the error reason is a known one.  It returns one of
-    {"pool-taken", "bucket-taken", "server-busy", "unknown"}.  It
-    checks the "reason" part in the message.  One message is:
-    "Buckets-directory is already used: path=({path}), holder={uid}".
-    """
-    try:
-        d = json.loads(s)
-    except json.JSONDecodeError as x:
-        d = dict()
-        pass
-    reason = d.get("reason", "")
-    if code == 400 and reason.startswith("Buckets-directory is already used"):
-        return "pool-taken"
-    elif code == 403 and reason.startswith("Bucket name taken"):
-        return "bucket-taken"
-    elif code == 503 and reason.startswith("Cannot start backend for pool"):
-        return "server-busy"
-    else:
-        return "unknown"
-    pass
 
 
 def _pool_for_this_test_p(pool):
@@ -60,7 +38,8 @@ class Busy_Test():
     def __init__(self, registrar):
         self.registrar = registrar
         self.n_pools = int(registrar.conf["pools_count"])
-        self.duration = (int(registrar.conf["backend_awake_duration"]) / 3)
+        duration = registrar.conf["backend_awake_duration"]
+        self.duration = int(max(duration / 3, 60))
         self.pools = None
         self.buckets = None
         self.clients = None
@@ -97,7 +76,7 @@ class Busy_Test():
                 except urllib.error.HTTPError as x:
                     print(f"Making a pool got an exception: ({x})")
                     msg = self.registrar.urlopen_error_message
-                    how = _check_lens3_message(x.code, msg)
+                    how = check_lens3_message(x.code, msg)
                     if how == "server-busy":
                         got400 += 1
                         print(f"SERVER BUSY, SLEEP IN {self.duration} SEC...")
@@ -129,7 +108,7 @@ class Busy_Test():
                 except urllib.error.HTTPError as x:
                     print(f"Making a bucket got an exception: ({x})")
                     msg = self.registrar.urlopen_error_message
-                    how = _check_lens3_message(ex.code, msg)
+                    how = check_lens3_message(ex.code, msg)
                     if how == "server-busy":
                         got400 += 1
                         print(f"SERVER BUSY, SLEEP IN {self.duration} SEC...")
@@ -147,7 +126,7 @@ class Busy_Test():
                 except urllib.error.HTTPError as x:
                     print(f"Making a secret got an exception: ({x})")
                     msg = self.registrar.urlopen_error_message
-                    how = _check_lens3_message(ex.code, msg)
+                    how = check_lens3_message(ex.code, msg)
                     if how == "server-busy":
                         got400 += 1
                         print(f"SERVER BUSY, SLEEP IN {self.duration} SEC...")
@@ -180,8 +159,7 @@ class Busy_Test():
             pool = next((p for p in pools if p["buckets_directory"] == name),
                         None)
             if pool == None:
-                print(f"Pool not found, run prepare_busy_server.py first:"
-                      f" {name}")
+                print(f"Pool not found, do prepare first: {name}")
                 return
             self.pools[i] = pool
             pass
@@ -216,7 +194,8 @@ class Busy_Test():
         with open("gomi-file0.txt", "rb") as f:
             data = f.read()
             pass
-        for _ in range(loops):
+        for j in range(loops):
+            print(f"*** Test {j}/{loops}-th repeat.")
             for i in range(self.n_pools):
                 s3 = self.clients[i]
                 bucket = self.buckets[i]
@@ -230,15 +209,16 @@ class Busy_Test():
                         break
                     except botocore.exceptions.ClientError as x:
                         pool = self.pools[i]["pool_name"]
-                        print(f"*** pool={pool} ClientError {x}")
+                        print(f"ClientError pool={pool} exception: {x}")
                         code = x.response["ResponseMetadata"]["HTTPStatusCode"]
-                        print("*** ClientError.Code", code)
                         if code != 503:
-                            return
-                        time.sleep(max(self.duration / 10, 60))
+                            print(f"Unexpected error code {code}")
+                            raise
+                        print(f"SERVER BUSY, SLEEP IN {self.duration} SEC...")
+                        time.sleep(self.duration)
                         continue
                     except Exception as x:
-                        print("*** Exception", x)
+                        print("Unknown exception", x)
                         raise
                     pass
                 pass
@@ -263,36 +243,37 @@ class Busy_Test():
     pass
 
 
+def _usage():
+    print(f"USAGE {sys.argv[0]} prepare/destroy/run")
+    print(f"\tprepare creates a number of pools")
+    print(f"\tdestroy wipes out pools for test")
+    print(f"\trun test")
+    pass
+
 def main():
     print(f"BUSY SERVER TEST.")
-    print(f"NOTICE: THIS WILL TAKE A LONG TIME.")
-    registrar = Lens3_Client("client.json")
+    registrar = Lens3_Registrar("client.json")
     print(f";; Client for ep={registrar.reg_ep}")
     registrar.get_user_info()
 
     testcase = Busy_Test(registrar)
-    if len(sys.argv) == 1:
-        print(f"USAGE {sys.argv[0]} prepare/destroy/run")
+    if len(sys.argv) != 2:
+        _usage()
     elif sys.argv[1] == "prepare":
-        try:
-            testcase.prepare()
-        finally:
-            pass
+        testcase.prepare()
         print("Done")
     elif sys.argv[1] == "destroy":
         testcase.destroy()
+        print("Done")
     elif sys.argv[1] == "run":
-        try:
-            testcase.run()
-        finally:
-            pass
+        testcase.run()
         print("Done")
     else:
-        print(f"USAGE {sys.argv[0]} prepare/destroy/run")
+        _usage()
         pass
     pass
 
-# >>> exec(open("busy_server.py").read())
+# >>> exec(open("test_busy_server.py").read())
 
 if __name__ == "__main__":
     main()

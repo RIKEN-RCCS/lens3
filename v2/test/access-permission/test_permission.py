@@ -16,7 +16,7 @@ import boto3
 
 sys.path.append("../lib/")
 
-from lens3_client import Lens3_Client
+from lens3_client import Lens3_Registrar
 from lens3_client import random_string
 
 
@@ -297,12 +297,12 @@ class Access_Test():
         # (2) Make an S3 client without a key (for public access).
         #
 
-        client2 = boto3.client(
+        c = boto3.client(
             service_name="s3",
             region_name=region,
             endpoint_url=self.client.s3_ep,
             config=botocore.config.Config(signature_version=botocore.UNSIGNED))
-        self.s3_clients[expired]["nokey"] = client2
+        self.s3_clients[expired]["nokey"] = c
 
         #
         # (3) Make an S3 client with an unusable key (a key for another pool).
@@ -543,27 +543,27 @@ class Access_Test():
 
 
 def main():
-    global client2, test2
+    global registrar, testcase
     print(f"ACCESS TEST...")
-    client2 = Lens3_Client("client.json")
-    client2.get_user_info()
+    registrar = Lens3_Registrar("client.json")
+    registrar.get_user_info()
 
-    test2 = Access_Test(client2)
+    testcase = Access_Test(registrar)
     print(f"Making working pools for test...")
-    test2.make_working_pool()
-    test2.make_another_pool()
+    testcase.make_working_pool()
+    testcase.make_another_pool()
     try:
-        test2.run()
+        testcase.run()
     finally:
         clean_working_pools = True
         if clean_working_pools:
-            print(f";; Deleting a working pool={test2.working_pool}")
-            test2.client.delete_pool(test2.working_pool)
-            print(f";; Deleting a working pool={test2.another_pool}")
-            test2.client.delete_pool(test2.another_pool)
+            print(f";; Deleting a working pool={testcase.working_pool}")
+            testcase.client.delete_pool(testcase.working_pool)
+            print(f";; Deleting a working pool={testcase.another_pool}")
+            testcase.client.delete_pool(testcase.another_pool)
         else:
-            print(f";; Leave a working pool={test2.working_pool}")
-            print(f";; Leave a working pool={test2.another_pool}")
+            print(f";; Leave a working pool={testcase.working_pool}")
+            print(f";; Leave a working pool={testcase.another_pool}")
             pass
         pass
     print("Done")

@@ -1,0 +1,114 @@
+;; -*-Coding: utf-8; Mode: Fundamental;-*-
+
+Samples of rclone-serve-s3 start-up messages.
+
+% rclone -V
+
+/usr/local/bin/rclone v1.66.0
+- os/version: rocky 8.9 (64 bit)
+- os/kernel: 4.18.0-513.18.1.el8_9.x86_64 (x86_64)
+- os/type: linux
+- os/arch: amd64
+- go/version: go1.22.1
+- go/linking: static
+- go/tags: none
+
+----
+
+# SERVE-S3 MESSAGES (without "--use-json-log")
+
+Outputs are on stderr.
+
+## Start OK
+
+% /usr/local/bin/rclone serve s3 '/home/someone/pool-a' --addr :8081 --auth-key 'c8FMgFkojnE4SsQ6BcDs,dXGMc6yY5oidUGoqkcvnn6iYgpwLrsfQZY1jP60hl7BcMtbI' --config notfound --rc
+
+[stderr]:
+
+2024/06/03 16:56:47 NOTICE: Serving remote control on http://127.0.0.1:5572/
+2024/06/03 16:56:47 NOTICE: Local file system at /home/someone/pool-a: Starting s3 server on [http://[::]:8081/]
+
+## (Non-existing Directory is OK)
+
+% /usr/local/bin/rclone serve s3 '/home/nonexists' --addr :8081 --auth-key 'c8FMgFkojnE4SsQ6BcDs,dXGMc6yY5oidUGoqkcvnn6iYgpwLrsfQZY1jP60hl7BcMtbI' --config notfound --rc
+
+2024/06/03 16:57:32 NOTICE: Serving remote control on http://127.0.0.1:5572/
+2024/06/03 16:57:32 NOTICE: Local file system at /home/nonexists: Starting s3 server on [http://[::]:8081/]
+
+## Port Busy for S3
+
+% /usr/local/bin/rclone serve s3 '/home/someone/pool-a' --addr :6378 --auth-key 'c8FMgFkojnE4SsQ6BcDs,dXGMc6yY5oidUGoqkcvnn6iYgpwLrsfQZY1jP60hl7BcMtbI' --config notfound --rc
+
+2024/06/03 16:58:29 NOTICE: Serving remote control on http://127.0.0.1:5572/
+2024/06/03 16:58:29 Failed to s3: failed to init server: listen tcp :6378: bind: address already in use
+
+## Bad Port for S3
+
+% /usr/local/bin/rclone serve s3 '/home/someone/pool-a' --addr :80 --auth-key 'c8FMgFkojnE4SsQ6BcDs,dXGMc6yY5oidUGoqkcvnn6iYgpwLrsfQZY1jP60hl7BcMtbI' --config notfound --rc
+
+2024/06/03 17:23:53 NOTICE: Serving remote control on http://127.0.0.1:5572/
+2024/06/03 17:23:53 Failed to s3: failed to init server: listen tcp :81: bind: permission denied
+
+## Port Busy (5572) for RC
+
+% /usr/local/bin/rclone serve s3 '/home/someone/pool-a' --addr :8081 --auth-key 'c8FMgFkojnE4SsQ6BcDs,dXGMc6yY5oidUGoqkcvnn6iYgpwLrsfQZY1jP60hl7BcMtbI' --config notfound --rc
+
+2024/06/06 00:43:03 Failed to start remote control: failed to init server: listen tcp 127.0.0.1:5572: bind: address already in use
+
+# RC-COMMAND MESSAGES
+
+% /usr/local/bin/rclone rc --url=:5572 core/quit --user 'S1VaIzyiTjzrp' --pass 'xdGAkQcS1VaIzyiTjzrp'
+
+{}
+
+% /usr/local/bin/rclone rc --url=:5572 core/quit --user 'S1VaIzyiTjzrp' --pass 'xdGAkQcS1VaIzyiTjzrp'
+
+[stdout]:
+
+{
+	"error": "connection failed: Post \"http://localhost:5572/core/quit\": dial tcp [::1]:5572: connect: connection refused",
+	"path": "core/quit",
+	"status": 503
+}
+
+[stderr]:
+
+2024/06/03 17:08:22 Failed to rc: connection failed: Post "http://localhost:5572/core/quit": dial tcp [::1]:5572: connect: connection refused
+
+----
+
+# SERVE-S3 MESSAGES (with "--use-json-log")
+
+% rclone serve s3 '/home/someone/pool-a' --addr :8081 --auth-key 'c8FMgFkojnE4SsQ6BcDs,dXGMc6yY5oidUGoqkcvnn6iYgpwLrsfQZY1jP60hl7BcMtbI' --config notfound --rc --use-json-log
+
+[stderr]:
+
+{"level":"warning","msg":"Serving remote control on http://127.0.0.1:5572/","source":"rcserver/rcserver.go:165","time":"2024-06-04T22:41:38.057683+09:00"}
+{"level":"warning","msg":"Starting s3 server on [http://[::]:8081/]","object":"Local file system at /home/someone/pool-a","objectType":"*local.Fs","source":"s3/server.go:81","time":"2024-06-04T22:41:38.058414+09:00"}
+
+% /usr/local/bin/rclone serve s3 '/home/someone/pool-a' --addr :8081 --auth-key 'c8FMgFkojnE4SsQ6BcDs,dXGMc6yY5oidUGoqkcvnn6iYgpwLrsfQZY1jP60hl7BcMtbI' --config notfound --rc --use-json-log
+
+[stderr]:
+
+{"level":"warning","msg":"Serving remote control on http://127.0.0.1:5572/","source":"rcserver/rcserver.go:165","time":"2024-06-04T22:44:17.459875+09:00"}
+{"level":"warning","msg":"Starting s3 server on [http://[::]:8081/]","object":"Local file system at /home/someone/pool-a","objectType":"*local.Fs","source":"s3/server.go:81","time":"2024-06-04T22:44:17.46074+09:00"}
+
+% /usr/local/bin/rclone serve s3 '/home/someone/pool-a' --addr :6378 --auth-key 'c8FMgFkojnE4SsQ6BcDs,dXGMc6yY5oidUGoqkcvnn6iYgpwLrsfQZY1jP60hl7BcMtbI' --config notfound --rc --use-json-log
+
+[stderr]:
+
+{"level":"warning","msg":"Serving remote control on http://127.0.0.1:5572/","source":"rcserver/rcserver.go:165","time":"2024-06-04T22:46:00.854034+09:00"}
+2024/06/04 22:46:00 Failed to s3: failed to init server: listen tcp :6378: bind: address already in use
+
+% /usr/local/bin/rclone serve s3 '/home/someone/pool-a' --addr :80 --auth-key 'c8FMgFkojnE4SsQ6BcDs,dXGMc6yY5oidUGoqkcvnn6iYgpwLrsfQZY1jP60hl7BcMtbI' --config notfound --rc --use-json-log
+
+{"level":"warning","msg":"Serving remote control on http://127.0.0.1:5572/","source":"rcserver/rcserver.go:165","time":"2024-06-04T22:48:54.501643+09:00"}
+2024/06/04 22:48:54 Failed to s3: failed to init server: listen tcp :80: bind: permission denied
+
+# RC-COMMAND MESSAGES.
+
+% /usr/local/bin/rclone rc --url=:5572 core/quit --user 'S1VaIzyiTjzrp' --pass 'xdGAkQcS1VaIzyiTjzrp'
+
+{}
+
+% /usr/local/bin/rclone rc --url=:5572 core/quit --user 'S1VaIzyiTjzrp' --pass 'xdGAkQcS1VaIzyiTjzrp' --use-json-log

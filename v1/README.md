@@ -12,7 +12,7 @@ about MinIO.  While a MinIO service is usually owned by a single user,
 Lens3 starts multiple MinIO instances one for each user to confine
 operations by user's permission.
 
-| ![lens3-overview](v1/doc/lens3-overview.svg) |
+| ![lens3-overview](./doc/lens3-overview.svg) |
 |:--:|
 | **Fig. Lens3 overview.** |
 
@@ -27,15 +27,16 @@ service, called "Lens3-Api", is started as a systemd serivce, too.
 
 ## Guides
 
-[user-guide.md](v1/doc/user-guide.md) for users.
+[user-guide.md](./doc/user-guide.md) for users.
 
-[admin-guide.md](v1/doc/admin-guide.md) for administrators to maintain
+[admin-guide.md](./doc/admin-guide.md) for administrators to maintain
 lens3 services.
 
-[setting-guide.md](v1/doc/setting-guide.md) for site managers to install
+[setting-guide.md](./doc/setting-guide.md) for site managers to install
 lens3 services.
 
-[design.md](v1/doc/design.md) for programmers to debug.
+[design.md](./doc/design.md) for programmers to debug.
+
 
 ## ACKNOWLEDGEMENT
 
@@ -50,12 +51,24 @@ Lens3 uses MinIO as a backend S3 server.  Lens3 lacks a way to display
 a credit to MinIO, because it blocks accesses to MinIO's user
 interfaces.  Please refer to [https://min.io](https://min.io).
 
+Lens3 utilizes third-party open source software, which is listed in
+[acknowledgement](./ACKNOWLEDGEMENT.txt).  It may fail to include
+software transitively used.
+
 Lens3 UI is created with vuejs+vuetify.  Please refer to
 [https://vuejs.org](https://vuejs.org/) and
 [https://vuetifyjs.com](https://vuetifyjs.com/en/).
 
-(README for v1)[v1/README.md#ACKNOWLEDGEMENT]
+## Directories
 
-(README for v2)[v2/README.md#ACKNOWLEDGEMENT]
+```
+doc                  documents
+src/lenticularis     source code
+ui                   UI source code (Vuetify)
+unit-file            configuration and systemd templates
+nginx                example settings of a proxy
+apache               example settings of a proxy
+test                 test code
+```
 
 __Lenticularis-S3 comes with ABSOLUTELY NO WARRANTY.__

@@ -219,14 +219,27 @@ by request by filtering server logs.
   access.  A probe access is dropped at Lens3-Mux and not forwarded to
   a MinIO instance.
 
-## Changes from v1.2 to v1.3
+## Changes from v1.3.1 to v2.1.1
+
+* v2.1 is a code refresh.
+* Users of the service are default-allow (configurable).  Prior
+  registering of users is not necessary.
+* It has a choice of a backend, rclone in addition to MinIO.  Note
+  that the current implementation of S3 in rclone-serve-s3 has
+  problems (rclone v1.66.0).
+* Checking access keys is done by Lens3.  v1.3 passed requests to a
+  backend unchecked.
+* Records in the keyval-db are not compatible to v1.3.  All records
+  are stored in json.  The keyval-db is changed to Valkey.
+
+## Changes from v1.2.1 to v1.3.1
 
 * MinIO version is fixed to use the legacy "fs"-mode (it is quite
   old).  In a recent development of erasure-coding, MinIO uses chunked
   files in storage, which would not be suitable for
   importing/exporting existing files.
 
-## Changes from v1.1 to v1.2
+## Changes from v1.1.1 to v1.2.1
 
 * Host-style naming of buckets is dropped.
 * Accesses are forwarded to MinIO with respect to a pair of a bucket
@@ -242,10 +255,3 @@ by request by filtering server logs.
 * MC commands are directly invoked from Lens3-Reg to change the
   setting of a MinIO instance.  MC commands were invoked at Lens3-Mux
   in v1.1.
-
-## Changes from v1.2 to v2.1
-
-* Checking authentication is done by Lens3.  Lens3-v1.2 passed
-  requests to a backend unchecked.
-* v1.2 keyval-db stores string data without quotes (not in json).  It
-  has now quotes and readable in json.

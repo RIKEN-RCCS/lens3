@@ -11,7 +11,7 @@ This document describes setting for Lenticularis-S3 (Lens3).
 The steps are:
 * Prepare prerequisite software and install Lens3
 * Set up a proxy (Apache-HTTPD)
-* Start Redis
+* Start Valkey
 * Start Lens3-Mux (a Multiplexer service)
 * Start Lens3-Reg (a Registrar service)
 * Register users
@@ -21,7 +21,7 @@ The steps are:
 Lens3 consists of a couple of services as depicted in the
 configuration figure above.  A reverse-proxy can be any server, but
 Apache HTTP Server is used in this guide.  A key-value database
-server, Redis, runs at port=6378.  The Lens3 services, Lens3-Mux and
+server, Valkey, runs at port=6378.  The Lens3 services, Lens3-Mux and
 Lens3-Reg, run at port=8003 and port=8004, respectively.  The proxy is
 set up to forward requests to Lens3-Mux and Lens3-Reg.
 
@@ -37,7 +37,7 @@ It is highly recommended the server host is not open for users.
 
 * Services and thier ports
   * HTTP Proxy (port=433)
-  * Redis (port=6378)
+  * Valkey (port=6378)
   * Lens3-Mux (port=8003)
   * Lens3-Reg (port=8004)
 
@@ -46,56 +46,31 @@ It is highly recommended the server host is not open for users.
   * `httpd` or `nginx`
 
 * Files and directories
-  * /usr/lib/systemd/system/lenticularis-reg.service
   * /usr/lib/systemd/system/lenticularis-mux.service
-  * /usr/lib/systemd/system/lenticularis-redis.service
+  * /usr/lib/systemd/system/lenticularis-valkey.service
   * /etc/lenticularis/conf.json
-  * /etc/lenticularis/redis.conf
+  * /etc/lenticularis/valkey.conf
   * /var/log/lenticularis/
-  * /var/log/lenticularis-redis/
-  * /run/lenticularis-redis/ (temporary)
+  * /var/log/lenticularis-valkey/
+  * /run/lenticularis-valkey/ (temporary)
   * /etc/httpd/
   * /etc/nginx/conf.d/
 
 * Software
   * RedHat/Rocky 8.8
-  * Python 3.9
+  * Golang 1.22 and later
   * git
 
 ## Install Prerequisites
 
-Install "Golang", "Redis-6", and "Development-Tools" onto the host.
-
-Recent versions of Redis is Redis-6 and Redis-7 (as of 2024-04-01).
-But, the default is Redis-5 on Rocky8.9, so it is necessary to switch
-to use Redis-6.
-
-```
-# dnf remove redis
-# (dnf module list redis)
-# dnf module reset redis
-# dnf module enable redis:6
-# (dnf module list redis)
-# dnf install redis
-```
+Install "Golang", "Valkey-7", and "Development-Tools" onto the host.
+Some tests are written in Python.
 
 ```
 # dnf groupinstall "Development Tools"
 # dnf install golang
+# dnf install valkey
 # dnf install rpm-devel
-```
-
-Ensure using Python3.9, if necessary.
-
-```
-# update-alternatives --config python3
-```
-
-Check the version of Python3.
-
-```
-$ python3 --version
-$ update-alternatives --display python3
 ```
 
 Install a proxy, either Apache-HTTPD or NGINX.  Install Apache-HTTPD
@@ -169,7 +144,7 @@ lens3$ ls ~/.local/lib/python3.9/site-packages/lenticularis
 ## Prepare Log File Directories
 
 Create directories for logging, and modify their security attributes.
-Redis usually requires "redis_log_t" to write its logs, and
+Valkey usually requires "redis_log_t" to write its logs, and
 "logrotate" requires "var_log_t" or "redis_log_t".  Note "tmp_t"-type
 won't work due to the policy for "logrotate".  Enforce the attribute
 by "restorecon" (or using "chcon -t redis_log_t").
@@ -181,14 +156,14 @@ by "restorecon" (or using "chcon -t redis_log_t").
 # ls -dlZ /var/log/lenticularis
 (* Check the context is with var_log_t on /var/log/lenticularis. *)
 
-# mkdir /var/log/lenticularis-redis
-# chown lens3:lens3 /var/log/lenticularis-redis
-# chmod 700 /var/log/lenticularis-redis
-# semanage fcontext -a -t redis_log_t "/var/log/lenticularis-redis(/.*)?"
-# semanage fcontext -l | grep lenticularis-redis
-# restorecon -r -v /var/log/lenticularis-redis
-# ls -dlZ /var/log/lenticularis-redis
-(* Check the context is with redis_log_t on /var/log/lenticularis-redis. *)
+# mkdir /var/log/lenticularis-valkey
+# chown lens3:lens3 /var/log/lenticularis-valkey
+# chmod 700 /var/log/lenticularis-valkey
+# semanage fcontext -a -t redis_log_t "/var/log/lenticularis-valkey(/.*)?"
+# semanage fcontext -l | grep lenticularis-valkey
+# restorecon -r -v /var/log/lenticularis-valkey
+# ls -dlZ /var/log/lenticularis-valkey
+(* Check the context is with redis_log_t on /var/log/lenticularis-valkey. *)
 ```
 
 ## Enable HTTP Connections
@@ -387,40 +362,40 @@ parameters:
 See also for the AWS S3 CLI parameters:
 [https://docs.aws.amazon.com/cli/latest/topic/s3-config.html](https://docs.aws.amazon.com/cli/latest/topic/s3-config.html).
 
-## Start Redis
+## Start Valkey
 
-Lens3 uses a separate Redis instance running at port=6378 (not
+Lens3 uses a separate Valkey instance running at port=6378 (not
 well-known port=6379).
 
-Prepare a configuration file as "/etc/lenticularis/redis.conf".
-Change the owner and edit the fields.  Starting Redis will fail when
-the owner of /etc/lenticularis/redis.conf is not "lens3".  Keep it
+Prepare a configuration file as "/etc/lenticularis/valkey.conf".
+Change the owner and edit the fields.  Starting Valkey will fail when
+the owner of /etc/lenticularis/valkey.conf is not "lens3".  Keep it
 secure.  The following fields need be changed from the sample file:
 
 * bind: Network interfaces; localhost by default
-* port: A port for Redis
-* requirepass: A passhprase for Redis
+* port: A port for Valkey
+* requirepass: A passhprase for Valkey
 
 ```
 # mkdir /etc/lenticularis
-# cp $TOP/unit-file/redis/redis.conf /etc/lenticularis/redis.conf
-# chown lens3:lens3 /etc/lenticularis/redis.conf
-# chmod 660 /etc/lenticularis/redis.conf
-# vi /etc/lenticularis/redis.conf
+# cp $TOP/unit-file/valkey/valkey.conf /etc/lenticularis/valkey.conf
+# chown lens3:lens3 /etc/lenticularis/valkey.conf
+# chmod 660 /etc/lenticularis/valkey.conf
+# vi /etc/lenticularis/valkey.conf
 ```
 
-Prepare a systemd unit file for Redis, and start/restart Redis.
+Prepare a systemd unit file for Valkey, and start/restart Valkey.
 
 ```
-# cp $TOP/unit-file/redis/lenticularis-redis.service /usr/lib/systemd/system/
+# cp $TOP/unit-file/valkey/lenticularis-valkey.service /usr/lib/systemd/system/
 # systemctl daemon-reload
-# systemctl enable lenticularis-redis
-# systemctl start lenticularis-redis
+# systemctl enable lenticularis-valkey
+# systemctl start lenticularis-valkey
 ```
 
-Lens3-Mux and Lens3-Reg connect to Redis using the information held in
+Lens3-Mux and Lens3-Reg connect to Valkey using the information held in
 "/etc/lenticularis/conf.json".  Copy and edit the configuration file.
-Keep it secure as it holds the password to Redis.
+Keep it secure as it holds the password to Valkey.
 
 ```
 # cp $TOP/unit-file/conf.json /etc/lenticularis/conf.json
@@ -429,17 +404,17 @@ Keep it secure as it holds the password to Redis.
 # vi /etc/lenticularis/conf.json
 ```
 
-## Store Lens3 Settings in Redis
+## Store Lens3 Settings in Valkey
 
-Lens3-Mux and Lens3-Reg load the configuration from Redis.  This
+Lens3-Mux and Lens3-Reg load the configuration from Valkey.  This
 section prepares it.  It is better to run `lens3-admin` on the same
-host running Redis.  See the following descriptions of the fields of
+host running Valkey.  See the following descriptions of the fields of
 the configurations.
 
 * [mux-conf-json.md](mux-conf-json.md)
 * [reg-conf-json.md](reg-conf-json.md)
 
-Make the configurations in files to load them in Redis.
+Make the configurations in files to load them in Valkey.
 
 ```
 # su - lens3
@@ -451,7 +426,7 @@ lens3$ vi reg-conf.json
 ```
 
 Load the Lens3 configuration from the files.  Note `lens3-admin` needs
-"conf.json" containing connection information to Redis.  KEEP
+"conf.json" containing connection information to Valkey.  KEEP
 "conf.json" SECURE ALL THE TIME -- access keys to S3 are stored in the
 database in raw text.
 
@@ -505,11 +480,11 @@ Storage=persistent
 
 ## (Optional) Set up Log Rotation
 
-Logs from Lens3-Mux, Lens3-Reg, Gunicorn, and Redis are rotated with
+Logs from Lens3-Mux, Lens3-Reg, Gunicorn, and Valkey are rotated with
 "copytruncate".  Note the "copytruncate" method has a minor race.  The
 USR1 signal to Gunicorn is not used because it would terminate the
 process (in our environment), contrary to the Gunicorn document.  A
-rule for Redis is a modified copy of /etc/logrotate.d/redis.  We
+rule for Valkey is a modified copy of /etc/logrotate.d/redis.  We
 didn't use Python's logging.handlers.TimedRotatingFileHandler, because
 its work differs from what we expected.
 
@@ -590,10 +565,10 @@ Or,
 # systemctl status nginx
 ```
 
-Redis status:
+Valkey status:
 
 ```
-# systemctl status lenticularis-redis
+# systemctl status lenticularis-valkey
 ```
 
 Lens3-Mux and Lens3-Reg status:
@@ -650,19 +625,19 @@ It is a bit tricky when MinIO does not behave as expected.  In that
 case, it will help to connect to MinIO with "mc" command.
 
 The necessary information to use "mc" command, URL, ACCESSKEY and
-SECRETKEY, can be taken by "show-minio" command of "lens3-admin".
-First, run "show-pool" to list all the pools.  Then, run "show-minio"
-with a pool-id to display the information.  It displays URL
-(host+port) of MinIO as "minio_ep".  It also displays admin's
-ACCESSKEY under the key "admin" and SECRETKEY under "password".  Note
-that the "show-minio" command is only useful while a MinIO instance is
-running.  To keep a MinIO instance running, call the "access-mux"
-command periodically.  Otherwise, it will stop after a while.
+SECRETKEY, can be taken by "show-be" command of "lens3-admin".  First,
+run "show-pool" to list all the pools.  Then, run "show-be" with a
+pool-name to display the information.  It displays URL (host+port) of
+MinIO as "minio_ep".  It also displays admin's ACCESSKEY under the key
+"admin" and SECRETKEY under "password".  Note that the "show-be"
+command is only useful while a MinIO instance is running.  To keep a
+MinIO instance running, call the "access-mux" command periodically.
+Otherwise, it will stop after a while.
 
 ```
 lens3$ lens3-admin -c conf.json show-pool
-lens3$ lens3-admin -c conf.json show-minio POOLID
-lens3$ lens3-admin -c conf.json access-mux POOLID
+lens3$ lens3-admin -c conf.json show-be
+lens3$ lens3-admin -c conf.json access-mux POOL-NAME
 ```
 
 For example, the following commands can be used to dump tracing logs
@@ -676,15 +651,17 @@ lens3$ mc admin trace -v ALIAS
 
 ### Clean Start for Messy Troubles
 
-Clear Redis databases.
+Clear Valkey databases.
 
 ```
 lens3$ export REDISCLI_AUTH=password
-lens3$ redis-cli -p 6378 FLUSHALL
-lens3$ redis-cli -p 6378 -n 1 --scan --pattern '*'
-lens3$ redis-cli -p 6378 -n 2 --scan --pattern '*'
-lens3$ redis-cli -p 6378 -n 3 --scan --pattern '*'
+lens3$ valkey-cli -p 6378 FLUSHALL
+lens3$ valkey-cli -p 6378 -n 1 --scan --pattern '*'
+lens3$ valkey-cli -p 6378 -n 2 --scan --pattern '*'
+lens3$ valkey-cli -p 6378 -n 3 --scan --pattern '*'
 ```
+
+Use "-a password" instead of an environment variable.
 
 ### Running MinIO by Hand
 

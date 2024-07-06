@@ -1,0 +1,17 @@
+[Unit]
+Description=Valkey for Lenticularis-S3
+After=network.target
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+User=lens3
+Group=lens3
+WorkingDirectory=/var/tmp
+RuntimeDirectory=lenticularis-valkey
+RuntimeDirectoryMode=0755
+ExecStart=/usr/bin/valkey-server /etc/lenticularis/valkey.conf
+
+[Install]
+WantedBy=multi-user.target

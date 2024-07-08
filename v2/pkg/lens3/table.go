@@ -1,4 +1,4 @@
-/* Accessors to the Keyval-DB (Valkey/Redis). */
+/* Accessors to the Keyval-DB (Valkey). */
 
 // Copyright 2022-2024 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
@@ -9,29 +9,31 @@ package lens3
 // consists of a set of three databases to easy manual inspection in
 // the keyval-db.
 //
-// NOTE: Errors related to configuration files are fatal.  They are in
-// the admin tool.  It calls panic(nil).
+// NOTE: Errors related to configuration files are fatal.  Such calls
+// are in the admin tool.  It calls panic(nil).
 
-// This is by "go-redis/v8".  Use "go-redis/v8" for Redis-6, and
-// "go-redis/v9" for Redis-7.
+// This is for Valkey v7.2.5, and valkey-go v1.0.40.
+
+// MEMO: Values of strings are converted by string(), not by
+// valkey.BinaryString().
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/go-redis/redis/v8"
+	"github.com/valkey-io/valkey-go"
 	"slices"
 	"time"
 )
 
 type keyval_table struct {
-	setting       *redis.Client
-	storage       *redis.Client
-	process       *redis.Client
+	setting       valkey.Client
+	storage       valkey.Client
+	process       valkey.Client
 	ctx           context.Context
-	prefix_to_db  map[string]*redis.Client
-	db_name_to_db map[string]*redis.Client
+	prefix_to_db  map[string]valkey.Client
+	db_name_to_db map[string]valkey.Client
 }
 
 const limit_of_id_generation_loop = 30
@@ -55,7 +57,7 @@ const (
 	db_csrf_token_prefix        = "tn:"
 	db_pool_state_prefix        = "ps:"
 	db_pool_timestamp_prefix    = "pt:"
-	db_user_timestamp_prefix    = "us:"
+	db_user_timestamp_prefix    = "ut:"
 	//db_backend_ep_prefix     = "ep:"
 )
 
@@ -88,7 +90,7 @@ var prefix_to_db_number_assignment = map[string]int{
 }
 
 // Records for configuration are defined in "conf.go".  They are
-// "cf:reg", "cf:mux", and "cf:mux:" + mux-name.
+// stored under the keys: "cf:reg", "cf:mux", and "cf:mux:"+mux-name.
 
 // "uu:" + uid Entry (DB_USER_DATA_PREFIX).  Constraint:
 // (key≡user_record.Uid).  An ephemeral marker is on, when a user is
@@ -213,8 +215,9 @@ type mux_record struct {
 // "us:" + uid Entry (DB_USER_TIMESTAMP_PREFIX).
 // type int64
 
-// BUCKET_POLICY is a public-access policy attached to a bucket.  "rw"
-// is PUBLIC, "ro" is DOWNLOAD, and "wo" is UPLOAD.
+// BUCKET_POLICY is a public-access policy attached to a bucket
+// (without an access key).  "rw" is PUBLIC, "ro" is DOWNLOAD, and
+// "wo" is UPLOAD.
 type bucket_policy string
 
 const (
@@ -224,7 +227,7 @@ const (
 	bucket_policy_NONE bucket_policy = "none"
 )
 
-// SECRET_POLICY is a policy attached to an access-key.
+// SECRET_POLICY is a policy attached to an access key.
 type secret_policy string
 
 const (
@@ -245,7 +248,7 @@ type routing_bucket_desc_keys__ struct {
 	modification_time int64
 }
 
-// KEY_PAIR is a access-key and a secret-key.
+// KEY_PAIR is a access key and a secret key.
 type key_pair struct {
 	access_key string
 	secret_record
@@ -307,29 +310,40 @@ const db_no_expiration = 0
 func make_keyval_table(conf *db_conf) *keyval_table {
 	var ep = conf.Ep
 	var pw = conf.Password
-
-	var setting = redis.NewClient(&redis.Options{
-		Addr:     ep,
-		Password: pw,
-		DB:       setting_db,
+	var setting, err1 = valkey.NewClient(valkey.ClientOption{
+		InitAddress: []string{ep},
+		Password:    pw,
+		SelectDB:    setting_db,
 	})
-	var storage = redis.NewClient(&redis.Options{
-		Addr:     ep,
-		Password: pw,
-		DB:       storage_db,
+	if err1 != nil {
+		slogger.Error("keyval-db client (n=1) error", "err", err1)
+		panic(nil)
+	}
+	var storage, err2 = valkey.NewClient(valkey.ClientOption{
+		InitAddress: []string{ep},
+		Password:    pw,
+		SelectDB:    storage_db,
 	})
-	var process = redis.NewClient(&redis.Options{
-		Addr:     ep,
-		Password: pw,
-		DB:       process_db,
+	if err2 != nil {
+		slogger.Error("keyval-db client (n=2) error", "err", err2)
+		panic(nil)
+	}
+	var process, err3 = valkey.NewClient(valkey.ClientOption{
+		InitAddress: []string{ep},
+		Password:    pw,
+		SelectDB:    process_db,
 	})
+	if err3 != nil {
+		slogger.Error("keyval-db client (n=3) error", "err", err3)
+		panic(nil)
+	}
 	var t = &keyval_table{
 		ctx:           context.Background(),
 		setting:       setting,
 		storage:       storage,
 		process:       process,
-		prefix_to_db:  make(map[string]*redis.Client),
-		db_name_to_db: make(map[string]*redis.Client),
+		prefix_to_db:  make(map[string]valkey.Client),
+		db_name_to_db: make(map[string]valkey.Client),
 	}
 	for k, i := range prefix_to_db_number_assignment {
 		switch i {
@@ -350,8 +364,10 @@ func make_keyval_table(conf *db_conf) *keyval_table {
 	// Wait for a keyval-db.
 
 	for {
-		var s = t.setting.Ping(t.ctx)
-		if s.Err() == nil {
+		var db = t.setting
+		//var w = db.Ping(t.ctx)
+		var w = db.Do(t.ctx, db.B().Ping().Build())
+		if w.Error() == nil {
 			slogger.Debug("Connected to the keyval-db", "ep", ep)
 			return t
 		} else {
@@ -374,8 +390,8 @@ func raise_on_marshaling_error(err error) {
 	}
 }
 
-func raise_on_set_error(w *redis.StatusCmd) {
-	var err = w.Err()
+func raise_on_set_error(w *valkey.ValkeyResult) {
+	var err = w.Error()
 	if err != nil {
 		slogger.Error("db-set() failed", "err", err)
 		raise(&proxy_exc{
@@ -387,8 +403,8 @@ func raise_on_set_error(w *redis.StatusCmd) {
 	}
 }
 
-func raise_on_setnx_error(w *redis.BoolCmd) {
-	var err = w.Err()
+func raise_on_setnx_error(w *valkey.ValkeyResult) {
+	var err = w.Error()
 	if err != nil {
 		slogger.Error("db-setnx() failed", "err", err)
 		raise(&proxy_exc{
@@ -402,9 +418,9 @@ func raise_on_setnx_error(w *redis.BoolCmd) {
 
 // RAISE_ON_GET_ERROR raises on an error except for a non-existing
 // case.  Existence of an entry is double checked in unmarshaling.
-func raise_on_get_error(w *redis.StringCmd) {
-	var err = w.Err()
-	if err != nil && err != redis.Nil {
+func raise_on_get_error(w *valkey.ValkeyResult) {
+	var err = w.Error()
+	if err != nil && !valkey.IsValkeyNil(err) {
 		slogger.Error("db-get() failed", "err", err)
 		raise(&proxy_exc{
 			"-",
@@ -415,8 +431,8 @@ func raise_on_get_error(w *redis.StringCmd) {
 	}
 }
 
-func check_on_del_failure(w *redis.IntCmd) bool {
-	var n, err = w.Result()
+func check_on_del_failure(w *valkey.ValkeyResult) bool {
+	var n, err = w.AsInt64()
 	if err != nil {
 		slogger.Error("db-del() failed", "err", err)
 		raise(&proxy_exc{
@@ -429,8 +445,8 @@ func check_on_del_failure(w *redis.IntCmd) bool {
 	return n == 1
 }
 
-func raise_on_del_failure(w *redis.IntCmd) {
-	var n, err = w.Result()
+func raise_on_del_failure(w *valkey.ValkeyResult) {
+	var n, err = w.AsInt64()
 	if err != nil {
 		slogger.Error("db-del() failed", "err", err)
 		raise(&proxy_exc{
@@ -453,8 +469,8 @@ func raise_on_del_failure(w *redis.IntCmd) {
 
 // CHECK_ON_EXPIRE_FAILURE raises on an error except for a
 // non-existing case.  It returns NG when a key does not exist.
-func check_on_expire_failure(w *redis.BoolCmd) bool {
-	var ok, err = w.Result()
+func check_on_expire_failure(w *valkey.ValkeyResult) bool {
+	var ok, err = w.AsBool()
 	if err != nil {
 		slogger.Error("db-expire() failed", "err", err)
 		raise(&proxy_exc{
@@ -502,10 +518,10 @@ func delete_conf(t *keyval_table, sub string) {
 // reg_conf.
 func list_confs(t *keyval_table) []*lens3_conf {
 	var prefix = db_conf_prefix
-	var keyi = scan_table(t, prefix, "*")
+	var ee = scan_table(t, prefix, "*")
 	var confs []*lens3_conf = make([]*lens3_conf, 0)
-	for keyi.Next(t.ctx) {
-		var sub = keyi.Key()
+	for _, kx := range ee.Elements {
+		var sub = kx[len(prefix):]
 		var v lens3_conf
 		switch {
 		case sub == "mux" || (len(sub) >= 5 && sub[:4] == "mux:"):
@@ -603,10 +619,11 @@ func delete_user(t *keyval_table, uid string) {
 // LIST_USERS lists all uid's.
 func list_users(t *keyval_table) []string {
 	var prefix = db_user_data_prefix
-	var keyi = scan_table(t, prefix, "*")
+	var ee = scan_table(t, prefix, "*")
 	var users []string = make([]string, 0)
-	for keyi.Next(t.ctx) {
-		users = append(users, keyi.Key())
+	for _, kx := range ee.Elements {
+		var k = kx[len(prefix):]
+		users = append(users, k)
 	}
 	return users
 }
@@ -633,14 +650,15 @@ func delete_user_claim(t *keyval_table, claim string) {
 func clear_user_claim(t *keyval_table, uid string) {
 	var prefix = db_user_claim_prefix
 	var db = t.prefix_to_db[prefix]
-	var keyi = scan_table(t, prefix, "*")
-	for keyi.Next(t.ctx) {
-		var k = keyi.Key()
+	var ee = scan_table(t, prefix, "*")
+	for _, kx := range ee.Elements {
+		var k = kx[len(prefix):]
 		var claiminguser = get_user_claim(t, k)
 		if claiminguser.Uid == uid {
 			var k = (prefix + k)
-			var w = db.Del(t.ctx, k)
-			raise_on_del_failure(w)
+			//var w = db.Del(t.ctx, k)
+			var w = db.Do(t.ctx, db.B().Del().Key(k).Build())
+			raise_on_del_failure(&w)
 		}
 	}
 }
@@ -666,10 +684,11 @@ func delete_pool(t *keyval_table, pool string) {
 // pool="*".  Or, it checks the existence of a pool.
 func list_pools(t *keyval_table, pool string) []string {
 	var prefix = db_pool_data_prefix
-	var keyi = scan_table(t, prefix, pool)
+	var ee = scan_table(t, prefix, pool)
 	var pools []string = make([]string, 0)
-	for keyi.Next(t.ctx) {
-		pools = append(pools, keyi.Key())
+	for _, kx := range ee.Elements {
+		var k = kx[len(prefix):]
+		pools = append(pools, k)
 	}
 	return pools
 }
@@ -703,9 +722,9 @@ func get_buckets_directory(t *keyval_table, path string) *bucket_directory_recor
 
 func find_buckets_directory_of_pool(t *keyval_table, pool string) string {
 	var prefix = db_directory_prefix
-	var keyi = scan_table(t, prefix, "*")
-	for keyi.Next(t.ctx) {
-		var path = keyi.Key()
+	var ee = scan_table(t, prefix, "*")
+	for _, kx := range ee.Elements {
+		var path = kx[len(prefix):]
 		var dir = get_buckets_directory(t, path)
 		if dir != nil && dir.Pool == pool {
 			return path
@@ -722,11 +741,11 @@ func delete_buckets_directory_unconditionally(t *keyval_table, path string) bool
 // LIST_BUCKETS_DIRECTORIES returns a list of all buckets-directories.
 func list_buckets_directories(t *keyval_table) []*bucket_directory_record {
 	var prefix = db_directory_prefix
-	var keyi = scan_table(t, prefix, "*")
+	var ee = scan_table(t, prefix, "*")
 	//var bkts []*pool_directory
 	var dirs []*bucket_directory_record = make([]*bucket_directory_record, 0)
-	for keyi.Next(t.ctx) {
-		var path = keyi.Key()
+	for _, kx := range ee.Elements {
+		var path = kx[len(prefix):]
 		var dir = get_buckets_directory(t, path)
 		if dir != nil {
 			dirs = append(dirs, dir)
@@ -816,10 +835,10 @@ func delete_backend(t *keyval_table, pool string) {
 // Use "*" for pool.
 func list_backends(t *keyval_table, pool string) []*backend_record {
 	var prefix = db_backend_data_prefix
-	var ki = scan_table(t, prefix, pool)
+	var ee = scan_table(t, prefix, pool)
 	var procs []*backend_record = make([]*backend_record, 0)
-	for ki.Next(t.ctx) {
-		var id = ki.Key()
+	for _, kx := range ee.Elements {
+		var id = kx[len(prefix):]
 		var p = get_backend(t, id)
 		if p != nil {
 			procs = append(procs, p)
@@ -851,10 +870,10 @@ func delete_mux_ep(t *keyval_table, mux_ep string) {
 // LIST_MUX_EPS returns a list of Mux-record.
 func list_mux_eps(t *keyval_table) []*mux_record {
 	var prefix = db_mux_ep_prefix
-	var keyi = scan_table(t, prefix, "*")
+	var ee = scan_table(t, prefix, "*")
 	var muxs []*mux_record = make([]*mux_record, 0)
-	for keyi.Next(t.ctx) {
-		var ep = keyi.Key()
+	for _, kx := range ee.Elements {
+		var ep = kx[len(prefix):]
 		var d = get_mux_ep(t, ep)
 		if d != nil {
 			muxs = append(muxs, d)
@@ -897,10 +916,10 @@ func delete_bucket_unconditionally(t *keyval_table, bucket string) bool {
 // LIST_BUCKETS lists buckets.  If pool≠"", lists buckets for a pool.
 func list_buckets(t *keyval_table, pool string) []*bucket_record {
 	var prefix = db_bucket_prefix
-	var keyi = scan_table(t, prefix, "*")
+	var ee = scan_table(t, prefix, "*")
 	var bkts []*bucket_record = make([]*bucket_record, 0)
-	for keyi.Next(t.ctx) {
-		var key = keyi.Key()
+	for _, kx := range ee.Elements {
+		var key = kx[len(prefix):]
 		var d = get_bucket(t, key)
 		if d == nil {
 			continue
@@ -947,9 +966,9 @@ func list_pool_timestamps(t *keyval_table) []*name_timestamp_pair {
 func clean_pool_timestamps(t *keyval_table) {
 	var poollist = list_pools(t, "*")
 	var prefix = db_pool_timestamp_prefix
-	var keyi = scan_table(t, prefix, "*")
-	for keyi.Next(t.ctx) {
-		var pool = keyi.Key()
+	var ee = scan_table(t, prefix, "*")
+	for _, kx := range ee.Elements {
+		var pool = kx[len(prefix):]
 		if !slices.Contains(poollist, pool) {
 			slogger.Error("clean_pool_timestamps() Remove remaining entry",
 				"pool", pool)
@@ -993,9 +1012,9 @@ func list_user_timestamps(t *keyval_table) []*name_timestamp_pair {
 func clean_user_timestamps(t *keyval_table) {
 	var userlist = list_users(t)
 	var prefix = db_user_timestamp_prefix
-	var keyi = scan_table(t, prefix, "*")
-	for keyi.Next(t.ctx) {
-		var uid = keyi.Key()
+	var ee = scan_table(t, prefix, "*")
+	for _, kx := range ee.Elements {
+		var uid = kx[len(prefix):]
 		if !slices.Contains(userlist, uid) {
 			slogger.Error("clean_user_timestamps() remove a remaining entry",
 				"user", uid)
@@ -1005,7 +1024,7 @@ func clean_user_timestamps(t *keyval_table) {
 }
 
 // SET_WITH_UNIQUE_POOL_NAME makes a random unique id for a pool-name or an
-// access-key.
+// access key.
 func set_with_unique_pool_name(t *keyval_table, data *pool_mutex_record) string {
 	var prefix = db_pool_name_prefix
 	var s = set_with_unique_id_loop(t, prefix, data, generate_random_key)
@@ -1013,7 +1032,7 @@ func set_with_unique_pool_name(t *keyval_table, data *pool_mutex_record) string 
 }
 
 // SET_WITH_UNIQUE_SECRET_KEY makes a random unique id for a an
-// access-key.  The generator function assigns a new access-key in
+// access key.  The generator function assigns a new access key in
 // each loop.
 func set_with_unique_secret_key(t *keyval_table, data *secret_record) string {
 	var generator = func() string {
@@ -1034,9 +1053,11 @@ func set_with_unique_id_loop(t *keyval_table, prefix string, data any, generator
 		var v, err = json.Marshal(data)
 		raise_on_marshaling_error(err)
 		var k = (prefix + id)
-		var w = db.SetNX(t.ctx, k, v, db_no_expiration)
-		raise_on_setnx_error(w)
-		var ok, _ = w.Result()
+		//var w = db.SetNX(t.ctx, k, v, db_no_expiration)
+		var w = db.Do(t.ctx, db.B().Setnx().Key(k).Value(string(v)).Build())
+		raise_on_setnx_error(&w)
+		var ok, _ = w.AsBool()
+		//var ok, _ = w.AsInt64()
 		if ok {
 			return id
 		}
@@ -1078,7 +1099,7 @@ func get_secret(t *keyval_table, key string) *secret_record {
 	return ITE(ok, &data, nil)
 }
 
-// DELETE_SECRET_KEY deletes a access-key, unconditionally.
+// DELETE_SECRET_KEY deletes a access key, unconditionally.
 func delete_secret_key_unconditionally(t *keyval_table, key string) bool {
 	var ok = db_del_with_prefix(t, db_secret_prefix, key)
 	return ok
@@ -1088,18 +1109,19 @@ func delete_secret_key__(t *keyval_table, key string) {
 	var prefix = db_secret_prefix
 	var db = t.prefix_to_db[prefix]
 	var k = (prefix + key)
-	var w = db.Del(t.ctx, k)
-	raise_on_del_failure(w)
+	//var w = db.Del(t.ctx, k)
+	var w = db.Do(t.ctx, db.B().Del().Key(k).Build())
+	raise_on_del_failure(&w)
 }
 
-// LIST_SECRETS_OF_POOL lists secrets (access-keys) of a pool.  It
+// LIST_SECRETS_OF_POOL lists secrets (access keys) of a pool.  It
 // includes a probe-key (which is created and used internally).
 func list_secrets_of_pool(t *keyval_table, pool string) []*secret_record {
 	var prefix = db_secret_prefix
-	var keyi = scan_table(t, prefix, "*")
+	var ee = scan_table(t, prefix, "*")
 	var secrets []*secret_record = make([]*secret_record, 0)
-	for keyi.Next(t.ctx) {
-		var key = keyi.Key()
+	for _, kx := range ee.Elements {
+		var key = kx[len(prefix):]
 		var d = get_secret(t, key)
 		if d == nil {
 			// Race.  It is not an error.
@@ -1134,8 +1156,9 @@ func db_set_with_prefix(t *keyval_table, prefix string, key string, val any) {
 	var k = (prefix + key)
 	var v, err = json.Marshal(val)
 	raise_on_marshaling_error(err)
-	var w = db.Set(t.ctx, k, v, db_no_expiration)
-	raise_on_set_error(w)
+	//var w = db.Set(t.ctx, k, v, db_no_expiration)
+	var w = db.Do(t.ctx, db.B().Set().Key(k).Value(string(v)).Build())
+	raise_on_set_error(&w)
 }
 
 func db_setnx_with_prefix(t *keyval_table, prefix string, key string, val any) bool {
@@ -1143,26 +1166,30 @@ func db_setnx_with_prefix(t *keyval_table, prefix string, key string, val any) b
 	var k = (prefix + key)
 	var v, err = json.Marshal(val)
 	raise_on_marshaling_error(err)
-	var w = db.SetNX(t.ctx, k, v, db_no_expiration)
-	raise_on_setnx_error(w)
-	var ok, _ = w.Result()
+	//var w = db.SetNX(t.ctx, k, v, db_no_expiration)
+	var w = db.Do(t.ctx, db.B().Setnx().Key(k).Value(string(v)).Build())
+	raise_on_setnx_error(&w)
+	var ok, _ = w.AsBool()
 	return ok
 }
 
 func db_get_with_prefix(t *keyval_table, prefix string, key string, val any) bool {
 	var db = t.prefix_to_db[prefix]
 	var k = (prefix + key)
-	var w = db.Get(t.ctx, k)
-	raise_on_get_error(w)
-	var ok = load_db_data(w, val)
+	//var w = db.Get(t.ctx, k)
+	var w = db.Do(t.ctx, db.B().Get().Key(k).Build())
+	raise_on_get_error(&w)
+	var ok = load_db_data(&w, val)
 	return ok
 }
 
 func db_expire_with_prefix(t *keyval_table, prefix string, key string, timeout int64) bool {
 	var db = t.prefix_to_db[prefix]
 	var k = (prefix + key)
-	var w = db.Expire(t.ctx, k, (time.Duration(timeout) * time.Second))
-	var ok = check_on_expire_failure(w)
+	var sec int64 = int64(time.Duration(timeout) * time.Second)
+	//var w = db.Expire(t.ctx, k, sec)
+	var w = db.Do(t.ctx, db.B().Expire().Key(k).Seconds(sec).Build())
+	var ok = check_on_expire_failure(&w)
 	return ok
 }
 
@@ -1170,8 +1197,9 @@ func db_expire_with_prefix(t *keyval_table, prefix string, key string, timeout i
 func db_del_with_prefix(t *keyval_table, prefix string, key string) bool {
 	var db = t.prefix_to_db[prefix]
 	var k = (prefix + key)
-	var w = db.Del(t.ctx, k)
-	var ok = check_on_del_failure(w)
+	//var w = db.Del(t.ctx, k)
+	var w = db.Do(t.ctx, db.B().Del().Key(k).Build())
+	var ok = check_on_del_failure(&w)
 	return ok
 }
 
@@ -1179,17 +1207,18 @@ func db_del_with_prefix(t *keyval_table, prefix string, key string) bool {
 func db_del_with_prefix_raise(t *keyval_table, prefix string, key string) {
 	var db = t.prefix_to_db[prefix]
 	var k = (prefix + key)
-	var w = db.Del(t.ctx, k)
-	raise_on_del_failure(w)
+	//var w = db.Del(t.ctx, k)
+	var w = db.Do(t.ctx, db.B().Del().Key(k).Build())
+	raise_on_del_failure(&w)
 }
 
 // LOAD_DATA fills a structure by json data in the keyval-db.  It
 // returns true or false about an entry is found.  Note that a get
-// with err=redis.Nil means a non-exising entry.
-func load_db_data(w *redis.StringCmd, data any) bool {
-	var b, err1 = w.Bytes()
+// with valkey.IsValkeyNil(err) means a non-exising entry.
+func load_db_data(w *valkey.ValkeyResult, data any) bool {
+	var b, err1 = w.AsBytes()
 	if err1 != nil {
-		if err1 == redis.Nil {
+		if valkey.IsValkeyNil(err1) {
 			return false
 		} else {
 			slogger.Error("Bad value in the keyval-db", "err", err1)
@@ -1226,41 +1255,23 @@ func load_db_data(w *redis.StringCmd, data any) bool {
 	return true
 }
 
-// SCAN_TABLE returns an iterator of keys for a prefix+target pattern,
-// where a target is "*" for a wildcard.  It drops the prefix from the
-// returned keys.  Note that a null-ness check is always necessary
-// when getting a value, because a deletion can intervene scanning
-// keys and getting values.
-func scan_table(t *keyval_table, prefix string, target string) *db_key_iterator {
+// SCAN_TABLE returns a ScanEntry of keys for a prefix+target pattern,
+// where a target is "*" for a wildcard.  It requires to drop the
+// prefix from the returned keys.  (Note that a null-ness check is
+// always necessary when getting a value, because a deletion can
+// intervene scanning keys and getting values).
+func scan_table(t *keyval_table, prefix string, target string) *valkey.ScanEntry {
 	var db = t.prefix_to_db[prefix]
 	var pattern = prefix + target
-	var prefix_length = len(prefix)
-	var ki = db_key_iterator{
-		prefix_length,
-		db.Scan(t.ctx, 0, pattern, 0).Iterator(),
+	//var prefix_length = len(prefix)
+	//db.Scan(t.ctx, 0, pattern, 0).Iterator()
+	var s = db.Do(t.ctx, db.B().Scan().Cursor(0).Match(pattern).Build())
+	var ee, err = s.AsScanEntry()
+	if err != nil {
+		slogger.Error("Scan in the keybal-db failed", "err", err)
+		panic(nil)
 	}
-	return &ki
-}
-
-// DB_KEY_ITERATOR is a scanner, also containing a length of a
-// key-prefix.  It removes a key-prefix from a key while iterating.
-type db_key_iterator struct {
-	prefix_length int
-	i             *redis.ScanIterator
-}
-
-func (keyi *db_key_iterator) Err() error {
-	return keyi.i.Err()
-}
-
-func (keyi *db_key_iterator) Next(ctx context.Context) bool {
-	return keyi.i.Next(ctx)
-}
-
-func (keyi *db_key_iterator) Key() string {
-	//CHECK-STRING-LENGTH
-	var k = keyi.i.Val()
-	return k[keyi.prefix_length:]
+	return &ee
 }
 
 // CLEAR-TABLES.
@@ -1276,20 +1287,30 @@ func clear_everything(t *keyval_table) {
 	}
 }
 
-func clear_db(t *keyval_table, db *redis.Client, prefix string) {
+func clear_db(t *keyval_table, db valkey.Client, prefix string) {
 	assert_fatal(len(prefix) == 3)
 	var pattern = (prefix + "*")
-	var keyi = db.Scan(t.ctx, 0, pattern, 0).Iterator()
-	for keyi.Next(t.ctx) {
-		var k = keyi.Val()
-		var _ = db.Del(t.ctx, k)
+	//var w1 = db.Scan(t.ctx, 0, pattern, 0).Iterator()
+	var w1 = db.Do(t.ctx, db.B().Scan().Cursor(0).Match(pattern).Build())
+	var ee, err1 = w1.AsScanEntry()
+	if err1 != nil {
+		slogger.Error("Scan the keybal-db failed (ignored)", "err", err1)
+		return
+	}
+	for _, key := range ee.Elements {
+		//var _ = db.Del(t.ctx, key)
+		var w2 = db.Do(t.ctx, db.B().Del().Key(key).Build())
+		var err2 = w2.Error()
+		if err2 != nil {
+			slogger.Error("Del in the keybal-db failed (ignored)", "err", err2)
+		}
 		//raise_when_db_fail(w.Err())
 	}
 }
 
 // DB_RAW_TABLE returns a keyval-db for a db-name: {"setting",
 // "storage", "process"}.
-func db_raw_table(t *keyval_table, name string) *redis.Client {
+func db_raw_table(t *keyval_table, name string) valkey.Client {
 	var db, ok = t.db_name_to_db[name]
 	if !ok {
 		slogger.Error("Bad keybal-db name", "name", name)
@@ -1310,8 +1331,9 @@ func set_db_raw(t *keyval_table, kv [2]string) {
 		slogger.Error("Bad prefix to the keybal-db", "prefix", prefix)
 		panic(nil)
 	}
-	var w = db.Set(t.ctx, kv[0], kv[1], db_no_expiration)
-	raise_on_set_error(w)
+	//var w = db.Set(t.ctx, kv[0], kv[1], db_no_expiration)
+	var w = db.Do(t.ctx, db.B().Set().Key(kv[0]).Value(kv[1]).Build())
+	raise_on_set_error(&w)
 }
 
 func adm_del_db_raw(t *keyval_table, key string) {
@@ -1322,56 +1344,56 @@ func adm_del_db_raw(t *keyval_table, key string) {
 	//var prefix = key[:3]
 	//var db = t.prefix_to_db[prefix]
 	//if db != nil {
-	//	var w *redis.IntCmd = db.Del(t.ctx, key)
+	//	var w = db.Del(t.ctx, key)
 	//	raise_when_db_fail(w.Err())
 	//}
 	for name, db := range t.db_name_to_db {
-		var w *redis.IntCmd = db.Del(t.ctx, key)
-		var n, err = w.Result()
+		//var w = db.Del(t.ctx, key)
+		var w = db.Do(t.ctx, db.B().Del().Key(key).Build())
+		var n, err = w.AsInt64()
 		if err == nil && n == 1 {
 			fmt.Printf("deleted (%s) in the keyval-db\n", name)
 		}
 	}
 }
 
-type db_raw_iterator struct {
-	table    *keyval_table
-	db       *redis.Client
-	iterator *redis.ScanIterator
-}
-
-// SCAN_DB_RAW returns a (raw) iterator of the keyval-db.  It returns
-// nil for a bad db name.
-func scan_db_raw(t *keyval_table, dbname string) *db_raw_iterator {
+// SCAN_DB_RAW returns a list of all entries in the keyval-db.  It
+// returns an empty list for a bad db name (not an error).
+func scan_db_raw(t *keyval_table, dbname string) []map[string]string {
 	var db = db_raw_table(t, dbname)
 	if db == nil {
-		return nil
+		return []map[string]string{}
 	}
-	return &db_raw_iterator{
-		table:    t,
-		db:       db,
-		iterator: db.Scan(t.ctx, 0, "*", 0).Iterator(),
+	//db.Scan(t.ctx, 0, "*", 0).Iterator()
+	var w = db.Do(t.ctx, db.B().Scan().Cursor(0).Match("*").Build())
+	var ee, err = w.AsScanEntry()
+	if err != nil {
+		slogger.Error("Scan the keybal-db failed (ignored)", "err", err)
+		return []map[string]string{}
 	}
+	var keyvals = make_key_value_list(t, db, &ee)
+	return keyvals
 }
 
-// NEXT_DB_RAW returns a next entry of the iterator.  It returns a map
-// with a single entry, or returns nil at the end.  A value part is a
-// json string.
-func next_db_raw(db *db_raw_iterator) map[string]string {
-	for db.iterator.Next(db.table.ctx) {
-		var key = db.iterator.Val()
-		var w = db.db.Get(db.table.ctx, key)
-		var val, err1 = w.Bytes()
+// MAKE_KEY_VALUE_LIST makes key-value entries from the scan result.
+// It returns an array of maps, with each map a single key-value
+// entry.
+func make_key_value_list(t *keyval_table, db valkey.Client, ee *valkey.ScanEntry) []map[string]string {
+	var keyvals []map[string]string
+	for _, key := range ee.Elements {
+		//var w = db.Get(t.ctx, key)
+		var w = db.Do(t.ctx, db.B().Get().Key(key).Build())
+		var val, err1 = w.AsBytes()
 		if err1 != nil {
-			// w.Err() case subsumed.
-			if err1 == redis.Nil {
+			// w.Error() case subsumed.
+			if valkey.IsValkeyNil(err1) {
 				continue
 			} else {
 				slogger.Error("Get in the keybal-db failed", "err", err1)
 				panic(nil)
 			}
 		}
-		return map[string]string{key: string(val)}
+		keyvals = append(keyvals, map[string]string{key: string(val)})
 	}
-	return nil
+	return keyvals
 }

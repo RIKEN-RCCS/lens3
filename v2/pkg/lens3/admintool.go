@@ -382,23 +382,19 @@ func wipe_out_db(t *keyval_table, everything string) {
 // record.  (* Each entry two lines; the 1st line is ^key$ and 2nd
 // line is prefix by 4whitespaces as ^____value$. *)
 func dump_db(t *keyval_table) {
-	var i1 = scan_db_raw(t, "setting")
-	print_db_entries(i1, "Setting")
-	var i2 = scan_db_raw(t, "storage")
-	print_db_entries(i2, "Storage")
-	var i3 = scan_db_raw(t, "process")
-	print_db_entries(i3, "Process")
+	var kv1 = scan_db_raw(t, "setting")
+	print_db_entries(kv1, "Setting")
+	var kv2 = scan_db_raw(t, "storage")
+	print_db_entries(kv2, "Storage")
+	var kv3 = scan_db_raw(t, "process")
+	print_db_entries(kv3, "Process")
 }
 
-func print_db_entries(db *db_raw_iterator, title string) {
+func print_db_entries(kvlist []map[string]string, title string) {
 	fmt.Println("//----")
 	fmt.Println("// " + title)
 	fmt.Println("//----")
-	for {
-		var kv = next_db_raw(db)
-		if kv == nil {
-			break
-		}
+	for _, kv := range kvlist {
 		//print_in_json(kv)
 		for key, val := range kv {
 			fmt.Printf("%s\n", key)

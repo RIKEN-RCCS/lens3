@@ -34,7 +34,7 @@ get::
 	go get github.com/eclipse/paho.golang/autopaho
 	go get github.com/eclipse/paho.golang/autopaho/queue/memory
 	go get github.com/eclipse/paho.golang/paho
-	go get github.com/go-redis/redis/v8
+	go get github.com/valkey-io/valkey-go
 	go get golang.org/x/sys
 	go mod tidy
 
@@ -46,7 +46,7 @@ get-u::
 	go get -u github.com/eclipse/paho.golang/autopaho
 	go get -u github.com/eclipse/paho.golang/autopaho/queue/memory
 	go get -u github.com/eclipse/paho.golang/paho
-	go get -u github.com/go-redis/redis/v8
+	go get -u github.com/valkey-io/valkey-go
 	go get -u golang.org/x/sys
 	go mod tidy
 

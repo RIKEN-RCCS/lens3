@@ -362,8 +362,7 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 
 		go ping_backend(w, d)
 
-		var now int64 = time.Now().Unix()
-		proc.be.Timestamp = now
+		proc.be.Timestamp = time.Now().Unix()
 		set_backend(w.table, pool, proc.be)
 		return d
 	}

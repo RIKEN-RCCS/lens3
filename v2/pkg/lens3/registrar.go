@@ -528,7 +528,7 @@ func list_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 	if pool != "" && len(poollist) == 0 {
 		var err1 = &proxy_exc{
 			u.Uid,
-			http_400_bad_request,
+			http_404_not_found,
 			[][2]string{
 				message_no_pool,
 				{"pool", pool},
@@ -602,7 +602,7 @@ func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 		var owner = find_owner_of_pool(z, holder)
 		var err1 = &proxy_exc{
 			u.Uid,
-			http_400_bad_request,
+			http_409_conflict,
 			[][2]string{
 				message_buckets_directory_already_taken,
 				{"path", path},
@@ -664,7 +664,7 @@ func delete_pool_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 	if !ok {
 		var err1 = &proxy_exc{
 			u.Uid,
-			http_400_bad_request,
+			http_404_not_found,
 			[][2]string{
 				message_no_pool,
 				{"pool", pool},
@@ -724,7 +724,7 @@ func make_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 		var owner = find_owner_of_pool(z, holder)
 		var err1 = &proxy_exc{
 			u.Uid,
-			http_400_bad_request,
+			http_409_conflict,
 			[][2]string{
 				message_bucket_already_taken,
 				{"owner", owner},
@@ -825,7 +825,7 @@ func delete_secret_and_return_response(z *registrar, w http.ResponseWriter, r *h
 		slogger.Info("Reg() delete_secret_key() failed (ignored)")
 		var err1 = &proxy_exc{
 			u.Uid,
-			http_400_bad_request,
+			http_404_not_found,
 			[][2]string{
 				message_bad_secret,
 				{"secret", secret},
@@ -951,7 +951,7 @@ func check_user_access_with_error_return(z *registrar, w http.ResponseWriter, r 
 		slogger.Error("Reg() Bad pool name", "uid", uid, "pool", pool)
 		var err5 = &proxy_exc{
 			u.Uid,
-			http_401_unauthorized,
+			http_400_bad_request,
 			[][2]string{
 				message_no_pool,
 				{"pool", pool},
@@ -966,7 +966,7 @@ func check_user_access_with_error_return(z *registrar, w http.ResponseWriter, r 
 		slogger.Error("Reg() No pool", "uid", uid, "pool", pool)
 		var err6 = &proxy_exc{
 			u.Uid,
-			http_401_unauthorized,
+			http_404_not_found,
 			[][2]string{
 				message_no_pool,
 				{"pool", pool},
@@ -981,7 +981,7 @@ func check_user_access_with_error_return(z *registrar, w http.ResponseWriter, r 
 			"uid", uid, "pool", pool)
 		var err7 = &proxy_exc{
 			u.Uid,
-			http_401_unauthorized,
+			http_403_forbidden,
 			[][2]string{
 				message_no_pool,
 				{"pool", pool},
@@ -1002,7 +1002,7 @@ func check_user_access_with_error_return(z *registrar, w http.ResponseWriter, r 
 			"state", state, "reason", reason)
 		var err8 = &proxy_exc{
 			u.Uid,
-			http_401_unauthorized,
+			http_403_forbidden,
 			[][2]string{
 				message_bad_pool_state,
 				{"pool", pool},
@@ -1298,7 +1298,7 @@ func check_bucket_owner_with_error_return(z *registrar, w http.ResponseWriter, r
 	if b.Pool != pool {
 		var err2 = &proxy_exc{
 			u.Uid,
-			http_401_unauthorized,
+			http_403_forbidden,
 			[][2]string{
 				message_not_bucket_owner,
 				{"bucket", bucket},
@@ -1346,7 +1346,7 @@ func check_secret_owner_with_error_return(z *registrar, w http.ResponseWriter, r
 	if b.Pool != pool {
 		var err2 = &proxy_exc{
 			u.Uid,
-			http_401_unauthorized,
+			http_403_forbidden,
 			[][2]string{
 				message_not_secret_owner,
 				{"secret", secret},

@@ -1,4 +1,4 @@
-/* Check Reg. */
+/* Check Registrar. */
 
 package main
 
@@ -12,15 +12,6 @@ import (
 	"os"
 	"os/user"
 	"time"
-	//"bufio"
-	//"context"
-	//"log"
-	//"os/exec"
-	//"os/signal"
-	//"reflect"
-	//"strings"
-	//"syscall"
-	//"testing"
 )
 
 type make_pool_arguments struct {
@@ -98,10 +89,10 @@ func run_dummy_reg_client() {
 
 	get_user_info(c, 200)
 	make_pool(c, "pool-x", 200)
-	make_pool(c, "pool-x", 400)
+	make_pool(c, "pool-x", 409)
 	list_pool(c, 200)
 	make_bucket(c, "lenticularis-oddity-x3", 200)
-	make_bucket(c, "lenticularis-oddity-x3", 400)
+	make_bucket(c, "lenticularis-oddity-x3", 409)
 	make_secret(c, 200)
 	make_secret(c, 200)
 	list_pool(c, 200)

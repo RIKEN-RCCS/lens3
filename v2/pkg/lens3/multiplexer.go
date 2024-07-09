@@ -259,7 +259,7 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 			}
 			var err4 = &proxy_exc{
 				auth,
-				http_400_bad_request,
+				http_403_forbidden,
 				[][2]string{
 					message_access_rejected,
 				},
@@ -275,7 +275,7 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 			slogger.Debug(m.MuxEP + " Access the root with authentication")
 			var err5 = &proxy_exc{
 				auth,
-				http_403_forbidden,
+				http_400_bad_request,
 				[][2]string{
 					message_bucket_listing_forbidden,
 				},
@@ -306,11 +306,11 @@ func serve_authenticated_access(m *multiplexer, w http.ResponseWriter, r *http.R
 	if secret != nil {
 		auth = secret.Access_key
 	}
-	var now int64 = time.Now().Unix()
+	//var now int64 = time.Now().Unix()
 	if !ensure_bucket_owner(m, w, r, bucket, secret, auth) {
 		return
 	}
-	if !ensure_bucket_not_expired(m, w, r, bucket, now, auth) {
+	if !ensure_bucket_not_expired(m, w, r, bucket, auth) {
 		return
 	}
 	var pooldata *pool_record = ensure_pool_existence(m, w, r, bucket.Pool, auth)
@@ -338,8 +338,8 @@ func serve_authenticated_access(m *multiplexer, w http.ResponseWriter, r *http.R
 func serve_anonymous_access(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record, proxy http.Handler) {
 	assert_fatal(bucket != nil)
 	var auth = "-"
-	var now int64 = time.Now().Unix()
-	if !ensure_bucket_not_expired(m, w, r, bucket, now, auth) {
+	//var now int64 = time.Now().Unix()
+	if !ensure_bucket_not_expired(m, w, r, bucket, auth) {
 		return
 	}
 	var pooldata *pool_record = ensure_pool_existence(m, w, r, bucket.Pool, auth)
@@ -508,7 +508,7 @@ func check_authenticated(m *multiplexer, r *http.Request) (*secret_record, *prox
 		slogger.Info(m.MuxEP+" Unknown credential", "key", auth)
 		var err1 = &proxy_exc{
 			"-",
-			http_403_forbidden,
+			http_401_unauthorized,
 			[][2]string{
 				message_access_rejected,
 			},
@@ -517,13 +517,13 @@ func check_authenticated(m *multiplexer, r *http.Request) (*secret_record, *prox
 	}
 	assert_fatal(secret.Access_key == auth)
 	var keypair = [2]string{secret.Access_key, secret.Secret_key}
-	var ok, reason = check_credential_in_request(r, keypair)
+	var ok, reason = check_credential_is_good(r, keypair)
 	if !ok {
 		slogger.Info(m.MuxEP+" Bad credential",
 			"key", auth, "reason", reason)
 		var err2 = &proxy_exc{
 			"-",
-			http_403_forbidden,
+			http_401_unauthorized,
 			[][2]string{
 				message_access_rejected,
 			},
@@ -700,11 +700,13 @@ func check_bucket_in_path(m *multiplexer, w http.ResponseWriter, r *http.Request
 	return bucket, nil
 }
 
-func ensure_bucket_not_expired(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record, now int64, auth string) bool {
-	if bucket.Expiration_time < now {
+func ensure_bucket_not_expired(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record, auth string) bool {
+	var now = time.Now()
+	var expiration = time.Unix(bucket.Expiration_time, 0)
+	if !now.Before(expiration) {
 		var err1 = &proxy_exc{
 			auth,
-			http_400_bad_request,
+			http_403_forbidden,
 			[][2]string{
 				message_bucket_expired,
 			},
@@ -1078,13 +1080,14 @@ func check_pool_state(t *keyval_table, pool string) (pool_state, pool_reason) {
 }
 
 func check_user_is_active(t *keyval_table, uid string) (bool, error_message) {
-	var now int64 = time.Now().Unix()
 	var ui = get_user(t, uid)
 	if ui == nil {
 		slogger.Warn("User not found", "user", uid)
 		return false, message_user_not_registered
 	}
-	if !ui.Enabled || ui.Expiration_time < now {
+	var now = time.Now()
+	var expiration = time.Unix(ui.Expiration_time, 0)
+	if !ui.Enabled || !now.Before(expiration) {
 		return false, message_user_disabled
 	}
 

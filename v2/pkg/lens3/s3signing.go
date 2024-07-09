@@ -64,11 +64,11 @@ const (
 	empty_payload_hash_sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 )
 
-// CHECK_CREDENTIAL_IN_REQUEST checks the sign in an http request.  It
+// CHECK_CREDENTIAL_IS_GOOD checks the sign in an http request.  It
 // returns OK/NG and a simple reason.  It once signs a request (after
 // copying) using AWS SDK, and compares the result.  It substitutes
 // "Host" by "X-Forwarded-Host" if it is missing.
-func check_credential_in_request(rqst1 *http.Request, keypair [2]string) (bool, string) {
+func check_credential_is_good(rqst1 *http.Request, keypair [2]string) (bool, string) {
 	var header1 = rqst1.Header.Get("Authorization")
 	//fmt.Println("*** authorization=", header1)
 	if header1 == "" {

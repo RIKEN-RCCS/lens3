@@ -12,6 +12,7 @@ const (
 	http_401_unauthorized int = 401
 	http_403_forbidden    int = 403
 	http_404_not_found    int = 404
+	http_409_conflict     int = 409
 
 	http_500_internal_server_error int = 500
 	http_502_bad_gateway           int = 502

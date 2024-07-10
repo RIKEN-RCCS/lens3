@@ -23,12 +23,15 @@ type pool_prop struct {
 
 // GATHER_POOL_PROP returns a property description of a pool.  It
 // constructs a property description by gathering data scattered in
-// the keyval-db.
+// the keyval-db.  It is a fatal error and returns nil when the pool
+// is gone.
 func gather_pool_prop(t *keyval_table, pool string) *pool_prop {
+	var inconsistent_db_entires = false
 	var poolprop = pool_prop{}
 	var pooldata = get_pool(t, pool)
 	if pooldata == nil {
-		slogger.Warn("A race happens in gather_pool_prop")
+		slogger.Error("Inconsistency in keyval-db: no requested pool",
+			"pool", pool)
 		return nil
 	}
 	assert_fatal(pooldata.Pool == pool)
@@ -38,9 +41,9 @@ func gather_pool_prop(t *keyval_table, pool string) *pool_prop {
 
 	var bd = find_buckets_directory_of_pool(t, pool)
 	if !(pooldata.Buckets_directory == bd) {
-		slogger.Error(("An inconsistent entry in keyval-db:" +
-			" bad buckets-directory entry"),
-			"bd1", pooldata.Buckets_directory, "bd2", bd)
+		slogger.Error("Inconsistency in keyval-db: bad buckets-directory",
+			"pool", pool, "bd", bd, "need", pooldata.Buckets_directory)
+		inconsistent_db_entires = true
 	}
 
 	// Gather buckets.
@@ -58,19 +61,14 @@ func gather_pool_prop(t *keyval_table, pool string) *pool_prop {
 	var uid = poolprop.Owner_uid
 	var u = get_user(t, uid)
 	if u == nil {
-		slogger.Error(("An inconsistent entry in keyval-db:" +
-			" user of pool nonexists"), "uid", uid, "pool", pool)
+		slogger.Error("Inconsistency in keyval-db: pool without an owner",
+			"pool", pool, "old-owner", uid)
+		inconsistent_db_entires = true
 	}
-	if u != nil {
-		poolprop.user_record = *u
-	}
+	poolprop.user_record = *u
 
-	// Gather dynamic states.
+	// Check the dynamic state.
 
-	// var state *pool_state_record = get_pool_state(t, pool)
-	// if state != nil {
-	// 	poolprop.pool_state_record = *state
-	// }
 	var state, reason = check_pool_state(t, pool)
 	poolprop.pool_state_record = pool_state_record{
 		Pool:      pool,
@@ -79,7 +77,12 @@ func gather_pool_prop(t *keyval_table, pool string) *pool_prop {
 		Timestamp: 0,
 	}
 
-	//check_pool_is_well_formed(poolprop, None)
+	if inconsistent_db_entires {
+		deregister_pool_by_prop(t, &poolprop)
+		return nil
+	}
+
+	//check_pool_is_well_formed(poolprop)
 	return &poolprop
 }
 

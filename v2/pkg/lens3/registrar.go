@@ -65,7 +65,7 @@ type registrar struct {
 	// EP_PORT is a listening port of Registrar (":port").
 	ep_port string
 
-	verbose bool
+	verbose int
 
 	table *keyval_table
 
@@ -247,7 +247,7 @@ func configure_registrar(z *registrar, t *keyval_table, qch <-chan vacuous, c *r
 
 func start_registrar(z *registrar, wg *sync.WaitGroup) {
 	defer wg.Done()
-	if z.verbose {
+	if z.verbose >= 3 {
 		slogger.Debug("Reg() start_registrar()")
 	}
 
@@ -428,7 +428,7 @@ func return_file(z *registrar, w http.ResponseWriter, rqst *http.Request, path s
 		//materialdesignicons-webfont.woff2 -> "font/woff2"
 		//materialdesignicons.css.map -> "text/plain"
 		var ct = http.DetectContentType(data2)
-		if z.verbose {
+		if z.verbose >= 3 {
 			slogger.Debug("Reg() http.DetectContentType()",
 				"path", path1, "type", ct)
 		}
@@ -598,7 +598,7 @@ func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 	}
 	var ok, holder = set_ex_buckets_directory(z.table, path, bd)
 	if !ok {
-		var _ = delete_pool_name_unconditionally(z.table, pool)
+		var _ = delete_pool_mutex_checking(z.table, pool)
 		var owner = find_owner_of_pool(z, holder)
 		var err1 = &proxy_exc{
 			u.Uid,
@@ -758,7 +758,7 @@ func delete_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *h
 		return nil
 	}
 
-	var ok1 = delete_bucket_unconditionally(z.table, bucket)
+	var ok1 = delete_bucket_checking(z.table, bucket)
 	if !ok1 {
 		var err1 = &proxy_exc{
 			u.Uid,
@@ -820,7 +820,7 @@ func delete_secret_and_return_response(z *registrar, w http.ResponseWriter, r *h
 	}
 
 	//ensure_secret_owner_only(self.tables, access_key, pool_id)
-	var ok = delete_secret_key_unconditionally(z.table, secret)
+	var ok = delete_secret_key_checking(z.table, secret)
 	if !ok {
 		slogger.Info("Reg() delete_secret_key() failed (ignored)")
 		var err1 = &proxy_exc{
@@ -835,7 +835,7 @@ func delete_secret_and_return_response(z *registrar, w http.ResponseWriter, r *h
 		return nil
 	}
 
-	var rpsn *pool_prop_response = return_pool_prop(z, w, r, u, pool)
+	var rpsn = return_pool_prop(z, w, r, u, pool)
 	return rpsn
 }
 
@@ -1146,9 +1146,9 @@ func check_csrf_tokens(z *registrar, w http.ResponseWriter, r *http.Request, uid
 	var h = r.Header.Get("X-Csrf-Token")
 	var ok = (v != nil && c != nil && h != "" &&
 		v.Csrf_token[0] == c.Value && v.Csrf_token[1] == h)
-	if z.verbose && !ok {
+	if !ok {
 		slogger.Debug("Reg() Checking csrf-tokens failed",
-			"token", v.Csrf_token, "header", h, "cookie", c)
+			"uid", uid, "token", v.Csrf_token, "header", h, "cookie", c)
 	}
 	return ok
 }
@@ -1660,66 +1660,73 @@ func list_pools_of_user(t *keyval_table, uid string) []string {
 func deregister_user(t *keyval_table, uid string) {
 	var poolnames = list_pools_of_user(t, uid)
 	for _, pool := range poolnames {
-		//var p = gather_pool_prop(t, pool)
-		//if p == nil {
-		//continue
-		//}
 		// Ignore errors.
 		var _ = deregister_pool(t, pool)
 	}
-	delete_user(t, uid)
+	clear_user_claim(t, uid)
 	delete_user_timestamp(t, uid)
+	delete_user(t, uid)
 }
 
-// DEREGISTER_POOL deletes a pool, along with its buckets-directory,
-// buckets, and access-keys.  It returns OK/NG.  It ignores most of
-// the errors but only fails when a pool is not found.  IT DOES
-// NOTHING TO A BACKEND.  That is, it does not remove or disable
-// buckets in the backend.
+// DEREGISTER_POOL deletes a pool, along with its members, i.e.,
+// buckets-directory, buckets, and access keys.  It returns OK/NG.  It
+// ignores most of the errors but only fails when a pool is not found.
+// It does nothing to a backend, that is, it does not remove or
+// disable buckets in the backend.
 func deregister_pool(t *keyval_table, pool string) bool {
-	//fmt.Println("deregister_pool()", pool)
-	var p = gather_pool_prop(t, pool)
-	if p == nil {
-		slogger.Info("Reg() Deleting a non-existing pool", "pool", pool)
+	var prop = gather_pool_prop(t, pool)
+	if prop == nil {
+		slogger.Error("Reg() Deleting a non-existing pool", "pool", pool)
 		return false
 	}
+	var ok = deregister_pool_by_prop(t, prop)
+	return ok
+}
+
+func deregister_pool_by_prop(t *keyval_table, prop *pool_prop) bool {
+	var pool = prop.pool_record.Pool
 
 	// Delete buckets_directory.
 
-	var path = p.Buckets_directory
-	var ok1 = delete_buckets_directory_unconditionally(t, path)
-	if !ok1 {
-		slogger.Info("Reg() Deleting a buckets directory failed (ignored)",
-			"pool", pool, "path", path)
+	if prop.Buckets_directory != "" {
+		var path = prop.Buckets_directory
+		var ok1 = delete_buckets_directory_checking(t, path)
+		if !ok1 {
+			slogger.Error("Reg() Deleting a buckets directory failed (ignored)",
+				"pool", pool, "path", path)
+		}
 	}
 
 	// Delete buckets.
 
-	var bkts = p.Buckets
-	for _, b := range bkts {
+	for _, b := range prop.Buckets {
 		assert_fatal(b.Pool == pool)
-		var ok2 = delete_bucket_unconditionally(t, b.Bucket)
+		var ok2 = delete_bucket_checking(t, b.Bucket)
 		if !ok2 {
-			slogger.Info("Reg() Deleting a bucket failed (ignored)",
+			slogger.Error("Reg() Deleting a bucket failed (ignored)",
 				"pool", pool, "bucket", b.Bucket)
 		}
 	}
 
-	// Delete access-keys.
+	// Delete access keys.
 
-	for _, k := range p.Secrets {
+	for _, k := range prop.Secrets {
 		assert_fatal(k.Pool == pool)
-		var ok = delete_secret_key_unconditionally(t, k.Access_key)
-		if !ok {
-			slogger.Info("Reg() Deleting an access-key failed (ignored)",
+		var ok3 = delete_secret_key_checking(t, k.Access_key)
+		if !ok3 {
+			slogger.Error("Reg() Deleting an access-key failed (ignored)",
 				"pool", pool, "secret", k.Access_key)
 		}
 	}
 
-	//erase_backend_ep(self.tables, pool)
-	//erase_pool_prop(self.tables, pool)
+	var ok4 = delete_pool_mutex_checking(t, pool)
+	if !ok4 {
+		slogger.Error("Reg() Deleting a pool entry failed (ignored)",
+			"pool", pool)
+	}
 
-	delete_pool(t, p.pool_record.Pool)
+	delete_pool_timestamp(t, pool)
+	delete_pool(t, pool)
 
 	return true
 }

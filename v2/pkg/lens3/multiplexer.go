@@ -50,7 +50,7 @@ type multiplexer struct {
 
 	manager *manager
 
-	verbose bool
+	verbose int
 
 	table *keyval_table
 
@@ -82,7 +82,7 @@ func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, qch <-ch
 	m.manager = w
 	m.conf = c
 	m.ch_quit_service = qch
-	//m.verbose = true
+	//m.verbose = 3
 
 	var conf = &m.conf.Multiplexer
 	open_log_for_mux(c.Log.Access_log_file)
@@ -121,7 +121,7 @@ func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, qch <-ch
 // MEMO: ReverseProxy <: Handler as it implements ServeHTTP().
 func start_multiplexer(m *multiplexer, wg *sync.WaitGroup) {
 	defer wg.Done()
-	if m.verbose {
+	if m.verbose >= 3 {
 		slogger.Debug(m.MuxEP + " start_multiplexer()")
 	}
 
@@ -254,8 +254,8 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 			return
 		case bucket == nil && authenticated == nil:
 			// THIS CAN BE PORT SCANS.
-			if m.verbose {
-				slogger.Debug(m.MuxEP + " Access the root")
+			if m.verbose >= 3 {
+				slogger.Debug(m.MuxEP + " Accessing the top (bucket=nil)")
 			}
 			var err4 = &proxy_exc{
 				auth,
@@ -400,7 +400,7 @@ func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, be *
 	var ctx3 = context.WithValue(ctx2, "lens3-pool-auth", []string{pool, auth})
 	var r2 = r.WithContext(ctx3)
 
-	if m.verbose {
+	if m.verbose >= 3 {
 		slogger.Debug(m.MuxEP+" Forward a request", "pool", pool, "key", auth,
 			"method", r.Method, "resource", r.RequestURI)
 	}
@@ -949,8 +949,8 @@ func return_mux_error_response(m *multiplexer, w http.ResponseWriter, r *http.Re
 
 func mux_periodic_work(m *multiplexer) {
 	var conf = &m.conf.Multiplexer
-	if m.verbose {
-		//slogger.Debug(m.MuxEP + " Periodic work started")
+	if m.verbose >= 3 {
+		slogger.Debug(m.MuxEP + " Periodic work started")
 	}
 	var now int64 = time.Now().Unix()
 	var mux = &mux_record{
@@ -964,7 +964,7 @@ func mux_periodic_work(m *multiplexer) {
 	assert_fatal(interval >= 10)
 	//time.Sleep(1 * time.Second)
 	for {
-		if m.verbose {
+		if m.verbose >= 3 {
 			slogger.Debug(m.MuxEP + " Update Mux-ep")
 		}
 		mux.Timestamp = time.Now().Unix()

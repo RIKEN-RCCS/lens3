@@ -43,11 +43,11 @@
     "access_log_file": "/tmp/lens3-mux-access-log"
   },
   "logging": {
-    "syslog": {
+    "logger": {
       "log_file": "/tmp/lens3-log",
       "facility": "LOCAL7",
       "level": "DEBUG",
-      "verbose": true,
+      "verbosity": 1,
       "source_line": false
     },
     "stats": {

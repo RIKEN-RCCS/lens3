@@ -282,11 +282,11 @@ func dump_db__(t *keyval_table) *dump_data {
 	var poollist = list_pools(t, "*")
 	var pools []*pool_prop = make([]*pool_prop, 0)
 	for _, pool := range poollist {
-		var i = gather_pool_prop(t, pool)
-		//fmt.Println("pool=", i)
-		if i != nil {
-			pools = append(pools, i)
+		var d = gather_pool_prop(t, pool)
+		if d == nil {
+			continue
 		}
+		pools = append(pools, d)
 	}
 	return &dump_data{
 		Confs: confs,
@@ -360,8 +360,10 @@ func restore_db(t *keyval_table, filename string) {
 	}
 }
 
-func delete_db_entry(t *keyval_table, key string) {
-	adm_del_db_raw(t, key)
+func delete_db_entry(t *keyval_table, keys []string) {
+	for _, key := range keys {
+		adm_del_db_raw(t, key)
+	}
 }
 
 func probe_mux(t *keyval_table, pool string) {
@@ -571,12 +573,16 @@ var cmd_list = []*cmd{
 			}
 			var pools []*pool_prop = make([]*pool_prop, 0)
 			for _, name := range poollist {
+				var pooldata = get_pool(adm.table, name)
+				if pooldata == nil {
+					fmt.Fprintf(os.Stderr, "No pool found for (%s)\n", name)
+					continue
+				}
 				var d = gather_pool_prop(adm.table, name)
 				if d == nil {
-					fmt.Fprintf(os.Stderr, "No pool found for (%s)\n", name)
-				} else {
-					pools = append(pools, d)
+					continue
 				}
+				pools = append(pools, d)
 			}
 			slices.SortFunc(pools, func(a, b *pool_prop) int {
 				return strings.Compare(
@@ -647,7 +653,7 @@ var cmd_list = []*cmd{
 
 		run: func(adm *adm, args []string) {
 			var bkt = args[1]
-			var ok = delete_bucket_unconditionally(adm.table, bkt)
+			var ok = delete_bucket_checking(adm.table, bkt)
 			if !ok {
 				fmt.Fprintf(os.Stderr, "No bucket found for (%s)\n", bkt)
 				return
@@ -747,10 +753,16 @@ var cmd_list = []*cmd{
 			var poollist = list_pools(adm.table, "*")
 			var pools []*pool_prop = make([]*pool_prop, 0)
 			for _, pool := range poollist {
-				var i = gather_pool_prop(adm.table, pool)
-				if i != nil {
-					pools = append(pools, i)
+				var pooldata = get_pool(adm.table, pool)
+				if pooldata == nil {
+					fmt.Fprintf(os.Stderr, "No pool found for (%s)\n", pool)
+					continue
 				}
+				var d = gather_pool_prop(adm.table, pool)
+				if d == nil {
+					continue
+				}
+				pools = append(pools, d)
 			}
 
 			var filename string
@@ -788,12 +800,13 @@ var cmd_list = []*cmd{
 	},
 
 	&cmd{
-		synopsis: "remove-db-entry key",
+		synopsis: "kill-db-entry key ...",
 
-		doc: `Removes an entry in the keyval-db by a key.`,
+		doc: `Removes an entry in the keyval-db by a raw key.  A raw key is a
+	key with a prefix (such as "po:").`,
 
 		run: func(adm *adm, args []string) {
-			delete_db_entry(adm.table, args[1])
+			delete_db_entry(adm.table, args[1:])
 		},
 	},
 

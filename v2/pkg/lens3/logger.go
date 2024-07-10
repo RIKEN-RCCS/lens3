@@ -26,13 +26,13 @@ var slogger = slog.Default()
 // syslog logger.  It also makes an additional logger for alerting (by
 // MQTT).  It removes the "time" field for syslog.  See "Example
 // (Wrapping)" in the "slog" document.
-func configure_logger(logging *logging_conf, qch <-chan vacuous) {
+func configure_logger(logconf *logging_conf, qch <-chan vacuous) {
 	slog.SetLogLoggerLevel(slog.LevelDebug)
 
 	var w1 io.Writer
 	var notime bool
-	if logging.Syslog.Log_file != "" {
-		var f = logging.Syslog.Log_file
+	if logconf.Logger.Log_file != "" {
+		var f = logconf.Logger.Log_file
 		var w2, err1 = os.OpenFile(f, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
 		if err1 != nil {
 			slog.Error("Opening a log file failed", "file", f, "err", err1)
@@ -41,8 +41,8 @@ func configure_logger(logging *logging_conf, qch <-chan vacuous) {
 		w1 = w2
 		notime = false
 	} else {
-		var fac = log_facility_map[logging.Syslog.Facility]
-		var sev = log_severity_map[logging.Syslog.Level]
+		var fac = log_facility_map[logconf.Logger.Facility]
+		var sev = log_severity_map[logconf.Logger.Level]
 		var p syslog.Priority = sev | fac
 		var w2, err2 = syslog.New(p, "lenticularis")
 		if err2 != nil {
@@ -68,8 +68,8 @@ func configure_logger(logging *logging_conf, qch <-chan vacuous) {
 
 	// Make a usual (file or syslog) logger.
 
-	var source bool = logging.Syslog.Source_line
-	var level = map_level_name(logging.Syslog.Level)
+	var source bool = logconf.Logger.Source_line
+	var level = map_level_name(logconf.Logger.Level)
 	var h1 slog.Handler = slog.NewTextHandler(w1, &slog.HandlerOptions{
 		AddSource:   source,
 		Level:       level,
@@ -87,9 +87,9 @@ func configure_logger(logging *logging_conf, qch <-chan vacuous) {
 	var alert slog.Level = slog.LevelInfo
 
 	var mqtt *mqtt_client = nil
-	if strings.EqualFold(logging.Alert.Queue, "mqtt") {
-		mqtt = configure_mqtt(&logging.Mqtt, qch)
-		alert = map_level_name(logging.Alert.Level)
+	if strings.EqualFold(logconf.Alert.Queue, "mqtt") {
+		mqtt = configure_mqtt(&logconf.Mqtt, qch)
+		alert = map_level_name(logconf.Alert.Level)
 		h2 = slog.NewTextHandler(mqtt, &slog.HandlerOptions{
 			AddSource:   false,
 			Level:       alert,

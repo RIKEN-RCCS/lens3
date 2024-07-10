@@ -139,7 +139,7 @@ func start_lenticularis_service(confpath string, services [2]string) {
 		var w = the_manager
 		configure_multiplexer(m, w, t, ch_quit_service, muxconf)
 		configure_manager(w, m, t, ch_quit_service, muxconf)
-		m.verbose = logconf.Syslog.Verbose
+		m.verbose = logconf.Logger.Verbosity
 		defer w.factory.clean_at_exit()
 		go start_multiplexer(m, &wg)
 	}
@@ -149,7 +149,7 @@ func start_lenticularis_service(confpath string, services [2]string) {
 	if services[1] != "" {
 		var z = the_registrar
 		configure_registrar(z, t, ch_quit_service, regconf)
-		z.verbose = logconf.Syslog.Verbose
+		z.verbose = logconf.Logger.Verbosity
 		go start_registrar(z, &wg)
 	}
 

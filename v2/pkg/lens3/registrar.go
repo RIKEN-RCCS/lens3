@@ -65,7 +65,7 @@ type registrar struct {
 	// EP_PORT is a listening port of Registrar (":port").
 	ep_port string
 
-	verbose int
+	verbosity trace_flag
 
 	table *keyval_table
 
@@ -123,7 +123,7 @@ type pool_list_response struct {
 
 type pool_prop_ui struct {
 	Pool                string            `json:"pool_name"`
-	Buckets_directory   string            `json:"buckets_directory"`
+	Bucket_directory    string            `json:"buckets_directory"`
 	Owner_uid           string            `json:"owner_uid"`
 	Owner_gid           string            `json:"owner_gid"`
 	Buckets             []*bucket_data_ui `json:"buckets"`
@@ -165,8 +165,8 @@ type user_info_ui struct {
 type empty_request struct{}
 
 type make_pool_arguments struct {
-	Buckets_directory string `json:"buckets_directory"`
-	Owner_gid         string `json:"owner_gid"`
+	Bucket_directory string `json:"buckets_directory"`
+	Owner_gid        string `json:"owner_gid"`
 }
 
 type make_bucket_arguments struct {
@@ -247,7 +247,7 @@ func configure_registrar(z *registrar, t *keyval_table, qch <-chan vacuous, c *r
 
 func start_registrar(z *registrar, wg *sync.WaitGroup) {
 	defer wg.Done()
-	if z.verbose >= 3 {
+	if trace_task&z.verbosity != 0 {
 		slogger.Debug("Reg() start_registrar()")
 	}
 
@@ -428,7 +428,7 @@ func return_file(z *registrar, w http.ResponseWriter, rqst *http.Request, path s
 		//materialdesignicons-webfont.woff2 -> "font/woff2"
 		//materialdesignicons.css.map -> "text/plain"
 		var ct = http.DetectContentType(data2)
-		if z.verbose >= 3 {
+		if trace_proxy&z.verbosity != 0 {
 			slogger.Debug("Reg() http.DetectContentType()",
 				"path", path1, "type", ct)
 		}
@@ -551,7 +551,7 @@ func list_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 	}
 
 	slices.SortFunc(poollist, func(x, y *pool_prop_ui) int {
-		return strings.Compare(x.Buckets_directory, y.Buckets_directory)
+		return strings.Compare(x.Bucket_directory, y.Bucket_directory)
 	})
 	var rspn = &pool_list_response{
 		response_common: response_common{
@@ -588,15 +588,15 @@ func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 	}
 	var pool = set_with_unique_pool_name(z.table, poolname)
 
-	// Register buckets-directory.
+	// Register bucket-directory.
 
-	var path = args.Buckets_directory
+	var path = args.Bucket_directory
 	var bd = &bucket_directory_record{
 		Pool:      pool,
 		Directory: path,
 		Timestamp: now,
 	}
-	var ok, holder = set_ex_buckets_directory(z.table, path, bd)
+	var ok, holder = set_ex_bucket_directory(z.table, path, bd)
 	if !ok {
 		var _ = delete_pool_mutex_checking(z.table, pool)
 		var owner = find_owner_of_pool(z, holder)
@@ -604,7 +604,7 @@ func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 			u.Uid,
 			http_409_conflict,
 			[][2]string{
-				message_buckets_directory_already_taken,
+				message_bucket_directory_already_taken,
 				{"path", path},
 				{"owner", owner},
 			},
@@ -633,14 +633,14 @@ func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 	// Register pool.
 
 	var pooldata = &pool_record{
-		Pool:              pool,
-		Buckets_directory: path,
-		Owner_uid:         u.Uid,
-		Owner_gid:         args.Owner_gid,
-		Probe_key:         probe,
-		Enabled:           true,
-		Expiration_time:   expiration,
-		Timestamp:         now,
+		Pool:             pool,
+		Bucket_directory: path,
+		Owner_uid:        u.Uid,
+		Owner_gid:        args.Owner_gid,
+		Probe_key:        probe,
+		Enabled:          true,
+		Expiration_time:  expiration,
+		Timestamp:        now,
 	}
 	set_pool(z.table, pool, pooldata)
 	//set_pool_state(z.table, pool, pool_state_INITIAL, pool_reason_NORMAL)
@@ -771,6 +771,7 @@ func delete_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *h
 		return_reg_error_response(z, w, r, u, err1)
 		return nil
 	}
+
 	var rspn = return_pool_prop(z, w, r, u, pool)
 	return rspn
 }
@@ -801,6 +802,7 @@ func make_secret_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 		Timestamp:       now,
 	}
 	var _ = set_with_unique_secret_key(z.table, secret)
+
 	var rspn = return_pool_prop(z, w, r, u, pool)
 	return rspn
 }
@@ -835,14 +837,27 @@ func delete_secret_and_return_response(z *registrar, w http.ResponseWriter, r *h
 		return nil
 	}
 
-	var rpsn = return_pool_prop(z, w, r, u, pool)
-	return rpsn
+	var rspn = return_pool_prop(z, w, r, u, pool)
+	return rspn
 }
 
 // RETURN_POOL_PROP returns pool data.
 func return_pool_prop(z *registrar, w http.ResponseWriter, r *http.Request, u *user_record, pool string) *pool_prop_response {
 	var d = gather_pool_prop(z.table, pool)
-	assert_fatal(d != nil)
+	if d == nil {
+		// (This inconsistency error has been already logged).
+		var err1 = &proxy_exc{
+			u.Uid,
+			http_500_internal_server_error,
+			[][2]string{
+				message_bad_pool_state,
+				{"pool", pool},
+			},
+		}
+		return_reg_error_response(z, w, r, u, err1)
+		return nil
+	}
+
 	var poolprop = copy_pool_prop_to_ui(d)
 	var rspn = &pool_prop_response{
 		response_common: response_common{
@@ -1175,24 +1190,24 @@ func make_csrf_tokens(z *registrar, uid string) *csrf_token_record {
 	return data
 }
 
-// CHECK_MAKE_POOL_ARGUMENTS checks the entires of buckets_directory
-// and owner_gid.  It normalizes the path of a buckets-directory (in
-// the posix sense).
+// CHECK_MAKE_POOL_ARGUMENTS checks the entires of bucket-directory
+// and owner-gid.  It normalizes the path of a bucket-directory in
+// the posix sense.
 func check_make_pool_arguments(z *registrar, u *user_record, pool string, data any) reg_error_message {
 	var args, ok = data.(*make_pool_arguments)
 	assert_fatal(ok)
 
 	// Check bucket-directory path.
 
-	var bd = args.Buckets_directory
+	var bd = args.Bucket_directory
 	var path = filepath.Clean(bd)
 	if !filepath.IsAbs(path) {
 		return reg_error_message{
-			message_bad_buckets_directory,
+			message_bad_bucket_directory,
 			{"path", bd},
 		}
 	}
-	args.Buckets_directory = path
+	args.Bucket_directory = path
 
 	// Check GID.  UID is not in the arguments.
 
@@ -1469,14 +1484,14 @@ func copy_user_record_to_ui(z *registrar, u *user_record, groups []string) *user
 func copy_pool_prop_to_ui(d *pool_prop) *pool_prop_ui {
 	var v = &pool_prop_ui{
 		// POOL_RECORD
-		Pool:              d.pool_record.Pool,
-		Buckets_directory: d.Buckets_directory,
-		Owner_uid:         d.Owner_uid,
-		Owner_gid:         d.Owner_gid,
-		Probe_key:         d.Probe_key,
-		Online_status:     d.pool_record.Enabled,
-		Expiration_time:   d.pool_record.Expiration_time,
-		Timestamp:         d.pool_record.Timestamp,
+		Pool:             d.pool_record.Pool,
+		Bucket_directory: d.Bucket_directory,
+		Owner_uid:        d.Owner_uid,
+		Owner_gid:        d.Owner_gid,
+		Probe_key:        d.Probe_key,
+		Online_status:    d.pool_record.Enabled,
+		Expiration_time:  d.pool_record.Expiration_time,
+		Timestamp:        d.pool_record.Timestamp,
 		// POOL_PROP
 		Buckets: copy_bucket_data_to_ui(d.Buckets),
 		Secrets: copy_secret_data_to_ui(d.Secrets),
@@ -1669,7 +1684,7 @@ func deregister_user(t *keyval_table, uid string) {
 }
 
 // DEREGISTER_POOL deletes a pool, along with its members, i.e.,
-// buckets-directory, buckets, and access keys.  It returns OK/NG.  It
+// bucket-directory, buckets, and access keys.  It returns OK/NG.  It
 // ignores most of the errors but only fails when a pool is not found.
 // It does nothing to a backend, that is, it does not remove or
 // disable buckets in the backend.
@@ -1686,13 +1701,13 @@ func deregister_pool(t *keyval_table, pool string) bool {
 func deregister_pool_by_prop(t *keyval_table, prop *pool_prop) bool {
 	var pool = prop.pool_record.Pool
 
-	// Delete buckets_directory.
+	// Delete bucket-directory.
 
-	if prop.Buckets_directory != "" {
-		var path = prop.Buckets_directory
-		var ok1 = delete_buckets_directory_checking(t, path)
+	if prop.Bucket_directory != "" {
+		var path = prop.Bucket_directory
+		var ok1 = delete_bucket_directory_checking(t, path)
 		if !ok1 {
-			slogger.Error("Reg() Deleting a buckets directory failed (ignored)",
+			slogger.Error("Reg() Deleting a bucket-directory failed (ignored)",
 				"pool", pool, "path", path)
 		}
 	}

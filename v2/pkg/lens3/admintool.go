@@ -57,9 +57,9 @@ func make_adm_command_table() {
 func adm_toplevel() {
 	//os.Args[...]
 	var flag_conf = flag.String("c", "conf.json",
-		"A file containing keyval-db connection info.")
+		"Connection setting to keyval-db.")
 	var flag_debug = flag.Bool("d", false,
-		"Debug flag.")
+		"Verbose on keyval-db operations.")
 	_ = flag_conf
 	_ = flag_debug
 	flag.Parse()
@@ -73,8 +73,11 @@ func adm_toplevel() {
 	assert_fatal(flag_conf != nil)
 	var dbconf = read_db_conf(*flag_conf)
 	//fmt.Println(dbconf)
-	var t = make_keyval_table(dbconf)
-	_ = t
+	var trace trace_flag = 0
+	if flag_conf != nil {
+		trace = 0xff
+	}
+	var t = make_keyval_table(dbconf, trace)
 	var adm = &adm{
 		dbconf: dbconf,
 		table:  t,
@@ -586,7 +589,7 @@ var cmd_list = []*cmd{
 			}
 			slices.SortFunc(pools, func(a, b *pool_prop) int {
 				return strings.Compare(
-					a.Buckets_directory, b.Buckets_directory)
+					a.Bucket_directory, b.Bucket_directory)
 			})
 			for _, x := range pools {
 				print_in_json(x)
@@ -664,10 +667,10 @@ var cmd_list = []*cmd{
 	&cmd{
 		synopsis: "show-directory",
 
-		doc: `Prints all buckets-directories.`,
+		doc: `Prints all bucket-directories.`,
 
 		run: func(adm *adm, args []string) {
-			var dirs = list_buckets_directories(adm.table)
+			var dirs = list_bucket_directories(adm.table)
 			print_in_json(dirs)
 			// for _, x := range dirs {
 			// 	print_in_json(x)

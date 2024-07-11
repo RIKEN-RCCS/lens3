@@ -148,11 +148,11 @@ type logging_conf struct {
 }
 
 type logger_conf struct {
-	Log_file    string `json:"log_file"`
-	Facility    string `json:"facility"`
-	Level       string `json:"level"`
-	Verbosity   int    `json:"verbosity"`
-	Source_line bool   `json:"source_line"`
+	Log_file    string     `json:"log_file"`
+	Facility    string     `json:"facility"`
+	Level       string     `json:"level"`
+	Verbosity   trace_flag `json:"verbosity"`
+	Source_line bool       `json:"source_line"`
 }
 
 type stats_conf struct {

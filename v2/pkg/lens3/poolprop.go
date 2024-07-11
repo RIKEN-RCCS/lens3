@@ -37,12 +37,12 @@ func gather_pool_prop(t *keyval_table, pool string) *pool_prop {
 	assert_fatal(pooldata.Pool == pool)
 	poolprop.pool_record = *pooldata
 
-	// Check a buckets-directory entry.
+	// Check a bucket-directory entry.
 
-	var bd = find_buckets_directory_of_pool(t, pool)
-	if !(pooldata.Buckets_directory == bd) {
-		slogger.Error("Inconsistency in keyval-db: bad buckets-directory",
-			"pool", pool, "bd", bd, "need", pooldata.Buckets_directory)
+	var bd = find_bucket_directory_of_pool(t, pool)
+	if !(pooldata.Bucket_directory == bd) {
+		slogger.Error("Inconsistency in keyval-db: bad bucket-directory",
+			"pool", pool, "bd", bd, "need", pooldata.Bucket_directory)
 		inconsistent_db_entires = true
 	}
 

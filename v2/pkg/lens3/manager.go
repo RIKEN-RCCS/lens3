@@ -411,7 +411,7 @@ func try_start_backend(w *manager, d backend, port int) *start_result {
 
 	var user = proc.Owner_uid
 	var group = proc.Owner_gid
-	var directory = proc.Buckets_directory
+	var directory = proc.Bucket_directory
 	var command = d.make_command_line(port, directory)
 	var sudo_argv = []string{
 		w.Sudo,

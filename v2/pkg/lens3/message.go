@@ -118,8 +118,8 @@ var (
 	message_not_secret_owner = error_message{
 		"message", "Not secret owner"}
 
-	message_bad_buckets_directory = error_message{
-		"message", "Buckets-directory is not absolute"}
+	message_bad_bucket_directory = error_message{
+		"message", "Bucket-directory is not absolute"}
 	message_bad_bucket = error_message{
 		"message", "Bad bucket"}
 	message_bad_secret = error_message{
@@ -131,6 +131,6 @@ var (
 
 	message_bucket_already_taken = error_message{
 		"message", "Bucket already taken"}
-	message_buckets_directory_already_taken = error_message{
-		"message", "Buckets directory already taken"}
+	message_bucket_directory_already_taken = error_message{
+		"message", "Bucket-directory already taken"}
 )

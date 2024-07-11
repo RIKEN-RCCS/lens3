@@ -255,7 +255,9 @@ class Access_Test():
         pass
 
     def make_s3_clients(self, expired):
-        """Makes S3 clients one for each access-key (for each policy)."""
+        """Makes S3 clients one for each access-key and for each policy.  Use
+10 sec durlation for making quickly expiring keys.
+        """
         region = "us-east-1"
         assert expired == 0 or expired == 1
         now = int(time.time())
@@ -468,7 +470,7 @@ class Access_Test():
             print(f"buckets.all()={r}")
         except botocore.exceptions.ClientError as e:
             error = e.response["Error"]["Code"]
-            assert error == "403"
+            assert error == "400"
             pass
         bucket = ("lenticularis-oddity-" + random_string(6))
         while bucket in self.working_buckets:

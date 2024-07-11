@@ -47,7 +47,7 @@
       "log_file": "/tmp/lens3-log",
       "facility": "LOCAL7",
       "level": "DEBUG",
-      "verbosity": 1,
+      "verbosity": 0,
       "source_line": false
     },
     "stats": {

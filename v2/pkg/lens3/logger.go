@@ -350,3 +350,12 @@ func log_access(src string, rqst *http.Request, code int, length int64, uid stri
 		panic(nil)
 	}
 }
+
+type trace_flag uint32
+
+const (
+	trace_db trace_flag = 1 << iota
+	trace_task
+	trace_proxy
+	trace_dos
+)

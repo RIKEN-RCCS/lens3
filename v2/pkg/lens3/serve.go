@@ -88,7 +88,7 @@ func start_lenticularis_service(confpath string, services [2]string) {
 		fmt.Fprintf(os.Stderr, "Reading db conf filed: %q\n", confpath)
 		os.Exit(1)
 	}
-	var t = make_keyval_table(dbconf)
+	var t = make_keyval_table(dbconf, 0xff)
 
 	var count int = 0
 	var muxconf *mux_conf = nil
@@ -121,6 +121,7 @@ func start_lenticularis_service(confpath string, services [2]string) {
 		fmt.Fprintf(os.Stderr, "No conf for logging\n")
 		os.Exit(1)
 	}
+	t.verbosity = logconf.Logger.Verbosity
 
 	var ch_quit_service = make(chan vacuous)
 	configure_logger(logconf, ch_quit_service)
@@ -139,7 +140,7 @@ func start_lenticularis_service(confpath string, services [2]string) {
 		var w = the_manager
 		configure_multiplexer(m, w, t, ch_quit_service, muxconf)
 		configure_manager(w, m, t, ch_quit_service, muxconf)
-		m.verbose = logconf.Logger.Verbosity
+		m.verbosity = logconf.Logger.Verbosity
 		defer w.factory.clean_at_exit()
 		go start_multiplexer(m, &wg)
 	}
@@ -149,7 +150,7 @@ func start_lenticularis_service(confpath string, services [2]string) {
 	if services[1] != "" {
 		var z = the_registrar
 		configure_registrar(z, t, ch_quit_service, regconf)
-		z.verbose = logconf.Logger.Verbosity
+		z.verbosity = logconf.Logger.Verbosity
 		go start_registrar(z, &wg)
 	}
 

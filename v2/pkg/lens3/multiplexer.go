@@ -50,7 +50,7 @@ type multiplexer struct {
 
 	manager *manager
 
-	verbose int
+	verbosity trace_flag
 
 	table *keyval_table
 
@@ -121,7 +121,7 @@ func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, qch <-ch
 // MEMO: ReverseProxy <: Handler as it implements ServeHTTP().
 func start_multiplexer(m *multiplexer, wg *sync.WaitGroup) {
 	defer wg.Done()
-	if m.verbose >= 3 {
+	if trace_task&m.verbosity != 0 {
 		slogger.Debug(m.MuxEP + " start_multiplexer()")
 	}
 
@@ -254,7 +254,7 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 			return
 		case bucket == nil && authenticated == nil:
 			// THIS CAN BE PORT SCANS.
-			if m.verbose >= 3 {
+			if trace_dos&m.verbosity != 0 {
 				slogger.Debug(m.MuxEP + " Accessing the top (bucket=nil)")
 			}
 			var err4 = &proxy_exc{
@@ -272,7 +272,7 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 			// 	})
 			return
 		case bucket == nil && authenticated != nil:
-			slogger.Debug(m.MuxEP + " Access the root with authentication")
+			slogger.Debug(m.MuxEP + " Access the top with authentication")
 			var err5 = &proxy_exc{
 				auth,
 				http_400_bad_request,
@@ -400,7 +400,7 @@ func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, be *
 	var ctx3 = context.WithValue(ctx2, "lens3-pool-auth", []string{pool, auth})
 	var r2 = r.WithContext(ctx3)
 
-	if m.verbose >= 3 {
+	if trace_proxy&m.verbosity != 0 {
 		slogger.Debug(m.MuxEP+" Forward a request", "pool", pool, "key", auth,
 			"method", r.Method, "resource", r.RequestURI)
 	}
@@ -455,8 +455,8 @@ func handle_exc(prefix string, delay_ms time_in_sec, logfn access_logger, w http
 	switch err1 := x.(type) {
 	case nil:
 	case *runtime.PanicNilError:
-		slogger.Error(prefix+" FATAL ERROR", "err", err1)
-		slogger.Error("stacktrace:\n" + string(debug.Stack()))
+		slogger.Error(prefix+" FATAL ERROR", "err", err1,
+			"stack", string(debug.Stack()))
 		var msg = message_internal_error
 		var code = http_500_internal_server_error
 		delay_sleep(delay_ms)
@@ -464,8 +464,8 @@ func handle_exc(prefix string, delay_ms time_in_sec, logfn access_logger, w http
 		logfn(rqst, code, int64(len(msg)), "-", "-")
 		panic(nil)
 		// case *table_exc:
-		// 	slogger.Error(prefix+" keyval-db access error", "err", err1)
-		// 	slogger.Error("stacktrace:\n" + string(debug.Stack()))
+		// 	slogger.Error(prefix+" keyval-db access error", "err", err1,
+		//  	"stack", string(debug.Stack()))
 		// 	var msg = message_internal_error
 		// 	var code = http_500_internal_server_error
 		// 	delay_sleep(delay_ms)
@@ -483,8 +483,8 @@ func handle_exc(prefix string, delay_ms time_in_sec, logfn access_logger, w http
 		http.Error(w, string(b1), err1.code)
 		logfn(rqst, err1.code, int64(len(b1)), "-", err1.auth)
 	default:
-		slogger.Error(prefix+" Runtime panic", "err", err1)
-		slogger.Error("stacktrace:\n" + string(debug.Stack()))
+		slogger.Error(prefix+" Runtime panic", "err", err1,
+			"stack", string(debug.Stack()))
 		var msg = message_internal_error
 		var code = http_500_internal_server_error
 		delay_sleep(delay_ms)
@@ -949,7 +949,7 @@ func return_mux_error_response(m *multiplexer, w http.ResponseWriter, r *http.Re
 
 func mux_periodic_work(m *multiplexer) {
 	var conf = &m.conf.Multiplexer
-	if m.verbose >= 3 {
+	if trace_task&m.verbosity != 0 {
 		slogger.Debug(m.MuxEP + " Periodic work started")
 	}
 	var now int64 = time.Now().Unix()
@@ -964,7 +964,7 @@ func mux_periodic_work(m *multiplexer) {
 	assert_fatal(interval >= 10)
 	//time.Sleep(1 * time.Second)
 	for {
-		if m.verbose >= 3 {
+		if trace_task&m.verbosity != 0 {
 			slogger.Debug(m.MuxEP + " Update Mux-ep")
 		}
 		mux.Timestamp = time.Now().Unix()

@@ -129,7 +129,7 @@ func check_credential_is_good(rqst1 *http.Request, keypair [2]string) (bool, str
 	var err1 = s.SignHTTP(ctx, credentials, &rqst2,
 		hash, service, region, date)
 	if err1 != nil {
-		slogger.Error("Mux() signer.SignHTTP() failed", "err", err1)
+		slogger.Error("Mux() signer/SignHTTP() failed", "err", err1)
 		return false, "cannot-sign"
 	}
 

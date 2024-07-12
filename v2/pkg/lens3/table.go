@@ -33,7 +33,7 @@ type keyval_table struct {
 	process       valkey.Client
 	prefix_to_db  map[string]valkey.Client
 	db_name_to_db map[string]valkey.Client
-	verbosity     trace_flag
+	tracing       trace_flag
 }
 
 const limit_of_id_generation_loop = 30
@@ -316,7 +316,7 @@ const (
 const db_no_expiration = 0
 
 // MAKE_KEYVAL_TABLE makes keyval-db clients.
-func make_keyval_table(conf *db_conf, verbosity trace_flag) *keyval_table {
+func make_keyval_table(conf *db_conf, tracing trace_flag) *keyval_table {
 	var ep = conf.Ep
 	var pw = conf.Password
 	var setting, err1 = valkey.NewClient(valkey.ClientOption{
@@ -352,7 +352,7 @@ func make_keyval_table(conf *db_conf, verbosity trace_flag) *keyval_table {
 		process:       process,
 		prefix_to_db:  make(map[string]valkey.Client),
 		db_name_to_db: make(map[string]valkey.Client),
-		verbosity:     verbosity,
+		tracing:       tracing,
 	}
 	for k, i := range prefix_to_db_number_assignment {
 		switch i {
@@ -1060,8 +1060,8 @@ func set_with_unique_id_loop(t *keyval_table, prefix string, data any, generator
 	var counter = 0
 	for {
 		var id = generator()
-		if trace_db&t.verbosity != 0 {
-			slogger.Debug("DB-setnx", "key", (prefix + id))
+		if trace_db&t.tracing != 0 {
+			slogger.Debug("DB: setnx", "key", (prefix + id))
 		}
 		var v, err = json.Marshal(data)
 		raise_on_marshaling_error(err)
@@ -1166,8 +1166,8 @@ func get_csrf_token(t *keyval_table, uid string) *csrf_token_record {
 }
 
 func db_set_with_prefix(t *keyval_table, prefix string, key string, val any) {
-	if trace_db&t.verbosity != 0 {
-		slogger.Debug("DB-set", "key", (prefix + key))
+	if trace_db&t.tracing != 0 {
+		slogger.Debug("DB: set", "key", (prefix + key))
 	}
 	var db = t.prefix_to_db[prefix]
 	var k = (prefix + key)
@@ -1180,8 +1180,8 @@ func db_set_with_prefix(t *keyval_table, prefix string, key string, val any) {
 }
 
 func db_setnx_with_prefix(t *keyval_table, prefix string, key string, val any) bool {
-	if trace_db&t.verbosity != 0 {
-		slogger.Debug("DB-setnx", "key", (prefix + key))
+	if trace_db&t.tracing != 0 {
+		slogger.Debug("DB: setnx", "key", (prefix + key))
 	}
 	var db = t.prefix_to_db[prefix]
 	var k = (prefix + key)
@@ -1207,8 +1207,8 @@ func db_get_with_prefix(t *keyval_table, prefix string, key string, val any) boo
 }
 
 func db_expire_with_prefix(t *keyval_table, prefix string, key string, timeout int64) bool {
-	if trace_db&t.verbosity != 0 {
-		slogger.Debug("DB-expire", "key", (prefix + key))
+	if trace_db&t.tracing != 0 {
+		slogger.Debug("DB: expire", "key", (prefix + key))
 	}
 	var db = t.prefix_to_db[prefix]
 	var k = (prefix + key)
@@ -1222,8 +1222,8 @@ func db_expire_with_prefix(t *keyval_table, prefix string, key string, timeout i
 
 // DB_DEL_WITH_PREFIX returns OK/NG, but usually, failure is ignored.
 func db_del_with_prefix(t *keyval_table, prefix string, key string) bool {
-	if trace_db&t.verbosity != 0 {
-		slogger.Debug("DB-del", "key", (prefix + key))
+	if trace_db&t.tracing != 0 {
+		slogger.Debug("DB: del", "key", (prefix + key))
 	}
 	var db = t.prefix_to_db[prefix]
 	var k = (prefix + key)

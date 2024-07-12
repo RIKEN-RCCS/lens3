@@ -6,8 +6,8 @@
 package lens3
 
 // Configuration Files.  The configurations are stored in the
-// keyval-db.  Configuration files are read and checked against the
-// structures.  It accepts extra fields.  Reading configuration files
+// keyval-db.  Configuration files are read and checked against
+// definitions.  It accepts extra fields.  Reading configuration files
 // are by the admin tool, and the errors are fatal.
 
 import (
@@ -151,7 +151,7 @@ type logger_conf struct {
 	Log_file    string     `json:"log_file"`
 	Facility    string     `json:"facility"`
 	Level       string     `json:"level"`
-	Verbosity   trace_flag `json:"verbosity"`
+	Tracing     trace_flag `json:"tracing"`
 	Source_line bool       `json:"source_line"`
 }
 

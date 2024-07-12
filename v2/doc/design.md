@@ -4,27 +4,24 @@ This describes design notes of Lenticularis-S3.
 
 ## Components of Lens3
 
-* Lens3-Mux
-* Lens3-Reg (Web-UI)
-* Manager: A Manager runs under a Lens3-Mux and starts a MinIO
-  instance and manages its lifetime.
-* MinIO (S3 server)
-* Redis
+* Multiplexer
+* Registrar
+* MinIO (S3 backend server)
+* Valkey (keyval-DB)
 
-## Keyval-DB  Databases (prefixes of keys)
+## Keyval-DB Databases (prefixes of keys)
 
-Lens3 uses a couple of keyval-db databases (by database numbers), but the
-division is arbitrary as distinct prefixes are used.  Most of the
-entries are json records, and others are simple strings.
+Lens3 uses three keyval-db (by database numbers), but the division is
+arbitrary as distinct prefixes are used.  The entries are json.
 
 NOTE: In the tables below, entries with "\*1" are set atomically (by
 "setnx"), and entries with "\*2" are with expiry.
 
-A date+time is by unix seconds.  Web-UI also passes a date+time by
+A date+time is by unix seconds.  Registrar also passes a date+time by
 unix seconds.
 
-Mux, Reg, and Managers make (potentially) many connections to keyval-db,
-because they use multiple databases.
+Multiplexer and Registrar make (potentially) many connections to
+keyval-db, because they use multiple databases.
 
 ### CONSISTENCY OF ENTRIES.
 
@@ -74,7 +71,7 @@ a service is very annoying.
 | bd:directory  | pool-name       | A bucket-directory (path string) \*1 |
 
 A __po:pool-name__ entry is a pool description: {"pool_name",
-"owner_uid", "owner_gid", "buckets_directory", "probe_key",
+"owner_uid", "owner_gid", "bucket_directory", "probe_key",
 "online_status", "expiration_time", "modification_time"}.  It holds
 the semi-static part of pool information.
 

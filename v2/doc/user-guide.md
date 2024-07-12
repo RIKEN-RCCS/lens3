@@ -187,7 +187,7 @@ Buckets can only have a public access policy.
 
 ### Residue Files
 
-Running MinIO leaves a directory ".minio.sys" in the buckets-directory
+Running MinIO leaves a directory ".minio.sys" in the bucket-directory
 of the pool.
 
 ### No Access Logs

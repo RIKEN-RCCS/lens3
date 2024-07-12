@@ -143,7 +143,7 @@ func (d *backend_minio) check_startup(stream stdio_stream, ss []string) *start_r
 		assert_fatal(m2 != nil)
 		var m3 = get_string(m2, "message")
 		if d.verbose {
-			slogger.Debug("Mux(minio) Got an expected message", "output", m3)
+			slogger.Debug("BE(minio): Got an expected message", "output", m3)
 		}
 		return &start_result{
 			start_state: start_started,
@@ -166,7 +166,7 @@ func (d *backend_minio) establish() error {
 func (d *backend_minio) shutdown() error {
 	//fmt.Println("minio.shutdown()")
 	var proc = d.get_super_part()
-	slogger.Debug("Mux(minio) Stopping MinIO",
+	slogger.Debug("BE(minio): Stopping MinIO",
 		"pool", proc.Pool, "pid", proc.cmd.Process.Pid)
 	//assert_fatal(d.mc_alias != nil)
 	var v1 = minio_mc_admin_service_stop(d)
@@ -191,14 +191,14 @@ func (d *backend_minio) heartbeat(*manager) int {
 	var c = d.heartbeat_client
 	var rsp, err1 = c.Get(d.heartbeat_url)
 	if err1 != nil {
-		slogger.Info("Mux(minio) Heartbeat failed in http.Client.Get()",
+		slogger.Info("BE(minio): Heartbeat failed in http/Client.Get()",
 			"pool", proc.Pool, "err", err1)
 		return http_500_internal_server_error
 	}
 	defer rsp.Body.Close()
 	var _, err2 = io.ReadAll(rsp.Body)
 	if err2 != nil {
-		slogger.Info("Mux(minio) Heartbeat failed in io.ReadAll()",
+		slogger.Info("BE(minio): Heartbeat failed in io/ReadAll()",
 			"pool", proc.Pool, "err", err2)
 		return http_500_internal_server_error
 	}
@@ -238,7 +238,7 @@ type minio_mc_result struct {
 func simplify_minio_mc_message(s []byte) *minio_mc_result {
 	var mm, ok = decode_json([]string{string(s)})
 	if !ok {
-		slogger.Error("Mux(minio) json decode failed")
+		slogger.Error("BE(minio): json decode failed")
 		var err1 = fmt.Errorf("MC-command returned a bad json: %q", s)
 		return &minio_mc_result{nil, err1}
 	}
@@ -249,7 +249,7 @@ func simplify_minio_mc_message(s []byte) *minio_mc_result {
 			// Skip.
 		case "error":
 			if len(mm) != 1 {
-				slogger.Warn("Mux(minio) MC-command with multiple errors",
+				slogger.Warn("BE(minio): MC-command with multiple errors",
 					"stdout", mm)
 			}
 			var m1 = get_string(m, "error", "cause", "error", "Code")
@@ -280,7 +280,7 @@ func execute_minio_mc_cmd(d *backend_minio, synopsis string, command []string) *
 	argv = append(argv, command...)
 
 	var stdouts, stderrs, err1 = execute_command(synopsis, argv, d.environ,
-		int64(d.Backend_timeout_ms), "Mux(minio)", d.verbose)
+		int64(d.Backend_timeout_ms), "BE(minio)", d.verbose)
 	if err1 != nil {
 		return &minio_mc_result{nil, err1}
 	}
@@ -288,12 +288,12 @@ func execute_minio_mc_cmd(d *backend_minio, synopsis string, command []string) *
 	var v1 = simplify_minio_mc_message([]byte(stdouts))
 	if v1.err == nil {
 		if d.verbose {
-			slogger.Debug("Mux(minio) MC-command Okay", "cmd", command)
+			slogger.Debug("BE(minio): MC-command Okay", "cmd", command)
 		} else {
-			slogger.Debug("Mux(minio) MC-command Okay", "cmd", synopsis)
+			slogger.Debug("BE(minio): MC-command Okay", "cmd", synopsis)
 		}
 	} else {
-		slogger.Error("Mux(minio) MC-command failed",
+		slogger.Error("BE(minio): MC-command failed",
 			"cmd", argv, "err", v1.err,
 			"stdout", stdouts, "stderr", stderrs)
 	}
@@ -306,7 +306,7 @@ func minio_mc_alias_set(d *backend_minio) *minio_mc_result {
 	var url = fmt.Sprintf("http://%s", d.be.Backend_ep)
 	var dir, err1 = os.MkdirTemp("", "lens3-mc-")
 	if err1 != nil {
-		slogger.Error("Mux(minio) os.MkdirTemp() failed", "err", err1)
+		slogger.Error("BE(minio): os/MkdirTemp() failed", "err", err1)
 		return &minio_mc_result{nil, err1}
 	}
 	d.mc_alias = fmt.Sprintf("pool-%s-%s", d.Pool, rnd)
@@ -345,16 +345,16 @@ func clean_minio_tmp() {
 	var matches, err1 = filepath.Glob(pattern)
 	if err1 != nil {
 		// (err1 : filepath.ErrBadPattern).
-		slogger.Error("Mux(minio) filepath.Glob() failed",
+		slogger.Error("BE(minio): filepath/Glob() failed",
 			"pattern", pattern, "err", err1)
 		return
 	}
 	for _, p := range matches {
-		slogger.Debug("Mux(minio) Clean by os.RemoveAll()", "path", p)
+		slogger.Debug("BE(minio): Clean by os/RemoveAll()", "path", p)
 		var err2 = os.RemoveAll(p)
 		if err2 != nil {
 			// (err2 : *os.PathError).
-			slogger.Error("Mux(minio) os.RemoveAll() failed",
+			slogger.Error("BE(minio): os/RemoveAll() failed",
 				"path", p, "err", err2)
 		}
 	}

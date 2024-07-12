@@ -12,10 +12,10 @@ package lens3
 
 // MEMO: A manager tries to kill a backend by sudo's signal relaying,
 // when a shutdown fails.  Signal relaying works because sudo runs
-// with the same RUID.  Note that killpg won't work.  A cancel
-// function is replaced by one with SIGTERM.  The default in
-// exec/Command.Cancel kills with SIGKILL, but it does not work with
-// sudo.  See "src/os/exec/exec.go".
+// with the same RUID.  The signal of a cancel function is changed
+// from SIGKILL to SIGTERM.  The default in exec/Command.Cancel kills
+// with SIGKILL, but it does not work with signal relaying.  See
+// "src/os/exec/exec.go".
 //
 // MEMO: It does not use "Pdeathsig" in "unix.SysProcAttr".
 // Pdeathsig, or prctl(PR_SET_PDEATHSIG), is Linux.
@@ -41,9 +41,6 @@ import (
 // object, "the_manager".  It is with threads to wait for child
 // processes.
 type manager struct {
-	// MuxEP="Mux(ep)" is a printing name of this Manager.
-	MuxEP string
-
 	multiplexer *multiplexer
 
 	table *keyval_table
@@ -62,6 +59,9 @@ type manager struct {
 
 	// ENVIRON holds a copy of the minimal list of environs.
 	environ []string
+
+	// logprefix="Mux(ep): " is a printing name of this Manager.
+	logprefix string
 
 	// CH_QUIT is to receive quitting notification.
 	ch_quit_service <-chan vacuous
@@ -191,8 +191,9 @@ func configure_manager(w *manager, m *multiplexer, t *keyval_table, q chan vacuo
 	w.manager_conf = c.Manager
 	w.process = make(map[string]backend)
 
-	w.MuxEP = m.MuxEP
 	w.mux_ep = m.mux_ep
+
+	w.logprefix = m.logprefix
 
 	w.backend_stabilize_ms = 10
 	w.backend_linger_ms = 10
@@ -209,7 +210,7 @@ func configure_manager(w *manager, m *multiplexer, t *keyval_table, q chan vacuo
 	case "rclone":
 		w.factory = the_backend_rclone_factory
 	default:
-		slogger.Error(w.MuxEP+" Configuration error, unknown backend",
+		slogger.Error(w.logprefix+"Configuration error, unknown backend",
 			"backend", c.Multiplexer.Backend)
 		panic(nil)
 	}
@@ -265,7 +266,7 @@ func start_backend(w *manager, pool string) backend {
 	if !ok1 {
 		var be1 = wait_for_backend_by_race(w, pool)
 		if be1 == nil {
-			slogger.Debug(w.MuxEP+" start_backend waits by race", "pool", pool)
+			slogger.Debug(w.logprefix+"start_backend waits by race", "pool", pool)
 		}
 		return nil
 	} else {
@@ -273,7 +274,7 @@ func start_backend(w *manager, pool string) backend {
 		var ok2 = set_backend_exclusion_expiry(w.table, pool, expiry)
 		if !ok2 {
 			// Ignore an error.
-			slogger.Error(w.MuxEP + " Bad call set_backend_exclusion_expiry()")
+			slogger.Error(w.logprefix + "Bad call set_backend_exclusion_expiry()")
 		}
 		var be2 = start_backend_in_mutexed(w, pool)
 		return be2
@@ -292,7 +293,7 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 
 	var pooldata = get_pool(w.table, pool)
 	if pooldata == nil {
-		slogger.Warn(w.MuxEP+" start_backend() pool is missing", "pool", pool)
+		slogger.Warn(w.logprefix+"start_backend() pool is missing", "pool", pool)
 		return nil
 	}
 
@@ -309,14 +310,14 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 	var available_ports = list_available_ports(w, proc.use_n_ports)
 
 	if proc.verbose {
-		slogger.Debug(w.MuxEP+" start_backend()", "ports", available_ports)
+		slogger.Debug(w.logprefix+"start_backend()", "ports", available_ports)
 	}
 
 	for _, port := range available_ports {
 		var r1 = try_start_backend(w, d, port)
 		switch r1.start_state {
 		case start_ongoing:
-			slogger.Error(w.MuxEP+" Starting a backend failed (timeout)",
+			slogger.Error(w.logprefix+"Starting a backend failed (timeout)",
 				"pool", pool)
 			return nil
 		case start_started:
@@ -324,7 +325,7 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 		case start_to_retry:
 			continue
 		case start_failed:
-			slogger.Error(w.MuxEP+" Starting a backend failed",
+			slogger.Error(w.logprefix+"Starting a backend failed",
 				"pool", pool, "stdout", r1.message)
 			return nil
 		}
@@ -344,7 +345,7 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 			}
 		}()
 		if !ok {
-			slogger.Warn(w.MuxEP+" Starting a backend failed",
+			slogger.Warn(w.logprefix+"Starting a backend failed",
 				"pool", pool, "reason", "manager is in shutdown")
 			tell_stop_backend(w, d)
 			return nil
@@ -369,7 +370,7 @@ func start_backend_in_mutexed(w *manager, pool string) backend {
 
 	// All ports are tried and failed.
 
-	slogger.Warn(w.MuxEP+" A backend SUSPENDED (no ports)", "pool", pool)
+	slogger.Warn(w.logprefix+"A backend SUSPENDED (no ports)", "pool", pool)
 
 	var now int64 = time.Now().Unix()
 	var dummy = &backend_record{
@@ -401,12 +402,12 @@ func try_start_backend(w *manager, d backend, port int) *start_result {
 	var proc = d.get_super_part()
 	var thishost, _, err1 = net.SplitHostPort(w.mux_ep)
 	if err1 != nil {
-		slogger.Error(w.MuxEP+" Bad endpoint of Mux", "ep", w.mux_ep)
+		slogger.Error(w.logprefix+"Bad endpoint of Mux", "ep", w.mux_ep)
 		panic(nil)
 	}
 	proc.be.Backend_ep = net.JoinHostPort(thishost, strconv.Itoa(port))
 	if proc.verbose {
-		slogger.Debug(w.MuxEP+" try_start_backend()", "ep", proc.be.Backend_ep)
+		slogger.Debug(w.logprefix+"try_start_backend()", "ep", proc.be.Backend_ep)
 	}
 
 	var user = proc.Owner_uid
@@ -421,12 +422,12 @@ func try_start_backend(w *manager, d backend, port int) *start_result {
 	var argv = append(sudo_argv, command.argv...)
 	var envs = append(w.environ, command.envs...)
 
-	slogger.Debug(w.MuxEP+" Run a backend", "pool", proc.Pool, "argv", argv)
+	slogger.Debug(w.logprefix+"Run a backend", "pool", proc.Pool, "argv", argv)
 
 	var ctx = context.Background()
 	var cmd = exec.CommandContext(ctx, argv[0], argv[1:]...)
 	if cmd == nil {
-		slogger.Error(w.MuxEP + " exec.Command() returned nil")
+		slogger.Error(w.logprefix + "exec/Command() returned nil")
 		panic(nil)
 	}
 	assert_fatal(cmd.SysProcAttr == nil)
@@ -455,7 +456,7 @@ func try_start_backend(w *manager, d backend, port int) *start_result {
 
 	var err3 = cmd.Start()
 	if err3 != nil {
-		slogger.Error("exec.Command.Start() failed", "err", err3)
+		slogger.Error("exec/Command.Start() failed", "err", err3)
 		return &start_result{
 			start_state: start_failed,
 			message:     err3.Error(),
@@ -466,7 +467,7 @@ func try_start_backend(w *manager, d backend, port int) *start_result {
 	var r1 = wait_for_backend_come_up(w, d)
 
 	if proc.verbose {
-		slogger.Debug(w.MuxEP+" A backend started",
+		slogger.Debug(w.logprefix+"A backend started",
 			"pool", proc.Pool, "state", r1.start_state, "stdout", r1.message)
 	}
 
@@ -574,7 +575,7 @@ func wait_for_backend_come_up(w *manager, d backend) *start_result {
 // It sleeps in 1ms, 3^1ms, 3^2ms, ... and 1s, and keeps sleeping in 1s
 // until a timeout.
 func wait_for_backend_by_race(w *manager, pool string) *backend_record {
-	slogger.Debug(w.MuxEP+" Waiting for a backend by race", "pool", pool)
+	slogger.Debug(w.logprefix+"Waiting for a backend by race", "pool", pool)
 	var sleep int64 = 1
 	var limit = time.Now().Add(
 		(time.Duration(w.Backend_start_timeout) * time.Second) +
@@ -591,7 +592,7 @@ func wait_for_backend_by_race(w *manager, pool string) *backend_record {
 			sleep = 1000
 		}
 	}
-	slogger.Debug(w.MuxEP+" Waiting for a backend by race failed", "pool", pool)
+	slogger.Debug(w.logprefix+"Waiting for a backend by race failed", "pool", pool)
 	return nil
 }
 
@@ -655,11 +656,11 @@ func ping_backend(w *manager, d backend) {
 			proc.heartbeat_misses += 1
 		}
 		if proc.verbose {
-			slogger.Debug(w.MuxEP+" Heartbeat", "pool", proc.Pool,
+			slogger.Debug(w.logprefix+"Heartbeat", "pool", proc.Pool,
 				"status", status, "misses", proc.heartbeat_misses)
 		}
 		if proc.heartbeat_misses > w.Heartbeat_miss_tolerance {
-			slogger.Info(w.MuxEP+" Heartbeat failed",
+			slogger.Info(w.logprefix+"Heartbeat failed",
 				"pool", proc.Pool, "misses", proc.heartbeat_misses)
 			break
 		}
@@ -669,7 +670,7 @@ func ping_backend(w *manager, d backend) {
 		var ts = get_pool_timestamp(w.table, proc.Pool)
 		var lifetime = time.Unix(ts, 0).Add(duration)
 		if lifetime.Before(time.Now()) {
-			slogger.Debug(w.MuxEP+" Awake time elapsed", "pool", proc.Pool)
+			slogger.Debug(w.logprefix+"Awake time elapsed", "pool", proc.Pool)
 			break
 		}
 
@@ -677,7 +678,7 @@ func ping_backend(w *manager, d backend) {
 
 		var ok = set_backend_expiry(w.table, proc.Pool, expiry)
 		if !ok {
-			slogger.Warn(w.MuxEP+" Backend entry has gone",
+			slogger.Warn(w.logprefix+"Backend entry has gone",
 				"pool", proc.Pool)
 			break
 		}
@@ -693,7 +694,7 @@ func ping_backend(w *manager, d backend) {
 // race, assuming all requests are finished in the wait.
 func stop_backend(w *manager, d backend) {
 	var proc = d.get_super_part()
-	slogger.Info(w.MuxEP+" Stop a backend", "pool", proc.Pool)
+	slogger.Info(w.logprefix+"Stop a backend", "pool", proc.Pool)
 
 	delete_backend_exclusion(w.table, proc.Pool)
 	delete_backend(w.table, proc.Pool)
@@ -702,7 +703,7 @@ func stop_backend(w *manager, d backend) {
 
 	var err1 = d.shutdown()
 	if err1 != nil {
-		slogger.Info(w.MuxEP+" Backend shutdown() failed",
+		slogger.Info(w.logprefix+"Backend shutdown() failed",
 			"pool", proc.Pool, "err", err1)
 	}
 	if err1 == nil {
@@ -710,7 +711,7 @@ func stop_backend(w *manager, d backend) {
 	}
 	var err2 = proc.cmd.Cancel()
 	if err2 != nil {
-		slogger.Info(w.MuxEP+" Backend exec.Command.Cancel() failed",
+		slogger.Info(w.logprefix+"Backend exec/Command.Cancel() failed",
 			"pool", proc.Pool, "err", err2)
 	}
 }
@@ -774,13 +775,13 @@ func disgorge_stdio_to_log(w *manager, proc *backend_delegate) {
 		//var m = strings.TrimSpace(x1.string)
 		var m = x1.string
 		if x1.stdio_stream == on_stdout {
-			slogger.Info(w.MuxEP+" stdout message", "pool", pool, "stdout", m)
+			slogger.Info(w.logprefix+"stdout message", "pool", pool, "stdout", m)
 		} else {
-			slogger.Info(w.MuxEP+" stderr message", "pool", pool, "stderr", m)
+			slogger.Info(w.logprefix+"stderr message", "pool", pool, "stderr", m)
 		}
 	}
 	if proc.verbose {
-		slogger.Debug(w.MuxEP+" stdio dumper done", "pool", pool)
+		slogger.Debug(w.logprefix+"stdio dumper done", "pool", pool)
 	}
 }
 
@@ -790,10 +791,10 @@ func drain_start_messages_to_log(w *manager, pool string, stdouts []string, stde
 	// fmt.Println("drain_start_messages_to_log()")
 	var s string
 	for _, s = range stdouts {
-		slogger.Info(w.MuxEP+" stdout message", "pool", pool, "stdout", s)
+		slogger.Info(w.logprefix+"stdout message", "pool", pool, "stdout", s)
 	}
 	for _, s = range stderrs {
-		slogger.Info(w.MuxEP+" stderr message", "pool", pool, "stderr", s)
+		slogger.Info(w.logprefix+"stderr message", "pool", pool, "stderr", s)
 	}
 }
 
@@ -810,13 +811,13 @@ func list_available_ports(w *manager, use_n_ports int) []int {
 		assert_fatal(be.Mux_ep == w.mux_ep)
 		var _, ps, err1 = net.SplitHostPort(be.Backend_ep)
 		if err1 != nil {
-			slogger.Error(w.MuxEP+" Bad endpoint",
+			slogger.Error(w.logprefix+"Bad endpoint",
 				"ep", be.Backend_ep, "err", err1)
 			panic(nil)
 		}
 		var port, err2 = strconv.Atoi(ps)
 		if err2 != nil {
-			slogger.Error(w.MuxEP+" Bad endpoint",
+			slogger.Error(w.logprefix+"Bad endpoint",
 				"ep", be.Backend_ep, "err", err2)
 			panic(nil)
 		}
@@ -869,21 +870,21 @@ func wait4_child_process(w *manager, d backend) {
 			if err2 == unix.ECHILD {
 				time.Sleep(60 * time.Second)
 			} else {
-				slogger.Warn(w.MuxEP+"wait4() failed",
+				slogger.Warn(w.logprefix+"wait4() failed",
 					"errno", unix.ErrnoName(err2))
 			}
 			continue
 		}
 		if wpid == 0 {
-			slogger.Warn(w.MuxEP+" wait4() failed",
+			slogger.Warn(w.logprefix+"wait4() failed",
 				"errno", unix.ErrnoName(unix.ECHILD))
 			continue
 		}
 		if proc.verbose {
-			slogger.Debug(w.MuxEP+" wait4() returns",
+			slogger.Debug(w.logprefix+"wait4() returns",
 				"pid", wpid, "status", wstatus, "rusage", rusage)
 		} else {
-			slogger.Debug(w.MuxEP+" wait4() returns",
+			slogger.Debug(w.logprefix+"wait4() returns",
 				"pid", wpid, "status", wstatus)
 		}
 		break
@@ -897,7 +898,7 @@ func wait4_child_process(w *manager, d backend) {
 func make_absent_buckets_in_backend(w *manager, be *backend_record) {
 	// var be = get_backend(w.table, pool)
 	// if be == nil {
-	// 	logger.errf(w.MuxEP + " Backend not running in setup: pool=(%s)",
+	// 	logger.errf(w.logprefix + "Backend not running in setup: pool=(%s)",
 	// 		pool)
 	// 	return
 	// }
@@ -907,12 +908,12 @@ func make_absent_buckets_in_backend(w *manager, be *backend_record) {
 
 	var buckets_exsting, err = list_buckets_in_backend(w, be)
 	if err != nil {
-		slogger.Error(w.MuxEP+" Backend access failed",
+		slogger.Error(w.logprefix+"Backend access failed",
 			"pool", be.Pool, "err", err)
 		command_to_stop_backend(w, pool)
 	}
 
-	slogger.Debug(w.MuxEP+" Check existing buckets in backend",
+	slogger.Debug(w.logprefix+"Check existing buckets in backend",
 		"pool", be.Pool, "buckets", buckets_exsting)
 
 	var now = time.Now()
@@ -924,7 +925,7 @@ func make_absent_buckets_in_backend(w *manager, be *backend_record) {
 			continue
 		}
 
-		slogger.Debug(w.MuxEP+" Make a bucket in backend",
+		slogger.Debug(w.logprefix+"Make a bucket in backend",
 			"pool", b.Pool, "bucket", b.Bucket)
 
 		make_bucket_in_backend(w, be, b)

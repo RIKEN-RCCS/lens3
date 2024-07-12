@@ -264,7 +264,7 @@ var reg_access_log_file *os.File
 func open_log_for_mux(f string) {
 	var s, err1 = os.OpenFile(f, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
 	if err1 != nil {
-		slogger.Error("Mux() Opening a log file failed", "err", err1)
+		slogger.Error("Opening a log file failed", "err", err1)
 		panic(nil)
 	}
 	mux_access_log_file = s
@@ -273,7 +273,7 @@ func open_log_for_mux(f string) {
 func open_log_for_reg(f string) {
 	var s, err1 = os.OpenFile(f, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
 	if err1 != nil {
-		slogger.Error("Reg() Opening a log file failed: err=(%v)", err1)
+		slogger.Error("Opening a log file failed", "err", err1)
 		panic(nil)
 	}
 	reg_access_log_file = s

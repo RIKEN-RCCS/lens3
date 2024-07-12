@@ -5,6 +5,8 @@
 
 package lens3
 
+// Registrar is a Web-API for pool management.
+
 // MEMO: UI expects responses as FastAPI/Starlette's "JSONResponse".
 //
 // media_type = "application/json"
@@ -39,7 +41,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -61,36 +62,32 @@ var efs1 embed.FS
 //go:embed ui2
 var efs2 embed.FS
 
+const reg_api_version = "v1.2"
+
 type registrar struct {
 	// EP_PORT is a listening port of Registrar (":port").
 	ep_port string
 
-	verbosity trace_flag
-
 	table *keyval_table
 
 	trusted_proxies []net.IP
+
+	tracing trace_flag
 
 	// CH_QUIT is to receive quitting notification.
 	ch_quit_service <-chan vacuous
 
 	server *http.Server
 
-	mqtt *mqtt_client
-
 	conf *reg_conf
 }
 
-const reg_api_version = "v1.2"
+// Records exchanged via Web-API.  These are same for versions "v1.x".
+// These are defined by a set of json formats.  RESPONSES are returned
+// to UI.  See the function set_pool_data() in "v1/ui/src/lens3c.ts".
+// Status is "success" or "error".  REQUESTS are arguments passed from
+// UI.
 
-type response_to_ui interface{ response_union() }
-
-func (*pool_prop_response) response_union() {}
-func (*user_info_response) response_union() {}
-
-// RESPONSE is a json format of a response to UI.  See the function
-// set_pool_data() in "v1/ui/src/lens3c.ts".  Status is "success" or
-// "error".
 type response_common struct {
 	Status    string            `json:"status"`
 	Reason    map[string]string `json:"reason"`
@@ -162,26 +159,24 @@ type user_info_ui struct {
 	Footer_banner string   `json:"footer_banner"`
 }
 
-type empty_request struct{}
-
-type make_pool_arguments struct {
+type make_pool_request struct {
 	Bucket_directory string `json:"buckets_directory"`
 	Owner_gid        string `json:"owner_gid"`
 }
 
-type make_bucket_arguments struct {
+type make_bucket_request struct {
 	Bucket        string `json:"name"`
 	Bucket_policy string `json:"bkt_policy"`
 }
 
-type make_secret_arguments struct {
+type make_secret_request struct {
 	Secret_policy   string `json:"key_policy"`
 	Expiration_time int64  `json:"expiration_time"`
 }
 
 var the_registrar = &registrar{}
 
-var err_body_not_allowed = errors.New("http: request method or response status code does not allow body")
+//var err_body_not_allowed = errors.New("http: request method or response status code does not allow body")
 
 const (
 	bucket_policy_ui_NONE string = "none"
@@ -237,9 +232,9 @@ func configure_registrar(z *registrar, t *keyval_table, qch <-chan vacuous, c *r
 	z.ep_port = net.JoinHostPort("", strconv.Itoa(conf.Port))
 
 	var addrs []net.IP = convert_hosts_to_addrs(conf.Trusted_proxy_list)
-	slogger.Debug("Reg() Trusted proxies", "ip", addrs)
+	slogger.Debug("Reg: Trusted proxies", "ip", addrs)
 	if len(addrs) == 0 {
-		slogger.Error("Reg() No trusted proxies")
+		slogger.Error("Reg: No trusted proxies")
 		panic(nil)
 	}
 	z.trusted_proxies = addrs
@@ -247,8 +242,8 @@ func configure_registrar(z *registrar, t *keyval_table, qch <-chan vacuous, c *r
 
 func start_registrar(z *registrar, wg *sync.WaitGroup) {
 	defer wg.Done()
-	if trace_task&z.verbosity != 0 {
-		slogger.Debug("Reg() start_registrar()")
+	if trace_task&z.tracing != 0 {
+		slogger.Debug("Reg: start_registrar()")
 	}
 
 	var router = http.NewServeMux()
@@ -265,50 +260,50 @@ func start_registrar(z *registrar, wg *sync.WaitGroup) {
 		defer handle_registrar_exc(z, w, r)
 		var ep = z.conf.Registrar.Server_ep
 		var newurl = "http://" + ep + "/ui/index.html"
-		slogger.Debug("Reg() GET /", "redirect", newurl)
+		slogger.Debug("Reg: http GET /", "redirect", newurl)
 		http.Redirect(w, r, newurl, http.StatusTemporaryRedirect)
 	})
 
 	router.HandleFunc("GET /ui/index.html", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
-		slogger.Debug("Reg() GET /ui/index.html")
+		slogger.Debug("Reg: http GET /ui/index.html")
 		var _ = return_file(z, w, r, r.URL.Path, true, &efs1)
 	})
 
 	router.HandleFunc("GET /ui2/index.html", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
-		slogger.Debug("Reg() GET /ui2/index.html")
+		slogger.Debug("Reg: http GET /ui2/index.html")
 		var _ = return_file(z, w, r, r.URL.Path, true, &efs2)
 	})
 
 	router.HandleFunc("GET /ui/", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
-		slogger.Debug("Reg() GET /ui/", "path", r.URL.Path)
+		slogger.Debug("Reg: http GET /ui/", "path", r.URL.Path)
 		var _ = return_file(z, w, r, r.URL.Path, false, &efs1)
 	})
 
 	router.HandleFunc("GET /ui2/", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
-		slogger.Debug("Reg() GET /ui2/", "path", r.URL.Path)
+		slogger.Debug("Reg: http GET /ui2/", "path", r.URL.Path)
 		var _ = return_file(z, w, r, r.URL.Path, false, &efs2)
 	})
 
 	router.HandleFunc("GET /user-info", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
-		slogger.Debug("Reg() GET /user-info")
+		slogger.Debug("Reg: http GET /user-info")
 		var _ = return_user_info(z, w, r)
 	})
 
 	router.HandleFunc("GET /pool", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
-		slogger.Debug("Reg() GET /pool")
+		slogger.Debug("Reg: http GET /pool")
 		var _ = list_pool_and_return_response(z, w, r, "")
 	})
 
 	router.HandleFunc("GET /pool/{pool}", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
 		var pool = r.PathValue("pool")
-		slogger.Debug("Reg() GET /pool", "pool", pool)
+		slogger.Debug("Reg: http GET /pool", "pool", pool)
 		var _ = list_pool_and_return_response(z, w, r, pool)
 	})
 
@@ -316,14 +311,14 @@ func start_registrar(z *registrar, wg *sync.WaitGroup) {
 
 	router.HandleFunc("POST /pool", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
-		slogger.Debug("Reg() POST /pool")
+		slogger.Debug("Reg: http POST /pool")
 		var _ = make_pool_and_return_response(z, w, r)
 	})
 
 	router.HandleFunc("DELETE /pool/{pool}", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
 		var pool = r.PathValue("pool")
-		slogger.Debug("Reg() DELETE /pool", "pool", pool)
+		slogger.Debug("Reg: http DELETE /pool", "pool", pool)
 		var _ = delete_pool_and_return_response(z, w, r, pool)
 	})
 
@@ -332,7 +327,7 @@ func start_registrar(z *registrar, wg *sync.WaitGroup) {
 	router.HandleFunc("PUT /pool/{pool}/bucket", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
 		var pool = r.PathValue("pool")
-		slogger.Debug("Reg() PUT /pool/*/bucket", "pool", pool)
+		slogger.Debug("Reg: http PUT /pool/*/bucket", "pool", pool)
 		var _ = make_bucket_and_return_response(z, w, r, pool)
 	})
 
@@ -340,7 +335,7 @@ func start_registrar(z *registrar, wg *sync.WaitGroup) {
 		defer handle_registrar_exc(z, w, r)
 		var pool = r.PathValue("pool")
 		var bucket = r.PathValue("bucket")
-		slogger.Debug("Reg() DELETE /pool/*/bucket", "pool", pool,
+		slogger.Debug("Reg: http DELETE /pool/*/bucket", "pool", pool,
 			"bucket", bucket)
 		var _ = delete_bucket_and_return_response(z, w, r, pool, bucket)
 	})
@@ -350,7 +345,7 @@ func start_registrar(z *registrar, wg *sync.WaitGroup) {
 	router.HandleFunc("POST /pool/{pool}/secret", func(w http.ResponseWriter, r *http.Request) {
 		defer handle_registrar_exc(z, w, r)
 		var pool = r.PathValue("pool")
-		slogger.Debug("Reg() POST /pool/*/secret", "pool", pool)
+		slogger.Debug("Reg: http POST /pool/*/secret", "pool", pool)
 		var _ = make_secret_and_return_response(z, w, r, pool)
 	})
 
@@ -358,7 +353,7 @@ func start_registrar(z *registrar, wg *sync.WaitGroup) {
 		defer handle_registrar_exc(z, w, r)
 		var pool = r.PathValue("pool")
 		var secret = r.PathValue("secret")
-		slogger.Debug("Reg() DELETE /pool/*/secret", "pool", pool,
+		slogger.Debug("Reg: http DELETE /pool/*/secret", "pool", pool,
 			"secret", secret)
 		var _ = delete_secret_and_return_response(z, w, r, pool, secret)
 	})
@@ -371,15 +366,15 @@ func start_registrar(z *registrar, wg *sync.WaitGroup) {
 		}
 	}()
 
-	slogger.Info("Reg() Start Registrar", "ep", z.ep_port)
+	slogger.Info("Reg: Start Registrar", "ep", z.ep_port)
 	var err1 = z.server.ListenAndServe()
-	slogger.Error("Reg() http.Server.ListenAndServe() DONE", "err", err1)
+	slogger.Error("Reg: http/Server.ListenAndServe() EXITS", "err", err1)
 }
 
 func handle_registrar_exc(z *registrar, w http.ResponseWriter, rqst *http.Request) {
 	var delay_ms = z.conf.Registrar.Error_response_delay_ms
 	var logfn = log_reg_access_by_request
-	handle_exc("Reg()", delay_ms, logfn, w, rqst)
+	handle_exc("Reg:", delay_ms, logfn, w, rqst)
 }
 
 func return_file(z *registrar, w http.ResponseWriter, rqst *http.Request, path string, modify_script bool, efs *embed.FS) *[]byte {
@@ -391,7 +386,7 @@ func return_file(z *registrar, w http.ResponseWriter, rqst *http.Request, path s
 	}
 	var data1, err1 = efs.ReadFile(path1)
 	if err1 != nil {
-		slogger.Error("Reg() Reading UI files failed",
+		slogger.Error("Reg: Reading UI files failed",
 			"path", path1, "err", err1)
 		delay_sleep(z.conf.Registrar.Error_response_delay_ms)
 		var msg = "BAD"
@@ -428,8 +423,8 @@ func return_file(z *registrar, w http.ResponseWriter, rqst *http.Request, path s
 		//materialdesignicons-webfont.woff2 -> "font/woff2"
 		//materialdesignicons.css.map -> "text/plain"
 		var ct = http.DetectContentType(data2)
-		if trace_proxy&z.verbosity != 0 {
-			slogger.Debug("Reg() http.DetectContentType()",
+		if trace_proxy&z.tracing != 0 {
+			slogger.Debug("Reg: http/DetectContentType()",
 				"path", path1, "type", ct)
 		}
 		w.Header().Set("Content-Type", (ct + "; charset=utf-8"))
@@ -437,7 +432,7 @@ func return_file(z *registrar, w http.ResponseWriter, rqst *http.Request, path s
 
 	var _, err2 = w.Write(data2)
 	if err2 != nil {
-		slogger.Error("Reg() Writing reply failed", "err", err2)
+		slogger.Error("Reg: Writing reply failed", "err", err2)
 	}
 	var wf, ok = w.(http.Flusher)
 	if ok {
@@ -499,7 +494,7 @@ func return_user_info(z *registrar, w http.ResponseWriter, r *http.Request) *use
 		Csrf_token: csrf.Csrf_token[1],
 		User_info:  *info,
 	}
-	return_json_repsonse(z, w, r, u, rspn)
+	return_success_repsonse(z, w, r, u, rspn)
 	return rspn
 }
 
@@ -538,7 +533,7 @@ func list_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 		return nil
 	}
 	if pool != "" && len(poollist) > 1 {
-		slogger.Error("Reg() Multiple pools with the same id", "pool", pool)
+		slogger.Error("Reg: Multiple pools with the same id", "pool", pool)
 		var err2 = &proxy_exc{
 			u.Uid,
 			http_500_internal_server_error,
@@ -561,7 +556,7 @@ func list_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 		},
 		Pool_list: poollist,
 	}
-	return_json_repsonse(z, w, r, u, rspn)
+	return_success_repsonse(z, w, r, u, rspn)
 	return rspn
 }
 
@@ -573,9 +568,9 @@ func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 		return nil
 	}
 
-	var args make_pool_arguments
+	var args make_pool_request
 	if !decode_request_body_with_error_return(z, w, r, u, "", opr,
-		&args, check_make_pool_arguments) {
+		&args, check_make_pool_request) {
 		return nil
 	}
 
@@ -685,7 +680,7 @@ func delete_pool_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 			Timestamp: time.Now().Unix(),
 		},
 	}
-	return_json_repsonse(z, w, r, u, rspn)
+	return_success_repsonse(z, w, r, u, rspn)
 	return rspn
 }
 
@@ -697,9 +692,9 @@ func make_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 		return nil
 	}
 
-	var args make_bucket_arguments
+	var args make_bucket_request
 	if !decode_request_body_with_error_return(z, w, r, u, pool, opr,
-		&args, check_make_bucket_arguments) {
+		&args, check_make_bucket_request) {
 		return nil
 	}
 	var name = args.Bucket
@@ -784,9 +779,9 @@ func make_secret_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 		return nil
 	}
 
-	var args make_secret_arguments
+	var args make_secret_request
 	if !decode_request_body_with_error_return(z, w, r, u, pool, opr,
-		&args, check_make_secret_arguments) {
+		&args, check_make_secret_request) {
 		return nil
 	}
 	var policy = intern_ui_secret_policy(args.Secret_policy)
@@ -824,7 +819,7 @@ func delete_secret_and_return_response(z *registrar, w http.ResponseWriter, r *h
 	//ensure_secret_owner_only(self.tables, access_key, pool_id)
 	var ok = delete_secret_key_checking(z.table, secret)
 	if !ok {
-		slogger.Info("Reg() delete_secret_key() failed (ignored)")
+		slogger.Info("Reg: delete_secret_key() failed (ignored)")
 		var err1 = &proxy_exc{
 			u.Uid,
 			http_404_not_found,
@@ -867,7 +862,7 @@ func return_pool_prop(z *registrar, w http.ResponseWriter, r *http.Request, u *u
 		},
 		Pool_prop: poolprop,
 	}
-	return_json_repsonse(z, w, r, u, rspn)
+	return_success_repsonse(z, w, r, u, rspn)
 	return rspn
 }
 
@@ -892,7 +887,7 @@ func check_user_access_with_error_return(z *registrar, w http.ResponseWriter, r 
 	// Check if Lens3 is working.
 
 	if !check_lens3_is_running(z.table) {
-		slogger.Error("Reg() Lens3 is not running")
+		slogger.Error("Reg: Lens3 is not running")
 		var err1 = &proxy_exc{
 			x_remote_user,
 			http_500_internal_server_error,
@@ -909,7 +904,7 @@ func check_user_access_with_error_return(z *registrar, w http.ResponseWriter, r 
 	//var client = r.Header.Get("X-Real-Ip")
 	var peer = r.RemoteAddr
 	if !check_frontend_proxy_trusted(z.trusted_proxies, peer) {
-		slogger.Error("Reg() Frontend proxy is untrusted", "ep", peer)
+		slogger.Error("Reg: Frontend proxy is untrusted", "ep", peer)
 		var err2 = &proxy_exc{
 			x_remote_user,
 			http_500_internal_server_error,
@@ -927,7 +922,7 @@ func check_user_access_with_error_return(z *registrar, w http.ResponseWriter, r 
 	var u = check_user_account(z, uid, firstsession)
 	if u == nil {
 		var xuid string = ITE(uid != "", uid, x_remote_user)
-		slogger.Warn("Reg() User is not active", "uid", xuid)
+		slogger.Warn("Reg: User is not active", "uid", xuid)
 		var err3 = &proxy_exc{
 			xuid,
 			http_401_unauthorized,
@@ -942,7 +937,7 @@ func check_user_access_with_error_return(z *registrar, w http.ResponseWriter, r 
 	if !firstsession {
 		var ok = check_csrf_tokens(z, w, r, uid)
 		if !ok {
-			slogger.Warn("Reg() Bad csrf tokens", "uid", uid)
+			slogger.Warn("Reg: Bad csrf tokens", "uid", uid)
 			var err4 = &proxy_exc{
 				u.Uid,
 				http_401_unauthorized,
@@ -963,7 +958,7 @@ func check_user_access_with_error_return(z *registrar, w http.ResponseWriter, r 
 	// SOMEONE MIGHT HAVE FORGED A REQUEST.
 
 	if !check_pool_naming(pool) {
-		slogger.Error("Reg() Bad pool name", "uid", uid, "pool", pool)
+		slogger.Error("Reg: Bad pool name", "uid", uid, "pool", pool)
 		var err5 = &proxy_exc{
 			u.Uid,
 			http_400_bad_request,
@@ -978,7 +973,7 @@ func check_user_access_with_error_return(z *registrar, w http.ResponseWriter, r 
 
 	var pooldata = get_pool(z.table, pool)
 	if pooldata == nil {
-		slogger.Error("Reg() No pool", "uid", uid, "pool", pool)
+		slogger.Error("Reg: No pool", "uid", uid, "pool", pool)
 		var err6 = &proxy_exc{
 			u.Uid,
 			http_404_not_found,
@@ -992,7 +987,7 @@ func check_user_access_with_error_return(z *registrar, w http.ResponseWriter, r 
 	}
 
 	if pooldata.Owner_uid != u.Uid {
-		slogger.Error("Reg() Not pool owner",
+		slogger.Error("Reg: Not pool owner",
 			"uid", uid, "pool", pool)
 		var err7 = &proxy_exc{
 			u.Uid,
@@ -1013,7 +1008,7 @@ func check_user_access_with_error_return(z *registrar, w http.ResponseWriter, r 
 	case pool_state_SUSPENDED:
 		// OK.
 	case pool_state_DISABLED, pool_state_INOPERABLE:
-		slogger.Debug("Reg() Bad pool state", "pool", pool,
+		slogger.Debug("Reg: Bad pool state", "pool", pool,
 			"state", state, "reason", reason)
 		var err8 = &proxy_exc{
 			u.Uid,
@@ -1066,7 +1061,7 @@ func check_user_account(z *registrar, uid string, firstsession bool) *user_recor
 	_ = uu
 	if err1 != nil {
 		// (type of err1 : user.UnknownUserError).
-		slogger.Error("Reg() user.Lookup() failed", "uid", uid, "err", err1)
+		slogger.Error("Reg: user/Lookup() failed", "uid", uid, "err", err1)
 		return nil
 	}
 
@@ -1098,7 +1093,7 @@ func enroll_new_user(z *registrar, uid string, firstsession bool) *user_record {
 	assert_fatal(approving)
 
 	if conf.Claim_uid_map == claim_uid_map_map {
-		slogger.Error("Reg() Configuration error",
+		slogger.Error("Reg: Configuration error",
 			"user_approval", conf.User_approval,
 			"claim_uid_map", conf.Claim_uid_map)
 		return nil
@@ -1107,35 +1102,35 @@ func enroll_new_user(z *registrar, uid string, firstsession bool) *user_record {
 	var uu, err1 = user.Lookup(uid)
 	if err1 != nil {
 		// (err1 : user.UnknownUserError)
-		slogger.Error("Reg() user.Lookup(%s) failed", "uid", uid, "err", err1)
+		slogger.Error("Reg: user/Lookup() failed", "uid", uid, "err", err1)
 		return nil
 	}
 
 	var uid_n, err2 = strconv.Atoi(uu.Uid)
 	if err2 != nil {
-		slogger.Error("Reg() user.Lookup() returns non-numeric uid",
+		slogger.Error("Reg: user/Lookup() returns non-numeric uid",
 			"uid", uid, "user.User.Uid", uu.Uid)
 		return nil
 	}
 	if len(conf.Uid_allow_range_list) != 0 {
 		if !check_int_in_ranges(conf.Uid_allow_range_list, uid_n) {
-			slogger.Info("Reg() A new user blocked", "uid", uid)
+			slogger.Info("Reg: A new user blocked", "uid", uid)
 			return nil
 		}
 	}
 	if check_int_in_ranges(conf.Uid_block_range_list, uid_n) {
-		slogger.Info("Reg() A new user blocked", "uid", uid)
+		slogger.Info("Reg: A new user blocked", "uid", uid)
 		return nil
 	}
 
 	var groups = list_groups_of_user(z, uid)
 
 	if len(groups) == 0 {
-		slogger.Info("Reg() No groups for a new user", "uid", uid)
+		slogger.Info("Reg: No groups for a new user", "uid", uid)
 		return nil
 	}
 
-	slogger.Warn("Reg() Enroll a user automatically", "uid", uid)
+	slogger.Warn("Reg: Enroll a user automatically", "uid", uid)
 
 	assert_fatal(conf.User_expiration_days > 0)
 	var days = conf.User_expiration_days
@@ -1162,7 +1157,7 @@ func check_csrf_tokens(z *registrar, w http.ResponseWriter, r *http.Request, uid
 	var ok = (v != nil && c != nil && h != "" &&
 		v.Csrf_token[0] == c.Value && v.Csrf_token[1] == h)
 	if !ok {
-		slogger.Debug("Reg() Checking csrf-tokens failed",
+		slogger.Debug("Reg: Checking csrf-tokens failed",
 			"uid", uid, "token", v.Csrf_token, "header", h, "cookie", c)
 	}
 	return ok
@@ -1183,18 +1178,18 @@ func make_csrf_tokens(z *registrar, uid string) *csrf_token_record {
 	var ok = set_csrf_token_expiry(z.table, uid, timeout)
 	if !ok {
 		// Ignore an error.
-		slogger.Error("Reg() Bad call set_csrf_token_expiry()")
+		slogger.Error("Reg: Bad call set_csrf_token_expiry()")
 	}
 	//var x = get_csrf_token(z.table, uid)
 	//fmt.Println("make_csrf_tokens=", x)
 	return data
 }
 
-// CHECK_MAKE_POOL_ARGUMENTS checks the entires of bucket-directory
+// CHECK_MAKE_POOL_REQUEST checks the entires of bucket-directory
 // and owner-gid.  It normalizes the path of a bucket-directory in
 // the posix sense.
-func check_make_pool_arguments(z *registrar, u *user_record, pool string, data any) reg_error_message {
-	var args, ok = data.(*make_pool_arguments)
+func check_make_pool_request(z *registrar, u *user_record, pool string, data any) reg_error_message {
+	var args, ok = data.(*make_pool_request)
 	assert_fatal(ok)
 
 	// Check bucket-directory path.
@@ -1227,8 +1222,8 @@ func check_make_pool_arguments(z *registrar, u *user_record, pool string, data a
 	return nil
 }
 
-func check_make_bucket_arguments(z *registrar, u *user_record, pool string, data any) reg_error_message {
-	var args, ok = data.(*make_bucket_arguments)
+func check_make_bucket_request(z *registrar, u *user_record, pool string, data any) reg_error_message {
+	var args, ok = data.(*make_bucket_request)
 	assert_fatal(ok)
 
 	// Check Bucket.
@@ -1248,8 +1243,8 @@ func check_make_bucket_arguments(z *registrar, u *user_record, pool string, data
 	return nil
 }
 
-func check_make_secret_arguments(z *registrar, u *user_record, pool string, data any) reg_error_message {
-	var args, ok = data.(*make_secret_arguments)
+func check_make_secret_request(z *registrar, u *user_record, pool string, data any) reg_error_message {
+	var args, ok = data.(*make_secret_request)
 	assert_fatal(ok)
 
 	// Check Secret_policy.
@@ -1278,7 +1273,7 @@ func check_empty_arguments_with_error_return(z *registrar, w http.ResponseWriter
 	var is = r.Body
 	var err1 = check_stream_eof(is, true)
 	if err1 != nil {
-		slogger.Info("Reg() Garbage in an empty request body",
+		slogger.Info("Reg: Garbage in an empty request body",
 			"err", err1)
 		var err2 = &proxy_exc{
 			u.Uid,
@@ -1427,11 +1422,11 @@ func decode_request_body(z *registrar, r *http.Request, data any) bool {
 	d.DisallowUnknownFields()
 	var err1 = d.Decode(data)
 	if err1 != nil {
-		slogger.Debug("Reg() Error in reading request body", "err", err1)
+		slogger.Debug("Reg: Error in reading request body", "err", err1)
 		return false
 	}
 	if !check_fields_filled(data) {
-		slogger.Debug("Reg() Unfilled fields in request body",
+		slogger.Debug("Reg: Unfilled fields in request body",
 			"data", data)
 		return false
 	}
@@ -1439,7 +1434,7 @@ func decode_request_body(z *registrar, r *http.Request, data any) bool {
 	var is = d.Buffered()
 	var err2 = check_stream_eof(is, false)
 	if err2 != nil {
-		slogger.Info("Reg() Garbage after json data in request body",
+		slogger.Info("Reg: Garbage after json data in request body",
 			"err", err2)
 	}
 	return (err2 == nil)
@@ -1622,12 +1617,12 @@ func list_groups_of_user(z *registrar, uid string) []string {
 	var uu, err1 = user.Lookup(uid)
 	if err1 != nil {
 		// (err1 : user.UnknownUserError)
-		slogger.Error("Reg() user.Lookup() failed", "uid", uid, "err", err1)
+		slogger.Error("Reg: user/Lookup() failed", "uid", uid, "err", err1)
 		return nil
 	}
 	var gids, err2 = uu.GroupIds()
 	if err2 != nil {
-		slogger.Error("Reg() user.User.GroupIds() failed",
+		slogger.Error("Reg: user/User.GroupIds() failed",
 			"uid", uid, "err", err2)
 		return nil
 	}
@@ -1635,7 +1630,7 @@ func list_groups_of_user(z *registrar, uid string) []string {
 	for _, g1 := range gids {
 		var gid_n, err3 = strconv.Atoi(g1)
 		if err3 != nil {
-			slogger.Error("Reg() user.User.GroupIds() returns non-numeric gid",
+			slogger.Error("Reg: user/User.GroupIds() returns non-numeric gid",
 				"uid", uid, "gid", g1)
 			continue
 		}
@@ -1647,7 +1642,7 @@ func list_groups_of_user(z *registrar, uid string) []string {
 		}
 		var gr, err4 = user.LookupGroupId(g1)
 		if err4 != nil {
-			slogger.Error("Reg(0 user.LookupGroupId() failed",
+			slogger.Error("Reg(0 user/LookupGroupId() failed",
 				"gid", g1, "err", err4)
 			continue
 		}
@@ -1691,7 +1686,7 @@ func deregister_user(t *keyval_table, uid string) {
 func deregister_pool(t *keyval_table, pool string) bool {
 	var prop = gather_pool_prop(t, pool)
 	if prop == nil {
-		slogger.Error("Reg() Deleting a non-existing pool", "pool", pool)
+		slogger.Error("Reg: Deleting a non-existing pool", "pool", pool)
 		return false
 	}
 	var ok = deregister_pool_by_prop(t, prop)
@@ -1707,7 +1702,7 @@ func deregister_pool_by_prop(t *keyval_table, prop *pool_prop) bool {
 		var path = prop.Bucket_directory
 		var ok1 = delete_bucket_directory_checking(t, path)
 		if !ok1 {
-			slogger.Error("Reg() Deleting a bucket-directory failed (ignored)",
+			slogger.Error("Reg: Deleting a bucket-directory failed (ignored)",
 				"pool", pool, "path", path)
 		}
 	}
@@ -1718,7 +1713,7 @@ func deregister_pool_by_prop(t *keyval_table, prop *pool_prop) bool {
 		assert_fatal(b.Pool == pool)
 		var ok2 = delete_bucket_checking(t, b.Bucket)
 		if !ok2 {
-			slogger.Error("Reg() Deleting a bucket failed (ignored)",
+			slogger.Error("Reg: Deleting a bucket failed (ignored)",
 				"pool", pool, "bucket", b.Bucket)
 		}
 	}
@@ -1729,14 +1724,14 @@ func deregister_pool_by_prop(t *keyval_table, prop *pool_prop) bool {
 		assert_fatal(k.Pool == pool)
 		var ok3 = delete_secret_key_checking(t, k.Access_key)
 		if !ok3 {
-			slogger.Error("Reg() Deleting an access-key failed (ignored)",
+			slogger.Error("Reg: Deleting an access-key failed (ignored)",
 				"pool", pool, "secret", k.Access_key)
 		}
 	}
 
 	var ok4 = delete_pool_mutex_checking(t, pool)
 	if !ok4 {
-		slogger.Error("Reg() Deleting a pool entry failed (ignored)",
+		slogger.Error("Reg: Deleting a pool entry failed (ignored)",
 			"pool", pool)
 	}
 
@@ -1746,17 +1741,17 @@ func deregister_pool_by_prop(t *keyval_table, prop *pool_prop) bool {
 	return true
 }
 
-// RETURN_JSON_REPSONSE returns a success response (200).  NOTE: It is
+// RETURN_SUCCESS_REPSONSE returns a success response (200).  NOTE: It is
 // not possible to obtain a response object from http.ResponseWriter.
 // http.ResponseWriter is an instance of http.response, but it is not
 // public.  Also, the field http.Request.Response is null.  Niether, a
 // context does not have a response.  http.RoundTrip is on the client
 // side.
-func return_json_repsonse(z *registrar, w http.ResponseWriter, rqst *http.Request, u *user_record, value any) {
+func return_success_repsonse(z *registrar, w http.ResponseWriter, rqst *http.Request, u *user_record, value any) {
 	assert_fatal(u != nil)
 	var v1, err1 = json.Marshal(value)
 	if err1 != nil {
-		slogger.Error("Reg() json.Marshal() failed", "err", err1)
+		slogger.Error("Reg: json/Marshal() failed", "err", err1)
 		panic(nil)
 	}
 
@@ -1767,7 +1762,7 @@ func return_json_repsonse(z *registrar, w http.ResponseWriter, rqst *http.Reques
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	var _, err2 = w.Write(v1)
 	if err2 != nil {
-		slogger.Error("Reg() Writing reply failed", "err", err2)
+		slogger.Error("Reg: Writing reply failed", "err", err2)
 	}
 	var wf, ok = w.(http.Flusher)
 	if ok {

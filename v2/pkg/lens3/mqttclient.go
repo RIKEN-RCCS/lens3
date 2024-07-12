@@ -103,14 +103,14 @@ func configure_mqtt(c *mqtt_conf, qch <-chan vacuous) *mqtt_client {
 	var ctx = context.Background()
 	var cm, err2 = autopaho.NewConnection(ctx, conf)
 	if err2 != nil {
-		slogger.Error("MQTT() paho.NewConnection() failed", "err", err2,
+		slogger.Error("MQTT() paho/NewConnection() failed", "err", err2,
 			"alert", true)
 		return nil
 	}
 	q.cm = cm
 	var err3 = cm.AwaitConnection(ctx)
 	if err3 != nil {
-		slogger.Error("MQTT() paho.AwaitConnection() failed", "err", err3,
+		slogger.Error("MQTT() paho/AwaitConnection() failed", "err", err3,
 			"alert", true)
 		return nil
 	}
@@ -132,7 +132,7 @@ func pub_mqtt_message(q *mqtt_client, m string) error {
 	})
 	if err1 != nil {
 		if ctx.Err() == nil {
-			slogger.Error("MQTT() paho.Publish() failed", "err", err1,
+			slogger.Error("MQTT() paho/Publish() failed", "err", err1,
 				"alert", true)
 		}
 	}

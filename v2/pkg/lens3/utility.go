@@ -265,7 +265,7 @@ func convert_hosts_to_addrs(hosts []string) []net.IP {
 	for _, h := range hosts {
 		var ips, err1 = net.LookupIP(h)
 		if err1 != nil {
-			slogger.Warn("net.LookupIP() fails", "host", h, "err", err1)
+			slogger.Warn("net/LookupIP() fails", "host", h, "err", err1)
 			continue
 		}
 		addrs = append(addrs, ips...)
@@ -352,26 +352,26 @@ func execute_command(synopsis string, argv []string, environ []string, timeout_m
 	case nil:
 		// OK.
 		if verbose {
-			slogger.Debug(prefix+" Command done",
+			slogger.Debug(prefix+": Command done",
 				"cmd", argv, "exit", wstatus,
 				"stdout", stdouts, "stderr", stderrs)
 		}
 	case *exec.ExitError:
 		// Not successful.
 		if wstatus == -1 {
-			slogger.Error(prefix+" Command signaled/unfinished",
+			slogger.Error(prefix+": Command signaled/unfinished",
 				"cmd", argv, "err", err2,
 				"stdout", stdouts, "stderr", stderrs)
 			return "", "", err2
 		} else {
-			slogger.Error(prefix+" Command failed",
+			slogger.Error(prefix+": Command failed",
 				"cmd", argv, "err", err2,
 				"stdout", stdouts, "stderr", stderrs)
 			return "", "", err2
 		}
 	default:
 		// Error.
-		slogger.Error(prefix+" Command failed to run",
+		slogger.Error(prefix+": Command failed to run",
 			"cmd", argv, "err", err1,
 			"stdout", stdouts, "stderr", stderrs)
 		return "", "", err1
@@ -464,7 +464,7 @@ func check_frontend_proxy_trusted(trusted []net.IP, peer string) bool {
 	}
 	var ips, err2 = net.LookupIP(host)
 	if err2 != nil {
-		slogger.Warn("net.LookupIP(%s) failed", "peer", host, "err", err2)
+		slogger.Warn("net/LookupIP() failed", "peer", host, "err", err2)
 		return false
 	}
 	for _, ip := range ips {

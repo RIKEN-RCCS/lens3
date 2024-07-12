@@ -175,11 +175,11 @@ func (d *backend_rclone) check_startup(stream stdio_stream, mm []string) *start_
 		var got_control = rclone_response_control_url_re.MatchString
 		var control_found, _ = find_one(mm, got_control)
 		if !control_found {
-			slogger.Warn("Mux(rclone) Got an expected message " +
+			slogger.Warn("BE(rclone): Got an expected message" +
 				" but no control messages")
 		}
 		if d.verbose {
-			slogger.Debug("Mux(rclone) Got an expected message", "output", m3)
+			slogger.Debug("BE(rclone): Got an expected message", "output", m3)
 		}
 		return &start_result{
 			start_state: start_started,
@@ -217,7 +217,7 @@ func (d *backend_rclone) establish() error {
 // SHUTDOWN stops a server using RC core/quit.
 func (d *backend_rclone) shutdown() error {
 	var proc = d.get_super_part()
-	slogger.Debug("Mux(rclone) Stopping rclone",
+	slogger.Debug("BE(rclone): Stopping rclone",
 		"pool", proc.Pool, "pid", proc.cmd.Process.Pid)
 	var v1 = rclone_rc_core_quit(d)
 	return v1.err
@@ -252,7 +252,7 @@ func simplify_rclone_rc_message(s []byte) *rclone_rc_result {
 	var m map[string]any
 	var err1 = dec.Decode(&m)
 	if err1 != nil {
-		slogger.Error("Mux(rclone) Bad message from rclone-rc",
+		slogger.Error("BE(rclone): Bad message from rclone-rc",
 			"output", s2, "err", err1)
 		return &rclone_rc_result{nil, err1}
 	}
@@ -264,7 +264,7 @@ func simplify_rclone_rc_message(s []byte) *rclone_rc_result {
 		return &rclone_rc_result{nil, err2}
 	default:
 		var err3 = fmt.Errorf("Non-string error message: %q", m)
-		slogger.Error("Mux(rclone) Bad message from rclone-rc",
+		slogger.Error("BE(rclone): Bad message from rclone-rc",
 			"err", err3)
 		return &rclone_rc_result{nil, err3}
 	}
@@ -283,7 +283,7 @@ func execute_rclone_rc_cmd(d *backend_rclone, synopsis string, command []string)
 	argv = append(argv, command...)
 
 	var stdouts, stderrs, err1 = execute_command(synopsis, argv, d.environ,
-		int64(d.Backend_timeout_ms), "Mux(rclone)", d.verbose)
+		int64(d.Backend_timeout_ms), "BE(rclone)", d.verbose)
 	if err1 != nil {
 		return &rclone_rc_result{nil, err1}
 	}
@@ -291,14 +291,14 @@ func execute_rclone_rc_cmd(d *backend_rclone, synopsis string, command []string)
 	var v1 = simplify_rclone_rc_message([]byte(stdouts))
 	if v1.err == nil {
 		if d.verbose {
-			slogger.Debug("Mux(rclone) RC-command Okay",
+			slogger.Debug("BE(rclone): RC-command Okay",
 				"cmd", command)
 		} else {
-			slogger.Debug("Mux(rclone) RC-command Okay",
+			slogger.Debug("BE(rclone): RC-command Okay",
 				"cmd", synopsis)
 		}
 	} else {
-		slogger.Error("Mux(rclone) RC-command failed",
+		slogger.Error("BE(rclone): RC-command failed",
 			"cmd", argv, "err", v1.err,
 			"stdout", stdouts, "stderr", stderrs)
 	}

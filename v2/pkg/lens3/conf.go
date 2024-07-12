@@ -17,6 +17,8 @@ import (
 	"os"
 	"reflect"
 	"slices"
+	"strings"
+	"time"
 )
 
 // DB_CONF is a pair of an endpoint and a password to access the
@@ -67,11 +69,7 @@ type multiplexer_conf struct {
 	Mux_node_name           string       `json:"mux_node_name"`
 	Backend                 backend_name `json:"backend"`
 	Mux_ep_update_interval  time_in_sec  `json:"mux_ep_update_interval"`
-	Forwarding_timeout      time_in_sec  `json:"forwarding_timeout"`
-	Probe_access_timeout    time_in_sec  `json:"probe_access_timeout"`
-	Busy_suspension_time    time_in_sec  `json:"busy_suspension_time"`
 	Error_response_delay_ms time_in_sec  `json:"error_response_delay_ms"`
-	Backend_timeout_ms      time_in_sec  `json:"backend_timeout_ms"`
 }
 
 // REGISTRAR_CONF is a Registrar configuration.  SERVER_EP is a
@@ -93,8 +91,6 @@ type registrar_conf struct {
 	Bucket_expiration_days  int           `json:"bucket_expiration_days"`
 	Secret_expiration_days  int           `json:"secret_expiration_days"`
 	Error_response_delay_ms time_in_sec   `json:"error_response_delay_ms"`
-	Backend_timeout_ms      time_in_sec   `json:"backend_timeout_ms"`
-	Probe_access_timeout    time_in_sec   `json:"probe_access_timeout"`
 	Ui_session_duration     time_in_sec   `json:"ui_session_duration"`
 }
 
@@ -103,20 +99,15 @@ type manager_conf struct {
 	Port_min                  int         `json:"port_min"`
 	Port_max                  int         `json:"port_max"`
 	Backend_awake_duration    time_in_sec `json:"backend_awake_duration"`
-	Backend_start_timeout     time_in_sec `json:"backend_start_timeout"`
-	Backend_setup_timeout     time_in_sec `json:"backend_setup_timeout"`
-	Backend_stop_timeout      time_in_sec `json:"backend_stop_timeout"`
+	Backend_start_timeout_ms  time_in_sec `json:"backend_start_timeout_ms"`
 	Backend_timeout_ms        time_in_sec `json:"backend_timeout_ms"`
 	Backend_region            string      `json:"backend_region"`
 	Backend_no_setup_at_start bool        `json:"backend_no_setup_at_start"`
 	Heartbeat_interval        time_in_sec `json:"heartbeat_interval"`
-	Heartbeat_timeout         time_in_sec `json:"heartbeat_timeout"`
 	Heartbeat_miss_tolerance  int         `json:"heartbeat_miss_tolerance"`
-	backend_stabilize_ms      time_in_sec
-	backend_linger_ms         time_in_sec
-	watch_gap_minimal         time_in_sec
-	manager_expiration        time_in_sec
-	busy_suspension_duration  time_in_sec
+	backend_suspension_time   time.Duration
+	backend_stabilize_time    time.Duration
+	backend_linger_time       time.Duration
 }
 
 type minio_conf struct {
@@ -299,11 +290,15 @@ func check_reg_conf(conf *reg_conf) {
 	}
 }
 
-func check_field_required_and_positive(t any, slot string) {
+func check_field_required_and_positive(t any, slot string, conf_name string) {
 	var t1 = reflect.ValueOf(t)
 	var s = t1.FieldByName(slot)
 	//fmt.Printf("s=%T %v\n", s, s)
-	assert_fatal(s.IsValid())
+	if !s.IsValid() {
+		var slot1 = strings.ToLower(slot)
+		fmt.Printf("Required %q not in %q configuration.\n", slot1, conf_name)
+		panic(nil)
+	}
 	switch s.Kind() {
 	case reflect.Int:
 		fallthrough
@@ -335,13 +330,9 @@ func check_multiplexer_entry(e *multiplexer_conf) {
 		//"Mux_node_name",
 		"Backend",
 		"Mux_ep_update_interval",
-		"Forwarding_timeout",
-		"Probe_access_timeout",
-		"Busy_suspension_time",
 		"Error_response_delay_ms",
-		"Backend_timeout_ms",
 	} {
-		check_field_required_and_positive(*e, slot)
+		check_field_required_and_positive(*e, slot, "multiplexer")
 	}
 	if !slices.Contains(backend_list, e.Backend) {
 		slogger.Error("Bad backend name", "name", e.Backend)
@@ -367,12 +358,10 @@ func check_registrar_entry(e *registrar_conf) {
 		"Bucket_expiration_days",
 		"Secret_expiration_days",
 		"Error_response_delay_ms",
-		"Backend_timeout_ms",
-		"Probe_access_timeout",
 		"Postpone_probe_access",
 		"Ui_session_duration",
 	} {
-		check_field_required_and_positive(*e, slot)
+		check_field_required_and_positive(*e, slot, "registrar")
 	}
 	if !slices.Contains(claim_conversions, e.Claim_uid_map) {
 		slogger.Error("Bad claim mapping", "name", e.Claim_uid_map)
@@ -386,17 +375,14 @@ func check_manager_entry(e *manager_conf) {
 		"Port_min",
 		"Port_max",
 		"Backend_awake_duration",
-		"Backend_start_timeout",
-		"Backend_setup_timeout",
-		"Backend_stop_timeout",
+		"Backend_start_timeout_ms",
 		"Backend_timeout_ms",
 		"Backend_region",
 		"Backend_no_setup_at_start",
 		"Heartbeat_interval",
 		"Heartbeat_miss_tolerance",
-		"Heartbeat_timeout",
 	} {
-		check_field_required_and_positive(*e, slot)
+		check_field_required_and_positive(*e, slot, "manager")
 	}
 }
 
@@ -432,7 +418,7 @@ func check_access_log_entry(e *access_log_conf) {
 	for _, slot := range []string{
 		"Access_log_file",
 	} {
-		check_field_required_and_positive(*e, slot)
+		check_field_required_and_positive(*e, slot, "log")
 	}
 }
 
@@ -470,54 +456,3 @@ func check_mqtt_entry(e *mqtt_conf) {
 		panic(nil)
 	}
 }
-
-// func check_registrar_entry_2(e registrar_conf) {
-// 	if e.Port > 0 &&
-// 		e.Front_host != "" &&
-// 		// e.Trusted_proxies
-// 		// e.Base_path != "" &&
-// 		slices.Contains(claim_conversions, e.Claim_uid_map) &&
-// 		e.Probe_access_timeout > 0 &&
-// 		e.Backend_timeout_ms > 0 &&
-// 		e.Max_pool_expiry > 0 &&
-// 		e.Csrf_secret_seed != "" &&
-// 		e.Backend != "" &&
-// 		e.Backend_timeout_ms > 0 &&
-// 		e.Reg_access_log_file != "" {
-// 	} else {
-// 		panic(fmt.Errorf(bad_message))
-// 	}
-// }
-
-// func check_multiplexer_entry_2(e multiplexer_conf) {
-// 	if e.Port > 0 &&
-// 		e.Front_host != "" &&
-// 		// e.Trusted_proxies
-// 		e.Mux_ep_update_interval > 0 &&
-// 		e.Forwarding_timeout > 0 &&
-// 		e.Probe_access_timeout > 0 &&
-// 		e.Error_response_delay_ms > 0 &&
-// 		e.Busy_suspension_time > 0 &&
-// 		//e.Mux_node_name
-// 		e.Backend != "" &&
-// 		e.Backend_timeout_ms > 0 &&
-// 		e.Mux_access_log_file != "" {
-// 	} else {
-// 		panic(fmt.Errorf(bad_message))
-// 	}
-// }
-
-// func check_manager_entry_2(e manager_conf) {
-// 	assert_slot(len(e.Sudo) > 0)
-// 	assert_slot(e.Port_min > 0)
-// 	assert_slot(e.Port_max > 0)
-// 	assert_slot(e.Backend_awake_duration > 0)
-// 	//assert_slot(Backend_setup_at_start : bool
-// 	assert_slot(e.Backend_start_timeout > 0)
-// 	assert_slot(e.Backend_setup_timeout > 0)
-// 	assert_slot(e.Backend_stop_timeout > 0)
-// 	assert_slot(e.Backend_timeout_ms > 0)
-// 	assert_slot(e.Heartbeat_interval > 0)
-// 	assert_slot(e.Heartbeat_miss_tolerance > 0)
-// 	assert_slot(e.Heartbeat_timeout > 0)
-// }

@@ -43,7 +43,7 @@ var (
 
 	// http_500_internal_server_error
 
-	message_backend_not_running = error_message{
+	message_backend_not_running__ = error_message{
 		"message", "Backend not running"}
 	message_bad_backend_ep = error_message{
 		"message", "Bad backend ep"}

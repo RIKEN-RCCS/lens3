@@ -21,8 +21,6 @@
     "bucket_expiration_days": 365,
     "secret_expiration_days": 365,
     "error_response_delay_ms": 1000,
-    "backend_timeout_ms": 1000,
-    "probe_access_timeout": 60,
     "ui_session_duration": 1800
   },
   "ui": {

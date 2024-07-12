@@ -34,7 +34,7 @@ var (
 
 // BACKEND_MINIO is a delegate for MinIO.
 type backend_minio struct {
-	backend_delegate
+	backend_generic
 
 	mc_alias      string
 	mc_config_dir string
@@ -59,7 +59,7 @@ func (fa *backend_factory_minio) configure(conf *mux_conf) {
 	fa.backend_conf.use_n_ports = 1
 }
 
-func (fa *backend_factory_minio) make_delegate(pool string) backend {
+func (fa *backend_factory_minio) make_delegate(pool string) backend_delegate {
 	var d = &backend_minio{}
 	// Set the super part.
 	d.backend_conf = &fa.backend_conf
@@ -80,8 +80,8 @@ func finalize_backend_minio(d *backend_minio) {
 	}
 }
 
-func (d *backend_minio) get_super_part() *backend_delegate {
-	return &(d.backend_delegate)
+func (d *backend_minio) get_super_part() *backend_generic {
+	return &(d.backend_generic)
 }
 
 func (d *backend_minio) make_command_line(port int, directory string) backend_command {
@@ -180,7 +180,7 @@ func (d *backend_minio) heartbeat(*manager) int {
 	var proc = d.get_super_part()
 
 	if d.heartbeat_client == nil {
-		var timeout = (time.Duration(proc.Heartbeat_timeout) * time.Second)
+		var timeout = (time.Duration(proc.Backend_timeout_ms) * time.Millisecond)
 		d.heartbeat_client = &http.Client{
 			Timeout: timeout,
 		}
@@ -279,8 +279,9 @@ func execute_minio_mc_cmd(d *backend_minio, synopsis string, command []string) *
 	}
 	argv = append(argv, command...)
 
+	var timeout = (time.Duration(d.Backend_start_timeout_ms) * time.Millisecond)
 	var stdouts, stderrs, err1 = execute_command(synopsis, argv, d.environ,
-		int64(d.Backend_timeout_ms), "BE(minio)", d.verbose)
+		timeout, "BE(minio)", d.verbose)
 	if err1 != nil {
 		return &minio_mc_result{nil, err1}
 	}

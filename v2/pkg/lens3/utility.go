@@ -333,8 +333,8 @@ func check_claim_string(claim string) bool {
 // returns a message from stdout+stderr and an error.  Note that a
 // timeout kills the process by SIGKILL.  MEMO: Timeout of context
 // returns "context.deadlineExceededError".
-func execute_command(synopsis string, argv []string, environ []string, timeout_ms int64, prefix string, verbose bool) (string, string, error) {
-	var timeout = (time.Duration(timeout_ms) * time.Millisecond)
+func execute_command(synopsis string, argv []string, environ []string, timeout time.Duration, prefix string, verbose bool) (string, string, error) {
+	//var timeout = (time.Duration(timeout_ms) * time.Millisecond)
 	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	var cmd = exec.CommandContext(ctx, argv[0], argv[1:]...)

@@ -40,6 +40,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Messages Patterns.  These are messages from rclone at its start-up.
@@ -75,7 +76,7 @@ var (
 
 // BACKEND_RCLONE is a manager for rclone.
 type backend_rclone struct {
-	backend_delegate
+	backend_generic
 
 	rc_port int
 	rc_user string
@@ -100,7 +101,7 @@ func (fa *backend_factory_rclone) configure(conf *mux_conf) {
 	fa.backend_conf.use_n_ports = 2
 }
 
-func (fa *backend_factory_rclone) make_delegate(pool string) backend {
+func (fa *backend_factory_rclone) make_delegate(pool string) backend_delegate {
 	var d = &backend_rclone{}
 	// Set the super part.
 	d.backend_conf = &fa.backend_conf
@@ -118,8 +119,8 @@ func (fa *backend_factory_rclone) clean_at_exit() {
 func finalize_backend_rclone(d *backend_rclone) {
 }
 
-func (d *backend_rclone) get_super_part() *backend_delegate {
-	return &(d.backend_delegate)
+func (d *backend_rclone) get_super_part() *backend_generic {
+	return &(d.backend_generic)
 }
 
 func (d *backend_rclone) make_command_line(port int, directory string) backend_command {
@@ -282,8 +283,9 @@ func execute_rclone_rc_cmd(d *backend_rclone, synopsis string, command []string)
 	}
 	argv = append(argv, command...)
 
+	var timeout = (time.Duration(d.Backend_start_timeout_ms) * time.Millisecond)
 	var stdouts, stderrs, err1 = execute_command(synopsis, argv, d.environ,
-		int64(d.Backend_timeout_ms), "BE(rclone)", d.verbose)
+		timeout, "BE(rclone)", d.verbose)
 	if err1 != nil {
 		return &rclone_rc_result{nil, err1}
 	}

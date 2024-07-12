@@ -543,8 +543,8 @@ func ensure_backend_running(m *multiplexer, w http.ResponseWriter, r *http.Reque
 	var be1 = get_backend(m.table, pool)
 	if be1 == nil {
 		slogger.Info(m.logprefix+"Start a backend", "pool", pool)
-		var proc = start_backend(m.manager, pool)
-		if proc == nil {
+		var be2 = start_backend(m.manager, pool)
+		if be2 == nil {
 			var err1 = &proxy_exc{
 				auth,
 				http_500_internal_server_error,
@@ -555,21 +555,9 @@ func ensure_backend_running(m *multiplexer, w http.ResponseWriter, r *http.Reque
 			return_mux_error_response(m, w, r, err1)
 			return nil
 		}
+		be1 = be2
 	}
-
-	var be2 = get_backend(m.table, pool)
-	if be2 == nil {
-		var err2 = &proxy_exc{
-			auth,
-			http_500_internal_server_error,
-			[][2]string{
-				message_backend_not_running,
-			},
-		}
-		return_mux_error_response(m, w, r, err2)
-		return nil
-	}
-	return be2
+	return be1
 }
 
 // ENSURE_POOL_EXISTENCE checks the pool exists.  It should never fail.

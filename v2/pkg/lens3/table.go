@@ -51,13 +51,13 @@ const (
 	db_bucket_prefix    = "bk:"
 	db_secret_prefix    = "sx:"
 
-	db_mux_ep_prefix            = "mu:"
-	db_backend_data_prefix      = "de:"
-	db_backend_exclusion_prefix = "dx:"
-	db_csrf_token_prefix        = "tn:"
-	db_pool_state_prefix        = "ps:"
-	db_pool_timestamp_prefix    = "pt:"
-	db_user_timestamp_prefix    = "ut:"
+	db_mux_ep_prefix         = "mu:"
+	db_backend_data_prefix   = "de:"
+	db_backend_mutex_prefix  = "dx:"
+	db_csrf_token_prefix     = "tn:"
+	db_pool_state_prefix     = "ps:"
+	db_pool_timestamp_prefix = "pt:"
+	db_user_timestamp_prefix = "ut:"
 	//db_backend_ep_prefix     = "ep:"
 )
 
@@ -79,13 +79,13 @@ var prefix_to_db_number_assignment = map[string]int{
 	db_secret_prefix:    storage_db,
 	db_bucket_prefix:    storage_db,
 
-	db_mux_ep_prefix:            process_db,
-	db_backend_exclusion_prefix: process_db,
-	db_backend_data_prefix:      process_db,
-	db_csrf_token_prefix:        process_db,
-	db_pool_state_prefix:        process_db,
-	db_pool_timestamp_prefix:    process_db,
-	db_user_timestamp_prefix:    process_db,
+	db_mux_ep_prefix:         process_db,
+	db_backend_mutex_prefix:  process_db,
+	db_backend_data_prefix:   process_db,
+	db_csrf_token_prefix:     process_db,
+	db_pool_state_prefix:     process_db,
+	db_pool_timestamp_prefix: process_db,
+	db_user_timestamp_prefix: process_db,
 	//db_backend_ep_prefix:       process_db,
 }
 
@@ -163,9 +163,9 @@ type backend_record struct {
 	Timestamp   int64      `json:"timestamp"`
 }
 
-// "dx:"+pool-name Entry (db_backend_exclusion_prefix).  This entry
+// "dx:"+pool-name Entry (db_backend_mutex_prefix).  This entry
 // is temporarily created to mutex to run a single backend.
-type backend_exclusion_record struct {
+type backend_mutex_record struct {
 	Mux_ep    string `json:"mux_ep"`
 	Timestamp int64  `json:"timestamp"`
 }
@@ -793,32 +793,32 @@ func delete_pool_state__(t *keyval_table, pool string) {
 	db_del_with_prefix(t, db_pool_state_prefix, pool)
 }
 
-// SET_EX_MANAGER atomically sets an exclusion for a backend.  It
+// SET_EX_BACKEND_MUTEX makes an exclusion entry for a backend.  It
 // returns OK or NG.  It tries to return an old record, but it can be
 // null due to a race (but practically never).
-func set_ex_backend_exclusion(t *keyval_table, pool string, data *backend_exclusion_record) (bool, *backend_exclusion_record) {
-	var ok = db_setnx_with_prefix(t, db_backend_exclusion_prefix, pool, data)
+func set_ex_backend_mutex(t *keyval_table, pool string, data *backend_mutex_record) (bool, *backend_mutex_record) {
+	var ok = db_setnx_with_prefix(t, db_backend_mutex_prefix, pool, data)
 	if ok {
 		return true, nil
 	}
 	// Race, return failure.
-	var holder = get_backend_exclusion(t, pool)
+	var holder = get_backend_mutex(t, pool)
 	return false, holder
 }
 
-func set_backend_exclusion_expiry(t *keyval_table, pool string, timeout int64) bool {
-	var ok = db_expire_with_prefix(t, db_backend_exclusion_prefix, pool, timeout)
+func set_backend_mutex_expiry(t *keyval_table, pool string, timeout int64) bool {
+	var ok = db_expire_with_prefix(t, db_backend_mutex_prefix, pool, timeout)
 	return ok
 }
 
-func get_backend_exclusion(t *keyval_table, pool string) *backend_exclusion_record {
-	var data backend_exclusion_record
-	var ok = db_get_with_prefix(t, db_backend_exclusion_prefix, pool, &data)
+func get_backend_mutex(t *keyval_table, pool string) *backend_mutex_record {
+	var data backend_mutex_record
+	var ok = db_get_with_prefix(t, db_backend_mutex_prefix, pool, &data)
 	return ITE(ok, &data, nil)
 }
 
-func delete_backend_exclusion(t *keyval_table, pool string) {
-	db_del_with_prefix(t, db_backend_exclusion_prefix, pool)
+func delete_backend_mutex(t *keyval_table, pool string) {
+	db_del_with_prefix(t, db_backend_mutex_prefix, pool)
 }
 
 func set_backend(t *keyval_table, pool string, data *backend_record) {

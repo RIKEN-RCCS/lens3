@@ -486,8 +486,21 @@ func find_one[T any](mm []T, f func(T) bool) (bool, T) {
 	return false, *new(T)
 }
 
-func delay_sleep(ms time_in_sec) {
-	time.Sleep(time.Duration(ms) * time.Millisecond)
+func delay_sleep(ms time_in_ms) {
+	//time.Sleep(time.Duration(ms) * time.Millisecond)
+	time.Sleep(ms.time_duration())
+}
+
+// DURATION_IN_SEC converts a Duration to a truncated second.
+func duration_in_sec(d time.Duration) int64 {
+	var sec = (d.Milliseconds() / 1000)
+	return sec
+}
+
+// DURATION_IN_MS converts a Duration to a truncated millisecond.
+func duration_in_ms(d time.Duration) int64 {
+	var ms = d.Milliseconds()
+	return ms
 }
 
 func dump_statistics_periodically(period time.Duration) {

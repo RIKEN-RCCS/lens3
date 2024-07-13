@@ -806,8 +806,9 @@ func set_ex_backend_mutex(t *keyval_table, pool string, data *backend_mutex_reco
 	return false, holder
 }
 
-func set_backend_mutex_expiry(t *keyval_table, pool string, timeout int64) bool {
-	var ok = db_expire_with_prefix(t, db_backend_mutex_prefix, pool, timeout)
+func set_backend_mutex_expiry(t *keyval_table, pool string, timeout time.Duration) bool {
+	var sec int64 = duration_in_sec(timeout)
+	var ok = db_expire_with_prefix(t, db_backend_mutex_prefix, pool, sec)
 	return ok
 }
 
@@ -826,8 +827,9 @@ func set_backend(t *keyval_table, pool string, data *backend_record) {
 	db_set_with_prefix(t, db_backend_data_prefix, pool, data)
 }
 
-func set_backend_expiry(t *keyval_table, pool string, timeout int64) bool {
-	var ok = db_expire_with_prefix(t, db_backend_data_prefix, pool, timeout)
+func set_backend_expiry(t *keyval_table, pool string, timeout time.Duration) bool {
+	var sec int64 = duration_in_sec(timeout)
+	var ok = db_expire_with_prefix(t, db_backend_data_prefix, pool, sec)
 	return ok
 }
 
@@ -862,8 +864,9 @@ func set_mux_ep(t *keyval_table, mux_ep string, data *mux_record) {
 	db_set_with_prefix(t, db_mux_ep_prefix, mux_ep, data)
 }
 
-func set_mux_ep_expiry(t *keyval_table, mux_ep string, timeout int64) bool {
-	var ok = db_expire_with_prefix(t, db_mux_ep_prefix, mux_ep, timeout)
+func set_mux_ep_expiry(t *keyval_table, mux_ep string, timeout time.Duration) bool {
+	var sec int64 = duration_in_sec(timeout)
+	var ok = db_expire_with_prefix(t, db_mux_ep_prefix, mux_ep, sec)
 	return ok
 }
 
@@ -1154,8 +1157,9 @@ func set_csrf_token(t *keyval_table, uid string, token *csrf_token_record) {
 	db_set_with_prefix(t, db_csrf_token_prefix, uid, token)
 }
 
-func set_csrf_token_expiry(t *keyval_table, uid string, timeout int64) bool {
-	var ok = db_expire_with_prefix(t, db_csrf_token_prefix, uid, timeout)
+func set_csrf_token_expiry(t *keyval_table, uid string, timeout time.Duration) bool {
+	var sec int64 = duration_in_sec(timeout)
+	var ok = db_expire_with_prefix(t, db_csrf_token_prefix, uid, sec)
 	return ok
 }
 
@@ -1206,13 +1210,12 @@ func db_get_with_prefix(t *keyval_table, prefix string, key string, val any) boo
 	return ok
 }
 
-func db_expire_with_prefix(t *keyval_table, prefix string, key string, timeout int64) bool {
+func db_expire_with_prefix(t *keyval_table, prefix string, key string, sec int64) bool {
 	if trace_db&t.tracing != 0 {
-		slogger.Debug("DB: expire", "key", (prefix + key))
+		slogger.Debug("DB: expire", "key", (prefix + key), "sec", sec)
 	}
 	var db = t.prefix_to_db[prefix]
 	var k = (prefix + key)
-	var sec int64 = int64(time.Duration(timeout) * time.Second)
 	var ctx1 = context.Background()
 	//var w = db.Expire(ctx1, k, sec)
 	var w = db.Do(ctx1, db.B().Expire().Key(k).Seconds(sec).Build())

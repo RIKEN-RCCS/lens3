@@ -1173,12 +1173,13 @@ func make_csrf_tokens(z *registrar, uid string) *csrf_token_record {
 		},
 		Timestamp: now,
 	}
-	var timeout = int64(conf.Ui_session_duration)
+	var expiry = (conf.Ui_session_duration).time_duration()
 	set_csrf_token(z.table, uid, data)
-	var ok = set_csrf_token_expiry(z.table, uid, timeout)
+	var ok = set_csrf_token_expiry(z.table, uid, expiry)
 	if !ok {
 		// Ignore an error.
-		slogger.Error("Reg: Bad call set_csrf_token_expiry()")
+		slogger.Error("Reg: DB.Expire() on csrf-token record failed",
+			"uid", uid)
 	}
 	//var x = get_csrf_token(z.table, uid)
 	//fmt.Println("make_csrf_tokens=", x)

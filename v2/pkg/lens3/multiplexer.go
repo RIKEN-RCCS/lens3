@@ -430,7 +430,7 @@ func handle_multiplexer_exc(m *multiplexer, w http.ResponseWriter, rqst *http.Re
 	handle_exc(m.logprefix, delay_ms, logfn, w, rqst)
 }
 
-func handle_exc(prefix string, delay_ms time_in_sec, logfn access_logger, w http.ResponseWriter, rqst *http.Request) {
+func handle_exc(prefix string, delay_ms time_in_ms, logfn access_logger, w http.ResponseWriter, rqst *http.Request) {
 	var x = recover()
 	switch err1 := x.(type) {
 	case nil:
@@ -864,10 +864,9 @@ func mux_periodic_work(m *multiplexer) {
 		Timestamp:  now,
 	}
 
-	var interval = int64(conf.Mux_ep_update_interval)
-	var expiry int64 = 3 * interval
-	assert_fatal(interval >= 10)
-	//time.Sleep(1 * time.Second)
+	var interval = (conf.Mux_ep_update_interval).time_duration()
+	var expiry = 3 * interval
+	assert_fatal(interval >= (10 * time.Second))
 	for {
 		if trace_task&m.tracing != 0 {
 			slogger.Debug(m.logprefix + "Update Mux-ep")
@@ -877,10 +876,11 @@ func mux_periodic_work(m *multiplexer) {
 		var ok = set_mux_ep_expiry(m.table, m.mux_ep, expiry)
 		if !ok {
 			// Ignore an error.
-			slogger.Error(m.logprefix + "Bad call set_mux_ep_expiry()")
+			slogger.Error(m.logprefix+"DB.Expire() on mux-ep failed",
+				"mux-ep", m.mux_ep)
 		}
-		var jitter = rand.Int64N(interval / 8)
-		time.Sleep(time.Duration(interval+jitter) * time.Second)
+		var jitter = time.Duration(rand.Int64N(int64(interval) / 8))
+		time.Sleep(interval + jitter)
 	}
 }
 

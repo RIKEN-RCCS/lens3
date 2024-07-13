@@ -44,7 +44,7 @@
       "source_line": false
     },
     "stats": {
-      "period": 600
+      "sample_period": 600
     },
     "alert": {
       "queue": "mqtt",

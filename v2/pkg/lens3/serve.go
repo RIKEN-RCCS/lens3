@@ -154,8 +154,8 @@ func start_lenticularis_service(confpath string, services [2]string) {
 		go start_registrar(z, &wg)
 	}
 
-	if logconf.Stats.Period > 0 {
-		var period = (time.Duration(logconf.Stats.Period) * time.Second)
+	if logconf.Stats.Sample_period > 0 {
+		var period = logconf.Stats.Sample_period.time_duration()
 		go dump_statistics_periodically(period)
 	}
 

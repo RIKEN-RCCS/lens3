@@ -266,7 +266,7 @@ func start_backend(w *manager, pool string) *backend_record {
 		// (An error is already logged when be1=nil).
 		return be1
 	} else {
-		var expiry int64 = int64((2 * w.Backend_start_timeout_ms) / 1000)
+		var expiry = (2 * (w.Backend_start_timeout_ms).time_duration())
 		var ok2 = set_backend_mutex_expiry(w.table, pool, expiry)
 		if !ok2 {
 			// Ignore an error.
@@ -294,7 +294,8 @@ func start_backend_in_mutexed(w *manager, pool string) backend_delegate {
 
 	var pooldata = get_pool(w.table, pool)
 	if pooldata == nil {
-		slogger.Warn(w.logprefix+"start_backend() pool is missing", "pool", pool)
+		slogger.Warn(w.logprefix+"start_backend() pool is missing",
+			"pool", pool)
 		return nil
 	}
 
@@ -334,18 +335,18 @@ func start_backend_in_mutexed(w *manager, pool string) backend_delegate {
 		assert_fatal(proc.cmd.Process != nil)
 		//var pid = proc.cmd.Process.Pid
 
-		var ok bool
+		var ok1 bool
 		func() {
 			w.mutex.Lock()
 			defer w.mutex.Unlock()
 			if !w.shutdown_in_progress {
 				w.process[pool] = d
-				ok = true
+				ok1 = true
 			} else {
-				ok = false
+				ok1 = false
 			}
 		}()
-		if !ok {
+		if !ok1 {
 			slogger.Warn(w.logprefix+"Starting a backend failed",
 				"pool", pool, "reason", "manager is in shutdown")
 			tell_stop_backend(w, d)
@@ -385,9 +386,13 @@ func start_backend_in_mutexed(w *manager, pool string) backend_delegate {
 		Mux_pid:     w.multiplexer.mux_pid,
 		Timestamp:   now,
 	}
-	var expiry = int64((proc.backend_suspension_time).Seconds())
+	var expiry = proc.backend_suspension_time
 	set_backend(w.table, pool, suspension)
-	set_backend_expiry(w.table, proc.Pool, expiry)
+	var ok2 = set_backend_expiry(w.table, pool, expiry)
+	if !ok2 {
+		slogger.Error(w.logprefix+"DB.Expire() on backend failed",
+			"pool", pool)
+	}
 
 	//var state = pool_state_SUSPENDED
 	//var reason = pool_reason_SERVER_BUSY
@@ -626,20 +631,22 @@ func tell_stop_backend(w *manager, d backend_delegate) {
 // backend.
 func ping_backend(w *manager, d backend_delegate) {
 	var proc = d.get_super_part()
-	var duration = (time.Duration(w.Backend_awake_duration) * time.Second)
-	var interval = (time.Duration(proc.Heartbeat_interval) * time.Second)
-	var expiry = int64(3 * proc.Heartbeat_interval)
+	var duration = (w.Backend_awake_duration).time_duration()
+	var interval = (proc.Heartbeat_interval).time_duration()
+	var expiry = (3 * (proc.Heartbeat_interval).time_duration())
 	//var ch_quit_backend = proc.ch_quit_backend
-
-	set_backend_expiry(w.table, proc.Pool, expiry)
+	var ok1 = set_backend_expiry(w.table, proc.Pool, expiry)
+	if !ok1 {
+		slogger.Error(w.logprefix+"DB.Expire() on backend failed",
+			"pool", proc.Pool)
+	}
 
 	proc.heartbeat_misses = 0
 	for {
-		var ok1 bool
+		var ok2 bool
 		select {
-		case _, ok1 = <-proc.ch_quit_backend:
-			assert_fatal(!ok1)
-			//fmt.Println("*** CH_QUIT_BACKEND CLOSED")
+		case _, ok2 = <-proc.ch_quit_backend:
+			assert_fatal(!ok2)
 			break
 		default:
 		}
@@ -653,17 +660,19 @@ func ping_backend(w *manager, d backend_delegate) {
 		} else {
 			proc.heartbeat_misses += 1
 		}
-		if proc.verbose {
+		if proc.heartbeat_misses > 0 {
+			slogger.Error(w.logprefix+"Heartbeat failed",
+				"pool", proc.Pool, "misses", proc.heartbeat_misses)
+		} else if proc.verbose {
 			slogger.Debug(w.logprefix+"Heartbeat", "pool", proc.Pool,
 				"status", status, "misses", proc.heartbeat_misses)
 		}
 		if proc.heartbeat_misses > w.Heartbeat_miss_tolerance {
-			slogger.Info(w.logprefix+"Heartbeat failed",
-				"pool", proc.Pool, "misses", proc.heartbeat_misses)
 			break
 		}
 
-		// Check lifetime.
+		// Check lifetime.  Missing pool timestamp means the awake
+		// time elapsed (ts=0 is infinite past).
 
 		var ts = get_pool_timestamp(w.table, proc.Pool)
 		var lifetime = time.Unix(ts, 0).Add(duration)
@@ -674,9 +683,9 @@ func ping_backend(w *manager, d backend_delegate) {
 
 		// Update a record expiration.
 
-		var ok = set_backend_expiry(w.table, proc.Pool, expiry)
-		if !ok {
-			slogger.Warn(w.logprefix+"Backend entry has gone",
+		var ok3 = set_backend_expiry(w.table, proc.Pool, expiry)
+		if !ok3 {
+			slogger.Error(w.logprefix+"DB.Expire() on backend failed",
 				"pool", proc.Pool)
 			break
 		}

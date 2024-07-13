@@ -69,7 +69,7 @@ type multiplexer_conf struct {
 	Mux_node_name           string       `json:"mux_node_name"`
 	Backend                 backend_name `json:"backend"`
 	Mux_ep_update_interval  time_in_sec  `json:"mux_ep_update_interval"`
-	Error_response_delay_ms time_in_sec  `json:"error_response_delay_ms"`
+	Error_response_delay_ms time_in_ms   `json:"error_response_delay_ms"`
 }
 
 // REGISTRAR_CONF is a Registrar configuration.  SERVER_EP is a
@@ -90,7 +90,7 @@ type registrar_conf struct {
 	Pool_expiration_days    int           `json:"pool_expiration_days"`
 	Bucket_expiration_days  int           `json:"bucket_expiration_days"`
 	Secret_expiration_days  int           `json:"secret_expiration_days"`
-	Error_response_delay_ms time_in_sec   `json:"error_response_delay_ms"`
+	Error_response_delay_ms time_in_ms    `json:"error_response_delay_ms"`
 	Ui_session_duration     time_in_sec   `json:"ui_session_duration"`
 }
 
@@ -99,8 +99,8 @@ type manager_conf struct {
 	Port_min                  int         `json:"port_min"`
 	Port_max                  int         `json:"port_max"`
 	Backend_awake_duration    time_in_sec `json:"backend_awake_duration"`
-	Backend_start_timeout_ms  time_in_sec `json:"backend_start_timeout_ms"`
-	Backend_timeout_ms        time_in_sec `json:"backend_timeout_ms"`
+	Backend_start_timeout_ms  time_in_ms  `json:"backend_start_timeout_ms"`
+	Backend_timeout_ms        time_in_ms  `json:"backend_timeout_ms"`
 	Backend_region            string      `json:"backend_region"`
 	Backend_no_setup_at_start bool        `json:"backend_no_setup_at_start"`
 	Heartbeat_interval        time_in_sec `json:"heartbeat_interval"`
@@ -147,7 +147,7 @@ type logger_conf struct {
 }
 
 type stats_conf struct {
-	Period time_in_sec `json:"period"`
+	Sample_period time_in_sec `json:"sample_period"`
 }
 
 type alert_conf struct {
@@ -164,6 +164,17 @@ type mqtt_conf struct {
 }
 
 type time_in_sec int64
+type time_in_ms int64
+
+func (t time_in_sec) time_duration() time.Duration {
+	var d = (time.Duration(t) * time.Second)
+	return d
+}
+
+func (t time_in_ms) time_duration() time.Duration {
+	var d = (time.Duration(t) * time.Millisecond)
+	return d
+}
 
 // CLAIM_UID_MAP is one of {"id", "email-name", "map"}.
 type claim_uid_map string

@@ -867,17 +867,15 @@ func return_pool_prop(z *registrar, w http.ResponseWriter, r *http.Request, u *u
 }
 
 // CHECK_USER_ACCESS_WITH_ERROR_RETURN checks an access to a pool by a
-// user is granted.  It returns a user record. Or, it returns nil when
-// access is not granted.  Call it without a pool when deleting a
-// pool.
+// user is granted.  It returns a user record, or nil.  It is OK to
+// call it without a pool (pool="") when creating a pool.
 func check_user_access_with_error_return(z *registrar, w http.ResponseWriter, r *http.Request, pool string, firstsession bool) *user_record {
 	var conf = &z.conf.Registrar
 	_ = conf
 
-	fmt.Println(";; r.RemoteAddr=", r.RemoteAddr)
-	fmt.Println(";; X-Remote-User=", r.Header.Get("X-Remote-User"))
-	fmt.Println(";; X-Csrf-Token=", r.Header.Get("X-Csrf-Token"))
-	//fmt.Println(";; X-Real-Ip=", r.Header.Get("X-Real-Ip"))
+	//fmt.Println(";; r.RemoteAddr=", r.RemoteAddr)
+	//fmt.Println(";; X-Remote-User=", r.Header.Get("X-Remote-User"))
+	//fmt.Println(";; X-Csrf-Token=", r.Header.Get("X-Csrf-Token"))
 
 	var x_remote_user = r.Header.Get("X-Remote-User")
 	var dummy = &user_record{
@@ -954,8 +952,8 @@ func check_user_access_with_error_return(z *registrar, w http.ResponseWriter, r 
 		return u
 	}
 
-	// Check the pool given a pool name.  A FAILURE OF CHECKS MEANS
-	// SOMEONE MIGHT HAVE FORGED A REQUEST.
+	// Check the pool given.  A FAILURE OF CHECKS MEANS SOMEONE FORGES
+	// A REQUEST.
 
 	if !check_pool_naming(pool) {
 		slogger.Error("Reg: Bad pool name", "uid", uid, "pool", pool)
@@ -1001,16 +999,28 @@ func check_user_access_with_error_return(z *registrar, w http.ResponseWriter, r 
 		return nil
 	}
 
-	var state, reason = check_pool_state(z.table, pool)
+	var state, reason = check_pool_state(z.table, pooldata)
 	switch state {
 	case pool_state_INITIAL, pool_state_READY:
 		// OK.
 	case pool_state_SUSPENDED:
-		// OK.
+		if true {
+			slogger.Debug("Reg: Bad pool state", "pool", pool,
+				"state", state, "reason", reason)
+			var err8 = &proxy_exc{
+				u.Uid,
+				http_503_service_unavailable,
+				[][2]string{
+					message_pool_suspended,
+				},
+			}
+			return_reg_error_response(z, w, r, u, err8)
+			return nil
+		}
 	case pool_state_DISABLED, pool_state_INOPERABLE:
 		slogger.Debug("Reg: Bad pool state", "pool", pool,
 			"state", state, "reason", reason)
-		var err8 = &proxy_exc{
+		var err9 = &proxy_exc{
 			u.Uid,
 			http_403_forbidden,
 			[][2]string{
@@ -1020,7 +1030,7 @@ func check_user_access_with_error_return(z *registrar, w http.ResponseWriter, r 
 				{"reason", string(reason)},
 			},
 		}
-		return_reg_error_response(z, w, r, u, err8)
+		return_reg_error_response(z, w, r, u, err9)
 		return nil
 	default:
 		panic(nil)
@@ -1067,9 +1077,9 @@ func check_user_account(z *registrar, uid string, firstsession bool) *user_recor
 
 	// Check if the user is enabled.
 
-	var now int64 = time.Now().Unix()
 	if u1 != nil {
-		if !u1.Enabled || u1.Expiration_time < now {
+		var expiration = time.Unix(u1.Expiration_time, 0)
+		if !u1.Enabled || !time.Now().Before(expiration) {
 			return nil
 		} else {
 			extend_user_expiration_time(z, u1)

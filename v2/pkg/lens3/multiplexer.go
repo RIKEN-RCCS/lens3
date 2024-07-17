@@ -285,21 +285,21 @@ func serve_authenticated_access(m *multiplexer, w http.ResponseWriter, r *http.R
 	if secret != nil {
 		auth = secret.Access_key
 	}
-	//var now int64 = time.Now().Unix()
 	if !ensure_bucket_owner(m, w, r, bucket, secret, auth) {
 		return
 	}
 	if !ensure_bucket_not_expired(m, w, r, bucket, auth) {
 		return
 	}
-	var pooldata *pool_record = ensure_pool_existence(m, w, r, bucket.Pool, auth)
+	var pool = bucket.Pool
+	var pooldata *pool_record = ensure_pool_existence(m, w, r, pool, auth)
 	if pooldata == nil {
 		return
 	}
-	if !ensure_user_is_active(m, w, r, pooldata.Owner_uid, auth) {
-		return
-	}
-	if !ensure_pool_state(m, w, r, pooldata.Pool, auth) {
+	// if !ensure_user_is_active(m, w, r, pooldata.Owner_uid, auth) {
+	// 	return
+	// }
+	if !ensure_pool_state(m, w, r, pooldata, auth) {
 		return
 	}
 	if !ensure_permission_by_secret(m, w, r, secret, auth) {
@@ -321,14 +321,15 @@ func serve_anonymous_access(m *multiplexer, w http.ResponseWriter, r *http.Reque
 	if !ensure_bucket_not_expired(m, w, r, bucket, auth) {
 		return
 	}
-	var pooldata *pool_record = ensure_pool_existence(m, w, r, bucket.Pool, auth)
+	var pool = bucket.Pool
+	var pooldata *pool_record = ensure_pool_existence(m, w, r, pool, auth)
 	if pooldata == nil {
 		return
 	}
-	if !ensure_user_is_active(m, w, r, pooldata.Owner_uid, auth) {
-		return
-	}
-	if !ensure_pool_state(m, w, r, pooldata.Pool, auth) {
+	// if !ensure_user_is_active(m, w, r, pooldata.Owner_uid, auth) {
+	// 	return
+	// }
+	if !ensure_pool_state(m, w, r, pooldata, auth) {
 		return
 	}
 	if !ensure_permission_by_bucket(m, w, r, bucket, auth) {
@@ -407,10 +408,10 @@ func serve_internal_access(m *multiplexer, w http.ResponseWriter, r *http.Reques
 	if pooldata == nil {
 		return
 	}
-	if !ensure_user_is_active(m, w, r, pooldata.Owner_uid, auth) {
-		return
-	}
-	if !ensure_pool_state(m, w, r, pooldata.Pool, auth) {
+	// if !ensure_user_is_active(m, w, r, pooldata.Owner_uid, auth) {
+	// 	return
+	// }
+	if !ensure_pool_state(m, w, r, pooldata, auth) {
 		return
 	}
 
@@ -510,9 +511,8 @@ func check_authenticated(m *multiplexer, r *http.Request) (*secret_record, *prox
 		}
 		return nil, err2
 	}
-	var now = time.Now()
 	var expiration = time.Unix(secret.Expiration_time, 0)
-	if !now.Before(expiration) {
+	if !time.Now().Before(expiration) {
 		var reason = "expired"
 		slogger.Info(m.logprefix+"Bad credential",
 			"key", auth, "reason", reason)
@@ -560,11 +560,13 @@ func ensure_backend_running(m *multiplexer, w http.ResponseWriter, r *http.Reque
 	return be1
 }
 
-// ENSURE_POOL_EXISTENCE checks the pool exists.  It should never fail.
+// ENSURE_POOL_EXISTENCE checks a pool exists.  It should never fail.
 // It is inconsistent if a bucket exists but a pool does not.
 func ensure_pool_existence(m *multiplexer, w http.ResponseWriter, r *http.Request, pool string, auth string) *pool_record {
 	var pooldata *pool_record = get_pool(m.table, pool)
 	if pooldata == nil {
+		slogger.Error("Inconsistency in keyval-db: bucket exists but no pool",
+			"pool", pool)
 		var err1 = &proxy_exc{
 			auth,
 			http_404_not_found,
@@ -578,7 +580,7 @@ func ensure_pool_existence(m *multiplexer, w http.ResponseWriter, r *http.Reques
 	return pooldata
 }
 
-func ensure_user_is_active(m *multiplexer, w http.ResponseWriter, r *http.Request, uid string, auth string) bool {
+func ensure_user_is_active__(m *multiplexer, w http.ResponseWriter, r *http.Request, uid string, auth string) bool {
 	var ok, reason = check_user_is_active(m.table, uid)
 	if !ok {
 		var err1 = &proxy_exc{
@@ -644,9 +646,8 @@ func check_bucket_in_path(m *multiplexer, w http.ResponseWriter, r *http.Request
 }
 
 func ensure_bucket_not_expired(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record, auth string) bool {
-	var now = time.Now()
 	var expiration = time.Unix(bucket.Expiration_time, 0)
-	if !now.Before(expiration) {
+	if !time.Now().Before(expiration) {
 		var err1 = &proxy_exc{
 			auth,
 			http_403_forbidden,
@@ -675,8 +676,10 @@ func ensure_bucket_owner(m *multiplexer, w http.ResponseWriter, r *http.Request,
 	return true
 }
 
-func ensure_pool_state(m *multiplexer, w http.ResponseWriter, r *http.Request, pool string, auth string) bool {
-	var state, _ = check_pool_state(m.table, pool)
+// ENSURE_POOL_STATE checks both a pool and its owner is active.
+func ensure_pool_state(m *multiplexer, w http.ResponseWriter, r *http.Request, pooldata *pool_record, auth string) bool {
+	var pool = pooldata.Pool
+	var state, _ = check_pool_state(m.table, pooldata)
 	switch state {
 	case pool_state_INITIAL, pool_state_READY:
 		// OK.
@@ -885,38 +888,23 @@ func mux_periodic_work(m *multiplexer) {
 }
 
 // CHECK_POOL_STATE checks the changes of user and pool settings.  It
-// returns a state and a reason.  It also updates the state of the
-// pool.  This routine should be called in access checking.
-func check_pool_state(t *keyval_table, pool string) (pool_state, pool_reason) {
-	var pooldata = get_pool(t, pool)
+// returns a state and a reason.  This routine should be called in
+// access checking.  Note that get_pool_state() returns an approximate
+// state which is used for reporting to users.
+func check_pool_state(t *keyval_table, pooldata *pool_record) (pool_state, pool_reason) {
 	if pooldata == nil {
+		// NEVER.
 		return pool_state_INOPERABLE, pool_reason_POOL_REMOVED
 	}
+	var pool = pooldata.Pool
 
-	//var state *pool_state_record = get_pool_state(t, pool)
-	// if state == nil {
-	// 	slogger.Warn("Pool state not found (ignored)", "pool", pool)
-	// 	var now int64 = time.Now().Unix()
-	// 	state = &pool_state_record{
-	// 		Pool:      pool,
-	// 		State:     pool_state_INITIAL,
-	// 		Reason:    pool_reason_NORMAL,
-	// 		Timestamp: now,
-	// 	}
-	// 	set_pool_state(t, pool, state.State, state.Reason)
-	// }
+	// Check the state by pool and user setting.
 
-	// switch state.State {
-	// case pool_state_INITIAL, pool_state_READY:
-	// case pool_state_SUSPENDED:
-	// case pool_state_DISABLED:
-	// case pool_state_INOPERABLE:
-	// 	return state.State, state.Reason
-	// default:
-	// 	panic(nil)
-	// }
-
-	// Check a state by the pool and user setting.
+	var uid = pooldata.Owner_uid
+	var active, _ = check_user_is_active(t, uid)
+	var online = pooldata.Enabled
+	var expiration = time.Unix(pooldata.Expiration_time, 0)
+	var unexpired = time.Now().Before(expiration)
 
 	var state = &pool_state_record{
 		Pool:      pool,
@@ -925,14 +913,7 @@ func check_pool_state(t *keyval_table, pool string) (pool_state, pool_reason) {
 		Timestamp: 0,
 	}
 
-	var uid = pooldata.Owner_uid
-	var active, _ = check_user_is_active(t, uid)
-	var online = pooldata.Enabled
-	var expiration = time.Unix(pooldata.Expiration_time, 0)
-	var unexpired = time.Now().Before(expiration)
-
 	if !(active && online && unexpired) {
-		//if state.State != pool_state_DISABLED {
 		state.State = pool_state_DISABLED
 		if !active {
 			state.Reason = pool_reason_USER_INACTIVE
@@ -945,7 +926,6 @@ func check_pool_state(t *keyval_table, pool string) (pool_state, pool_reason) {
 		}
 		//set_pool_state(t, pool, state.State, state.Reason)
 		//return state.State, state.Reason
-		//}
 		return state.State, state.Reason
 	}
 
@@ -990,9 +970,8 @@ func check_user_is_active(t *keyval_table, uid string) (bool, error_message) {
 		slogger.Warn("User not found", "user", uid)
 		return false, message_user_not_registered
 	}
-	var now = time.Now()
 	var expiration = time.Unix(ui.Expiration_time, 0)
-	if !ui.Enabled || !now.Before(expiration) {
+	if !ui.Enabled || !time.Now().Before(expiration) {
 		return false, message_user_disabled
 	}
 

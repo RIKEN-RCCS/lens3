@@ -9,7 +9,11 @@ package lens3
 // GATHER_POOL_PROP() collects the data from the entries.  It is slow,
 // but only called by Registrar and admin tools.
 
-import ()
+import (
+	"cmp"
+	"slices"
+	"strings"
+)
 
 // POOL_PROP is a description of a pool, a merge of the properties in
 // the keyval-db to fully present it.
@@ -69,7 +73,7 @@ func gather_pool_prop(t *keyval_table, pool string) *pool_prop {
 
 	// Check the dynamic state.
 
-	var state, reason = check_pool_state(t, pool)
+	var state, reason = check_pool_state(t, pooldata)
 	poolprop.pool_state_record = pool_state_record{
 		Pool:      pool,
 		State:     state,
@@ -86,23 +90,25 @@ func gather_pool_prop(t *keyval_table, pool string) *pool_prop {
 	return &poolprop
 }
 
-// GATHER_BUCKETS gathers buckets in a pool.  A returned list is
-// sorted for displaying.
+// GATHER_BUCKETS reconstructs a list of buckets in a pool.
 func gather_buckets(t *keyval_table, pool string) []*bucket_record {
 	var bkts1 = list_buckets(t, pool)
-	//slices.SortFunc(bkts1, func(x, y *bucket_record) int {
-	//return strings.Compare(x.Pool, y.Pool)
-	//})
+	if false {
+		slices.SortFunc(bkts1, func(x, y *bucket_record) int {
+			return strings.Compare(x.Bucket, y.Bucket)
+		})
+	}
 	return bkts1
 }
 
-// GATHER_SECRETS gathers secrets (access key pairs) in a pool.  A
-// returned list is sorted for displaying.  It excludes a probe-key
-// (which is internally used).
+// GATHER_SECRETS reconstructs a list of secrets (access key pairs) in
+// a pool.  It excludes an internally used probe-key.
 func gather_secrets(t *keyval_table, pool string) []*secret_record {
 	var keys1 = list_secrets_of_pool(t, pool)
-	//slices.SortFunc(keys1, func(x, y *secret_record) int {
-	//return (big.NewInt(x.Timestamp).Cmp(big.NewInt(y.Timestamp)))
-	//})
+	if false {
+		slices.SortFunc(keys1, func(x, y *secret_record) int {
+			return cmp.Compare(x.Timestamp, y.Timestamp)
+		})
+	}
 	return keys1
 }

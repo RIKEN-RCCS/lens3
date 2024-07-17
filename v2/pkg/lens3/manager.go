@@ -583,8 +583,7 @@ func wait_for_backend_come_up(w *manager, d backend_delegate) *start_result {
 // increases each time: 1ms, 3^1ms, 3^2ms, ... until maximum 1s.
 func wait_for_backend_by_race(w *manager, pool string) *backend_record {
 	slogger.Debug(w.logprefix+"Waiting for backend by race", "pool", pool)
-	var limit = time.Now().Add(
-		(time.Duration(w.Backend_start_timeout_ms) * time.Millisecond))
+	var limit = time.Now().Add((w.Backend_start_timeout_ms).time_duration())
 	var sleep int64 = 1
 	for time.Now().Before(limit) {
 		var be1 = get_backend(w.table, pool)
@@ -676,7 +675,7 @@ func ping_backend(w *manager, d backend_delegate) {
 
 		var ts = get_pool_timestamp(w.table, proc.Pool)
 		var lifetime = time.Unix(ts, 0).Add(duration)
-		if lifetime.Before(time.Now()) {
+		if !time.Now().Before(lifetime) {
 			slogger.Debug(w.logprefix+"Awake time elapsed", "pool", proc.Pool)
 			break
 		}
@@ -928,7 +927,8 @@ func make_absent_buckets_in_backend(w *manager, be *backend_record) {
 		if slices.Contains(buckets_exsting, b.Bucket) {
 			continue
 		}
-		if time.Unix(b.Expiration_time, 0).Before(now) {
+		var expiration = time.Unix(b.Expiration_time, 0)
+		if !now.Before(expiration) {
 			continue
 		}
 

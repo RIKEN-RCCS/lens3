@@ -71,9 +71,9 @@ func gather_pool_prop(t *keyval_table, pool string) *pool_prop {
 	}
 	poolprop.user_record = *u
 
-	// Check the dynamic state.
+	// Check the state of a pool.
 
-	var state, reason = check_pool_state(t, pooldata)
+	var state, reason = check_pool_usable(t, pooldata)
 	poolprop.pool_state_record = pool_state_record{
 		Pool:      pool,
 		State:     state,

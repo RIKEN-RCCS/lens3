@@ -530,8 +530,8 @@ func list_confs(t *keyval_table) []*lens3_conf {
 	var prefix = db_conf_prefix
 	var confs []*lens3_conf = make([]*lens3_conf, 0)
 	var ee = scan_table(t, prefix, "*")
-	for _, kx := range ee {
-		var sub = kx[len(prefix):]
+	for _, k := range ee {
+		var sub = k[len(prefix):]
 		var v lens3_conf
 		switch {
 		case sub == "mux" || (len(sub) >= 5 && sub[:4] == "mux:"):
@@ -631,9 +631,9 @@ func list_users(t *keyval_table) []string {
 	var prefix = db_user_data_prefix
 	var users []string = make([]string, 0)
 	var ee = scan_table(t, prefix, "*")
-	for _, kx := range ee {
-		var k = kx[len(prefix):]
-		users = append(users, k)
+	for _, k := range ee {
+		var key = k[len(prefix):]
+		users = append(users, key)
 	}
 	return users
 }
@@ -661,14 +661,16 @@ func clear_user_claim(t *keyval_table, uid string) {
 	var prefix = db_user_claim_prefix
 	var db = t.prefix_to_db[prefix]
 	var ee = scan_table(t, prefix, "*")
-	for _, kx := range ee {
-		var k = kx[len(prefix):]
-		var claiminguser = get_user_claim(t, k)
+	for _, k := range ee {
+		var key = k[len(prefix):]
+		var claiminguser = get_user_claim(t, key)
 		if claiminguser.Uid == uid {
-			//var k = (prefix + k)
+			if trace_db_set&t.tracing != 0 {
+				slogger.Debug("DB: del", "key", k)
+			}
 			var ctx1 = context.Background()
-			//var w = db.Del(ctx1, kx)
-			var w = db.Do(ctx1, db.B().Del().Key(kx).Build())
+			//var w = db.Del(ctx1, k)
+			var w = db.Do(ctx1, db.B().Del().Key(k).Build())
 			raise_on_del_failure(&w)
 		}
 	}
@@ -697,9 +699,9 @@ func list_pools(t *keyval_table, pool string) []string {
 	var prefix = db_pool_data_prefix
 	var pools []string = make([]string, 0)
 	var ee = scan_table(t, prefix, pool)
-	for _, kx := range ee {
-		var k = kx[len(prefix):]
-		pools = append(pools, k)
+	for _, k := range ee {
+		var key = k[len(prefix):]
+		pools = append(pools, key)
 	}
 	return pools
 }
@@ -734,8 +736,8 @@ func get_bucket_directory(t *keyval_table, path string) *bucket_directory_record
 func find_bucket_directory_of_pool(t *keyval_table, pool string) string {
 	var prefix = db_directory_prefix
 	var ee = scan_table(t, prefix, "*")
-	for _, kx := range ee {
-		var path = kx[len(prefix):]
+	for _, k := range ee {
+		var path = k[len(prefix):]
 		var dir = get_bucket_directory(t, path)
 		if dir != nil && dir.Pool == pool {
 			return path
@@ -754,8 +756,8 @@ func list_bucket_directories(t *keyval_table) []*bucket_directory_record {
 	var prefix = db_directory_prefix
 	var dirs []*bucket_directory_record = make([]*bucket_directory_record, 0)
 	var ee = scan_table(t, prefix, "*")
-	for _, kx := range ee {
-		var path = kx[len(prefix):]
+	for _, k := range ee {
+		var path = k[len(prefix):]
 		var dir = get_bucket_directory(t, path)
 		if dir != nil {
 			dirs = append(dirs, dir)
@@ -849,8 +851,8 @@ func list_backends(t *keyval_table, pool string) []*backend_record {
 	var prefix = db_backend_data_prefix
 	var procs []*backend_record = make([]*backend_record, 0)
 	var ee = scan_table(t, prefix, pool)
-	for _, kx := range ee {
-		var id = kx[len(prefix):]
+	for _, k := range ee {
+		var id = k[len(prefix):]
 		var p = get_backend(t, id)
 		if p != nil {
 			procs = append(procs, p)
@@ -885,8 +887,8 @@ func list_mux_eps(t *keyval_table) []*mux_record {
 	var prefix = db_mux_ep_prefix
 	var muxs []*mux_record = make([]*mux_record, 0)
 	var ee = scan_table(t, prefix, "*")
-	for _, kx := range ee {
-		var ep = kx[len(prefix):]
+	for _, k := range ee {
+		var ep = k[len(prefix):]
 		var d = get_mux_ep(t, ep)
 		if d != nil {
 			muxs = append(muxs, d)
@@ -931,8 +933,8 @@ func list_buckets(t *keyval_table, pool string) []*bucket_record {
 	var prefix = db_bucket_prefix
 	var bkts []*bucket_record = make([]*bucket_record, 0)
 	var ee = scan_table(t, prefix, "*")
-	for _, kx := range ee {
-		var key = kx[len(prefix):]
+	for _, k := range ee {
+		var key = k[len(prefix):]
 		var d = get_bucket(t, key)
 		if d == nil {
 			continue
@@ -980,8 +982,8 @@ func clean_pool_timestamps(t *keyval_table) {
 	var poollist = list_pools(t, "*")
 	var prefix = db_pool_timestamp_prefix
 	var ee = scan_table(t, prefix, "*")
-	for _, kx := range ee {
-		var pool = kx[len(prefix):]
+	for _, k := range ee {
+		var pool = k[len(prefix):]
 		if !slices.Contains(poollist, pool) {
 			slogger.Error("clean_pool_timestamps() Remove remaining entry",
 				"pool", pool)
@@ -1026,8 +1028,8 @@ func clean_user_timestamps(t *keyval_table) {
 	var userlist = list_users(t)
 	var prefix = db_user_timestamp_prefix
 	var ee = scan_table(t, prefix, "*")
-	for _, kx := range ee {
-		var uid = kx[len(prefix):]
+	for _, k := range ee {
+		var uid = k[len(prefix):]
 		if !slices.Contains(userlist, uid) {
 			slogger.Error("clean_user_timestamps() remove a remaining entry",
 				"user", uid)
@@ -1063,7 +1065,7 @@ func set_with_unique_id_loop(t *keyval_table, prefix string, data any, generator
 	var counter = 0
 	for {
 		var id = generator()
-		if trace_db&t.tracing != 0 {
+		if trace_db_set&t.tracing != 0 {
 			slogger.Debug("DB: setnx", "key", (prefix + id))
 		}
 		var v, err = json.Marshal(data)
@@ -1137,8 +1139,8 @@ func list_secrets_of_pool(t *keyval_table, pool string) []*secret_record {
 	var prefix = db_secret_prefix
 	var secrets []*secret_record = make([]*secret_record, 0)
 	var ee = scan_table(t, prefix, "*")
-	for _, kx := range ee {
-		var key = kx[len(prefix):]
+	for _, k := range ee {
+		var key = k[len(prefix):]
 		var d = get_secret(t, key)
 		if d == nil {
 			// Race.  It is not an error.
@@ -1170,7 +1172,7 @@ func get_csrf_token(t *keyval_table, uid string) *csrf_token_record {
 }
 
 func db_set_with_prefix(t *keyval_table, prefix string, key string, val any) {
-	if trace_db&t.tracing != 0 {
+	if trace_db_set&t.tracing != 0 {
 		slogger.Debug("DB: set", "key", (prefix + key))
 	}
 	var db = t.prefix_to_db[prefix]
@@ -1184,7 +1186,7 @@ func db_set_with_prefix(t *keyval_table, prefix string, key string, val any) {
 }
 
 func db_setnx_with_prefix(t *keyval_table, prefix string, key string, val any) bool {
-	if trace_db&t.tracing != 0 {
+	if trace_db_set&t.tracing != 0 {
 		slogger.Debug("DB: setnx", "key", (prefix + key))
 	}
 	var db = t.prefix_to_db[prefix]
@@ -1200,6 +1202,9 @@ func db_setnx_with_prefix(t *keyval_table, prefix string, key string, val any) b
 }
 
 func db_get_with_prefix(t *keyval_table, prefix string, key string, val any) bool {
+	if trace_db_get&t.tracing != 0 {
+		slogger.Debug("DB: get", "key", (prefix + key))
+	}
 	var db = t.prefix_to_db[prefix]
 	var k = (prefix + key)
 	var ctx1 = context.Background()
@@ -1211,7 +1216,7 @@ func db_get_with_prefix(t *keyval_table, prefix string, key string, val any) boo
 }
 
 func db_expire_with_prefix(t *keyval_table, prefix string, key string, sec int64) bool {
-	if trace_db&t.tracing != 0 {
+	if trace_db_set&t.tracing != 0 {
 		slogger.Debug("DB: expire", "key", (prefix + key), "sec", sec)
 	}
 	var db = t.prefix_to_db[prefix]
@@ -1225,7 +1230,7 @@ func db_expire_with_prefix(t *keyval_table, prefix string, key string, sec int64
 
 // DB_DEL_WITH_PREFIX returns OK/NG, but usually, failure is ignored.
 func db_del_with_prefix(t *keyval_table, prefix string, key string) bool {
-	if trace_db&t.tracing != 0 {
+	if trace_db_set&t.tracing != 0 {
 		slogger.Debug("DB: del", "key", (prefix + key))
 	}
 	var db = t.prefix_to_db[prefix]
@@ -1296,6 +1301,9 @@ func load_db_data(w *valkey.ValkeyResult, data any) bool {
 // value for a key, because a deletion can intervene scanning keys and
 // getting values.
 func scan_table(t *keyval_table, prefix string, target string) []string {
+	if trace_db_get&t.tracing != 0 {
+		slogger.Debug("DB: scan", "key", (prefix + target))
+	}
 	var db = t.prefix_to_db[prefix]
 	var pattern = prefix + target
 	//var prefix_length = len(prefix)
@@ -1345,10 +1353,10 @@ func clear_db(t *keyval_table, db valkey.Client, prefix string) {
 			slogger.Error("Scan in keyval-db failed (ignored)", "err", err1)
 			return
 		}
-		for _, key := range e.Elements {
+		for _, k := range e.Elements {
 			var ctx2 = context.Background()
-			//var _ = db.Del(ctx2, key)
-			var w2 = db.Do(ctx2, db.B().Del().Key(key).Build())
+			//var _ = db.Del(ctx2, k)
+			var w2 = db.Do(ctx2, db.B().Del().Key(k).Build())
 			var err2 = w2.Error()
 			if err2 != nil {
 				slogger.Error("Del in keyval-db failed (ignored)", "err", err2)
@@ -1439,10 +1447,10 @@ func scan_db_raw(t *keyval_table, dbname string) []map[string]string {
 // returns an array of maps, with each map a single key-value entry.
 func make_key_value_pairs(t *keyval_table, db valkey.Client, ee []string) []map[string]string {
 	var keyvals []map[string]string
-	for _, key := range ee {
+	for _, k := range ee {
 		var ctx1 = context.Background()
-		//var w = db.Get(ctx1, key)
-		var w = db.Do(ctx1, db.B().Get().Key(key).Build())
+		//var w = db.Get(ctx1, k)
+		var w = db.Do(ctx1, db.B().Get().Key(k).Build())
 		var val, err1 = w.AsBytes()
 		if err1 != nil {
 			// w.Error() case subsumed.
@@ -1453,7 +1461,7 @@ func make_key_value_pairs(t *keyval_table, db valkey.Client, ee []string) []map[
 				panic(nil)
 			}
 		}
-		keyvals = append(keyvals, map[string]string{key: string(val)})
+		keyvals = append(keyvals, map[string]string{k: string(val)})
 	}
 	return keyvals
 }

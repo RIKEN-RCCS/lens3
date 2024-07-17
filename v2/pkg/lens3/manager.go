@@ -108,8 +108,8 @@ type backend_delegate interface {
 }
 
 // BACKEND_GENERIC is a generic part of a backend.  It is embedded in
-// a backend_delegate instance and obtained by get_super_part().  A
-// configuration "manager_conf" is shared with the manager.
+// an instance of backend_delegate and obtained by get_super_part().
+// A configuration "manager_conf" is shared with the manager.
 type backend_generic struct {
 	pool_record
 	be *backend_record
@@ -179,7 +179,7 @@ const (
 	start_ongoing start_state = iota
 	start_started
 	start_to_retry
-	start_failed
+	start_failure
 )
 
 func configure_manager(w *manager, m *multiplexer, t *keyval_table, q chan vacuous, c *mux_conf) {
@@ -326,7 +326,7 @@ func start_backend_in_mutexed(w *manager, pool string) backend_delegate {
 			// OK.
 		case start_to_retry:
 			continue
-		case start_failed:
+		case start_failure:
 			slogger.Error(w.logprefix+"Starting a backend failed",
 				"pool", pool, "stdout", r1.message)
 			return nil
@@ -464,7 +464,7 @@ func try_start_backend(w *manager, d backend_delegate, port int) *start_result {
 	if err3 != nil {
 		slogger.Error("exec/Command.Start() failed", "err", err3)
 		return &start_result{
-			start_state: start_failed,
+			start_state: start_failure,
 			message:     err3.Error(),
 		}
 	}
@@ -489,7 +489,6 @@ func try_start_backend(w *manager, d backend_delegate, port int) *start_result {
 // stdio channels as much as available.
 func wait_for_backend_come_up(w *manager, d backend_delegate) *start_result {
 	var proc *backend_generic = d.get_super_part()
-	// fmt.Printf("WAIT_FOR_BACKEND_COME_UP() svr=%T proc=%T\n", svr, proc)
 
 	var msg_stdout []string
 	var msg_stderr []string
@@ -508,7 +507,7 @@ func wait_for_backend_come_up(w *manager, d backend_delegate) *start_result {
 		case msg1, ok1 := <-proc.ch_stdio:
 			if !ok1 {
 				return &start_result{
-					start_state: start_failed,
+					start_state: start_failure,
 					message:     "pipe closed",
 				}
 			}
@@ -564,14 +563,14 @@ func wait_for_backend_come_up(w *manager, d backend_delegate) *start_result {
 			}
 			if !(len(msg_stdout) < 500 && len(msg_stderr) < 500) {
 				return &start_result{
-					start_state: start_failed,
+					start_state: start_failure,
 					message:     "stdout/stderr flooding",
 				}
 			}
 			continue
 		case <-ch_timeout:
 			return &start_result{
-				start_state: start_failed,
+				start_state: start_failure,
 				message:     "timeout",
 			}
 		}

@@ -205,7 +205,7 @@ func load_user(t *keyval_table, filename string) {
 			}()
 			if !(len(record) >= 4) ||
 				!check_user_naming(record[1]) ||
-				!check_claim_string(record[2]) ||
+				!check_claim_naming(record[2]) ||
 				!groupok {
 				fmt.Fprintf(os.Stderr, "Bad user ADD entry: (%v)\n", record)
 				panic(nil)

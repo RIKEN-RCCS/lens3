@@ -132,7 +132,7 @@ func (d *backend_minio) check_startup(stream stdio_stream, ss []string) *start_r
 			}
 		default:
 			return &start_result{
-				start_state: start_failed,
+				start_state: start_failure,
 				message:     msg,
 			}
 		}

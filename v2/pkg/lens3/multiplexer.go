@@ -154,7 +154,7 @@ func proxy_request_rewriter(m *multiplexer) func(*httputil.ProxyRequest) {
 		var forwarding, ok = x1.(*url.URL)
 		assert_fatal(ok)
 		if false {
-			slogger.Debug(m.logprefix+"Forward a request", "url", forwarding)
+			slogger.Debug(m.logprefix+"Forward request", "url", forwarding)
 		}
 		r.SetURL(forwarding)
 		r.SetXForwarded()
@@ -212,8 +212,13 @@ func proxy_error_handler(m *multiplexer) func(http.ResponseWriter, *http.Request
 func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer handle_multiplexer_exc(m, w, r)
-		fmt.Printf("*** r.Header.Get(Remote_Addr)=%#v\n", r.Header.Get("Remote_Addr"))
-		fmt.Printf("*** r.RemoteAddr=%#v\n", r.RemoteAddr)
+		if trace_proxy&m.tracing != 0 {
+			slogger.Debug(m.logprefix+"Process request",
+				"method", r.Method, "resource", r.RequestURI)
+		}
+
+		//fmt.Printf("*** r.Remote_Addr=%#v\n", r.Header.Get("Remote_Addr"))
+		//fmt.Printf("*** r.RemoteAddr=%#v\n", r.RemoteAddr)
 
 		if !ensure_frontend_proxy_trusted(m, w, r) {
 			return
@@ -381,7 +386,7 @@ func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, be *
 	var r2 = r.WithContext(ctx3)
 
 	if trace_proxy&m.tracing != 0 {
-		slogger.Debug(m.logprefix+"Forward a request",
+		slogger.Debug(m.logprefix+"Forward request",
 			"pool", pool, "key", auth,
 			"method", r.Method, "resource", r.RequestURI)
 	}
@@ -415,7 +420,7 @@ func serve_internal_access(m *multiplexer, w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	var be = ensure_backend_running(m, w, r, secret.Pool, auth)
+	var be = ensure_backend_running(m, w, r, pool, auth)
 	if be == nil {
 		return
 	}
@@ -679,7 +684,7 @@ func ensure_bucket_owner(m *multiplexer, w http.ResponseWriter, r *http.Request,
 // ENSURE_POOL_STATE checks both a pool and its owner is active.
 func ensure_pool_state(m *multiplexer, w http.ResponseWriter, r *http.Request, pooldata *pool_record, auth string) bool {
 	var pool = pooldata.Pool
-	var state, _ = check_pool_state(m.table, pooldata)
+	var state, _ = check_pool_usable(m.table, pooldata)
 	switch state {
 	case pool_state_INITIAL, pool_state_READY:
 		// OK.
@@ -887,16 +892,19 @@ func mux_periodic_work(m *multiplexer) {
 	}
 }
 
-// CHECK_POOL_STATE checks the changes of user and pool settings.  It
+type state_reason struct {
+	State  pool_state
+	Reason pool_reason
+}
+
+// CHECK_POOL_USABLE checks the changes of user and pool settings.  It
 // returns a state and a reason.  This routine should be called in
-// access checking.  Note that get_pool_state() returns an approximate
-// state which is used for reporting to users.
-func check_pool_state(t *keyval_table, pooldata *pool_record) (pool_state, pool_reason) {
+// access checking.
+func check_pool_usable(t *keyval_table, pooldata *pool_record) (pool_state, pool_reason) {
 	if pooldata == nil {
 		// NEVER.
 		return pool_state_INOPERABLE, pool_reason_POOL_REMOVED
 	}
-	var pool = pooldata.Pool
 
 	// Check the state by pool and user setting.
 
@@ -906,11 +914,9 @@ func check_pool_state(t *keyval_table, pooldata *pool_record) (pool_state, pool_
 	var expiration = time.Unix(pooldata.Expiration_time, 0)
 	var unexpired = time.Now().Before(expiration)
 
-	var state = &pool_state_record{
-		Pool:      pool,
-		State:     pool_state_INITIAL,
-		Reason:    pool_reason_NORMAL,
-		Timestamp: 0,
+	var state = &state_reason{
+		State:  pool_state_INITIAL,
+		Reason: pool_reason_NORMAL,
 	}
 
 	if !(active && online && unexpired) {
@@ -929,7 +935,20 @@ func check_pool_state(t *keyval_table, pooldata *pool_record) (pool_state, pool_
 		return state.State, state.Reason
 	}
 
-	// Check a state by a running backend.
+	return check_backend_state(t, pooldata)
+}
+
+// CHECK_BACKEND_STATE returns a dynamic state of a pool.  Note that
+// get_pool_state() returns an approximate state which is used for
+// reporting to users.
+func check_backend_state(t *keyval_table, pooldata *pool_record) (pool_state, pool_reason) {
+	var pool = pooldata.Pool
+	var state = &state_reason{
+		State:  pool_state_INITIAL,
+		Reason: pool_reason_NORMAL,
+	}
+
+	// Check a backend is running or not.
 
 	var be = get_backend(t, pool)
 	if be == nil {

@@ -22,6 +22,21 @@ import (
 // be replaced by one created in configure_logger().
 var slogger = slog.Default()
 
+// TRACE_FLAG is a flag for low level tracing.  Trace outputs go
+// debug-level logging.  They are usually no interesting.
+type trace_flag uint32
+
+const (
+	trace_proxy trace_flag = 1 << iota
+	trace_task
+	trace_dos
+	trace_3_
+	trace_4_
+	trace_5_
+	trace_db_set
+	trace_db_get
+)
+
 // CONFIGURE_LOGGER makes a logger which is either a file logger or a
 // syslog logger.  It also makes an additional logger for alerting (by
 // MQTT).  It removes the "time" field for syslog.  See "Example
@@ -350,12 +365,3 @@ func log_access(src string, rqst *http.Request, code int, length int64, uid stri
 		panic(nil)
 	}
 }
-
-type trace_flag uint32
-
-const (
-	trace_db trace_flag = 1 << iota
-	trace_task
-	trace_proxy
-	trace_dos
-)

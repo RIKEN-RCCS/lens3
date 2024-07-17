@@ -119,22 +119,6 @@ func generate_random_key() string {
 	return v2[len(v2)-16:]
 }
 
-var access_key_naming_good_re = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9]*$`)
-
-func check_access_key_naming(s string) bool {
-	return (len(s) == access_key_length &&
-		access_key_naming_good_re.MatchString(s))
-}
-
-var claim_name_good_re = regexp.MustCompile(`^[-_a-zA-Z0-9.:@%]{0,256}$`)
-
-func check_claim_name(s string) bool {
-	return claim_name_good_re.MatchString(s)
-}
-
-func init() {
-}
-
 // get_function_name returns a printable name of a function.
 //
 //	var n = get_function_name(cmd.Cancel)
@@ -273,14 +257,11 @@ func convert_hosts_to_addrs(hosts []string) []net.IP {
 	return addrs
 }
 
-// MAKE_TYPICAL_IP_ADDRESS makes IP address strings comparable.  It
-// drops the hex part.  (Returned strings do not conform RFC-5952).
-func make_typical_ip_address__(ip string) string {
-	if strings.HasPrefix(ip, "::ffff:") {
-		return ip[7:]
-	} else {
-		return ip
-	}
+var secret_naming_good_re = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9]*$`)
+
+func check_secret_naming(s string) bool {
+	return (len(s) == access_key_length &&
+		secret_naming_good_re.MatchString(s))
 }
 
 var bucket_naming_good_re = regexp.MustCompile(`^[a-z0-9-]{3,63}$`)
@@ -323,10 +304,10 @@ func check_user_naming(name string) bool {
 	return user_naming_good_re.MatchString(name)
 }
 
-var claim_string_good_re = regexp.MustCompile(`^[-_a-zA-Z0-9.:@%]{0,256}$`)
+var claim_naming_good_re = regexp.MustCompile(`^[-_a-zA-Z0-9.:@%]{0,256}$`)
 
-func check_claim_string(claim string) bool {
-	return claim_string_good_re.MatchString(claim)
+func check_claim_naming(s string) bool {
+	return claim_naming_good_re.MatchString(s)
 }
 
 // EXECUTE_COMMAND runs a controlling command of the backend.  It
@@ -498,7 +479,7 @@ func duration_in_sec(d time.Duration) int64 {
 }
 
 // DURATION_IN_MS converts a Duration to a truncated millisecond.
-func duration_in_ms(d time.Duration) int64 {
+func duration_in_ms__(d time.Duration) int64 {
 	var ms = d.Milliseconds()
 	return ms
 }
@@ -560,3 +541,5 @@ func dump_statistics(verbose bool) {
 		slogger.Info("GCStats", "GCStats", g)
 	}
 }
+
+//func init() {}

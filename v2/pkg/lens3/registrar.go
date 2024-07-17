@@ -999,7 +999,7 @@ func check_user_access_with_error_return(z *registrar, w http.ResponseWriter, r 
 		return nil
 	}
 
-	var state, reason = check_pool_state(z.table, pooldata)
+	var state, reason = check_pool_usable(z.table, pooldata)
 	switch state {
 	case pool_state_INITIAL, pool_state_READY:
 		// OK.
@@ -1348,7 +1348,7 @@ func check_bucket_naming_with_error_return(z *registrar, w http.ResponseWriter, 
 }
 
 func check_secret_owner_with_error_return(z *registrar, w http.ResponseWriter, r *http.Request, u *user_record, pool string, secret string, opr string) bool {
-	if !check_access_key_naming_with_error_return(z, w, r, u, secret) {
+	if !check_secret_naming_with_error_return(z, w, r, u, secret) {
 		return false
 	}
 	var b *secret_record = get_secret(z.table, secret)
@@ -1379,8 +1379,8 @@ func check_secret_owner_with_error_return(z *registrar, w http.ResponseWriter, r
 	return true
 }
 
-func check_access_key_naming_with_error_return(z *registrar, w http.ResponseWriter, r *http.Request, u *user_record, secret string) bool {
-	var ok = check_access_key_naming(secret)
+func check_secret_naming_with_error_return(z *registrar, w http.ResponseWriter, r *http.Request, u *user_record, secret string) bool {
+	var ok = check_secret_naming(secret)
 	if !ok {
 		var err1 = &proxy_exc{
 			u.Uid,

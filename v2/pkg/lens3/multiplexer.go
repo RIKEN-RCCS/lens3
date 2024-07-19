@@ -58,7 +58,6 @@ type multiplexer struct {
 
 	// logprefix="Mux: " is a printing name of this Multiplexer.
 	logprefix string
-	tracing   trace_flag
 
 	// CH_QUIT is to receive quitting notification.
 	ch_quit_service <-chan vacuous
@@ -109,7 +108,8 @@ func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, qch <-ch
 // MEMO: ReverseProxy <: Handler as it implements ServeHTTP().
 func start_multiplexer(m *multiplexer, wg *sync.WaitGroup) {
 	defer wg.Done()
-	if trace_task&m.tracing != 0 {
+	defer quit_service()
+	if trace_task&tracing != 0 {
 		slogger.Debug(m.logprefix + "start_multiplexer()")
 	}
 
@@ -131,9 +131,9 @@ func start_multiplexer(m *multiplexer, wg *sync.WaitGroup) {
 	}
 
 	go func() {
-		var ctx = context.Background()
 		select {
 		case <-m.ch_quit_service:
+			var ctx = context.Background()
 			m.server.Shutdown(ctx)
 		}
 	}()
@@ -212,7 +212,7 @@ func proxy_error_handler(m *multiplexer) func(http.ResponseWriter, *http.Request
 func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer handle_multiplexer_exc(m, w, r)
-		if trace_proxy&m.tracing != 0 {
+		if trace_proxy&tracing != 0 {
 			slogger.Debug(m.logprefix+"Process request",
 				"method", r.Method, "resource", r.RequestURI)
 		}
@@ -248,7 +248,7 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 			return
 		case bucket == nil && authenticated == nil:
 			// THIS CAN BE PORT SCANS.
-			if trace_dos&m.tracing != 0 {
+			if trace_dos&tracing != 0 {
 				slogger.Debug(m.logprefix + "Accessing the top (bucket=nil)")
 			}
 			var err4 = &proxy_exc{
@@ -385,7 +385,7 @@ func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, be *
 	var ctx3 = context.WithValue(ctx2, "lens3-pool-auth", []string{pool, auth})
 	var r2 = r.WithContext(ctx3)
 
-	if trace_proxy&m.tracing != 0 {
+	if trace_proxy&tracing != 0 {
 		slogger.Debug(m.logprefix+"Forward request",
 			"pool", pool, "key", auth,
 			"method", r.Method, "resource", r.RequestURI)
@@ -862,7 +862,7 @@ func return_mux_error_response(m *multiplexer, w http.ResponseWriter, r *http.Re
 
 func mux_periodic_work(m *multiplexer) {
 	var conf = &m.conf.Multiplexer
-	if trace_task&m.tracing != 0 {
+	if trace_task&tracing != 0 {
 		slogger.Debug(m.logprefix + "Periodic work started")
 	}
 	var now int64 = time.Now().Unix()
@@ -876,7 +876,7 @@ func mux_periodic_work(m *multiplexer) {
 	var expiry = 3 * interval
 	assert_fatal(interval >= (10 * time.Second))
 	for {
-		if trace_task&m.tracing != 0 {
+		if trace_task&tracing != 0 {
 			slogger.Debug(m.logprefix + "Update Mux-ep")
 		}
 		mux.Timestamp = time.Now().Unix()

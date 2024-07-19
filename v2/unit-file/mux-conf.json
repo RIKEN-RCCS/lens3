@@ -38,17 +38,16 @@
   "logging": {
     "logger": {
       "log_file": "/tmp/lens3-log",
-      "facility": "LOCAL7",
       "level": "DEBUG",
       "tracing": 255,
       "source_line": false
     },
-    "stats": {
-      "sample_period": 600
-    },
     "alert": {
       "queue": "mqtt",
       "level": "WARNING"
+    },
+    "syslog": {
+      "facility": "LOCAL7"
     },
     "mqtt": {
       "ep": "localhost:1883",
@@ -56,6 +55,9 @@
       "topic": "Lens3 Alert",
       "username": "lens3",
       "password": "k7IwUfcKvYgaXfY9kHNoiXOP6RhTAHir9EzPbms8"
+    },
+    "stats": {
+      "sample_period": 600
     }
   }
 }

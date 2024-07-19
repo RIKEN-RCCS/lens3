@@ -25,7 +25,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go"
 	"math/rand/v2"
-	"time"
 )
 
 // PROBE_ACCESS_MUX accesses a Mux from Registrar or other
@@ -93,7 +92,7 @@ func list_buckets_in_backend(w *manager, be *backend_record) ([]string, error) {
 	}
 	var client *s3.Client = s3.New(options)
 
-	var timeout = (time.Duration(w.Backend_timeout_ms) * time.Millisecond)
+	var timeout = (w.Backend_timeout_ms).time_duration()
 	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	var v, err1 = client.ListBuckets(ctx, &s3.ListBucketsInput{})
@@ -125,7 +124,7 @@ func make_bucket_in_backend(w *manager, be *backend_record, bucket *bucket_recor
 	}
 	var client *s3.Client = s3.New(options)
 
-	var timeout = (time.Duration(w.Backend_timeout_ms) * time.Millisecond)
+	var timeout = (w.Backend_timeout_ms).time_duration()
 	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	var _, err1 = client.CreateBucket(ctx,
@@ -155,7 +154,7 @@ func heartbeat_backend(w *manager, be *backend_record) int {
 	}
 	var client *s3.Client = s3.New(options)
 
-	var timeout = (time.Duration(w.Backend_timeout_ms) * time.Millisecond)
+	var timeout = (w.Backend_timeout_ms).time_duration()
 	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	var _, err1 = client.ListBuckets(ctx, &s3.ListBucketsInput{})

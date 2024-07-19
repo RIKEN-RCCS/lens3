@@ -114,8 +114,6 @@ type backend_generic struct {
 	pool_record
 	be *backend_record
 
-	verbose bool
-
 	// ENVIRON is the shared one in the_manager.
 	environ []string
 
@@ -170,7 +168,7 @@ type stdio_message struct {
 
 type start_result struct {
 	start_state
-	message string
+	reason pool_reason
 }
 
 type start_state int
@@ -231,7 +229,6 @@ func initialize_backend_generic(w *manager, proc *backend_generic, pooldata *poo
 		Mux_pid:     w.multiplexer.mux_pid,
 		Timestamp:   0,
 	}
-	proc.verbose = true
 	proc.environ = w.environ
 	proc.manager_conf = &w.manager_conf
 }
@@ -311,7 +308,7 @@ func start_backend_in_mutexed(w *manager, pool string) backend_delegate {
 
 	var available_ports = list_available_ports(w, proc.use_n_ports)
 
-	if proc.verbose {
+	if trace_proc&tracing != 0 {
 		slogger.Debug(w.logprefix+"start_backend()", "ports", available_ports)
 	}
 
@@ -319,7 +316,8 @@ func start_backend_in_mutexed(w *manager, pool string) backend_delegate {
 		var r1 = try_start_backend(w, d, port)
 		switch r1.start_state {
 		case start_ongoing:
-			slogger.Error(w.logprefix+"Starting a backend failed (timeout)",
+			// (NEVER).
+			slogger.Error(w.logprefix+"Starting a backend failed (on going)",
 				"pool", pool)
 			return nil
 		case start_started:
@@ -327,8 +325,8 @@ func start_backend_in_mutexed(w *manager, pool string) backend_delegate {
 		case start_to_retry:
 			continue
 		case start_failure:
-			slogger.Error(w.logprefix+"Starting a backend failed",
-				"pool", pool, "stdout", r1.message)
+			// (An error is already logged).
+			mark_pool_inoperable(w, pooldata, r1.reason)
 			return nil
 		}
 
@@ -412,8 +410,9 @@ func try_start_backend(w *manager, d backend_delegate, port int) *start_result {
 		panic(nil)
 	}
 	proc.be.Backend_ep = net.JoinHostPort(thishost, strconv.Itoa(port))
-	if proc.verbose {
-		slogger.Debug(w.logprefix+"try_start_backend()", "ep", proc.be.Backend_ep)
+	if trace_proc&tracing != 0 {
+		slogger.Debug(w.logprefix+"try_start_backend()",
+			"ep", proc.be.Backend_ep)
 	}
 
 	var user = proc.Owner_uid
@@ -465,16 +464,16 @@ func try_start_backend(w *manager, d backend_delegate, port int) *start_result {
 		slogger.Error("exec/Command.Start() failed", "err", err3)
 		return &start_result{
 			start_state: start_failure,
-			message:     err3.Error(),
+			reason:      start_failure_exec_failed,
 		}
 	}
 
 	proc.be.Backend_pid = cmd.Process.Pid
 	var r1 = wait_for_backend_come_up(w, d)
 
-	if proc.verbose {
+	if trace_proc&tracing != 0 {
 		slogger.Debug(w.logprefix+"A backend started",
-			"pool", proc.Pool, "state", r1.start_state, "stdout", r1.message)
+			"pool", proc.Pool, "state", r1.start_state, "stdout", r1.reason)
 	}
 
 	assert_fatal(r1.start_state != start_ongoing)
@@ -485,7 +484,7 @@ func try_start_backend(w *manager, d backend_delegate, port int) *start_result {
 // WAIT_FOR_BACKEND_COME_UP waits until either a backend server (1)
 // outputs an expected message, (2) outputs an error message, (3)
 // outputs too many messages, (4) reaches a timeout, (5) closes both
-// stdout+stderr.  It returns STARTED/FAILED/TO_RETRY.  It reads the
+// stdout+stderr.  It returns STARTED/TO_RETRY/FAILURE.  It reads the
 // stdio channels as much as available.
 func wait_for_backend_come_up(w *manager, d backend_delegate) *start_result {
 	var proc *backend_generic = d.get_super_part()
@@ -500,15 +499,17 @@ func wait_for_backend_come_up(w *manager, d backend_delegate) *start_result {
 		drain_start_messages_to_log(w, proc.Pool, msg_stdout, msg_stderr)
 	}()
 
-	var timeout = (time.Duration(proc.Backend_start_timeout_ms) * time.Millisecond)
+	var timeout = (proc.Backend_start_timeout_ms).time_duration()
 	var ch_timeout = time.After(timeout)
 	for {
 		select {
 		case msg1, ok1 := <-proc.ch_stdio:
 			if !ok1 {
+				slogger.Warn(w.logprefix+"Starting a backend failed",
+					"pool", proc.Pool, "reason", start_failure_pipe_closed)
 				return &start_result{
 					start_state: start_failure,
-					message:     "pipe closed",
+					reason:      start_failure_pipe_closed,
 				}
 			}
 			var some_messages_on_stdout bool = false
@@ -548,6 +549,10 @@ func wait_for_backend_come_up(w *manager, d backend_delegate) *start_result {
 				switch st1.start_state {
 				case start_ongoing:
 					// Skip.
+				case start_failure:
+					slogger.Warn(w.logprefix+"Starting a backend failed",
+						"pool", proc.Pool, "reason", st1.reason)
+					return st1
 				default:
 					return st1
 				}
@@ -562,16 +567,20 @@ func wait_for_backend_come_up(w *manager, d backend_delegate) *start_result {
 				}
 			}
 			if !(len(msg_stdout) < 500 && len(msg_stderr) < 500) {
+				slogger.Warn(w.logprefix+"Starting a backend failed",
+					"pool", proc.Pool, "reason", start_failure_stdio_flooding)
 				return &start_result{
 					start_state: start_failure,
-					message:     "stdout/stderr flooding",
+					reason:      start_failure_stdio_flooding,
 				}
 			}
 			continue
 		case <-ch_timeout:
+			slogger.Warn(w.logprefix+"Starting a backend failed",
+				"pool", proc.Pool, "reason", start_failure_timeout)
 			return &start_result{
 				start_state: start_failure,
-				message:     "timeout",
+				reason:      start_failure_timeout,
 			}
 		}
 	}
@@ -595,6 +604,16 @@ func wait_for_backend_by_race(w *manager, pool string) *backend_record {
 	slogger.Error(w.logprefix+"Waiting for backend by race failed by timeout",
 		"pool", pool)
 	return nil
+}
+
+func mark_pool_inoperable(w *manager, pooldata *pool_record, reason pool_reason) {
+	if pooldata.Inoperable {
+		return
+	}
+	pooldata.Inoperable = true
+	pooldata.Reason = reason
+	pooldata.Timestamp = time.Now().Unix()
+	set_pool(w.table, pooldata.Pool, pooldata)
 }
 
 // COMMAND_TO_STOP_BACKEND tells the pinger thread to shutdown the backend.
@@ -661,7 +680,7 @@ func ping_backend(w *manager, d backend_delegate) {
 		if proc.heartbeat_misses > 0 {
 			slogger.Error(w.logprefix+"Heartbeat failed",
 				"pool", proc.Pool, "misses", proc.heartbeat_misses)
-		} else if proc.verbose {
+		} else if trace_proc&tracing != 0 {
 			slogger.Debug(w.logprefix+"Heartbeat", "pool", proc.Pool,
 				"status", status, "misses", proc.heartbeat_misses)
 		}
@@ -785,7 +804,7 @@ func disgorge_stdio_to_log(w *manager, proc *backend_generic) {
 			slogger.Info(w.logprefix+"stderr message", "pool", pool, "stderr", m)
 		}
 	}
-	if proc.verbose {
+	if trace_proc&tracing != 0 {
 		slogger.Debug(w.logprefix+"stdio dumper done", "pool", pool)
 	}
 }
@@ -885,7 +904,7 @@ func wait4_child_process(w *manager, d backend_delegate) {
 				"errno", unix.ErrnoName(unix.ECHILD))
 			continue
 		}
-		if proc.verbose {
+		if trace_proc&tracing != 0 {
 			slogger.Debug(w.logprefix+"wait4() returns",
 				"pid", wpid, "status", wstatus, "rusage", rusage)
 		} else {

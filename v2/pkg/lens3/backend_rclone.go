@@ -40,7 +40,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // Messages Patterns.  These are messages from rclone at its start-up.
@@ -147,7 +146,7 @@ func (d *backend_rclone) check_startup(stream stdio_stream, mm []string) *start_
 	if stream == on_stdout {
 		return &start_result{
 			start_state: start_ongoing,
-			message:     "--",
+			reason:      pool_reason_NORMAL,
 		}
 	}
 	//fmt.Printf("rclone.check_startup(%v)\n", mm)
@@ -179,18 +178,18 @@ func (d *backend_rclone) check_startup(stream stdio_stream, mm []string) *start_
 			slogger.Warn("BE(rclone): Got an expected message" +
 				" but no control messages")
 		}
-		if d.verbose {
+		if trace_proc&tracing != 0 {
 			slogger.Debug("BE(rclone): Got an expected message", "output", m3)
 		}
 		return &start_result{
 			start_state: start_started,
-			message:     m3,
+			reason:      pool_reason_NORMAL,
 		}
 	}
 
 	return &start_result{
 		start_state: start_ongoing,
-		message:     "--",
+		reason:      pool_reason_NORMAL,
 	}
 }
 
@@ -201,12 +200,12 @@ func check_rclone_port_in_use(m string, re *regexp.Regexp) *start_result {
 	if port_in_use {
 		return &start_result{
 			start_state: start_to_retry,
-			message:     m,
+			reason:      pool_reason_NORMAL,
 		}
 	} else {
 		return &start_result{
 			start_state: start_failure,
-			message:     m,
+			reason:      make_failure_reason(m),
 		}
 	}
 }
@@ -283,16 +282,17 @@ func execute_rclone_rc_cmd(d *backend_rclone, synopsis string, command []string)
 	}
 	argv = append(argv, command...)
 
-	var timeout = (time.Duration(d.Backend_start_timeout_ms) * time.Millisecond)
+	var timeout = (d.Backend_start_timeout_ms).time_duration()
+	var verbose = (trace_proc&tracing != 0)
 	var stdouts, stderrs, err1 = execute_command(synopsis, argv, d.environ,
-		timeout, "BE(rclone)", d.verbose)
+		timeout, "BE(rclone)", verbose)
 	if err1 != nil {
 		return &rclone_rc_result{nil, err1}
 	}
 
 	var v1 = simplify_rclone_rc_message([]byte(stdouts))
 	if v1.err == nil {
-		if d.verbose {
+		if trace_proc&tracing != 0 {
 			slogger.Debug("BE(rclone): RC-command Okay",
 				"cmd", command)
 		} else {

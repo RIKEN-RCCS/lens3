@@ -73,11 +73,10 @@ func adm_toplevel() {
 	assert_fatal(flag_conf != nil)
 	var dbconf = read_db_conf(*flag_conf)
 	//fmt.Println(dbconf)
-	var trace trace_flag = 0
 	if flag_conf != nil {
-		trace = 0xff
+		tracing = 0xff
 	}
-	var t = make_keyval_table(dbconf, trace)
+	var t = make_keyval_table(dbconf)
 	var adm = &adm{
 		dbconf: dbconf,
 		table:  t,

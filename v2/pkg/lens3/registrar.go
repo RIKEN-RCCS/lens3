@@ -72,8 +72,6 @@ type registrar struct {
 
 	trusted_proxies []net.IP
 
-	tracing trace_flag
-
 	// CH_QUIT is to receive quitting notification.
 	ch_quit_service <-chan vacuous
 
@@ -224,7 +222,6 @@ func configure_registrar(z *registrar, t *keyval_table, qch <-chan vacuous, c *r
 	z.table = t
 	z.ch_quit_service = qch
 	z.conf = c
-	//z.verbose = true
 
 	var conf = &z.conf.Registrar
 	open_log_for_reg(c.Log.Access_log_file)
@@ -242,7 +239,8 @@ func configure_registrar(z *registrar, t *keyval_table, qch <-chan vacuous, c *r
 
 func start_registrar(z *registrar, wg *sync.WaitGroup) {
 	defer wg.Done()
-	if trace_task&z.tracing != 0 {
+	defer quit_service()
+	if trace_task&tracing != 0 {
 		slogger.Debug("Reg: start_registrar()")
 	}
 
@@ -423,7 +421,7 @@ func return_file(z *registrar, w http.ResponseWriter, rqst *http.Request, path s
 		//materialdesignicons-webfont.woff2 -> "font/woff2"
 		//materialdesignicons.css.map -> "text/plain"
 		var ct = http.DetectContentType(data2)
-		if trace_proxy&z.tracing != 0 {
+		if trace_proxy&tracing != 0 {
 			slogger.Debug("Reg: http/DetectContentType()",
 				"path", path1, "type", ct)
 		}
@@ -1504,8 +1502,8 @@ func copy_pool_prop_to_ui(d *pool_prop) *pool_prop_ui {
 		// USER_RECORD
 		User_enabled_status: d.user_record.Enabled,
 		// POOL_STATE_RECORD
-		Backend_state:  d.State,
-		Backend_reason: d.Reason,
+		Backend_state:  d.pool_state_record.State,
+		Backend_reason: d.pool_state_record.Reason,
 	}
 	return v
 }

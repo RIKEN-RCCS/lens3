@@ -16,7 +16,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // Message prefixes from MinIO at its start-up.
@@ -108,7 +107,7 @@ func (d *backend_minio) check_startup(stream stdio_stream, ss []string) *start_r
 	if stream == on_stderr {
 		return &start_result{
 			start_state: start_ongoing,
-			message:     "--",
+			reason:      pool_reason_NORMAL,
 		}
 	}
 	var mm, _ = decode_json(ss)
@@ -116,7 +115,7 @@ func (d *backend_minio) check_startup(stream stdio_stream, ss []string) *start_r
 	if len(mm) == 0 {
 		return &start_result{
 			start_state: start_ongoing,
-			message:     "--",
+			reason:      pool_reason_NORMAL,
 		}
 	}
 	// var m1, fatal1 = check_fatal_exists(mm)
@@ -128,12 +127,12 @@ func (d *backend_minio) check_startup(stream stdio_stream, ss []string) *start_r
 		case strings.HasPrefix(msg, minio_response_port_in_use):
 			return &start_result{
 				start_state: start_to_retry,
-				message:     msg,
+				reason:      pool_reason_NORMAL,
 			}
 		default:
 			return &start_result{
 				start_state: start_failure,
-				message:     msg,
+				reason:      make_failure_reason(msg),
 			}
 		}
 	}
@@ -142,17 +141,17 @@ func (d *backend_minio) check_startup(stream stdio_stream, ss []string) *start_r
 	if expected_found {
 		assert_fatal(m2 != nil)
 		var m3 = get_string(m2, "message")
-		if d.verbose {
+		if trace_proc&tracing != 0 {
 			slogger.Debug("BE(minio): Got an expected message", "output", m3)
 		}
 		return &start_result{
 			start_state: start_started,
-			message:     m3,
+			reason:      pool_reason_NORMAL,
 		}
 	}
 	return &start_result{
 		start_state: start_ongoing,
-		message:     "--",
+		reason:      pool_reason_NORMAL,
 	}
 }
 
@@ -180,7 +179,7 @@ func (d *backend_minio) heartbeat(*manager) int {
 	var proc = d.get_super_part()
 
 	if d.heartbeat_client == nil {
-		var timeout = (time.Duration(proc.Backend_timeout_ms) * time.Millisecond)
+		var timeout = (proc.Backend_timeout_ms).time_duration()
 		d.heartbeat_client = &http.Client{
 			Timeout: timeout,
 		}
@@ -279,16 +278,17 @@ func execute_minio_mc_cmd(d *backend_minio, synopsis string, command []string) *
 	}
 	argv = append(argv, command...)
 
-	var timeout = (time.Duration(d.Backend_start_timeout_ms) * time.Millisecond)
+	var timeout = (d.Backend_start_timeout_ms).time_duration()
+	var verbose = (trace_proc&tracing != 0)
 	var stdouts, stderrs, err1 = execute_command(synopsis, argv, d.environ,
-		timeout, "BE(minio)", d.verbose)
+		timeout, "BE(minio)", verbose)
 	if err1 != nil {
 		return &minio_mc_result{nil, err1}
 	}
 
 	var v1 = simplify_minio_mc_message([]byte(stdouts))
 	if v1.err == nil {
-		if d.verbose {
+		if trace_proc&tracing != 0 {
 			slogger.Debug("BE(minio): MC-command Okay", "cmd", command)
 		} else {
 			slogger.Debug("BE(minio): MC-command Okay", "cmd", synopsis)

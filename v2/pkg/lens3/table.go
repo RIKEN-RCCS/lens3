@@ -33,7 +33,6 @@ type keyval_table struct {
 	process       valkey.Client
 	prefix_to_db  map[string]valkey.Client
 	db_name_to_db map[string]valkey.Client
-	tracing       trace_flag
 }
 
 const limit_of_id_generation_loop = 30
@@ -86,7 +85,6 @@ var prefix_to_db_number_assignment = map[string]int{
 	db_pool_state_prefix:     process_db,
 	db_pool_timestamp_prefix: process_db,
 	db_user_timestamp_prefix: process_db,
-	//db_backend_ep_prefix:       process_db,
 }
 
 // Record's constraints displays properties of an entry.  Some records
@@ -136,20 +134,33 @@ type pool_mutex_record struct {
 // "po:"+pool-name Entry (db_pool_data_prefix).
 // Constraint: (key≡pool_record.Pool).
 type pool_record struct {
-	Pool             string `json:"pool"`
-	Bucket_directory string `json:"bucket_directory"`
-	Owner_uid        string `json:"owner_uid"`
-	Owner_gid        string `json:"owner_gid"`
-	Probe_key        string `json:"probe_key"`
-	Enabled          bool   `json:"enabled"`
-	Expiration_time  int64  `json:"expiration_time"`
-	Timestamp        int64  `json:"timestamp"`
+	Pool             string      `json:"pool"`
+	Bucket_directory string      `json:"bucket_directory"`
+	Owner_uid        string      `json:"owner_uid"`
+	Owner_gid        string      `json:"owner_gid"`
+	Probe_key        string      `json:"probe_key"`
+	Expiration_time  int64       `json:"expiration_time"`
+	Enabled          bool        `json:"enabled"`
+	Inoperable       bool        `json:"inoperable"`
+	Reason           pool_reason `json:"reason"`
+	Timestamp        int64       `json:"timestamp"`
+}
+
+// "ps:"+pool-name Entry (db_pool_state_prefix).  A state transistions
+// in the subset {READY, SUSPENDED}.  READY includes DISABLED.
+// Constraint: (key≡pool_state_record.Pool), (ps:_∈po:Pool).
+type pool_state_record struct {
+	Pool      string      `json:"pool"`
+	State     pool_state  `json:"state"`
+	Reason    pool_reason `json:"reason"`
+	Timestamp int64       `json:"timestamp"`
 }
 
 // "de:"+pool-name Entry (db_backend_data_prefix).  A pair of
 // root_access and root_secret is a credential for accessing a
-// backend.  A state ranges only in a subset {pool_state_READY,
-// pool_state_SUSPENDED}.  Timestamp is a start time.  Constraint:
+// backend.  A state ranges only in the subset {READY, SUSPENDED}.  A
+// entry with the suspended state is used to block a backend from
+// starting for a while.  Timestamp is a start time.  Constraint:
 // (key≡backend_record.Pool).
 type backend_record struct {
 	Pool        string     `json:"pool"`
@@ -168,15 +179,6 @@ type backend_record struct {
 type backend_mutex_record struct {
 	Mux_ep    string `json:"mux_ep"`
 	Timestamp int64  `json:"timestamp"`
-}
-
-// "ps:"+pool-name Entry (db_pool_state_prefix).  Constraint:
-// (key≡pool_state_record.Pool).
-type pool_state_record struct {
-	Pool      string      `json:"pool"`
-	State     pool_state  `json:"state"`
-	Reason    pool_reason `json:"reason"`
-	Timestamp int64       `json:"timestamp"`
 }
 
 // "bd:"+directory Entry (db_directory_prefix).  Constraint:
@@ -303,20 +305,25 @@ const (
 
 	/* Reasons for INOPERABLE are: */
 
-	pool_reason_POOL_REMOVED pool_reason = "pool removed"
-	pool_reason_EXEC_FAILED  pool_reason = "start failed: "
-	pool_reason_SETUP_FAILED pool_reason = "initialization failed: "
-	//pool_reason_USER_REMOVED pool_reason = "user removed"
+	pool_reason_POOL_REMOVED     pool_reason = "pool removed"
+	start_failure_exec_failed    pool_reason = "exec failed"
+	start_failure_timeout        pool_reason = "timeout"
+	start_failure_pipe_closed    pool_reason = "pipe closed"
+	start_failure_stdio_flooding pool_reason = "stdout/stderr flooding"
 
 	// Other reasons are exceptions and messages from a backend.
 
 	pool_reason_POOL_DISABLED_INITIALLY_ pool_reason = "pool disabled initially"
 )
 
+func make_failure_reason(s string) pool_reason {
+	return pool_reason("backend returns: " + s)
+}
+
 const db_no_expiration = 0
 
 // MAKE_KEYVAL_TABLE makes keyval-db clients.
-func make_keyval_table(conf *db_conf, tracing trace_flag) *keyval_table {
+func make_keyval_table(conf *db_conf) *keyval_table {
 	var ep = conf.Ep
 	var pw = conf.Password
 	var setting, err1 = valkey.NewClient(valkey.ClientOption{
@@ -352,7 +359,6 @@ func make_keyval_table(conf *db_conf, tracing trace_flag) *keyval_table {
 		process:       process,
 		prefix_to_db:  make(map[string]valkey.Client),
 		db_name_to_db: make(map[string]valkey.Client),
-		tracing:       tracing,
 	}
 	for k, i := range prefix_to_db_number_assignment {
 		switch i {
@@ -665,7 +671,7 @@ func clear_user_claim(t *keyval_table, uid string) {
 		var key = k[len(prefix):]
 		var claiminguser = get_user_claim(t, key)
 		if claiminguser.Uid == uid {
-			if trace_db_set&t.tracing != 0 {
+			if trace_db_set&tracing != 0 {
 				slogger.Debug("DB: del", "key", k)
 			}
 			var ctx1 = context.Background()
@@ -1065,7 +1071,7 @@ func set_with_unique_id_loop(t *keyval_table, prefix string, data any, generator
 	var counter = 0
 	for {
 		var id = generator()
-		if trace_db_set&t.tracing != 0 {
+		if trace_db_set&tracing != 0 {
 			slogger.Debug("DB: setnx", "key", (prefix + id))
 		}
 		var v, err = json.Marshal(data)
@@ -1172,7 +1178,7 @@ func get_csrf_token(t *keyval_table, uid string) *csrf_token_record {
 }
 
 func db_set_with_prefix(t *keyval_table, prefix string, key string, val any) {
-	if trace_db_set&t.tracing != 0 {
+	if trace_db_set&tracing != 0 {
 		slogger.Debug("DB: set", "key", (prefix + key))
 	}
 	var db = t.prefix_to_db[prefix]
@@ -1186,7 +1192,7 @@ func db_set_with_prefix(t *keyval_table, prefix string, key string, val any) {
 }
 
 func db_setnx_with_prefix(t *keyval_table, prefix string, key string, val any) bool {
-	if trace_db_set&t.tracing != 0 {
+	if trace_db_set&tracing != 0 {
 		slogger.Debug("DB: setnx", "key", (prefix + key))
 	}
 	var db = t.prefix_to_db[prefix]
@@ -1202,7 +1208,7 @@ func db_setnx_with_prefix(t *keyval_table, prefix string, key string, val any) b
 }
 
 func db_get_with_prefix(t *keyval_table, prefix string, key string, val any) bool {
-	if trace_db_get&t.tracing != 0 {
+	if trace_db_get&tracing != 0 {
 		slogger.Debug("DB: get", "key", (prefix + key))
 	}
 	var db = t.prefix_to_db[prefix]
@@ -1216,7 +1222,7 @@ func db_get_with_prefix(t *keyval_table, prefix string, key string, val any) boo
 }
 
 func db_expire_with_prefix(t *keyval_table, prefix string, key string, sec int64) bool {
-	if trace_db_set&t.tracing != 0 {
+	if trace_db_set&tracing != 0 {
 		slogger.Debug("DB: expire", "key", (prefix + key), "sec", sec)
 	}
 	var db = t.prefix_to_db[prefix]
@@ -1230,7 +1236,7 @@ func db_expire_with_prefix(t *keyval_table, prefix string, key string, sec int64
 
 // DB_DEL_WITH_PREFIX returns OK/NG, but usually, failure is ignored.
 func db_del_with_prefix(t *keyval_table, prefix string, key string) bool {
-	if trace_db_set&t.tracing != 0 {
+	if trace_db_set&tracing != 0 {
 		slogger.Debug("DB: del", "key", (prefix + key))
 	}
 	var db = t.prefix_to_db[prefix]
@@ -1301,7 +1307,7 @@ func load_db_data(w *valkey.ValkeyResult, data any) bool {
 // value for a key, because a deletion can intervene scanning keys and
 // getting values.
 func scan_table(t *keyval_table, prefix string, target string) []string {
-	if trace_db_get&t.tracing != 0 {
+	if trace_db_get&tracing != 0 {
 		slogger.Debug("DB: scan", "key", (prefix + target))
 	}
 	var db = t.prefix_to_db[prefix]

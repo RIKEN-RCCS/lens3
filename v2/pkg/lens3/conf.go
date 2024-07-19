@@ -132,15 +132,15 @@ type access_log_conf struct {
 // LOGGING_CONF is optional.  It can be a member of both Multiplexer and
 // Registrar, and prefers one in Multiplexer.
 type logging_conf struct {
-	Logger logger_conf `json:"logger"`
-	Stats  stats_conf  `json:"stats"`
-	Alert  alert_conf  `json:"alert"`
-	Mqtt   mqtt_conf   `json:"mqtt"`
+	Logger logger_conf  `json:"logger"`
+	Stats  stats_conf   `json:"stats"`
+	Alert  *alert_conf  `json:"alert"`
+	Syslog *syslog_conf `json:"syslog"`
+	Mqtt   *mqtt_conf   `json:"mqtt"`
 }
 
 type logger_conf struct {
 	Log_file    string     `json:"log_file"`
-	Facility    string     `json:"facility"`
 	Level       string     `json:"level"`
 	Tracing     trace_flag `json:"tracing"`
 	Source_line bool       `json:"source_line"`
@@ -153,6 +153,10 @@ type stats_conf struct {
 type alert_conf struct {
 	Queue string `json:"queue"`
 	Level string `json:"level"`
+}
+
+type syslog_conf struct {
+	Facility string `json:"facility"`
 }
 
 type mqtt_conf struct {
@@ -435,14 +439,19 @@ func check_access_log_entry(e *access_log_conf) {
 
 func check_logging_entry(e *logging_conf) {
 	check_logger_entry(&e.Logger)
-	check_alert_entry(&e.Alert)
-	if e.Alert.Queue == "mqtt" {
-		check_mqtt_entry(&e.Mqtt)
+	if e.Alert != nil {
+		check_alert_entry(e.Alert)
+	}
+	if e.Syslog != nil {
+		check_syslog_entry(e.Syslog)
+	}
+	if e.Mqtt != nil {
+		check_mqtt_entry(e.Mqtt)
 	}
 }
 
 func check_logger_entry(e *logger_conf) {
-	if len(e.Facility) > 0 && len(e.Level) > 0 {
+	if len(e.Log_file) > 0 && len(e.Level) > 0 {
 		// OK.
 	} else {
 		slogger.Error("Bad logger entry", "entry", e)
@@ -455,6 +464,15 @@ func check_alert_entry(e *alert_conf) {
 		// OK.
 	} else {
 		slogger.Error("Bad alert entry", "entry", e)
+		panic(nil)
+	}
+}
+
+func check_syslog_entry(e *syslog_conf) {
+	if len(e.Facility) > 0 {
+		// OK.
+	} else {
+		slogger.Error("Bad Syslog entry", "entry", e)
 		panic(nil)
 	}
 }

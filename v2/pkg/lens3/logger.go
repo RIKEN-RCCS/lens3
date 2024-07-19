@@ -8,7 +8,6 @@ package lens3
 import (
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
 	"log/syslog"
 	"net/http"
@@ -18,60 +17,114 @@ import (
 	"time"
 )
 
-// SLOGGER is a logger.  It uses a default one first, but it will soon
-// be replaced by one created in configure_logger().
+// SLOGGER is a logger.  It uses a default one first, but it will be
+// replaced by one created in configure_logger().
 var slogger = slog.Default()
 
-// TRACE_FLAG is a flag for low level tracing.  Trace outputs go
-// debug-level logging.  They are usually no interesting.
+// TRACING is a flag for low-level tracing.  Trace outputs go
+// debug-level logging.  They are usually not interesting.
+var tracing trace_flag = 0
+
 type trace_flag uint32
 
 const (
 	trace_proxy trace_flag = 1 << iota
 	trace_task
 	trace_dos
-	trace_3_
+	trace_proc
 	trace_4_
 	trace_5_
 	trace_db_set
 	trace_db_get
 )
 
-// CONFIGURE_LOGGER makes a logger which is either a file logger or a
-// syslog logger.  It also makes an additional logger for alerting (by
-// MQTT).  It removes the "time" field for syslog.  See "Example
+// CONFIGURE_LOGGER makes a logger which is a pair of a file logger
+// and an alert logger.  An alert logger is optional and either syslog
+// or MQTT.  It removes the "time" field for syslog.  See "Example
 // (Wrapping)" in the "slog" document.
 func configure_logger(logconf *logging_conf, qch <-chan vacuous) {
 	slog.SetLogLoggerLevel(slog.LevelDebug)
 
-	var w1 io.Writer
-	var notime bool
-	if logconf.Logger.Log_file != "" {
-		var f = logconf.Logger.Log_file
-		var w2, err1 = os.OpenFile(f, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
-		if err1 != nil {
-			slog.Error("Opening a log file failed", "file", f, "err", err1)
+	// Make a file logger (mandatory).
+
+	var file1 = logconf.Logger.Log_file
+	var level1 slog.Level = map_level_name(logconf.Logger.Level)
+	var source1 bool = logconf.Logger.Source_line
+	var h1 slog.Handler = make_file_logger(file1, level1, source1)
+
+	// Set the file logger temporarily.  It is used until the end of
+	// this function.
+
+	slogger = slog.New(h1)
+
+	// Make an alert logger (syslog or MQTT).
+
+	var h2 slog.Handler = nil
+	var level2 slog.Level = slog.LevelWarn
+	var queue string = ""
+	if logconf.Alert != nil {
+		queue = logconf.Alert.Queue
+		level2 = map_level_name(logconf.Alert.Level)
+	}
+	if strings.EqualFold(queue, "syslog") {
+		if logconf.Syslog == nil {
+			slog.Error("No syslog configuration")
 			panic(nil)
 		}
-		w1 = w2
-		notime = false
-	} else {
-		var fac = log_facility_map[logconf.Logger.Facility]
-		var sev = log_severity_map[logconf.Logger.Level]
-		var p syslog.Priority = sev | fac
+		var sev = log_severity_map[logconf.Alert.Level]
+		var fac = log_facility_map[logconf.Syslog.Facility]
+		var p syslog.Priority = (sev | fac)
 		var w2, err2 = syslog.New(p, "lenticularis")
 		if err2 != nil {
 			slog.Error("Opening syslog failed", "err", err2)
 			panic(nil)
 		}
-		w1 = w2
-		notime = true
+		var replacer2 = func(groups []string, a slog.Attr) slog.Attr {
+			if a.Key == slog.TimeKey {
+				return slog.Attr{}
+			}
+			return a
+		}
+		h2 = slog.NewTextHandler(w2, &slog.HandlerOptions{
+			AddSource:   false,
+			Level:       level2,
+			ReplaceAttr: replacer2,
+		})
+	} else if strings.EqualFold(queue, "mqtt") {
+		if logconf.Mqtt == nil {
+			slog.Error("No mqtt configuration")
+			panic(nil)
+		}
+		var mqtt *mqtt_client = configure_mqtt(logconf.Mqtt, qch)
+		h2 = slog.NewTextHandler(mqtt, &slog.HandlerOptions{
+			AddSource:   false,
+			Level:       level2,
+			ReplaceAttr: nil,
+		})
+	} else if logconf.Alert != nil {
+		slog.Error("Bad alert logging configuration", "queue", queue)
+		panic(nil)
 	}
 
+	var hx = &slog_fork_handler{
+		h1:     h1,
+		h2:     h2,
+		level1: level1,
+		level2: level2,
+	}
+
+	// Set the logger.
+
+	slogger = slog.New(hx)
+}
+
+func make_file_logger(file string, level slog.Level, source bool) slog.Handler {
+	var w1, err1 = os.OpenFile(file, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
+	if err1 != nil {
+		slog.Error("Opening a log file failed", "file", file, "err", err1)
+		panic(nil)
+	}
 	var replacer = func(groups []string, a slog.Attr) slog.Attr {
-		if notime && a.Key == slog.TimeKey {
-			return slog.Attr{}
-		}
 		if a.Key == slog.SourceKey {
 			var s, ok1 = a.Value.Any().(*slog.Source)
 			if ok1 {
@@ -80,62 +133,12 @@ func configure_logger(logconf *logging_conf, qch <-chan vacuous) {
 		}
 		return a
 	}
-
-	// Make a usual (file or syslog) logger.
-
-	var source bool = logconf.Logger.Source_line
-	var level = map_level_name(logconf.Logger.Level)
-	var h1 slog.Handler = slog.NewTextHandler(w1, &slog.HandlerOptions{
+	var h = slog.NewTextHandler(w1, &slog.HandlerOptions{
 		AddSource:   source,
 		Level:       level,
 		ReplaceAttr: replacer,
 	})
-
-	// Set the usual logger temporarily.  It is used until the end of
-	// this function.
-
-	slogger = slog.New(h1)
-
-	// Make a logger for alerting.
-
-	var h2 slog.Handler = nil
-	var alert slog.Level = slog.LevelInfo
-
-	var mqtt *mqtt_client = nil
-	if strings.EqualFold(logconf.Alert.Queue, "mqtt") {
-		mqtt = configure_mqtt(&logconf.Mqtt, qch)
-		alert = map_level_name(logconf.Alert.Level)
-		h2 = slog.NewTextHandler(mqtt, &slog.HandlerOptions{
-			AddSource:   false,
-			Level:       alert,
-			ReplaceAttr: replacer,
-		})
-	}
-
-	var hx = &slog_fork_handler{
-		h1:    h1,
-		h2:    h2,
-		level: level,
-		alert: alert,
-	}
-
-	// Set the logger.
-
-	slogger = slog.New(hx)
-}
-
-// FETCH_SLOGGER_LEVEL returns a log level of an slog_fork_handler.
-// It returns slog.LevelDebug when it is not an slog_fork_handler.
-func fetch_slogger_level__(logger *slog.Logger) slog.Level {
-	var h = logger.Handler()
-	switch logger1 := h.(type) {
-	default:
-		//fmt.Println("slogger_level()= default")
-		return slog.LevelDebug
-	case *slog_fork_handler:
-		//fmt.Println("slogger_level()=", logger1.level)
-		return logger1.level
-	}
+	return h
 }
 
 const (
@@ -186,25 +189,26 @@ func map_level_name(n string) slog.Level {
 }
 
 // SLOG_FORK_HANDLER is a handler which copies messages to two
-// handlers.  h1 is for main logging (with level), and h2 is for
-// alerting (with alert).
+// handlers.  h1 (with level1) is for a file logger, and h2 (with
+// level2) is for an alert logger.
 type slog_fork_handler struct {
-	h1    slog.Handler
-	h2    slog.Handler
-	level slog.Level
-	alert slog.Level
+	h1     slog.Handler
+	h2     slog.Handler
+	level1 slog.Level
+	level2 slog.Level
 }
 
 func (x *slog_fork_handler) Enabled(ctx context.Context, l slog.Level) bool {
 	return x.h1.Enabled(ctx, l)
 }
 
-// SLOG_FORK_HANDLER.HANDLE outputs to both logging and alerting
-// targets.  Note that errors in MQTT are not reported here.
+// SLOG_FORK_HANDLER.HANDLE outputs to both file and alert logger
+// targets.  Note that errors in MQTT (marked by the "alert" key) are
+// not reported.
 func (x *slog_fork_handler) Handle(ctx context.Context, r slog.Record) error {
 	//fmt.Println("SLOG_FORK_HANDLER.Handle")
 	var err1 = x.h1.Handle(ctx, r)
-	if x.h2 != nil && r.Level >= x.alert {
+	if x.h2 != nil && r.Level >= x.level2 {
 		var skip bool = false
 		r.Attrs(func(a slog.Attr) bool {
 			if a.Key == "alert" {
@@ -226,51 +230,6 @@ func (x *slog_fork_handler) WithAttrs(attrs []slog.Attr) slog.Handler {
 
 func (x *slog_fork_handler) WithGroup(name string) slog.Handler {
 	return x.h1.WithGroup(name)
-}
-
-// LOG_WRITER IS NOT USED.
-// logger_ = &log_writer{slog.Default()}
-
-type log_writer struct {
-	o *slog.Logger
-}
-
-func (w *log_writer) critf(f string, a ...any) error {
-	var m = fmt.Sprintf(f, a...)
-	var ctx = context.Background()
-	w.o.Log(ctx, log_CRIT, m)
-	return nil
-}
-
-func (w *log_writer) errf(f string, a ...any) error {
-	var m = fmt.Sprintf(f, a...)
-	w.o.Debug(m)
-	return nil
-}
-
-func (w *log_writer) warnf(f string, a ...any) error {
-	var m = fmt.Sprintf(f, a...)
-	w.o.Warn(m)
-	return nil
-}
-
-func (w *log_writer) noticef(f string, a ...any) error {
-	var m = fmt.Sprintf(f, a...)
-	var ctx = context.Background()
-	w.o.Log(ctx, log_NOTICE, m)
-	return nil
-}
-
-func (w *log_writer) infof(f string, a ...any) error {
-	var m = fmt.Sprintf(f, a...)
-	w.o.Info(m)
-	return nil
-}
-
-func (w *log_writer) debugf(f string, a ...any) error {
-	var m = fmt.Sprintf(f, a...)
-	w.o.Debug(m)
-	return nil
 }
 
 var mux_access_log_file *os.File
@@ -300,9 +259,10 @@ func open_log_for_reg(f string) {
 //
 // https://en.wikipedia.org/wiki/Common_Log_Format
 //
-//  192.168.2.2 - - [02/Jan/2006:15:04:05 -0700] "GET /... HTTP/1.1"
-//  200 333 "-" "aws-cli/1.18.156 Python/3.6.8
-//  Linux/4.18.0-513.18.1.el8_9.x86_64 botocore/1.18.15"
+// EXAMPLE:
+//   192.168.2.2 - - [02/Jan/2006:15:04:05 -0700] "GET /... HTTP/1.1"
+//   200 333 "-" "aws-cli/1.18.156 Python/3.6.8
+//   Linux/4.18.0-513.18.1.el8_9.x86_64 botocore/1.18.15"
 
 func log_mux_access_by_response(rspn *http.Response, auth string) {
 	var rqst = rspn.Request

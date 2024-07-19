@@ -23,6 +23,8 @@ import (
 
 const lens3_version string = "v2.1.1"
 
+var ch_quit_service chan<- vacuous = nil
+
 func Run_lenticularis_mux() {
 	var flag_version = flag.Bool("v", false, "Lens3 version.")
 	var flag_help = flag.Bool("h", false, "Print help.")
@@ -83,12 +85,14 @@ func Run_lenticularis_mux() {
 }
 
 func start_lenticularis_service(confpath string, services [2]string) {
+	tracing = 0xff
+
 	var dbconf = read_db_conf(confpath)
 	if dbconf == nil {
 		fmt.Fprintf(os.Stderr, "Reading db conf filed: %q\n", confpath)
 		os.Exit(1)
 	}
-	var t = make_keyval_table(dbconf, 0xff)
+	var t = make_keyval_table(dbconf)
 
 	var count int = 0
 	var muxconf *mux_conf = nil
@@ -121,11 +125,12 @@ func start_lenticularis_service(confpath string, services [2]string) {
 		fmt.Fprintf(os.Stderr, "No conf for logging\n")
 		os.Exit(1)
 	}
-	t.tracing = logconf.Logger.Tracing
+	tracing = logconf.Logger.Tracing
 
-	var ch_quit_service = make(chan vacuous)
-	configure_logger(logconf, ch_quit_service)
-	handle_unix_signals(t, ch_quit_service)
+	var chquit = make(chan vacuous)
+	ch_quit_service = chquit
+	configure_logger(logconf, chquit)
+	handle_unix_signals(t)
 
 	slogger.Info("Lenticularis-S3", "version", lens3_version,
 		"golang.version", runtime.Version())
@@ -138,9 +143,8 @@ func start_lenticularis_service(confpath string, services [2]string) {
 	if services[0] != "" {
 		var m = the_multiplexer
 		var w = the_manager
-		configure_multiplexer(m, w, t, ch_quit_service, muxconf)
-		configure_manager(w, m, t, ch_quit_service, muxconf)
-		m.tracing = logconf.Logger.Tracing
+		configure_multiplexer(m, w, t, chquit, muxconf)
+		configure_manager(w, m, t, chquit, muxconf)
 		defer w.factory.clean_at_exit()
 		go start_multiplexer(m, &wg)
 	}
@@ -149,8 +153,7 @@ func start_lenticularis_service(confpath string, services [2]string) {
 
 	if services[1] != "" {
 		var z = the_registrar
-		configure_registrar(z, t, ch_quit_service, regconf)
-		z.tracing = logconf.Logger.Tracing
+		configure_registrar(z, t, chquit, regconf)
 		go start_registrar(z, &wg)
 	}
 
@@ -173,13 +176,7 @@ func print_usage_and_exit() {
 	os.Exit(1)
 }
 
-func handle_unix_signals(t *keyval_table, ch_quit_service chan vacuous) {
-	var pid = os.Getpid()
-	var pgid, err1 = unix.Getpgid(0)
-	if err1 != nil {
-		// Ignore.
-		pgid = pid
-	}
+func handle_unix_signals(t *keyval_table) {
 	//slogger.Debug("Set signal receivers", "pid", pid, "pgid", pgid)
 
 	var ch_signal = make(chan os.Signal, 1)
@@ -194,16 +191,46 @@ func handle_unix_signals(t *keyval_table, ch_quit_service chan vacuous) {
 				break watchloop
 			}
 		}
-		// Graceful killing first.
+		quit_service()
+	}()
+}
+
+// QUIT_SERVICE tells services to quit through the ch_quit_service.
+// It lets the main thread exit, and thus, the remaining part of this
+// function may not run to completion.
+func quit_service() {
+	var once sync.Once
+	once.Do(func() {
+		if ch_quit_service == nil {
+			return
+		}
+
+		// Graceful shutdown first.
+
 		close(ch_quit_service)
+		ch_quit_service = nil
+
+		// Backends had to be stopped, but force to kill them all.
+
+		var pid = os.Getpid()
+		var pgid, err1 = unix.Getpgid(0)
+		if err1 != nil {
+			// Ignore.
+			pgid = pid
+		}
 		time.Sleep(100 * time.Millisecond)
 		slogger.Debug("Killing by killpg", "pgid", pgid)
 		unix.Kill(-pgid, unix.SIGTERM)
-		// When servers fail to quit, force to exit.
+
+		// When the main thread fails to exit, force to call os.Exit().
+
 		time.Sleep(5000 * time.Millisecond)
-		slogger.Error("Force exit as shutdown failed")
+		slogger.Error("Force exit as the main thread not exits")
 		os.Exit(1)
-	}()
+	})
+
+	// Wait forever.
+	//<-make(chan vacuous)
 }
 
 func start_pprof_service(port int) {

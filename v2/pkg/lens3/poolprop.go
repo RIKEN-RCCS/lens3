@@ -5,9 +5,9 @@
 
 package lens3
 
-// Description of a pool is spread in a few entries in the keyval-db.
-// GATHER_POOL_PROP() collects the data from the entries.  It is slow,
-// but only called by Registrar and admin tools.
+// Description of a pool is spread in entries in the keyval-db, and
+// GATHER_POOL_PROP() collects the data from the entries.  It is
+// called by Registrar and admin tools.
 
 import (
 	"cmp"
@@ -25,10 +25,10 @@ type pool_prop struct {
 	Secrets           []*secret_record `json:"secrets"`
 }
 
-// GATHER_POOL_PROP returns a property description of a pool.  It
-// constructs a property description by gathering data scattered in
-// the keyval-db.  It is a fatal error and returns nil when the pool
-// is gone.
+// GATHER_POOL_PROP reconstructs properties of a pool to display the
+// pool in Web-UI via Registrar.  It reconstructs properties by
+// gathering data scattered in the keyval-db.  It returns nil when the
+// pool is gone.
 func gather_pool_prop(t *keyval_table, pool string) *pool_prop {
 	var inconsistent_db_entires = false
 	var poolprop = pool_prop{}
@@ -73,7 +73,10 @@ func gather_pool_prop(t *keyval_table, pool string) *pool_prop {
 
 	// Check the state of a pool.
 
-	var state, reason = check_pool_usable(t, pooldata)
+	var state1, reason1 = check_pool_is_usable(t, pooldata)
+	var state2, reason2 = check_pool_is_suspened(t, pool)
+	var state, reason = combine_pool_state(state1, reason1, state2, reason2)
+
 	poolprop.pool_state_record = pool_state_record{
 		Pool:      pool,
 		State:     state,
@@ -86,7 +89,6 @@ func gather_pool_prop(t *keyval_table, pool string) *pool_prop {
 		return nil
 	}
 
-	//check_pool_is_well_formed(poolprop)
 	return &poolprop
 }
 

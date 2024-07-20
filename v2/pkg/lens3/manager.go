@@ -363,8 +363,18 @@ func start_backend_in_mutexed(w *manager, pool string) backend_delegate {
 
 		go ping_backend(w, d)
 
-		proc.be.Timestamp = time.Now().Unix()
+		var now = time.Now().Unix()
+		proc.be.Timestamp = now
 		set_backend(w.table, pool, proc.be)
+
+		var state1 = &pool_state_record{
+			Pool:      pool,
+			State:     pool_state_READY,
+			Reason:    pool_reason_NORMAL,
+			Timestamp: now,
+		}
+		set_pool_state(w.table, pool, state1)
+
 		return d
 	}
 
@@ -392,9 +402,14 @@ func start_backend_in_mutexed(w *manager, pool string) backend_delegate {
 			"pool", pool)
 	}
 
-	//var state = pool_state_SUSPENDED
-	//var reason = pool_reason_SERVER_BUSY
-	//set_pool_state(w.table, pool, state, reason)
+	var state2 = &pool_state_record{
+		Pool:      pool,
+		State:     pool_state_SUSPENDED,
+		Reason:    pool_reason_SERVER_BUSY,
+		Timestamp: time.Now().Unix(),
+	}
+	set_pool_state(w.table, pool, state2)
+
 	return nil
 }
 

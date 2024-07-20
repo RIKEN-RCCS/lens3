@@ -255,7 +255,7 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 				auth,
 				http_403_forbidden,
 				[][2]string{
-					message_access_rejected,
+					message_403_access_rejected,
 				},
 			}
 			return_mux_error_response(m, w, r, err4)
@@ -266,7 +266,7 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 				auth,
 				http_400_bad_request,
 				[][2]string{
-					message_bucket_listing_forbidden,
+					message_400_bucket_listing_forbidden,
 				},
 			}
 			return_mux_error_response(m, w, r, err5)
@@ -360,7 +360,7 @@ func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, be *
 			auth,
 			http_500_internal_server_error,
 			[][2]string{
-				message_sign_failed,
+				message_500_sign_failed,
 			},
 		})
 	}
@@ -376,7 +376,7 @@ func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, be *
 			auth,
 			http_500_internal_server_error,
 			[][2]string{
-				message_bad_backend_ep,
+				message_500_bad_backend_ep,
 			},
 		})
 	}
@@ -496,7 +496,7 @@ func check_authenticated(m *multiplexer, r *http.Request) (*secret_record, *prox
 			"-",
 			http_401_unauthorized,
 			[][2]string{
-				message_access_rejected,
+				message_401_access_rejected,
 			},
 		}
 		return nil, err1
@@ -511,7 +511,7 @@ func check_authenticated(m *multiplexer, r *http.Request) (*secret_record, *prox
 			"-",
 			http_401_unauthorized,
 			[][2]string{
-				message_access_rejected,
+				message_401_access_rejected,
 			},
 		}
 		return nil, err2
@@ -525,7 +525,7 @@ func check_authenticated(m *multiplexer, r *http.Request) (*secret_record, *prox
 			"-",
 			http_403_forbidden,
 			[][2]string{
-				message_access_rejected,
+				message_403_access_rejected,
 			},
 		}
 		return nil, err3
@@ -554,7 +554,7 @@ func ensure_backend_running(m *multiplexer, w http.ResponseWriter, r *http.Reque
 				auth,
 				http_500_internal_server_error,
 				[][2]string{
-					message_cannot_start_backend,
+					message_500_cannot_start_backend,
 				},
 			}
 			return_mux_error_response(m, w, r, err1)
@@ -562,6 +562,30 @@ func ensure_backend_running(m *multiplexer, w http.ResponseWriter, r *http.Reque
 		}
 		be1 = be2
 	}
+
+	switch be1.State {
+	case pool_state_INITIAL, pool_state_READY:
+		// OK.
+	case pool_state_SUSPENDED:
+		slogger.Debug(m.logprefix+"Reject an access; pool suspended",
+			"pool", pool)
+		var err2 = &proxy_exc{
+			auth,
+			http_503_service_unavailable,
+			[][2]string{
+				message_503_pool_suspended,
+			},
+		}
+		return_mux_error_response(m, w, r, err2)
+		return nil
+	case pool_state_DISABLED:
+		panic(nil)
+	case pool_state_INOPERABLE:
+		panic(nil)
+	default:
+		panic(nil)
+	}
+
 	return be1
 }
 
@@ -576,7 +600,7 @@ func ensure_pool_existence(m *multiplexer, w http.ResponseWriter, r *http.Reques
 			auth,
 			http_404_not_found,
 			[][2]string{
-				message_nonexisting_pool,
+				message_404_nonexisting_pool,
 			},
 		}
 		return_mux_error_response(m, w, r, err1)
@@ -615,7 +639,7 @@ func ensure_frontend_proxy_trusted(m *multiplexer, w http.ResponseWriter, r *htt
 			http_500_internal_server_error,
 			[][2]string{
 				//message_proxy_untrusted,
-				message_access_rejected,
+				message_500_access_rejected,
 			},
 		}
 		return_mux_error_response(m, w, r, err1)
@@ -642,7 +666,7 @@ func check_bucket_in_path(m *multiplexer, w http.ResponseWriter, r *http.Request
 			auth,
 			http_404_not_found,
 			[][2]string{
-				message_no_named_bucket,
+				message_404_no_named_bucket,
 			},
 		}
 		return nil, err2
@@ -657,7 +681,7 @@ func ensure_bucket_not_expired(m *multiplexer, w http.ResponseWriter, r *http.Re
 			auth,
 			http_403_forbidden,
 			[][2]string{
-				message_bucket_expired,
+				message_403_bucket_expired,
 			},
 		}
 		return_mux_error_response(m, w, r, err1)
@@ -672,7 +696,7 @@ func ensure_bucket_owner(m *multiplexer, w http.ResponseWriter, r *http.Request,
 			auth,
 			http_403_forbidden,
 			[][2]string{
-				message_not_authorized,
+				message_403_not_authorized,
 			},
 		}
 		return_mux_error_response(m, w, r, err1)
@@ -684,22 +708,14 @@ func ensure_bucket_owner(m *multiplexer, w http.ResponseWriter, r *http.Request,
 // ENSURE_POOL_STATE checks both a pool and its owner is active.
 func ensure_pool_state(m *multiplexer, w http.ResponseWriter, r *http.Request, pooldata *pool_record, auth string) bool {
 	var pool = pooldata.Pool
-	var state, _ = check_pool_usable(m.table, pooldata)
-	switch state {
-	case pool_state_INITIAL, pool_state_READY:
+	var state1, _ = check_pool_is_usable(m.table, pooldata)
+	switch state1 {
+	case pool_state_INITIAL:
+		panic(nil)
+	case pool_state_READY:
 		// OK.
 	case pool_state_SUSPENDED:
-		slogger.Debug(m.logprefix+"Reject an access; pool suspended",
-			"pool", pool)
-		var err1 = &proxy_exc{
-			auth,
-			http_503_service_unavailable,
-			[][2]string{
-				message_pool_suspended,
-			},
-		}
-		return_mux_error_response(m, w, r, err1)
-		return false
+		panic(nil)
 	case pool_state_DISABLED:
 		slogger.Debug(m.logprefix+"Reject an access; pool disabled",
 			"pool", pool)
@@ -707,7 +723,7 @@ func ensure_pool_state(m *multiplexer, w http.ResponseWriter, r *http.Request, p
 			auth,
 			http_403_forbidden,
 			[][2]string{
-				message_pool_disabled,
+				message_403_pool_disabled,
 			},
 		}
 		return_mux_error_response(m, w, r, err2)
@@ -719,7 +735,7 @@ func ensure_pool_state(m *multiplexer, w http.ResponseWriter, r *http.Request, p
 			auth,
 			http_500_internal_server_error,
 			[][2]string{
-				message_pool_inoperable,
+				message_500_pool_inoperable,
 			},
 		}
 		return_mux_error_response(m, w, r, err3)
@@ -727,6 +743,7 @@ func ensure_pool_state(m *multiplexer, w http.ResponseWriter, r *http.Request, p
 	default:
 		panic(nil)
 	}
+
 	return true
 }
 
@@ -757,7 +774,7 @@ func ensure_permission_by_secret(m *multiplexer, w http.ResponseWriter, r *http.
 			auth,
 			http_403_forbidden,
 			[][2]string{
-				message_no_permission,
+				message_403_no_permission,
 			},
 		}
 		return_mux_error_response(m, w, r, err1)
@@ -791,7 +808,7 @@ func ensure_permission_by_bucket(m *multiplexer, w http.ResponseWriter, r *http.
 			auth,
 			http_403_forbidden,
 			[][2]string{
-				message_no_permission,
+				message_403_no_permission,
 			},
 		}
 		return_mux_error_response(m, w, r, err1)
@@ -817,7 +834,7 @@ func pick_bucket_in_path(m *multiplexer, r *http.Request, auth string) (string, 
 			auth,
 			http_400_bad_request,
 			[][2]string{
-				message_bad_bucket_name,
+				message_400_bad_bucket_name,
 			},
 		}
 		return bucket, err1
@@ -835,7 +852,7 @@ func return_mux_error_response(m *multiplexer, w http.ResponseWriter, r *http.Re
 		var message [][2]string
 		if err1.auth == "-" {
 			message = [][2]string{
-				message_access_rejected,
+				message_500_access_rejected,
 			}
 		} else {
 			message = err1.message
@@ -892,21 +909,22 @@ func mux_periodic_work(m *multiplexer) {
 	}
 }
 
-type state_reason struct {
-	State  pool_state
-	Reason pool_reason
-}
-
-// CHECK_POOL_USABLE checks the changes of user and pool settings.  It
-// returns a state and a reason.  This routine should be called in
-// access checking.
-func check_pool_usable(t *keyval_table, pooldata *pool_record) (pool_state, pool_reason) {
+// CHECK_POOL_IS_USABLE checks the state of a pool in changes of user
+// and pool settings, and returns the subset of {READY, DISABLED,
+// INOPERABLE}.  This routine should be called in access checking.
+func check_pool_is_usable(t *keyval_table, pooldata *pool_record) (pool_state, pool_reason) {
 	if pooldata == nil {
 		// NEVER.
 		return pool_state_INOPERABLE, pool_reason_POOL_REMOVED
 	}
 
-	// Check the state by pool and user setting.
+	// Check if a pool is in the INOPERABLE state.
+
+	if pooldata.Inoperable {
+		return pool_state_INOPERABLE, pooldata.Reason
+	}
+
+	// Check if a pool is in the DISABLED state.
 
 	var uid = pooldata.Owner_uid
 	var active, _ = check_user_is_active(t, uid)
@@ -914,72 +932,65 @@ func check_pool_usable(t *keyval_table, pooldata *pool_record) (pool_state, pool
 	var expiration = time.Unix(pooldata.Expiration_time, 0)
 	var unexpired = time.Now().Before(expiration)
 
-	var state = &state_reason{
-		State:  pool_state_INITIAL,
-		Reason: pool_reason_NORMAL,
-	}
-
 	if !(active && online && unexpired) {
-		state.State = pool_state_DISABLED
 		if !active {
-			state.Reason = pool_reason_USER_INACTIVE
+			return pool_state_DISABLED, pool_reason_USER_INACTIVE
 		} else if !online {
-			state.Reason = pool_reason_POOL_OFFLINE
+			return pool_state_DISABLED, pool_reason_POOL_OFFLINE
 		} else if !unexpired {
-			state.Reason = pool_reason_POOL_EXPIRED
+			return pool_state_DISABLED, pool_reason_POOL_EXPIRED
 		} else {
 			panic(nil)
 		}
-		//set_pool_state(t, pool, state.State, state.Reason)
-		//return state.State, state.Reason
-		return state.State, state.Reason
 	}
 
-	return check_backend_state(t, pooldata)
+	return pool_state_READY, pool_reason_NORMAL
 }
 
-// CHECK_BACKEND_STATE returns a dynamic state of a pool.  Note that
-// get_pool_state() returns an approximate state which is used for
-// reporting to users.
-func check_backend_state(t *keyval_table, pooldata *pool_record) (pool_state, pool_reason) {
-	var pool = pooldata.Pool
-	var state = &state_reason{
-		State:  pool_state_INITIAL,
-		Reason: pool_reason_NORMAL,
+// CHECK_POOL_IS_SUSPENED returns an approximate state which is used
+// for reporting to users.  It returns in the subset {READY,
+// SUSPENDED}.  It returns READY when the pool state is not recorded.
+func check_pool_is_suspened(t *keyval_table, pool string) (pool_state, pool_reason) {
+	var state *pool_state_record = get_pool_state(t, pool)
+	if state == nil {
+		return pool_state_READY, pool_reason_NORMAL
 	}
+	switch state.State {
+	case pool_state_INITIAL:
+		panic(nil)
+	case pool_state_READY:
+		return state.State, state.Reason
+	case pool_state_SUSPENDED:
+		return state.State, state.Reason
+	case pool_state_DISABLED:
+		panic(nil)
+	case pool_state_INOPERABLE:
+		panic(nil)
+	default:
+		panic(nil)
+	}
+}
 
-	// Check a backend is running or not.
-
-	var be = get_backend(t, pool)
-	if be == nil {
-		switch state.State {
-		case pool_state_INITIAL, pool_state_READY:
-			return state.State, state.Reason
-		case pool_state_SUSPENDED:
-			state.State = pool_state_INITIAL
-			state.Reason = pool_reason_NORMAL
-			//set_pool_state(t, pool, state.State, state.Reason)
-			return state.State, state.Reason
-		case pool_state_DISABLED:
-			return state.State, state.Reason
-		case pool_state_INOPERABLE:
-			panic(nil)
-		default:
-			panic(nil)
+// COMBINE_POOL_STATE merges the states from check_pool_is_usable
+// (state1) and check_pool_is_suspened (state2).
+func combine_pool_state(state1 pool_state, reason1 pool_reason, state2 pool_state, reason2 pool_reason) (pool_state, pool_reason) {
+	switch state1 {
+	case pool_state_INITIAL:
+		panic(nil)
+	case pool_state_READY:
+		if state2 == pool_state_SUSPENDED {
+			return state2, reason2
+		} else {
+			return state1, reason1
 		}
-	} else {
-		switch be.State {
-		case pool_state_INITIAL:
-			panic(nil)
-		case pool_state_READY:
-			return be.State, pool_reason_NORMAL
-		case pool_state_SUSPENDED:
-			return be.State, pool_reason_SERVER_BUSY
-		case pool_state_DISABLED, pool_state_INOPERABLE:
-			panic(nil)
-		default:
-			panic(nil)
-		}
+	case pool_state_SUSPENDED:
+		panic(nil)
+	case pool_state_DISABLED:
+		return state1, reason1
+	case pool_state_INOPERABLE:
+		return state1, reason1
+	default:
+		panic(nil)
 	}
 }
 
@@ -987,11 +998,11 @@ func check_user_is_active(t *keyval_table, uid string) (bool, error_message) {
 	var ui = get_user(t, uid)
 	if ui == nil {
 		slogger.Warn("User not found", "user", uid)
-		return false, message_user_not_registered
+		return false, message_403_user_not_registered
 	}
 	var expiration = time.Unix(ui.Expiration_time, 0)
 	if !ui.Enabled || !time.Now().Before(expiration) {
-		return false, message_user_disabled
+		return false, message_403_user_disabled
 	}
 
 	var _, err1 = user.Lookup(uid)
@@ -1003,7 +1014,7 @@ func check_user_is_active(t *keyval_table, uid string) (bool, error_message) {
 				"user", uid, "err", err1)
 		}
 		slogger.Warn("user/Lookup() fails", "user", uid, "err", err1)
-		return false, message_no_user_account
+		return false, message_403_no_user_account
 	}
 	// (uu.Uid : string, uu.Gid : string)
 

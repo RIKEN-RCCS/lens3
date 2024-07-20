@@ -23,114 +23,129 @@ const (
 
 var message_internal_error = `"(internal-error)"`
 
-// ERROR_MESSAGE is an error message to be returned to the client.
+// ERROR_MESSAGE is an error message to be returned to clients.
 type error_message [2]string
+
+// Error messages returned to clients by Multiplexer and Regisrar.
+var (
+	message_500_bad_db_entry = error_message{
+		"message", "(internal) Bad keyval-db entry"}
+
+	message_503_pool_suspended = error_message{
+		"message", "Pool suspended"}
+)
 
 // Error messages returned to clients by Multiplexer.
 var (
-	// http_401_unauthorized
+	message_400_bad_bucket_name = error_message{
+		"message", "Bad bucket name"}
+	message_400_bucket_listing_forbidden = error_message{
+		"message", "Bucket listing forbidden"}
 
-	message_access_rejected = error_message{
-		"message", "Rejected"}
-
-	message_inconsistent_db = error_message{
-		"message", "(internal) Bad keyval-db, inconsistent"}
-	message_bad_db_entry = error_message{
-		"message", "(internal) Bad keyval-db entry"}
-
-	message_not_authorized = error_message{
+	message_403_bucket_expired = error_message{
+		"message", "Bucket expired"}
+	message_403_not_authorized = error_message{
 		"message", "Not authorized"}
-
-	// http_500_internal_server_error
-
-	message_backend_not_running__ = error_message{
-		"message", "Backend not running"}
-	message_bad_backend_ep = error_message{
-		"message", "Bad backend ep"}
-	message_cannot_start_backend = error_message{
-		"message", "Cannot start backend"}
-	message_sign_failed = error_message{
-		"message", "Signing by aws.signer failed"}
-
-	message_no_permission = error_message{
+	message_403_no_permission = error_message{
 		"message", "No permission"}
-
-	message_user_not_registered = error_message{
+	message_403_user_not_registered = error_message{
 		"message", "User not registered"}
-	message_user_disabled = error_message{
+	message_403_user_disabled = error_message{
 		"message", "User disabled"}
-	message_no_user_account = error_message{
+	message_403_no_user_account = error_message{
 		"message", "No user account"}
-	message_user_account_conflict = error_message{
+	message_403_pool_disabled = [2]string{
+		"message", "Pool disabled"}
+
+	message_404_nonexisting_pool = error_message{
+		"message", "Nonexisting pool"}
+	message_404_no_named_bucket = error_message{
+		"message", "No named bucket"}
+
+	message_500_bad_backend_ep = error_message{
+		"message", "Bad backend ep"}
+	message_500_cannot_start_backend = error_message{
+		"message", "Cannot start backend"}
+	message_500_sign_failed = error_message{
+		"message", "Signing by aws.signer failed"}
+	message_500_user_account_conflict = error_message{
 		"message", "User accounts conflict"}
 
-	message_nonexisting_pool = error_message{
-		"message", "Nonexisting pool"}
-	message_pool_not_ready = error_message{
-		"message", "Pool not ready"}
-	message_pool_suspended = error_message{
-		"message", "Pool suspended"}
-	message_pool_disabled = [2]string{
-		"message", "Pool disabled"}
-	message_pool_inoperable = [2]string{
+	message_500_pool_inoperable = [2]string{
 		"message", "Pool inoperable"}
 
-	message_bad_bucket_name = error_message{
-		"message", "Bad bucket name"}
-	message_no_named_bucket = error_message{
-		"message", "No named bucket"}
-	message_bucket_expired = error_message{
-		"message", "Bucket expired"}
-	message_bucket_listing_forbidden = error_message{
-		"message", "Bucket listing forbidden"}
+	message_pool_not_ready__ = error_message{
+		"message", "Pool not ready"}
+	message_backend_not_running__ = error_message{
+		"message", "Backend not running"}
+
+	message_401_access_rejected = error_message{
+		"message", "Rejected"}
+	message_403_access_rejected = error_message{
+		"message", "Rejected"}
+	message_500_access_rejected = error_message{
+		"message", "Rejected"}
 )
 
 // Error messages returned to clients by Registrar.
 var (
-	message_lens3_not_running = error_message{
-		"message", "Lens3 is not running"}
-	message_proxy_untrusted = error_message{
-		"message", "Proxy_untrusted (bad configuration)"}
-	message_bad_csrf_tokens = error_message{
-		"message", "Missing or bad csrf-tokens"}
-
-	message_arguments_not_empty = error_message{
+	message_400_arguments_not_empty = error_message{
 		"message", "Arguments not empty"}
-	message_bad_body_encoding = error_message{
+	message_400_bad_body_encoding = error_message{
 		"message", "Bad body encoding"}
-
-	message_bad_user_account = error_message{
-		"message", "Missing or bad user account"}
-	message_bad_group = error_message{
+	message_400_bad_group = error_message{
 		"message", "Bad group"}
-	message_no_pool = error_message{
-		"message", "No pool"}
-	message_bad_pool_state = error_message{
-		"message", "Bad pool state"}
-
-	message_no_bucket = error_message{
-		"message", "No bucket"}
-	message_no_secret = error_message{
-		"message", "No secret"}
-
-	message_not_bucket_owner = error_message{
-		"message", "Not bucket owner"}
-	message_not_secret_owner = error_message{
-		"message", "Not secret owner"}
-
-	message_bad_bucket_directory = error_message{
+	message_400_bad_bucket_directory = error_message{
 		"message", "Bucket-directory is not absolute"}
-	message_bad_bucket = error_message{
+	message_400_bad_bucket = error_message{
 		"message", "Bad bucket"}
-	message_bad_secret = error_message{
-		"message", "Bad secret"}
-	message_bad_policy = error_message{
+	message_400_bad_policy = error_message{
 		"message", "Bad policy"}
-	message_bad_expiration = error_message{
+	message_400_bad_expiration = error_message{
 		"message", "Bad expiration"}
 
-	message_bucket_already_taken = error_message{
+	message_401_bad_user_account = error_message{
+		"message", "Missing or bad user account"}
+	message_401_bad_csrf_tokens = error_message{
+		"message", "Missing or bad csrf-tokens"}
+
+	message_403_not_bucket_owner = error_message{
+		"message", "Not bucket owner"}
+	message_403_not_secret_owner = error_message{
+		"message", "Not secret owner"}
+
+	message_404_no_bucket = error_message{
+		"message", "No bucket"}
+	message_404_no_secret = error_message{
+		"message", "No secret"}
+
+	message_409_bucket_already_taken = error_message{
 		"message", "Bucket already taken"}
-	message_bucket_directory_already_taken = error_message{
+	message_409_bucket_directory_already_taken = error_message{
 		"message", "Bucket-directory already taken"}
+
+	message_500_inconsistent_db = error_message{
+		"message", "(internal) Bad keyval-db, inconsistent"}
+
+	message_500_lens3_not_running = error_message{
+		"message", "Lens3 is not running"}
+	message_500_proxy_untrusted = error_message{
+		"message", "Proxy_untrusted (bad configuration)"}
+
+	message_400_no_pool = error_message{
+		"message", "No pool"}
+	message_403_no_pool = error_message{
+		"message", "No pool"}
+	message_404_no_pool = error_message{
+		"message", "No pool"}
+
+	message_403_bad_pool_state = error_message{
+		"message", "Bad pool state"}
+	message_500_bad_pool_state = error_message{
+		"message", "Bad pool state"}
+
+	message_400_bad_secret = error_message{
+		"message", "Bad secret"}
+	message_404_bad_secret = error_message{
+		"message", "Bad secret"}
 )

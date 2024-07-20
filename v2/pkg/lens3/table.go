@@ -124,9 +124,9 @@ type user_claim_record struct {
 	Timestamp int64  `json:"timestamp"`
 }
 
-// "px:"+pool-name Entry (db_pool_name_prefix).
-// Constraint: (px:_ ∈ po:Pool).
-type pool_mutex_record struct {
+// "px:"+pool-name Entry (db_pool_name_prefix).  A pool-name entry
+// keeps pool-names unique.  Constraint: (px:_∈_po:Pool).
+type pool_name_record struct {
 	Owner_uid string `json:"owner"`
 	Timestamp int64  `json:"timestamp"`
 }
@@ -146,9 +146,11 @@ type pool_record struct {
 	Timestamp        int64       `json:"timestamp"`
 }
 
-// "ps:"+pool-name Entry (db_pool_state_prefix).  A state transistions
-// in the subset {READY, SUSPENDED}.  READY includes DISABLED.
-// Constraint: (key≡pool_state_record.Pool), (ps:_∈po:Pool).
+// "ps:"+pool-name Entry (db_pool_state_prefix).  A pool-state is an
+// approximate dynamic state of a pool.  It ranges in the subset
+// {READY, SUSPENDED}.  It is imprecise and only used for Web-UI to
+// inform users the suspended state.  Constraint:
+// (key≡pool_state_record.Pool), (ps:_∈_po:Pool).
 type pool_state_record struct {
 	Pool      string      `json:"pool"`
 	State     pool_state  `json:"state"`
@@ -282,28 +284,27 @@ const (
 	pool_state_INOPERABLE pool_state = "inoperable"
 )
 
-// POOL_REASON is a set of reasons of state transitions.  It may
-// include other messages from a backend server.  POOL_REMOVED is not
-// stored in the state of a pool.  EXEC_FAILED and SETUP_FAILED will
-// be appended with a specific reason.
+// POOL_REASON is a set of reasons of state transitions.  It is not an
+// enumeration, but reasons include stdio messages output from a
+// backend server.  POOL_REMOVED is not stored in the state of a pool.
 type pool_reason string
 
 const (
-	/* Reasons for INITIAL or READY are: */
+	// Reasons for INITIAL or READY:
 
 	pool_reason_NORMAL pool_reason = "-"
 
-	/* Reasons for SUSPENDED are: */
+	// Reasons for SUSPENDED:
 
 	pool_reason_SERVER_BUSY pool_reason = "server busy"
 
-	/* Reasons for DISABLED are: */
+	// Reasons for DISABLED:
 
 	pool_reason_USER_INACTIVE pool_reason = "user inactive"
 	pool_reason_POOL_EXPIRED  pool_reason = "pool expired"
 	pool_reason_POOL_OFFLINE  pool_reason = "pool offline"
 
-	/* Reasons for INOPERABLE are: */
+	// Reasons for INOPERABLE:
 
 	pool_reason_POOL_REMOVED     pool_reason = "pool removed"
 	start_failure_exec_failed    pool_reason = "exec failed"
@@ -311,9 +312,8 @@ const (
 	start_failure_pipe_closed    pool_reason = "pipe closed"
 	start_failure_stdio_flooding pool_reason = "stdout/stderr flooding"
 
-	// Other reasons are exceptions and messages from a backend.
-
 	pool_reason_POOL_DISABLED_INITIALLY_ pool_reason = "pool disabled initially"
+	// Reasons include other messages on stdio from a backend server.
 )
 
 func make_failure_reason(s string) pool_reason {
@@ -400,7 +400,7 @@ func raise_on_marshaling_error(err error) {
 			"-",
 			http_500_internal_server_error,
 			[][2]string{
-				message_bad_db_entry,
+				message_500_bad_db_entry,
 			},
 		})
 	}
@@ -414,7 +414,7 @@ func raise_on_set_error(w *valkey.ValkeyResult) {
 			"-",
 			http_500_internal_server_error,
 			[][2]string{
-				message_bad_db_entry,
+				message_500_bad_db_entry,
 			}})
 	}
 }
@@ -427,7 +427,7 @@ func raise_on_setnx_error(w *valkey.ValkeyResult) {
 			"-",
 			http_500_internal_server_error,
 			[][2]string{
-				message_bad_db_entry,
+				message_500_bad_db_entry,
 			}})
 	}
 }
@@ -442,7 +442,7 @@ func raise_on_get_error(w *valkey.ValkeyResult) {
 			"-",
 			http_500_internal_server_error,
 			[][2]string{
-				message_bad_db_entry,
+				message_500_bad_db_entry,
 			}})
 	}
 }
@@ -455,7 +455,7 @@ func check_on_del_failure(w *valkey.ValkeyResult) bool {
 			"-",
 			http_500_internal_server_error,
 			[][2]string{
-				message_bad_db_entry,
+				message_500_bad_db_entry,
 			}})
 	}
 	return n == 1
@@ -469,7 +469,7 @@ func raise_on_del_failure(w *valkey.ValkeyResult) {
 			"-",
 			http_500_internal_server_error,
 			[][2]string{
-				message_bad_db_entry,
+				message_500_bad_db_entry,
 			}})
 	}
 	if n != 1 {
@@ -478,7 +478,7 @@ func raise_on_del_failure(w *valkey.ValkeyResult) {
 			"-",
 			http_500_internal_server_error,
 			[][2]string{
-				message_bad_db_entry,
+				message_500_bad_db_entry,
 			}})
 	}
 }
@@ -493,7 +493,7 @@ func check_on_expire_failure(w *valkey.ValkeyResult) bool {
 			"-",
 			http_500_internal_server_error,
 			[][2]string{
-				message_bad_db_entry,
+				message_500_bad_db_entry,
 			}})
 	}
 	return ok
@@ -591,7 +591,7 @@ func add_user(t *keyval_table, u *user_record) {
 				"-",
 				http_500_internal_server_error,
 				[][2]string{
-					message_user_account_conflict,
+					message_500_user_account_conflict,
 				}})
 		}
 		var now int64 = time.Now().Unix()
@@ -784,20 +784,21 @@ func set_pool_state__(t *keyval_table, pool string, state pool_state, reason poo
 		Reason:    reason,
 		Timestamp: now,
 	}
-	set_pool_state_raw(t, pool, data)
+	set_pool_state(t, pool, data)
 }
 
-func set_pool_state_raw(t *keyval_table, pool string, state *pool_state_record) {
-	db_set_with_prefix(t, db_pool_state_prefix, pool, state)
+func set_pool_state(t *keyval_table, pool string, data *pool_state_record) {
+	assert_fatal(data.Pool == pool)
+	db_set_with_prefix(t, db_pool_state_prefix, pool, data)
 }
 
-func get_pool_state__(t *keyval_table, pool string) *pool_state_record {
+func get_pool_state(t *keyval_table, pool string) *pool_state_record {
 	var data pool_state_record
 	var ok = db_get_with_prefix(t, db_pool_state_prefix, pool, &data)
 	return ITE(ok, &data, nil)
 }
 
-func delete_pool_state__(t *keyval_table, pool string) {
+func delete_pool_state(t *keyval_table, pool string) {
 	db_del_with_prefix(t, db_pool_state_prefix, pool)
 }
 
@@ -1046,7 +1047,7 @@ func clean_user_timestamps(t *keyval_table) {
 
 // SET_WITH_UNIQUE_POOL_NAME makes a random unique id for a pool-name or an
 // access key.
-func set_with_unique_pool_name(t *keyval_table, data *pool_mutex_record) string {
+func set_with_unique_pool_name(t *keyval_table, data *pool_name_record) string {
 	var prefix = db_pool_name_prefix
 	var s = set_with_unique_id_loop(t, prefix, data, generate_random_key)
 	return s
@@ -1094,19 +1095,19 @@ func set_with_unique_id_loop(t *keyval_table, prefix string, data any, generator
 	}
 }
 
-// SET_EX_POOL_MUTEX is used in restoring the keyval-db.
-func set_ex_pool_mutex(t *keyval_table, pool string, data *pool_mutex_record) bool {
+// SET_EX_POOL_NAME is used in restoring the keyval-db.
+func set_ex_pool_name__(t *keyval_table, pool string, data *pool_name_record) bool {
 	var ok = db_setnx_with_prefix(t, db_pool_name_prefix, pool, data)
 	return ok
 }
 
-func get_pool_mutex(t *keyval_table, pool string) *pool_mutex_record {
-	var data pool_mutex_record
+func get_pool_name__(t *keyval_table, pool string) *pool_name_record {
+	var data pool_name_record
 	var ok = db_get_with_prefix(t, db_pool_name_prefix, pool, &data)
 	return ITE(ok, &data, nil)
 }
 
-func delete_pool_mutex_checking(t *keyval_table, pool string) bool {
+func delete_pool_name_checking(t *keyval_table, pool string) bool {
 	var ok = db_del_with_prefix(t, db_pool_name_prefix, pool)
 	return ok
 }
@@ -1272,7 +1273,7 @@ func load_db_data(w *valkey.ValkeyResult, data any) bool {
 				"-",
 				http_500_internal_server_error,
 				[][2]string{
-					message_bad_db_entry,
+					message_500_bad_db_entry,
 				}})
 		}
 	}
@@ -1295,7 +1296,7 @@ func load_db_data(w *valkey.ValkeyResult, data any) bool {
 			"-",
 			http_500_internal_server_error,
 			[][2]string{
-				message_bad_db_entry,
+				message_500_bad_db_entry,
 			}})
 	}
 	return true

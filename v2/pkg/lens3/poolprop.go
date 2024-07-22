@@ -18,11 +18,11 @@ import (
 // POOL_PROP is a description of a pool, a merge of the properties in
 // the keyval-db to fully present it.
 type pool_prop struct {
-	pool_record       `json:"pool_record"`
-	pool_state_record `json:"pool_state_record"`
-	user_record       `json:"user_record"`
-	Buckets           []*bucket_record `json:"buckets"`
-	Secrets           []*secret_record `json:"secrets"`
+	pool_record          `json:"pool_record"`
+	blurred_state_record `json:"blurred_state_record"`
+	user_record          `json:"user_record"`
+	Buckets              []*bucket_record `json:"buckets"`
+	Secrets              []*secret_record `json:"secrets"`
 }
 
 // GATHER_POOL_PROP reconstructs properties of a pool to display the
@@ -77,7 +77,7 @@ func gather_pool_prop(t *keyval_table, pool string) *pool_prop {
 	var state2, reason2 = check_pool_is_suspened(t, pool)
 	var state, reason = combine_pool_state(state1, reason1, state2, reason2)
 
-	poolprop.pool_state_record = pool_state_record{
+	poolprop.blurred_state_record = blurred_state_record{
 		Pool:      pool,
 		State:     state,
 		Reason:    reason,

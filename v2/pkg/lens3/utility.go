@@ -45,9 +45,10 @@ func assert_fatal(c bool) {
 
 // PROXY_EXC is a panic argument to escape the service to toplevel
 // where recover() does handle this.  Usage: raise(&proxy_exc{auth,
-// code, and "message"}), where auth is an access-key or "-".
+// code, and "message"}), where auth is an access-key or "".
 type proxy_exc struct {
 	auth    string
+	uid     string
 	code    int
 	message [][2]string
 }

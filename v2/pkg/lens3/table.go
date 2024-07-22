@@ -54,7 +54,7 @@ const (
 	db_backend_data_prefix   = "de:"
 	db_backend_mutex_prefix  = "dx:"
 	db_csrf_token_prefix     = "tn:"
-	db_pool_state_prefix     = "ps:"
+	db_blurred_state_prefix  = "ps:"
 	db_pool_timestamp_prefix = "pt:"
 	db_user_timestamp_prefix = "ut:"
 	//db_backend_ep_prefix     = "ep:"
@@ -82,7 +82,7 @@ var prefix_to_db_number_assignment = map[string]int{
 	db_backend_mutex_prefix:  process_db,
 	db_backend_data_prefix:   process_db,
 	db_csrf_token_prefix:     process_db,
-	db_pool_state_prefix:     process_db,
+	db_blurred_state_prefix:  process_db,
 	db_pool_timestamp_prefix: process_db,
 	db_user_timestamp_prefix: process_db,
 }
@@ -146,12 +146,12 @@ type pool_record struct {
 	Timestamp        int64       `json:"timestamp"`
 }
 
-// "ps:"+pool-name Entry (db_pool_state_prefix).  A pool-state is an
+// "ps:"+pool-name Entry (db_blurred_state_prefix).  A pool-state is an
 // approximate dynamic state of a pool.  It ranges in the subset
 // {READY, SUSPENDED}.  It is imprecise and only used for Web-UI to
 // inform users the suspended state.  Constraint:
-// (key≡pool_state_record.Pool), (ps:_∈_po:Pool).
-type pool_state_record struct {
+// (key≡blurred_state_record.Pool), (ps:_∈_po:Pool).
+type blurred_state_record struct {
 	Pool      string      `json:"pool"`
 	State     pool_state  `json:"state"`
 	Reason    pool_reason `json:"reason"`
@@ -397,7 +397,8 @@ func raise_on_marshaling_error(err error) {
 	if err != nil {
 		slogger.Error("json.Marshal() on db entry failed", "err", err)
 		raise(&proxy_exc{
-			"-",
+			"",
+			"",
 			http_500_internal_server_error,
 			[][2]string{
 				message_500_bad_db_entry,
@@ -411,7 +412,8 @@ func raise_on_set_error(w *valkey.ValkeyResult) {
 	if err != nil {
 		slogger.Error("db-set() failed", "err", err)
 		raise(&proxy_exc{
-			"-",
+			"",
+			"",
 			http_500_internal_server_error,
 			[][2]string{
 				message_500_bad_db_entry,
@@ -424,7 +426,8 @@ func raise_on_setnx_error(w *valkey.ValkeyResult) {
 	if err != nil {
 		slogger.Error("db-setnx() failed", "err", err)
 		raise(&proxy_exc{
-			"-",
+			"",
+			"",
 			http_500_internal_server_error,
 			[][2]string{
 				message_500_bad_db_entry,
@@ -439,7 +442,8 @@ func raise_on_get_error(w *valkey.ValkeyResult) {
 	if err != nil && !valkey.IsValkeyNil(err) {
 		slogger.Error("db-get() failed", "err", err)
 		raise(&proxy_exc{
-			"-",
+			"",
+			"",
 			http_500_internal_server_error,
 			[][2]string{
 				message_500_bad_db_entry,
@@ -452,7 +456,8 @@ func check_on_del_failure(w *valkey.ValkeyResult) bool {
 	if err != nil {
 		slogger.Error("db-del() failed", "err", err)
 		raise(&proxy_exc{
-			"-",
+			"",
+			"",
 			http_500_internal_server_error,
 			[][2]string{
 				message_500_bad_db_entry,
@@ -466,7 +471,8 @@ func raise_on_del_failure(w *valkey.ValkeyResult) {
 	if err != nil {
 		slogger.Error("db-del() failed", "err", err)
 		raise(&proxy_exc{
-			"-",
+			"",
+			"",
 			http_500_internal_server_error,
 			[][2]string{
 				message_500_bad_db_entry,
@@ -475,7 +481,8 @@ func raise_on_del_failure(w *valkey.ValkeyResult) {
 	if n != 1 {
 		slogger.Error("db-del() no entry")
 		raise(&proxy_exc{
-			"-",
+			"",
+			"",
 			http_500_internal_server_error,
 			[][2]string{
 				message_500_bad_db_entry,
@@ -490,7 +497,8 @@ func check_on_expire_failure(w *valkey.ValkeyResult) bool {
 	if err != nil {
 		slogger.Error("db-expire() failed", "err", err)
 		raise(&proxy_exc{
-			"-",
+			"",
+			"",
 			http_500_internal_server_error,
 			[][2]string{
 				message_500_bad_db_entry,
@@ -588,7 +596,8 @@ func add_user(t *keyval_table, u *user_record) {
 			slogger.Error("Bad conflicting uid claims",
 				"claim", claim, "uid1", uid, "uid2", claiminguser.Uid)
 			raise(&proxy_exc{
-				"-",
+				"",
+				"",
 				http_500_internal_server_error,
 				[][2]string{
 					message_500_user_account_conflict,
@@ -776,30 +785,30 @@ func list_bucket_directories(t *keyval_table) []*bucket_directory_record {
 	return dirs
 }
 
-func set_pool_state__(t *keyval_table, pool string, state pool_state, reason pool_reason) {
+func set_blurred_state__(t *keyval_table, pool string, state pool_state, reason pool_reason) {
 	var now int64 = time.Now().Unix()
-	var data = &pool_state_record{
+	var data = &blurred_state_record{
 		Pool:      pool,
 		State:     state,
 		Reason:    reason,
 		Timestamp: now,
 	}
-	set_pool_state(t, pool, data)
+	set_blurred_state(t, pool, data)
 }
 
-func set_pool_state(t *keyval_table, pool string, data *pool_state_record) {
+func set_blurred_state(t *keyval_table, pool string, data *blurred_state_record) {
 	assert_fatal(data.Pool == pool)
-	db_set_with_prefix(t, db_pool_state_prefix, pool, data)
+	db_set_with_prefix(t, db_blurred_state_prefix, pool, data)
 }
 
-func get_pool_state(t *keyval_table, pool string) *pool_state_record {
-	var data pool_state_record
-	var ok = db_get_with_prefix(t, db_pool_state_prefix, pool, &data)
+func get_blurred_state(t *keyval_table, pool string) *blurred_state_record {
+	var data blurred_state_record
+	var ok = db_get_with_prefix(t, db_blurred_state_prefix, pool, &data)
 	return ITE(ok, &data, nil)
 }
 
-func delete_pool_state(t *keyval_table, pool string) {
-	db_del_with_prefix(t, db_pool_state_prefix, pool)
+func delete_blurred_state(t *keyval_table, pool string) {
+	db_del_with_prefix(t, db_blurred_state_prefix, pool)
 }
 
 // SET_EX_BACKEND_MUTEX makes an exclusion entry for a backend.  It
@@ -1270,7 +1279,8 @@ func load_db_data(w *valkey.ValkeyResult, data any) bool {
 		} else {
 			slogger.Error("Bad value in keyval-db", "err", err1)
 			raise(&proxy_exc{
-				"-",
+				"",
+				"",
 				http_500_internal_server_error,
 				[][2]string{
 					message_500_bad_db_entry,
@@ -1293,7 +1303,8 @@ func load_db_data(w *valkey.ValkeyResult, data any) bool {
 	if err2 != nil {
 		slogger.Error("json.Decode failed", "err", err2)
 		raise(&proxy_exc{
-			"-",
+			"",
+			"",
 			http_500_internal_server_error,
 			[][2]string{
 				message_500_bad_db_entry,

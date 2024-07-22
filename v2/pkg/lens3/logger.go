@@ -266,15 +266,15 @@ func open_log_for_reg(f string) {
 
 func log_mux_access_by_response(rspn *http.Response, auth string) {
 	var rqst = rspn.Request
-	log_access("mux", rqst, rspn.StatusCode, rspn.ContentLength, "-", auth)
+	log_access("mux", rqst, rspn.StatusCode, rspn.ContentLength, "", auth)
 }
 
 func log_mux_access_by_request(rqst *http.Request, code int, length int64, uid string, auth string) {
-	log_access("mux", rqst, code, length, "-", auth)
+	log_access("mux", rqst, code, length, uid, auth)
 }
 
 func log_reg_access_by_request(rqst *http.Request, code int, length int64, uid string, auth string) {
-	log_access("reg", rqst, code, length, "-", auth)
+	log_access("reg", rqst, code, length, uid, auth)
 }
 
 const common_log_time_layout = "02/Jan/2006:15:04:05 -0700"
@@ -282,6 +282,8 @@ const common_log_time_layout = "02/Jan/2006:15:04:05 -0700"
 // LOG_ACCESS logs accesses for both Multiplexer and Registrar.  The
 // AUTH is an access-key, and it is always "-" for Registrar.
 func log_access(src string, rqst *http.Request, code int, length int64, uid string, auth string) {
+	var uid1 = ITE(uid != "", uid, "-")
+	var auth1 = ITE(auth != "", auth, "-")
 
 	// l: RFC 1413 client identity by identd
 	// u: user
@@ -289,7 +291,7 @@ func log_access(src string, rqst *http.Request, code int, length int64, uid stri
 
 	var h = rqst.RemoteAddr
 	var l = "-"
-	var u = uid
+	var u = uid1
 	var t = time.Now().Format(common_log_time_layout)
 	var r = fmt.Sprintf("%s %s %s", rqst.Method, rqst.URL, rqst.Proto)
 	var s = fmt.Sprintf("%d", code)
@@ -304,7 +306,7 @@ func log_access(src string, rqst *http.Request, code int, length int64, uid stri
 			("%s %s %s [%s] %q" + " %s %s %q %q" + " auth=%q" + "\n"),
 			h, l, u, t, r,
 			s, b, rf, ua,
-			auth)
+			auth1)
 		var _, err1 = f.WriteString(msg1)
 		if err1 != nil {
 			slogger.Error("Mux() Wrinting access log failed",

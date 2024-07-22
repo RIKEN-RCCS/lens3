@@ -367,13 +367,13 @@ func start_backend_in_mutexed(w *manager, pool string) backend_delegate {
 		proc.be.Timestamp = now
 		set_backend(w.table, pool, proc.be)
 
-		var state1 = &pool_state_record{
+		var state1 = &blurred_state_record{
 			Pool:      pool,
 			State:     pool_state_READY,
 			Reason:    pool_reason_NORMAL,
 			Timestamp: now,
 		}
-		set_pool_state(w.table, pool, state1)
+		set_blurred_state(w.table, pool, state1)
 
 		return d
 	}
@@ -402,13 +402,13 @@ func start_backend_in_mutexed(w *manager, pool string) backend_delegate {
 			"pool", pool)
 	}
 
-	var state2 = &pool_state_record{
+	var state2 = &blurred_state_record{
 		Pool:      pool,
 		State:     pool_state_SUSPENDED,
 		Reason:    pool_reason_SERVER_BUSY,
 		Timestamp: time.Now().Unix(),
 	}
-	set_pool_state(w.table, pool, state2)
+	set_blurred_state(w.table, pool, state2)
 
 	return nil
 }

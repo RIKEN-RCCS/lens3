@@ -21,8 +21,6 @@ const (
 	http_601_too_much_data int = 601
 )
 
-var message_internal_error = `"(internal-error)"`
-
 // ERROR_MESSAGE is an error message to be returned to clients.
 type error_message [2]string
 
@@ -37,8 +35,8 @@ var (
 
 // Error messages returned to clients by Multiplexer.
 var (
-	message_400_bad_bucket_name = error_message{
-		"message", "Bad bucket name"}
+	message_40x_access_rejected = error_message{
+		"message", "Rejected"}
 	message_400_bucket_listing_forbidden = error_message{
 		"message", "Bucket listing forbidden"}
 
@@ -62,29 +60,18 @@ var (
 	message_404_no_named_bucket = error_message{
 		"message", "No named bucket"}
 
-	message_500_bad_backend_ep = error_message{
-		"message", "Bad backend ep"}
+	message_50x_internal_error = error_message{
+		"message", "(internal-error)"}
+	message_500_access_rejected = error_message{
+		"message", "Rejected"}
+	message_500_pool_inoperable = [2]string{
+		"message", "Pool inoperable"}
 	message_500_cannot_start_backend = error_message{
 		"message", "Cannot start backend"}
 	message_500_sign_failed = error_message{
 		"message", "Signing by aws.signer failed"}
 	message_500_user_account_conflict = error_message{
 		"message", "User accounts conflict"}
-
-	message_500_pool_inoperable = [2]string{
-		"message", "Pool inoperable"}
-
-	message_pool_not_ready__ = error_message{
-		"message", "Pool not ready"}
-	message_backend_not_running__ = error_message{
-		"message", "Backend not running"}
-
-	message_401_access_rejected = error_message{
-		"message", "Rejected"}
-	message_403_access_rejected = error_message{
-		"message", "Rejected"}
-	message_500_access_rejected = error_message{
-		"message", "Rejected"}
 )
 
 // Error messages returned to clients by Registrar.

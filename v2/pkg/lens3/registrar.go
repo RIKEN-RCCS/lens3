@@ -34,11 +34,9 @@ package lens3
 // {StatusMovedPermanently(301), StatusSeeOther(303),
 // StatusTemporaryRedirect(307), StatusPermanentRedirect(308)}.
 
-// NOTE: ??? Maybe, consider adding a "Retry-After" header for 503
-// error.
+// NOTE: Maybe, consider adding a "Retry-After" header for 503 error.
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -183,18 +181,18 @@ const (
 	bucket_policy_ui_RW   string = "public"
 )
 
-var bucket_policy_ui_list = []string{
-	bucket_policy_ui_NONE,
-	bucket_policy_ui_WO,
-	bucket_policy_ui_RO,
-	bucket_policy_ui_RW,
-}
-
 var export_bucket_policy_to_ui = map[bucket_policy]string{
 	bucket_policy_NONE: bucket_policy_ui_NONE,
 	bucket_policy_WO:   bucket_policy_ui_WO,
 	bucket_policy_RO:   bucket_policy_ui_RO,
 	bucket_policy_RW:   bucket_policy_ui_RW,
+}
+
+var intern_bucket_policy_from_ui = map[string]bucket_policy{
+	bucket_policy_ui_NONE: bucket_policy_NONE,
+	bucket_policy_ui_WO:   bucket_policy_WO,
+	bucket_policy_ui_RO:   bucket_policy_RO,
+	bucket_policy_ui_RW:   bucket_policy_RW,
 }
 
 const (
@@ -203,20 +201,21 @@ const (
 	secret_policy_ui_WO string = "writeonly"
 )
 
-var secret_policy_ui_list = []string{
-	secret_policy_ui_RW,
-	secret_policy_ui_RO,
-	secret_policy_ui_WO,
-}
-
 var export_secret_policy_to_ui = map[secret_policy]string{
 	secret_policy_RW: secret_policy_ui_RW,
 	secret_policy_RO: secret_policy_ui_RO,
 	secret_policy_WO: secret_policy_ui_WO,
 }
 
-// REG_ERROR_MESSAGE is an extra error message returned to UI on errors.
-type reg_error_message [][2]string
+var intern_secret_policy_from_ui = map[string]secret_policy{
+	secret_policy_ui_RW: secret_policy_RW,
+	secret_policy_ui_RO: secret_policy_RO,
+	secret_policy_ui_WO: secret_policy_WO,
+}
+
+// REG_BAD_ARGUMENT_MESSAGE is an error message returned to Web-UI on
+// bad arguments.
+type reg_bad_argument_message [][2]string
 
 func configure_registrar(z *registrar, t *keyval_table, qch <-chan vacuous, c *reg_conf) {
 	z.table = t
@@ -611,8 +610,8 @@ func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 
 	var conf = &z.conf.Registrar
 	assert_fatal(conf.Pool_expiration_days > 0)
-	var days = conf.Pool_expiration_days
-	var expiration = time.Now().AddDate(0, 0, days).Unix()
+	var days = conf.Pool_expiration_days.time_duration()
+	var expiration = time.Now().Add(days).Unix()
 
 	// Register secret for probing.
 
@@ -700,21 +699,21 @@ func make_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 		return nil
 	}
 	var name = args.Bucket
-	var policy = intern_ui_bucket_policy(args.Bucket_policy)
+	var policy = intern_bucket_policy_from_ui[args.Bucket_policy]
+	// (Arguments are checked above).
 	assert_fatal(policy != "")
 
 	var conf = &z.conf.Registrar
 	assert_fatal(conf.Bucket_expiration_days > 0)
-	var days = conf.Bucket_expiration_days
-	var expiration = time.Now().AddDate(0, 0, days).Unix()
+	var days = conf.Bucket_expiration_days.time_duration()
+	var expiration = time.Now().Add(days).Unix()
 
-	var now int64 = time.Now().Unix()
 	var bucket = &bucket_record{
 		Pool:            pool,
 		Bucket:          name,
 		Bucket_policy:   policy,
 		Expiration_time: expiration,
-		Timestamp:       now,
+		Timestamp:       time.Now().Unix(),
 	}
 	var ok1, holder = set_ex_bucket(z.table, name, bucket)
 	if !ok1 {
@@ -788,17 +787,18 @@ func make_secret_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 		&args, check_make_secret_request) {
 		return nil
 	}
-	var policy = intern_ui_secret_policy(args.Secret_policy)
+	var policy = intern_secret_policy_from_ui[args.Secret_policy]
+	// (Arguments are checked above).
 	assert_fatal(policy != "")
 	var expiration = args.Expiration_time
-	var now = time.Now().Unix()
+
 	var secret = &secret_record{
 		Pool:            pool,
 		Access_key:      "",
 		Secret_key:      generate_secret_key(),
 		Secret_policy:   policy,
 		Expiration_time: expiration,
-		Timestamp:       now,
+		Timestamp:       time.Now().Unix(),
 	}
 	var _ = set_with_unique_secret_key(z.table, secret)
 
@@ -1180,8 +1180,8 @@ func enroll_new_user(z *registrar, uid string, firstsession bool) *user_record {
 	slogger.Warn("Reg: Enroll a user automatically", "uid", uid)
 
 	assert_fatal(conf.User_expiration_days > 0)
-	var days = conf.User_expiration_days
-	var expiration = time.Now().AddDate(0, 0, days).Unix()
+	var days = conf.User_expiration_days.time_duration()
+	var expiration = time.Now().Add(days).Unix()
 	var now int64 = time.Now().Unix()
 	var newuser = &user_record{
 		Uid:                        uid,
@@ -1236,7 +1236,7 @@ func make_csrf_tokens(z *registrar, uid string) *csrf_token_record {
 // CHECK_MAKE_POOL_REQUEST checks the entires of bucket-directory
 // and owner-gid.  It normalizes the path of a bucket-directory in
 // the posix sense.
-func check_make_pool_request(z *registrar, u *user_record, pool string, data any) reg_error_message {
+func check_make_pool_request(z *registrar, u *user_record, pool string, data any) reg_bad_argument_message {
 	var args, ok = data.(*make_pool_request)
 	assert_fatal(ok)
 
@@ -1245,7 +1245,7 @@ func check_make_pool_request(z *registrar, u *user_record, pool string, data any
 	var bd = args.Bucket_directory
 	var path = filepath.Clean(bd)
 	if !filepath.IsAbs(path) {
-		return reg_error_message{
+		return reg_bad_argument_message{
 			message_400_bad_bucket_directory,
 			{"path", bd},
 		}
@@ -1262,7 +1262,7 @@ func check_make_pool_request(z *registrar, u *user_record, pool string, data any
 	}
 	var gid = args.Owner_gid
 	if slices.Index(groups, gid) == -1 {
-		return reg_error_message{
+		return reg_bad_argument_message{
 			message_400_bad_group,
 			{"group", gid},
 		}
@@ -1270,20 +1270,22 @@ func check_make_pool_request(z *registrar, u *user_record, pool string, data any
 	return nil
 }
 
-func check_make_bucket_request(z *registrar, u *user_record, pool string, data any) reg_error_message {
-	var args, ok = data.(*make_bucket_request)
-	assert_fatal(ok)
+func check_make_bucket_request(z *registrar, u *user_record, pool string, data any) reg_bad_argument_message {
+	var args, ok1 = data.(*make_bucket_request)
+	assert_fatal(ok1)
 
 	// Check Bucket.
 	if !check_bucket_naming(args.Bucket) {
-		return reg_error_message{
+		return reg_bad_argument_message{
 			message_400_bad_bucket,
 			{"bucket", args.Bucket},
 		}
 	}
 	// Check Bucket_policy.
-	if slices.Index(bucket_policy_ui_list, args.Bucket_policy) == -1 {
-		return reg_error_message{
+	var _, ok2 = intern_bucket_policy_from_ui[args.Bucket_policy]
+	//if slices.Index(bucket_policy_ui_list, args.Bucket_policy) == -1 {
+	if !ok2 {
+		return reg_bad_argument_message{
 			message_400_bad_policy,
 			{"policy", args.Bucket_policy},
 		}
@@ -1291,13 +1293,15 @@ func check_make_bucket_request(z *registrar, u *user_record, pool string, data a
 	return nil
 }
 
-func check_make_secret_request(z *registrar, u *user_record, pool string, data any) reg_error_message {
-	var args, ok = data.(*make_secret_request)
-	assert_fatal(ok)
+func check_make_secret_request(z *registrar, u *user_record, pool string, data any) reg_bad_argument_message {
+	var args, ok1 = data.(*make_secret_request)
+	assert_fatal(ok1)
 
 	// Check Secret_policy.
-	if slices.Index(secret_policy_ui_list, args.Secret_policy) == -1 {
-		return reg_error_message{
+	var _, ok2 = intern_secret_policy_from_ui[args.Secret_policy]
+	//if slices.Index(secret_policy_ui_list, args.Secret_policy) == -1
+	if !ok2 {
+		return reg_bad_argument_message{
 			message_400_bad_policy,
 			{"policy", args.Secret_policy},
 		}
@@ -1305,11 +1309,11 @@ func check_make_secret_request(z *registrar, u *user_record, pool string, data a
 	// Check Expiration_time.
 	var conf = &z.conf.Registrar
 	assert_fatal(conf.Secret_expiration_days > 0)
-	var days = conf.Secret_expiration_days
+	var days = conf.Secret_expiration_days.time_duration()
 	var e = time.Unix(args.Expiration_time, 0)
 	var now = time.Now()
-	if !(now.AddDate(0, 0, -1).Before(e) && e.Before(now.AddDate(0, 0, days))) {
-		return reg_error_message{
+	if !(now.AddDate(0, 0, -1).Before(e) && e.Before(now.Add(days))) {
+		return reg_bad_argument_message{
 			message_400_bad_expiration,
 			{"expiration", e.Format(time.DateOnly)},
 		}
@@ -1439,7 +1443,7 @@ func check_secret_naming_with_error_return(z *registrar, w http.ResponseWriter, 
 	return ok
 }
 
-type checker_fn func(z *registrar, u *user_record, pool string, data any) reg_error_message
+type checker_fn func(z *registrar, u *user_record, pool string, data any) reg_bad_argument_message
 
 // DECODE_REQUEST_BODY_WITH_ERROR_RETURN reads the body into the data.
 // It return true if decoding succeeds.  Any garbage after json data
@@ -1589,32 +1593,9 @@ func copy_secret_data_to_ui(m []*secret_record) []*secret_data_ui {
 	return secrets
 }
 
-func encode_error_message__(keyvals [][2]string) string {
-	fmt.Printf("encode_error_message for=%#v\n", keyvals)
-
-	var b bytes.Buffer
-	b.Write([]byte("{"))
-	for _, kv := range keyvals {
-		var b1, err1 = json.Marshal(kv[0])
-		assert_fatal(err1 == nil)
-		var _, err2 = b.Write(b1)
-		assert_fatal(err2 == nil)
-		var _, err3 = b.Write([]byte(":"))
-		assert_fatal(err3 == nil)
-		var b2, err4 = json.Marshal(kv[1])
-		assert_fatal(err4 == nil)
-		var _, err5 = b.Write(b2)
-		assert_fatal(err5 == nil)
-		var _, err6 = b.Write([]byte(","))
-		assert_fatal(err6 == nil)
-	}
-	b.Write([]byte("}"))
-	return string(b.Bytes())
-}
-
-// FIND_OWNER_OF_POOL finds an owner of a pool for printing
-// error messages.  It returns unknown-user, when an owner is not
-// found.
+// FIND_OWNER_OF_POOL finds an owner of a pool for printing error
+// messages.  It returns the string "unknown-user", when an owner is
+// not found.
 func find_owner_of_pool(z *registrar, pool string) string {
 	if pool == "" {
 		return "unknown-user"
@@ -1626,42 +1607,14 @@ func find_owner_of_pool(z *registrar, pool string) string {
 	return pooldata.Owner_uid
 }
 
-func intern_ui_secret_policy(policy string) secret_policy {
-	switch policy {
-	case secret_policy_ui_RW:
-		return secret_policy_RW
-	case secret_policy_ui_RO:
-		return secret_policy_RO
-	case secret_policy_ui_WO:
-		return secret_policy_WO
-	default:
-		return ""
-	}
-}
-
-func intern_ui_bucket_policy(policy string) bucket_policy {
-	switch policy {
-	case bucket_policy_ui_NONE:
-		return bucket_policy_NONE
-	case bucket_policy_ui_WO:
-		return bucket_policy_WO
-	case bucket_policy_ui_RO:
-		return bucket_policy_RO
-	case bucket_policy_ui_RW:
-		return bucket_policy_RW
-	default:
-		return ""
-	}
-}
-
 // EXTEND_USER_EXPIRATION_TIME extends user's validity by the
 // specified days.
 func extend_user_expiration_time(z *registrar, u *user_record) {
 	var conf = &z.conf.Registrar
 	assert_fatal(conf.User_expiration_days > 0)
 	var old_expiration = time.Unix(u.Expiration_time, 0)
-	var days = conf.User_expiration_days
-	var new_expiration = time.Now().AddDate(0, 0, days)
+	var days = conf.User_expiration_days.time_duration()
+	var new_expiration = time.Now().Add(days)
 	if old_expiration.Before(new_expiration) {
 		u.Expiration_time = new_expiration.Unix()
 		set_user_raw(z.table, u)

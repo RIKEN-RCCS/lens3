@@ -86,10 +86,10 @@ type registrar_conf struct {
 	Uid_block_range_list    [][2]int      `json:"uid_block_range_list"`
 	Gid_drop_range_list     [][2]int      `json:"gid_drop_range_list"`
 	Gid_drop_list           []int         `json:"gid_drop_list"`
-	User_expiration_days    int           `json:"user_expiration_days"`
-	Pool_expiration_days    int           `json:"pool_expiration_days"`
-	Bucket_expiration_days  int           `json:"bucket_expiration_days"`
-	Secret_expiration_days  int           `json:"secret_expiration_days"`
+	User_expiration_days    time_in_day   `json:"user_expiration_days"`
+	Pool_expiration_days    time_in_day   `json:"pool_expiration_days"`
+	Bucket_expiration_days  time_in_day   `json:"bucket_expiration_days"`
+	Secret_expiration_days  time_in_day   `json:"secret_expiration_days"`
 	Error_response_delay_ms time_in_ms    `json:"error_response_delay_ms"`
 	Ui_session_duration     time_in_sec   `json:"ui_session_duration"`
 }
@@ -169,6 +169,7 @@ type mqtt_conf struct {
 
 type time_in_sec int64
 type time_in_ms int64
+type time_in_day int
 
 func (t time_in_sec) time_duration() time.Duration {
 	var d = (time.Duration(t) * time.Second)
@@ -177,6 +178,12 @@ func (t time_in_sec) time_duration() time.Duration {
 
 func (t time_in_ms) time_duration() time.Duration {
 	var d = (time.Duration(t) * time.Millisecond)
+	return d
+}
+
+func (t time_in_day) time_duration() time.Duration {
+	var zero time.Time
+	var d = zero.AddDate(0, 0, int(t)).Sub(zero)
 	return d
 }
 

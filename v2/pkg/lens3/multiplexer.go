@@ -183,6 +183,9 @@ func proxy_access_addenda(m *multiplexer) func(*http.Response) error {
 	}
 }
 
+// PROXY_ERROR_HANDLER makes an "ErrorHandler" for
+// httputil/ReverseProxy that returns a response.  An error on
+// proxying does not abort the backend.
 func proxy_error_handler(m *multiplexer) func(http.ResponseWriter, *http.Request, error) {
 	return func(w http.ResponseWriter, rqst *http.Request, err error) {
 		var ctx = rqst.Context()
@@ -194,10 +197,9 @@ func proxy_error_handler(m *multiplexer) func(http.ResponseWriter, *http.Request
 			pool = poolauth[0]
 			auth = poolauth[1]
 		}
-		slogger.Error((m.logprefix + "httputil/ReverseProxy() failed;" +
-			" Maybe a backend record outdated"), "pool", pool, "err", err)
-		//delete_backend(m.table, pool)
-		//delete_backend_mutex(m.table, pool)
+		slogger.Error((m.logprefix + "httputil/ReverseProxy() failed"),
+			"pool", pool, "err", err)
+		//abort_backend_on_error(m.manager, pool, err)
 
 		//var code1 = http_502_bad_gateway
 		//var msg1 = map[string]string{}
@@ -210,10 +212,13 @@ func proxy_error_handler(m *multiplexer) func(http.ResponseWriter, *http.Request
 		//http_error_in_json(w, json1, code1)
 		//log_mux_access_by_request(rqst, code1, int64(len(json1)), "", auth)
 
+		// It should distinguish errors and return 502 or 503
+		// correspondingly.
+
 		var err1 = &proxy_exc{
 			auth,
 			"",
-			http_502_bad_gateway,
+			ITE(true, http_502_bad_gateway, http_503_service_unavailable),
 			[][2]string{
 				message_50x_internal_error,
 			},
@@ -409,9 +414,9 @@ func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, be *
 }
 
 // SERVE_INTERNAL_ACCESS handles requests by probe_access_mux() from
-// Registrar or other Multiplexers.  A call to
-// make_absent_buckets_in_backend() has a race, but it results in only
-// redundant work.
+// Registrar or other Multiplexers.  It tries to make a bucket in the
+// backend.  Calling make_absent_buckets_in_backend() has a race, but
+// it results in only redundant work.
 func serve_internal_access(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record, secret *secret_record) {
 	assert_fatal(secret != nil)
 	var auth = secret.Access_key
@@ -427,9 +432,6 @@ func serve_internal_access(m *multiplexer, w http.ResponseWriter, r *http.Reques
 	if pooldata == nil {
 		return
 	}
-	// if !ensure_user_is_active(m, w, r, pooldata.Owner_uid, auth) {
-	// 	return
-	// }
 	if !ensure_pool_state(m, w, r, pooldata, auth) {
 		return
 	}
@@ -439,7 +441,21 @@ func serve_internal_access(m *multiplexer, w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	make_absent_buckets_in_backend(m.manager, be)
+	if true {
+		var err1 = make_absent_buckets_in_backend(m.manager, be)
+		if err1 != nil {
+			var err2 = &proxy_exc{
+				auth,
+				"",
+				http_500_internal_server_error,
+				[][2]string{
+					message_500_cannot_start_backend,
+				},
+			}
+			return_mux_error_response(m, w, r, err2)
+			return
+		}
+	}
 }
 
 type access_logger = func(rqst *http.Request, code int, length int64, uid string, auth string)
@@ -657,25 +673,6 @@ func ensure_pool_existence(m *multiplexer, w http.ResponseWriter, r *http.Reques
 		return nil
 	}
 	return pooldata
-}
-
-func ensure_user_is_active__(m *multiplexer, w http.ResponseWriter, r *http.Request, uid string, auth string) bool {
-	var ok, reason = check_user_is_active(m.table, uid)
-	if !ok {
-		// (An error already logged).
-		var err1 = &proxy_exc{
-			auth,
-			"",
-			http_403_forbidden,
-			[][2]string{
-				reason,
-			},
-		}
-		return_mux_error_response(m, w, r, err1)
-		return false
-	}
-	set_user_timestamp(m.table, uid)
-	return true
 }
 
 // ENSURE_FORWARDING_HOST_TRUSTED checks the request sender is a
@@ -913,38 +910,6 @@ func pick_bucket_in_path(m *multiplexer, r *http.Request, auth string) (string, 
 	return bucket, nil
 }
 
-func mux_periodic_work(m *multiplexer) {
-	var conf = &m.conf.Multiplexer
-	if trace_task&tracing != 0 {
-		slogger.Debug(m.logprefix + "Periodic work started")
-	}
-	var now int64 = time.Now().Unix()
-	var mux = &mux_record{
-		Mux_ep:     m.mux_ep,
-		Start_time: now,
-		Timestamp:  now,
-	}
-
-	var interval = (conf.Mux_ep_update_interval).time_duration()
-	var expiry = 3 * interval
-	assert_fatal(interval >= (10 * time.Second))
-	for {
-		if trace_task&tracing != 0 {
-			slogger.Debug(m.logprefix + "Update Mux-ep")
-		}
-		mux.Timestamp = time.Now().Unix()
-		set_mux_ep(m.table, m.mux_ep, mux)
-		var ok = set_mux_ep_expiry(m.table, m.mux_ep, expiry)
-		if !ok {
-			// Ignore an error.
-			slogger.Error(m.logprefix+"DB.Expire() on mux-ep failed",
-				"mux-ep", m.mux_ep)
-		}
-		var jitter = time.Duration(rand.Int64N(int64(interval) / 8))
-		time.Sleep(interval + jitter)
-	}
-}
-
 // CHECK_POOL_IS_USABLE checks the state of a pool in changes of user
 // and pool settings, and returns the subset of {READY, DISABLED,
 // INOPERABLE}.  This routine should be called in access checking.
@@ -1056,49 +1021,81 @@ func check_user_is_active(t *keyval_table, uid string) (bool, error_message) {
 	return true, error_message{}
 }
 
-func return_mux_error_response(m *multiplexer, w http.ResponseWriter, r *http.Request, err error) {
+func mux_periodic_work(m *multiplexer) {
+	var conf = &m.conf.Multiplexer
+	if trace_task&tracing != 0 {
+		slogger.Debug(m.logprefix + "Periodic work started")
+	}
+	var now int64 = time.Now().Unix()
+	var mux = &mux_record{
+		Mux_ep:     m.mux_ep,
+		Start_time: now,
+		Timestamp:  now,
+	}
+
+	var interval = (conf.Mux_ep_update_interval).time_duration()
+	var expiry = 3 * interval
+	assert_fatal(interval >= (10 * time.Second))
+	for {
+		if trace_task&tracing != 0 {
+			slogger.Debug(m.logprefix + "Update Mux-ep")
+		}
+		mux.Timestamp = time.Now().Unix()
+		set_mux_ep(m.table, m.mux_ep, mux)
+		var ok = set_mux_ep_expiry(m.table, m.mux_ep, expiry)
+		if !ok {
+			// Ignore an error.
+			slogger.Error(m.logprefix+"DB.Expire() on mux-ep failed",
+				"mux-ep", m.mux_ep)
+		}
+		var jitter = time.Duration(rand.Int64N(int64(interval) / 8))
+		time.Sleep(interval + jitter)
+	}
+}
+
+func return_mux_error_response(m *multiplexer, w http.ResponseWriter, r *http.Request, err *proxy_exc) {
 	var delay_ms = m.conf.Multiplexer.Error_response_delay_ms
 	var logprefix = m.logprefix
 	var logfn = log_mux_access_by_request
 	return_error_response(w, r, err, delay_ms, logprefix, logfn)
 }
 
-func return_error_response(w http.ResponseWriter, r *http.Request, err error, delay_ms time_in_ms, logprefix string, logfn access_logger) {
-	switch err1 := err.(type) {
-	default:
-		slogger.Error(logprefix+"Unexpected error (internal)", "err", err)
-		raise(err)
-	case *proxy_exc:
-		// Do not send details if not authenticated.
-		var message [][2]string
-		if err1.auth == "" || err1.auth == "-" {
-			message = [][2]string{
-				message_500_access_rejected,
-			}
-		} else {
-			message = err1.message
-		}
+func return_error_response(w http.ResponseWriter, r *http.Request, err1 *proxy_exc, delay_ms time_in_ms, logprefix string, logfn access_logger) {
+	//switch err1 := errx.(type) {
+	//default:
+	//	slogger.Error(logprefix+"Unexpected error (internal)", "err", err)
+	//	raise(err)
+	//case *proxy_exc:
 
-		var code1 = err1.code
-		var msg = map[string]string{}
-		for _, kv := range message {
-			msg[kv[0]] = kv[1]
+	// Do not send details if not authenticated.
+	var message [][2]string
+	if err1.auth == "" || err1.auth == "-" {
+		message = [][2]string{
+			message_500_access_rejected,
 		}
-		var rspn = &error_response{
-			response_common: response_common{
-				Status:    "error",
-				Reason:    msg,
-				Timestamp: time.Now().Unix(),
-			},
-		}
-		var b1, err2 = json.Marshal(rspn)
-		assert_fatal(err2 == nil)
-		var json1 = string(b1)
-		delay_sleep(delay_ms)
-		//http.Error(w, string(b1), code1)
-		http_error_in_json(w, json1, code1)
-		logfn(r, code1, int64(len(json1)), "", err1.auth)
+	} else {
+		message = err1.message
 	}
+
+	var code1 = err1.code
+	var msg = map[string]string{}
+	for _, kv := range message {
+		msg[kv[0]] = kv[1]
+	}
+	var rspn = &error_response{
+		response_common: response_common{
+			Status:    "error",
+			Reason:    msg,
+			Timestamp: time.Now().Unix(),
+		},
+	}
+	var b1, err2 = json.Marshal(rspn)
+	assert_fatal(err2 == nil)
+	var json1 = string(b1)
+	delay_sleep(delay_ms)
+	//http.Error(w, string(b1), code1)
+	http_error_in_json(w, json1, code1)
+	logfn(r, code1, int64(len(json1)), "", err1.auth)
 }
 
 // HTTP_ERROR_IN_JSON is http/Error() but content-type in json.

@@ -111,21 +111,21 @@ type user_record struct {
 }
 
 // "tn:"+uid Entry (db_csrf_token_prefix).  A csrf_token is a pair
-// of cookie+header.  Constraint: (tn:_ ∈ uu:User).
+// of cookie+header.  Constraint: (tn:_∈uu:User).
 type csrf_token_record struct {
 	Csrf_token []string `json:"csrf_token"`
 	Timestamp  int64    `json:"timestamp"`
 }
 
 // "um:"+claim Entry (db_user_claim_prefix).
-// Constraint: (um:_ ∈ uu:User).
+// Constraint: (um:_∈uu:User).
 type user_claim_record struct {
 	Uid       string `json:"uid"`
 	Timestamp int64  `json:"timestamp"`
 }
 
 // "px:"+pool-name Entry (db_pool_name_prefix).  A pool-name entry
-// keeps pool-names unique.  Constraint: (px:_∈_po:Pool).
+// keeps pool-names unique.  Constraint: (px:_∈po:Pool).
 type pool_name_record struct {
 	Owner_uid string `json:"owner"`
 	Timestamp int64  `json:"timestamp"`
@@ -150,7 +150,7 @@ type pool_record struct {
 // approximate dynamic state of a pool.  It ranges in the subset
 // {READY, SUSPENDED}.  It is imprecise and only used for Web-UI to
 // inform users the suspended state.  Constraint:
-// (key≡blurred_state_record.Pool), (ps:_∈_po:Pool).
+// (key≡blurred_state_record.Pool), (ps:_∈po:Pool).
 type blurred_state_record struct {
 	Pool      string      `json:"pool"`
 	State     pool_state  `json:"state"`
@@ -176,15 +176,15 @@ type backend_record struct {
 	Timestamp   int64      `json:"timestamp"`
 }
 
-// "dx:"+pool-name Entry (db_backend_mutex_prefix).  This entry
-// is temporarily created to mutex to run a single backend.
+// "dx:"+pool-name Entry (db_backend_mutex_prefix).  This entry is
+// temporarily created to mutex to start a single backend.
 type backend_mutex_record struct {
 	Mux_ep    string `json:"mux_ep"`
 	Timestamp int64  `json:"timestamp"`
 }
 
 // "bd:"+directory Entry (db_directory_prefix).  Constraint:
-// (key≡bucket_directory_record.Directory), (bd:_ ∈ po:Pool).
+// (key≡bucket_directory_record.Directory), (bd:_∈po:Pool).
 type bucket_directory_record struct {
 	Pool      string `json:"pool"`
 	Directory string `json:"directory"`
@@ -192,7 +192,7 @@ type bucket_directory_record struct {
 }
 
 // "bk:"+bucket Entry (db_bucket_prefix).  Constraint:
-// (key≡bucket_record.Bucket), (bk:_ ∈ po:Pool).
+// (key≡bucket_record.Bucket), (bk:_∈po:Pool).
 type bucket_record struct {
 	Pool            string        `json:"pool"`
 	Bucket          string        `json:"bucket"`
@@ -202,7 +202,7 @@ type bucket_record struct {
 }
 
 // "sx:"+secret Entry (db_secret_prefix).  Constraint:
-// (key≡secret_record.Access_key), (sx:_ ∈ po:Pool).
+// (key≡secret_record.Access_key), (sx:_∈po:Pool).
 type secret_record struct {
 	Pool            string        `json:"pool"`
 	Access_key      string        `json:"access_key"`
@@ -221,11 +221,11 @@ type mux_record struct {
 }
 
 // "pt:"+pool-name Entry (db_pool_timestamp_prefix).
-// Constraint: (pt:_ ∈ po:Pool).
+// Constraint: (pt:_∈po:Pool).
 // type int64
 
 // "ut:"+uid Entry (db_user_timestamp_prefix).
-// Constraint: (ut:_ ∈ uu:User).
+// Constraint: (ut:_∈uu:User).
 // type int64
 
 // BUCKET_POLICY is a public-access policy attached to a bucket
@@ -311,6 +311,7 @@ const (
 	start_failure_timeout        pool_reason = "timeout"
 	start_failure_pipe_closed    pool_reason = "pipe closed"
 	start_failure_stdio_flooding pool_reason = "stdout/stderr flooding"
+	start_failure_in_setup       pool_reason = "backend setup fails"
 
 	pool_reason_POOL_DISABLED_INITIALLY_ pool_reason = "pool disabled initially"
 	// Reasons include other messages on stdio from a backend server.

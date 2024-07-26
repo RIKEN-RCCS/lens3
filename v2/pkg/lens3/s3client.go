@@ -110,14 +110,14 @@ func list_buckets_in_backend(w *manager, be *backend_record) ([]string, error) {
 	return bkts, nil
 }
 
-func make_bucket_in_backend(w *manager, be *backend_record, bucket *bucket_record) bool {
+func make_bucket_in_backend(w *manager, be *backend_record, bucket *bucket_record) error {
 	var session = ""
-	var beurl = "http://" + be.Backend_ep
+	var url1 = "http://" + be.Backend_ep
 	var provider = credentials.NewStaticCredentialsProvider(
 		be.Root_access, be.Root_secret, session)
 	var region = w.Backend_region
 	var options = s3.Options{
-		BaseEndpoint: aws.String(beurl),
+		BaseEndpoint: aws.String(url1),
 		Credentials:  provider,
 		Region:       region,
 		UsePathStyle: true,
@@ -134,10 +134,10 @@ func make_bucket_in_backend(w *manager, be *backend_record, bucket *bucket_recor
 	if err1 != nil {
 		slogger.Error("Making a bucket in backend failed",
 			"bucket", bucket.Bucket, "err", err1)
-		return false
+		return err1
 	}
 	//fmt.Println("CreateBucket()=", v)
-	return true
+	return nil
 }
 
 func heartbeat_backend(w *manager, be *backend_record) int {

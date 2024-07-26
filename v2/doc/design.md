@@ -234,52 +234,37 @@ AWS S3 Documents:
 
 * [How Amazon S3 authorizes a request](https://docs.aws.amazon.com/AmazonS3/latest/userguide/how-s3-evaluates-access-control.html)
 
-## Processes
-
-### Lens3-Reg Processes
-
-Lens3-Reg is not designed to work in distributed for load-balancing.
-
-### Lens3-Mux Processes
-
-There exist multiple Lens3-Mux processes for a single Lens3-Mux
-service, as it is started by Gunicorn.  Some book-keeping periodical
-operations (running in background threads) are performed more
-frequently than expected.
-
-### Manager Processes
-
-A Manager becomes a session leader (by calling setsid), and a MinIO
-process will be terminated when a Manager exits.
-
 ## Building UI
 
-Lens3 UI is created by vuejs+vuetify.  The code for Vuetify is in the
-"v1/ui" directory.  See [v1/ui/README.md](../ui/README.md) for building UI.
+Lens3 UI is created by vuejs+vuetify.  Lens3-v2.1 uses the same UI
+code as v1.2.  The code for Vuetify is in the "v1/ui" directory.  See
+[v1/ui/README.md](../../v1/ui/README.md) for building UI.
 
 ## Security
 
 Security mainly depends on the setting of the frontend proxy.  Please
 consult experts for setting up the proxy.  Accesses to Lens3-Reg are
 authenticated as it is behind the proxy, and thus it is of less
-concern.  Lens3-Mux restricts accesses by checking a pair of a bucket
-and a secret.  Checker functions have names beginning with "ensure_".
-Please review those functions intensively.
+concern.  Accesses to Lens3-Mux is restricted by checks on a pair of a
+bucket and a secret.  The checks are in functions
+"serve_XXX_access()".  Please review those functions intensively.
 
-## HTTP Status Code
+## Testing the Service
 
-Lens3-Reg and Lens3-Mux returns a limited set of status codes.  Other
-than these, the codes are also from the proxy and from MinIO.
+Release tests on Web-UI shall be performed manually.
 
-* 200 OK
-* 400 Bad Request
-* 401 Unauthorized
-* 403 Forbidden
-* 404 Not Found
-* 500 Internal Server Error
-* 503 Service Unavailable
+### Unwritable bucket-directory
 
-## Notes on Testing the Service
+Making a pool for an unwritable bucket-directory is an error.  Check
+the pool become inoperable.  This error is visible to users.
+
+### Unwritable bucket-directory for a bucket
+
+First make a bucket, then remove the directory of the bucket in the
+bucket-directory.  Make the bucket-directory unwritable.  Starting a
+backend tries to make a bucket in the backend, but it should fail.
+Check the pool DOES NOT become inoperable.  This error is NOT visible
+to users.
 
 ### Forced Heartbeat Failure
 
@@ -294,75 +279,30 @@ The action to fake a forced removal of a __ma:pool-name__ entry in
 keyval-db should (1) start a new Lens3-Mux + MinIO pair, and then (2)
 stop an old Lens3-Mux + MinIO pair.
 
-## Notes on MinIO
+## Notes on Backends
 
-### Clients (MC)
+### MinIO Clients (MC)
 
 Note that alias commands are local (not connect to a MinIO).
 
 ### MinIO Start Messages
 
-Lens3 recognizes some messages from MinIO at a start to judge a run is
-successful.  A failure in starting MinIO make the pool inoperable.  A
-message of level=FATAL is treated as erroneous, but level=ERROR is
+Lens3 recognizes some messages from MinIO at its start to judge a run
+is successful.  A failure in starting MinIO makes the pool inoperable.
+A message of level=FATAL is treated as erroneous, but level=ERROR is
 not.  An exception is a port-in-use error which is level=FATAL.  Lens3
-retries to start MinIO in that case.  The patterns of messages in the
-source code may require fixing after updating MinIO and MC command.
+retries to start MinIO in that case.  The patterns of messages will
+change by MinIO and MC versions.
 
-A successful run will output several messages of level=INFO.  Lens3
-looks for a message starting with "S3-API:" to be successful.  The
-messages look like as follows (some slots are omitted).
+The samples of messages from MinIO can be found in
+[msg_minio.txt](../pkg/lens3/msg_minio.txt).
 
-```
+Lens3 looks for a message starting with "S3-API:" as a successful
+start.
 
-{"level":"INFO", ..., "message":"MinIO Object Storage Server"}
-...
-{"level":"INFO", ..., "message":"S3-API: http://XX.XX.XX.XX:9000
- http://127.0.0.1:9000 "}
-
-{"level":"INFO", ..., "message":"Console: http://XX.XX.XX.XX:38671
- http://127.0.0.1:38671 "}
-...
-```
-
-Lens3 looks for a message "Specified port is already in use" on a
-port-in-use error.  It will be retried.  Messages look like:
-
-```
-{"level":"FATAL", ..., "message":"Specified port is already in use:
- listen tcp XX.XX.XX.XX:9000: bind: address already in use",
- "error":{"message":"Specified port is already in use: listen tcp
- XX.XX.XX.XX:9000: bind: address already in use", ...}}
-```
-
-Other typical messages are listed below.  Note some messages of
-level=ERROR precede a message of level=FATAL.  Messages from a run
-specifying a non-writable directory look like:
-
-```
-{"level":"ERROR", ..., "error":{...}}
-{"level":"ERROR", ..., "error":{...}}
-{"level":"FATAL", ..., "message":"Invalid arguments specified",
- "error":{"message":"Invalid arguments specified", "source":[...]}}
-```
-
-Messages from a run with exisiting incompatible ".minio.sys" (created
-by an older version of MinIO) look like:
-
-```
-{"level":"FATAL", ..., "message":"Invalid arguments specified",
- "error":{"message":"Invalid arguments specified", "source":[...]}}
-```
-
-MESSAGES from older versions
-
-```
-{"level": "INFO", ..., "message": "API: http://n.n.n.n:n  http://n.n.n.n:n"}
-{"level": "FATAL", ..., "message": "Specified port is already in use:
-  listen tcp :n: bind: address already in use", ...}
-{"level": "FATAL", ..., "message": "Unable to write to the backend:
-  file access denied", ...}
-```
+Lens3 also looks for a message "Specified port is already in use" for
+a port-in-use error.  Starting a backend will be retried when this
+message is found.
 
 ## Glossary
 
@@ -372,12 +312,8 @@ MESSAGES from older versions
 
 ## Short-Term Todo, or Deficiency
 
-* Rewrite in Go-lang.  The code will be in Go in the next release
-  (v2.1.1).
-
-* Avoid polling of a start of MinIO.  Currently, a Lens3-Mux waits for
-  MinIO by frequent polling in the database.  See
-  wait_for_service_starts().
+* Avoid polling of a start of a backend.  Lens3-Mux waits for a start
+  of a backend by polling in the keyval-db.
 
 * Reject certain bucket-directory paths so that it does service in
   directories with dots.  Servicing in ".ssh" should be avoided, for
@@ -418,46 +354,31 @@ MESSAGES from older versions
 
 ## RANDOM MEMO
 
-__Load balancing__: The "scheduler.py" file is not used in v1.2, which
-is for distributing the processes.  Lens3 now assumes accesses to
-Lens3-Mux is in itself balanced by a front-end proxy.
-
 __Removing buckets__: Lens3 does not remove buckets at all.  It just
-makes them inaccessible.  It is because MinIO's "mc rb" command
-removes the contents of a bucket that is not useful usually.
-
-__Python Popen behavior__: A closure of a pipe created by Popen is not
-detectable until the process exits.  Lens3 uses a one line message on
-stdout to detect a start of a subprocess, but it does not wait for an
-EOF.  In addition, p.communicate() on an exited process waits.  A
-check of a process status is needed.
-
-__Python alarm behavior__: Raising an exception at an alarm signal
-does not wake-up the python waiting for a subprocess to finish.
-Instead, a timeout of p.comminicate() will be in effect.
+makes them inaccessible.  It is because the contents of a bucket is
+useful usually.
 
 __MC command concurrency__: Lens3 assumes concurrently running
 multiple MC commands with distinct aliases and distinct config-dirs do
 not interfere.
 
-__MinIO start delay__: Lens3 delays request handling on starting
-MinIO.  Alternatively, it can be returning 503 with a "Retry-After"
-http header.  NGINX (a proxy in front of Lens3) seems to return 502 on
-long delays.  See [rfc7231](https://httpwg.org/specs/rfc7231.htm).
+__Backend start delay__: Lens3 responds to a request in slow on
+starting a backend.  Alternatively, it can be returning 503 with a
+"Retry-After" http header.  NGINX (a proxy in front of Lens3) seems to
+return 502 on long delays.  See
+[rfc7231](https://httpwg.org/specs/rfc7231.htm).
 
-__Python Modules__: "FastAPI" uses "Starlette".  There are no direct
-uses of "Starlette" in the source code.
+__Backend errors__: Lens3 returns 503 on an error in proxying a
+request.  It should return 502 or 503 with regard to an error.
 
-__MinIO behavior__: MinIO refuses a connection by ECONNRESET
-sometimes, maybe at a slightly high load.  Lens3 returns 503 on
-ECONNRESET.
+For example, MinIO refuses a connection by ECONNRESET sometimes, maybe
+at a slightly high load (not checked for Lens3-v2.1).
 
-__MinIO behavior__: MinIO refuses a connection by EPIPE for some
-illegal accesses.  That is, when trying to put an object by a
-readonly-key or to put an object to a download-bucket without a key.
-Lens3 returns 503 on EPIPE, but, it makes clients retry badly.
+MinIO also refuses a connection by EPIPE for some illegal accesses.
+That is, when trying to put an object by a readonly-key or to put an
+object to a download-bucket without a key.
 
 __Accepting pool creation in busy situations__: Lens3 accepts creation
-of a pool even if it cannot start MinIO due to busyness of the server.
-It is done on purpose to display the error condition in UI's
-"minio_state" slot.
+of a pool even if it cannot start a backend due to busyness of the
+server.  It is done on purpose to display the error condition in UI's
+"backend_state" slot.

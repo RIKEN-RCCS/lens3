@@ -27,9 +27,11 @@ import (
 	"context"
 	"golang.org/x/sys/unix"
 	"log"
+	"maps"
 	"math/rand/v2"
 	"net"
 	"os/exec"
+	"runtime/debug"
 	"slices"
 	"strconv"
 	"sync"
@@ -192,12 +194,11 @@ func configure_manager(w *manager, m *multiplexer, t *keyval_table, q chan vacuo
 
 	w.logprefix = m.logprefix
 
-	var awake = (time.Duration(w.Backend_awake_duration) * time.Second)
+	var awake = (w.Backend_awake_duration).time_duration()
 	w.backend_suspension_time = (awake / 3)
 	w.backend_stabilize_time = 10 * time.Millisecond
 	w.backend_linger_time = 10 * time.Millisecond
 
-	//w.ch_sig = set_signal_handling()
 	w.environ = minimal_environ()
 
 	switch c.Multiplexer.Backend {
@@ -233,18 +234,20 @@ func initialize_backend_generic(w *manager, proc *backend_generic, pooldata *poo
 	proc.manager_conf = &w.manager_conf
 }
 
+// STOP_RUNNING_BACKENDS stops all backends for quitting.  Note that
+// copying the map (by maps.Clone()) is unnecessary, because Golang
+// allows deleting.
 func stop_running_backends(w *manager) {
 	var processes map[string]backend_delegate
 	func() {
 		w.mutex.Lock()
 		defer w.mutex.Unlock()
-		processes = w.process
-		w.process = nil
+		processes = maps.Clone(w.process)
 		w.shutdown_in_progress = true
 	}()
 	//var belist = list_backends_under_manager(w)
 	for _, d := range processes {
-		tell_stop_backend(w, d)
+		abort_backend(w, d)
 	}
 }
 
@@ -298,13 +301,12 @@ func start_backend_in_mutexed(w *manager, pool string) backend_delegate {
 
 	var d = w.factory.make_delegate(pool)
 
-	// Initialize the super part.
+	// Initialize the super part.  The following fields will be set in
+	// starting a backend: {proc.cmd, proc.ch_stdio,
+	// proc.ch_quit_backend}
 
 	var proc *backend_generic = d.get_super_part()
 	initialize_backend_generic(w, proc, pooldata)
-
-	// The following fields are set in starting a backend: {proc.cmd,
-	// proc.ch_stdio, proc.ch_quit_backend}
 
 	var available_ports = list_available_ports(w, proc.use_n_ports)
 
@@ -347,19 +349,25 @@ func start_backend_in_mutexed(w *manager, pool string) backend_delegate {
 		if !ok1 {
 			slogger.Warn(w.logprefix+"Starting a backend failed",
 				"pool", pool, "reason", "manager is in shutdown")
-			tell_stop_backend(w, d)
+			abort_backend(w, d)
 			return nil
 		}
 
 		go disgorge_stdio_to_log(w, proc)
 
-		// Sleep for a while for a backend to be stable.
+		// Sleep shortly for a backend to be stable.
 
 		time.Sleep(w.backend_stabilize_time)
 
 		d.establish()
 
-		make_absent_buckets_in_backend(w, proc.be)
+		var err1 = make_absent_buckets_in_backend(w, proc.be)
+		if err1 != nil {
+			//var reason pool_reason = start_failure_in_setup
+			//abort_backend(w, d)
+			//mark_pool_inoperable(w, pooldata, reason)
+			//return nil
+		}
 
 		go ping_backend(w, d)
 
@@ -396,8 +404,8 @@ func start_backend_in_mutexed(w *manager, pool string) backend_delegate {
 	}
 	var expiry = proc.backend_suspension_time
 	set_backend(w.table, pool, suspension)
-	var ok2 = set_backend_expiry(w.table, pool, expiry)
-	if !ok2 {
+	var ok3 = set_backend_expiry(w.table, pool, expiry)
+	if !ok3 {
 		slogger.Error(w.logprefix+"DB.Expire() on backend failed",
 			"pool", pool)
 	}
@@ -621,6 +629,7 @@ func wait_for_backend_by_race(w *manager, pool string) *backend_record {
 	return nil
 }
 
+// MARK_POOL_INOPERABLE makes a pool inoperable.
 func mark_pool_inoperable(w *manager, pooldata *pool_record, reason pool_reason) {
 	if pooldata.Inoperable {
 		return
@@ -631,22 +640,8 @@ func mark_pool_inoperable(w *manager, pooldata *pool_record, reason pool_reason)
 	set_pool(w.table, pooldata.Pool, pooldata)
 }
 
-// COMMAND_TO_STOP_BACKEND tells the pinger thread to shutdown the backend.
-func command_to_stop_backend(w *manager, pool string) {
-	var d backend_delegate
-	func() {
-		w.mutex.Lock()
-		defer w.mutex.Unlock()
-		d = w.process[pool]
-	}()
-	if d == nil {
-		return
-	}
-	tell_stop_backend(w, d)
-}
-
-// TELL_STOP_BACKEND tells the pinger thread to shutdown the backend.
-func tell_stop_backend(w *manager, d backend_delegate) {
+// ABORT_BACKEND tells the pinger thread to shutdown the backend.
+func abort_backend(w *manager, d backend_delegate) {
 	var proc = d.get_super_part()
 	func() {
 		proc.mutex.Lock()
@@ -662,6 +657,12 @@ func tell_stop_backend(w *manager, d backend_delegate) {
 // either when heartbeating fails or it is instructed to stop the
 // backend.
 func ping_backend(w *manager, d backend_delegate) {
+	defer func() {
+		var x = recover()
+		slogger.Error(w.logprefix+"Pinger errs", "err", x,
+			"stack", string(debug.Stack()))
+	}()
+
 	var proc = d.get_super_part()
 	var duration = (w.Backend_awake_duration).time_duration()
 	var interval = (proc.Heartbeat_interval).time_duration()
@@ -733,32 +734,38 @@ func ping_backend(w *manager, d backend_delegate) {
 // race, assuming all requests are finished in the wait.
 func stop_backend(w *manager, d backend_delegate) {
 	var proc = d.get_super_part()
-	slogger.Info(w.logprefix+"Stop a backend", "pool", proc.Pool)
+	var pool = proc.Pool
+	slogger.Info(w.logprefix+"Stop a backend", "pool", pool)
 
-	delete_backend_mutex(w.table, proc.Pool)
-	delete_backend(w.table, proc.Pool)
+	func() {
+		w.mutex.Lock()
+		defer w.mutex.Unlock()
+		delete(w.process, pool)
+	}()
+	delete_backend_mutex(w.table, pool)
+	delete_backend(w.table, pool)
 
 	time.Sleep(w.backend_linger_time)
 
 	var err1 = d.shutdown()
 	if err1 != nil {
-		slogger.Info(w.logprefix+"Backend shutdown() failed",
-			"pool", proc.Pool, "err", err1)
+		slogger.Error(w.logprefix+"Backend shutdown() failed",
+			"pool", pool, "err", err1)
 	}
 	if err1 == nil {
 		return
 	}
 	var err2 = proc.cmd.Cancel()
 	if err2 != nil {
-		slogger.Info(w.logprefix+"Backend exec/Command.Cancel() failed",
-			"pool", proc.Pool, "err", err2)
+		slogger.Error(w.logprefix+"exec/Command.Cancel() on backend failed",
+			"pool", pool, "err", err2)
 	}
 }
 
-// START_DISGORGING_STDIO spawns threads to emit backend stdout/stderr
-// outputs to the "ch_stdio" channel.  It returns immediately.  It
-// drains one line at a time.  It closes the channel when both are
-// closed.
+// START_DISGORGING_STDIO emits stdout+stderr outputs from a backend
+// to the ch_stdio channel.  It returns immediately.  It drains one
+// line at a time.  It will stop the backend when both the
+// stdout+stderr are closed.
 func start_disgorging_stdio(w *manager, d backend_delegate, ch_stdio chan<- stdio_message) {
 	var proc = d.get_super_part()
 	var cmd *exec.Cmd = proc.cmd
@@ -796,7 +803,7 @@ func start_disgorging_stdio(w *manager, d backend_delegate, ch_stdio chan<- stdi
 	go func() {
 		wg.Wait()
 		close(ch_stdio)
-		tell_stop_backend(w, d)
+		abort_backend(w, d)
 	}()
 }
 
@@ -930,30 +937,23 @@ func wait4_child_process(w *manager, d backend_delegate) {
 	}
 }
 
-// MAKE_ABSENT_BUCKETS_IN_BACKEND makes consistent about buckets with
-// a record in Registrar.  Note that it runs during starting a
-// backend.  Thus, it won't work to call get_backend(table,pool),
+// MAKE_ABSENT_BUCKETS_IN_BACKEND makes consistent about buckets in a
+// Registrar's record and buckets in the backend.  Note that it runs
+// during starting a backend.  Thus, calling get_backend() won't work,
 // because the record is not set in the keyval-db yet.
-func make_absent_buckets_in_backend(w *manager, be *backend_record) {
-	// var be = get_backend(w.table, pool)
-	// if be == nil {
-	// 	logger.errf(w.logprefix + "Backend not running in setup: pool=(%s)",
-	// 		pool)
-	// 	return
-	// }
-
+func make_absent_buckets_in_backend(w *manager, be *backend_record) error {
 	var pool = be.Pool
 	var buckets_needed = gather_buckets(w.table, pool)
 
-	var buckets_exsting, err = list_buckets_in_backend(w, be)
-	if err != nil {
+	var buckets_exsting, err1 = list_buckets_in_backend(w, be)
+	if err1 != nil {
 		slogger.Error(w.logprefix+"Backend access failed",
-			"pool", be.Pool, "err", err)
-		command_to_stop_backend(w, pool)
+			"pool", pool, "err", err1)
+		return err1
 	}
 
 	slogger.Debug(w.logprefix+"Check existing buckets in backend",
-		"pool", be.Pool, "buckets", buckets_exsting)
+		"pool", pool, "buckets", buckets_exsting)
 
 	var now = time.Now()
 	for _, b := range buckets_needed {
@@ -966,8 +966,12 @@ func make_absent_buckets_in_backend(w *manager, be *backend_record) {
 		}
 
 		slogger.Debug(w.logprefix+"Make a bucket in backend",
-			"pool", b.Pool, "bucket", b.Bucket)
+			"pool", pool, "bucket", b.Bucket)
 
-		make_bucket_in_backend(w, be, b)
+		var err2 = make_bucket_in_backend(w, be, b)
+		if err2 != nil {
+			return err2
+		}
 	}
+	return nil
 }

@@ -184,7 +184,7 @@ func sign_by_backend_credential(r *http.Request, be *backend_record) error {
 		hash = empty_payload_hash_sha256
 	}
 	var service = "s3"
-	var region = "us-east-1"
+	var region = s3_region_default
 	var date = time.Now()
 	var s = signer.NewSigner(func(s *signer.SignerOptions) {
 		// No options.

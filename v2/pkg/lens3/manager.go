@@ -1,4 +1,4 @@
-/* A sentinel of an S3 server process. */
+/* A sentinel for an S3 backend server process. */
 
 // Copyright 2022-2024 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
@@ -16,8 +16,8 @@ package lens3
 // with SIGKILL, but it does not work with signal relaying.  See
 // "src/os/exec/exec.go".
 //
-// MEMO: It does not use "Pdeathsig" in "unix.SysProcAttr".
-// Pdeathsig, or prctl(PR_SET_PDEATHSIG), is Linux.
+// MEMO: It does not use "Pdeathsig" in unix/SysProcAttr.  Pdeathsig,
+// or prctl(PR_SET_PDEATHSIG), is Linux.
 //
 // MEMO: os/Signal is an interface, while unix/Signal and
 // syscall/Signal are identical and concrete.
@@ -38,36 +38,33 @@ import (
 	"time"
 )
 
-// MANAGER keeps track of backend processes.  Manager is a single
-// object, "the_manager".  It is with threads to wait for child
-// processes.
+// MANAGER keeps track of backend processes.  A Manager is a single
+// object, "the_manager".  MUX_EP is a copy of multiplexer.mux_ep,
+// which is used for printing logging messages.  FACTORY is to make a
+// backend.  PROCESS holds a list of backends.  It is emptied, when
+// the manager is in shutdown.  ENVIRON holds a copy of the minimal
+// list of environs.  LOGPREFIX≡"Mux(ep): " is a printing name of this
+// Manager.  CH_QUIT_SERVICE is to receive quitting notification.
+// MUTEX protects accesses to the processes list.  A Manager starts
+// threads to ping backend service.
 type manager struct {
 	multiplexer *multiplexer
 
 	table *keyval_table
 
-	// MUX_EP is a copy of multiplexer.mux_ep, used for printing
-	// logging messages.
 	mux_ep string
 
-	// BE factory is to make a backend.
 	factory backend_factory
 
-	// PROCESS holds a list of backends.  It is emptied, when the
-	// manager is in shutdown.
 	process              map[string]backend_delegate
 	shutdown_in_progress bool
 
-	// ENVIRON holds a copy of the minimal list of environs.
 	environ []string
 
-	// logprefix="Mux(ep): " is a printing name of this Manager.
 	logprefix string
 
-	// CH_QUIT is to receive quitting notification.
 	ch_quit_service <-chan vacuous
 
-	// MUTEX protects accesses to the processes list.
 	mutex sync.Mutex
 
 	conf *mux_conf
@@ -111,16 +108,17 @@ type backend_delegate interface {
 
 // BACKEND_GENERIC is a generic part of a backend.  It is embedded in
 // an instance of backend_delegate and obtained by get_super_part().
-// A configuration "manager_conf" is shared with the manager.
+// ENVIRON is the shared one in the_manager.  The fields {CMD,
+// CH_STDIO, CH_QUIT_BACKEND, CH_QUIT_BACKEND_SEND} are set when
+// starting a backend.  MUTEX protects accesses to the
+// ch_quit_backend.  A configuration "manager_conf" is shared with the
+// manager.
 type backend_generic struct {
 	pool_record
 	be *backend_record
 
-	// ENVIRON is the shared one in the_manager.
 	environ []string
 
-	// The following fields {cmd,ch_stdio,ch_quit_backend} are set
-	// when starting a backend.
 	cmd                  *exec.Cmd
 	ch_stdio             <-chan stdio_message
 	ch_quit_backend      <-chan vacuous
@@ -128,7 +126,6 @@ type backend_generic struct {
 
 	heartbeat_misses int
 
-	// MUTEX protects accesses to the ch_quit_backend.
 	mutex sync.Mutex
 
 	*manager_conf
@@ -136,10 +133,10 @@ type backend_generic struct {
 }
 
 // BACKEND_CONF is static parameters that are thought to be a part of
-// manager_conf.  It is set by factory's make_delegate().
+// manager_conf.  It is set by factory's make_delegate().  USE_N_PORTS
+// is the number of ports used per backend.  It is use_n_ports=1 for
+// MinIO and use_n_ports=2 for rclone.
 type backend_conf struct {
-	// USE_N_PORTS is the number of ports used per backend.  It is
-	// MinIO:1 and rclone:2.
 	use_n_ports int
 }
 
@@ -196,8 +193,8 @@ func configure_manager(w *manager, m *multiplexer, t *keyval_table, q chan vacuo
 
 	var awake = (w.Backend_awake_duration).time_duration()
 	w.backend_suspension_time = (awake / 3)
-	w.backend_stabilize_time = 10 * time.Millisecond
-	w.backend_linger_time = 10 * time.Millisecond
+	w.backend_stabilize_time = (10 * time.Millisecond)
+	w.backend_linger_time = (10 * time.Millisecond)
 
 	w.environ = minimal_environ()
 
@@ -653,14 +650,16 @@ func abort_backend(w *manager, d backend_delegate) {
 	}()
 }
 
-// PING_BACKEND performs heartbeating.  It will shutdown the backend,
-// either when heartbeating fails or it is instructed to stop the
-// backend.
+// PING_BACKEND performs heartbeating in its thread.  It will shutdown
+// the backend, either when heartbeating fails or it is instructed to
+// stop the backend.
 func ping_backend(w *manager, d backend_delegate) {
 	defer func() {
 		var x = recover()
-		slogger.Error(w.logprefix+"Pinger errs", "err", x,
-			"stack", string(debug.Stack()))
+		if x != nil {
+			slogger.Error(w.logprefix+"Pinger errs", "err", x,
+				"stack", string(debug.Stack()))
+		}
 	}()
 
 	var proc = d.get_super_part()
@@ -763,9 +762,9 @@ func stop_backend(w *manager, d backend_delegate) {
 }
 
 // START_DISGORGING_STDIO emits stdout+stderr outputs from a backend
-// to the ch_stdio channel.  It returns immediately.  It drains one
-// line at a time.  It will stop the backend when both the
-// stdout+stderr are closed.
+// to the ch_stdio channel.  It spawns threads and returns
+// immediately.  It drains one line at a time.  It will stop the
+// backend when both the stdout+stderr are closed.
 func start_disgorging_stdio(w *manager, d backend_delegate, ch_stdio chan<- stdio_message) {
 	var proc = d.get_super_part()
 	var cmd *exec.Cmd = proc.cmd
@@ -807,7 +806,7 @@ func start_disgorging_stdio(w *manager, d backend_delegate, ch_stdio chan<- stdi
 	}()
 }
 
-// DISGORGE_STDIO_TO_LOG dumps stdout+stderr messages to a log.  It
+// DISGORGE_STDIO_TO_LOG dumps stdout+stderr messages to logs.  It
 // receives messages written by threads started in
 // start_disgorging_stdio().
 func disgorge_stdio_to_log(w *manager, proc *backend_generic) {
@@ -817,7 +816,7 @@ func disgorge_stdio_to_log(w *manager, proc *backend_generic) {
 		if !ok1 {
 			break
 		}
-		// fmt.Println("LINE: ", x1.int, x1.string)
+		//fmt.Println("LINE: ", x1.int, x1.string)
 		//var m = strings.TrimSpace(x1.string)
 		var m = x1.string
 		if x1.stdio_stream == on_stdout {
@@ -913,13 +912,13 @@ func wait4_child_process(w *manager, d backend_delegate) {
 		if err1 != nil {
 			var err2, ok1 = err1.(unix.Errno)
 			assert_fatal(ok1)
-			if err2 == unix.ECHILD {
-				time.Sleep(60 * time.Second)
+			slogger.Warn(w.logprefix+"wait4() errs",
+				"errno", unix.ErrnoName(err2))
+			if err2 == unix.EINVAL || err2 == unix.ECHILD {
+				break
 			} else {
-				slogger.Warn(w.logprefix+"wait4() failed",
-					"errno", unix.ErrnoName(err2))
+				continue
 			}
-			continue
 		}
 		if wpid == 0 {
 			slogger.Warn(w.logprefix+"wait4() failed",
@@ -938,9 +937,10 @@ func wait4_child_process(w *manager, d backend_delegate) {
 }
 
 // MAKE_ABSENT_BUCKETS_IN_BACKEND makes consistent about buckets in a
-// Registrar's record and buckets in the backend.  Note that it runs
-// during starting a backend.  Thus, calling get_backend() won't work,
-// because the record is not set in the keyval-db yet.
+// Registrar's record and buckets in the backend.  It runs during
+// starting a backend.  It ignores errors from the backend but returns
+// the first one.  Calling get_backend() won't work yet, because the
+// record has not beeb set in the keyval-db.
 func make_absent_buckets_in_backend(w *manager, be *backend_record) error {
 	var pool = be.Pool
 	var buckets_needed = gather_buckets(w.table, pool)
@@ -955,6 +955,8 @@ func make_absent_buckets_in_backend(w *manager, be *backend_record) error {
 	slogger.Debug(w.logprefix+"Check existing buckets in backend",
 		"pool", pool, "buckets", buckets_exsting)
 
+	var err2 error = nil
+
 	var now = time.Now()
 	for _, b := range buckets_needed {
 		if slices.Contains(buckets_exsting, b.Bucket) {
@@ -968,10 +970,10 @@ func make_absent_buckets_in_backend(w *manager, be *backend_record) error {
 		slogger.Debug(w.logprefix+"Make a bucket in backend",
 			"pool", pool, "bucket", b.Bucket)
 
-		var err2 = make_bucket_in_backend(w, be, b)
-		if err2 != nil {
-			return err2
+		var err3 = make_bucket_in_backend(w, be, b)
+		if err3 != nil && err2 == nil {
+			err2 = err3
 		}
 	}
-	return nil
+	return err2
 }

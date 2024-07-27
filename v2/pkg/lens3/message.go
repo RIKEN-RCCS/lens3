@@ -66,10 +66,12 @@ var (
 		"message", "Rejected"}
 	message_500_pool_inoperable = [2]string{
 		"message", "Pool inoperable"}
-	message_500_cannot_start_backend = error_message{
-		"message", "Cannot start backend"}
 	message_500_sign_failed = error_message{
 		"message", "Signing by aws.signer failed"}
+	message_500_cannot_start_backend = error_message{
+		"message", "Cannot start backend"}
+	message_500_bucket_creation_failed = error_message{
+		"message", "Bucket creation failed"}
 	message_500_user_account_conflict = error_message{
 		"message", "User accounts conflict"}
 )

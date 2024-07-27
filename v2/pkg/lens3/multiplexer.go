@@ -43,15 +43,16 @@ import (
 	"time"
 )
 
-// MULTIPLEXER is a single object, "the_multiplexer".
+// MULTIPLEXER is a single object, "the_multiplexer".  EP_PORT is a
+// listening port of a Multiplexer (it is ":port").  MUX_EP and
+// MUX_PID are about a process that a Multiplexer and a Manager run
+// in.  LOGPREFIX≡"Mux: " is a printing name of this Multiplexer.
+// CH_QUIT_SERVICE is to receive quitting notification.
 type multiplexer struct {
-	// EP_PORT is a listening port of Mux (":port").
 	ep_port string
 
 	manager *manager
 
-	// MUX_EP and MUX_PID are about a process that a multiplexer and a
-	// manager run in.
 	mux_ep  string
 	mux_pid int
 
@@ -59,10 +60,8 @@ type multiplexer struct {
 
 	trusted_proxies []net.IP
 
-	// logprefix="Mux: " is a printing name of this Multiplexer.
 	logprefix string
 
-	// CH_QUIT is to receive quitting notification.
 	ch_quit_service <-chan vacuous
 
 	server *http.Server
@@ -146,24 +145,67 @@ func start_multiplexer(m *multiplexer, wg *sync.WaitGroup) {
 		"ep", m.mux_ep, "err", err1)
 }
 
+// MUX_PERIODIC_WORK registers the endpoint of Multiplexer in the
+// keyval-db in its thread.
+func mux_periodic_work(m *multiplexer) {
+	defer func() {
+		var x = recover()
+		if x != nil {
+			slogger.Error(m.logprefix+"Mux periodic work errs", "err", x,
+				"stack", string(debug.Stack()))
+		}
+	}()
+
+	var conf = &m.conf.Multiplexer
+	if trace_task&tracing != 0 {
+		slogger.Debug(m.logprefix + "Mux periodic work started")
+	}
+	var now int64 = time.Now().Unix()
+	var mux = &mux_record{
+		Mux_ep:     m.mux_ep,
+		Start_time: now,
+		Timestamp:  now,
+	}
+
+	var interval = (conf.Mux_ep_update_interval).time_duration()
+	var expiry = 2 * interval
+	assert_fatal(interval >= (10 * time.Second))
+	for {
+		if trace_task&tracing != 0 {
+			slogger.Debug(m.logprefix + "Update Mux-ep")
+		}
+		mux.Timestamp = time.Now().Unix()
+		set_mux_ep(m.table, m.mux_ep, mux)
+		var ok = set_mux_ep_expiry(m.table, m.mux_ep, expiry)
+		if !ok {
+			// Ignore an error.
+			slogger.Error(m.logprefix+"DB.Expire() on mux-ep failed",
+				"mux-ep", m.mux_ep)
+		}
+		var jitter = time.Duration(rand.Int64N(int64(interval) / 10))
+		time.Sleep(interval + jitter)
+	}
+}
+
 // PROXY_REQUEST_REWRITER makes a function for ReverseProxy.Rewriter.
-// It receives the forwarding url from a filtering proxy via the
-// context value "lens3-be".
+// It receives a forwarding url via the context value "lens3-be".
 func proxy_request_rewriter(m *multiplexer) func(*httputil.ProxyRequest) {
 	return func(r *httputil.ProxyRequest) {
 		var ctx = r.In.Context()
 		var x1 = ctx.Value("lens3-be")
 		var forwarding, ok = x1.(*url.URL)
 		assert_fatal(ok)
-		if false {
-			slogger.Debug(m.logprefix+"Forward request", "url", forwarding)
-		}
 		r.SetURL(forwarding)
 		r.SetXForwarded()
+
+		if false {
+			slogger.Debug(m.logprefix+"Forward request",
+				"url", forwarding)
+		}
 	}
 }
 
-// PROXY_ACCESS_ADDENDA makes a callback that is called at sending a
+// PROXY_ACCESS_ADDENDA makes a callback that is called at returning a
 // response by httputil/ReverseProxy.  It is to generate an access
 // log.
 func proxy_access_addenda(m *multiplexer) func(*http.Response) error {
@@ -184,8 +226,10 @@ func proxy_access_addenda(m *multiplexer) func(*http.Response) error {
 }
 
 // PROXY_ERROR_HANDLER makes an "ErrorHandler" for
-// httputil/ReverseProxy that returns a response.  An error on
-// proxying does not abort the backend.
+// httputil/ReverseProxy that returns a response.  Errors in proxying
+// are considered temporary and it returns
+// http_503_service_unavailable, not http_502_bad_gateway.  But, it
+// would have to distinguish errors for 502 or 503.
 func proxy_error_handler(m *multiplexer) func(http.ResponseWriter, *http.Request, error) {
 	return func(w http.ResponseWriter, rqst *http.Request, err error) {
 		var ctx = rqst.Context()
@@ -198,27 +242,13 @@ func proxy_error_handler(m *multiplexer) func(http.ResponseWriter, *http.Request
 			auth = poolauth[1]
 		}
 		slogger.Error((m.logprefix + "httputil/ReverseProxy() failed"),
-			"pool", pool, "err", err)
-		//abort_backend_on_error(m.manager, pool, err)
-
-		//var code1 = http_502_bad_gateway
-		//var msg1 = map[string]string{}
-		//msg1["message"] = message_50x_internal_error[1]
-		//var b1, err1 = json.Marshal(msg1)
-		//assert_fatal(err1 == nil)
-		//var json1 = string(b1)
-		//delay_sleep(m.conf.Multiplexer.Error_response_delay_ms)
-		////http.Error(w, msg1, code1)
-		//http_error_in_json(w, json1, code1)
-		//log_mux_access_by_request(rqst, code1, int64(len(json1)), "", auth)
-
-		// It should distinguish errors and return 502 or 503
-		// correspondingly.
+			"pool", pool, "requst", rqst, "err", err)
+		//abort_backend(m.manager, pool)
 
 		var err1 = &proxy_exc{
 			auth,
 			"",
-			ITE(true, http_502_bad_gateway, http_503_service_unavailable),
+			http_503_service_unavailable,
 			[][2]string{
 				message_50x_internal_error,
 			},
@@ -407,27 +437,40 @@ func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, be *
 	if trace_proxy&tracing != 0 {
 		slogger.Debug(m.logprefix+"Forward request",
 			"pool", pool, "key", auth,
-			"method", r.Method, "resource", r.RequestURI)
+			//"method", r2.Method, "resource", r2.RequestURI
+			"request", r2)
 	}
 
 	proxy.ServeHTTP(w, r2)
 }
 
 // SERVE_INTERNAL_ACCESS handles requests by probe_access_mux() from
-// Registrar or other Multiplexers.  It tries to make a bucket in the
+// Registrar or other Multiplexers.  It rejects requests from the
+// outside (ie, thru the proxy).  It tries to make buckets in the
 // backend.  Calling make_absent_buckets_in_backend() has a race, but
 // it results in only redundant work.
 func serve_internal_access(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record, secret *secret_record) {
 	assert_fatal(secret != nil)
 	var auth = secret.Access_key
-	slogger.Debug(m.logprefix+"Internal access", "pool", secret.Pool)
-
-	// REJECT REQUESTS FROM THE OUTSIDE.
-
-	//var peer = r.Header.Get("Remote_Addr")
-	//var peer = r.RemoteAddr
-
 	var pool = secret.Pool
+	slogger.Debug(m.logprefix+"Internal access", "pool", pool)
+
+	var peer = r.Header.Get("Remote_Addr")
+	if peer != "" {
+		slogger.Error(m.logprefix+"Bad probe access",
+			"remote", peer)
+		var err1 = &proxy_exc{
+			auth,
+			"",
+			http_500_internal_server_error,
+			[][2]string{
+				message_500_access_rejected,
+			},
+		}
+		return_mux_error_response(m, w, r, err1)
+		return
+	}
+
 	var pooldata *pool_record = ensure_pool_existence(m, w, r, pool, auth)
 	if pooldata == nil {
 		return
@@ -441,20 +484,18 @@ func serve_internal_access(m *multiplexer, w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if true {
-		var err1 = make_absent_buckets_in_backend(m.manager, be)
-		if err1 != nil {
-			var err2 = &proxy_exc{
-				auth,
-				"",
-				http_500_internal_server_error,
-				[][2]string{
-					message_500_cannot_start_backend,
-				},
-			}
-			return_mux_error_response(m, w, r, err2)
-			return
+	var err2 = make_absent_buckets_in_backend(m.manager, be)
+	if err2 != nil {
+		var err3 = &proxy_exc{
+			auth,
+			"",
+			http_500_internal_server_error,
+			[][2]string{
+				message_500_bucket_creation_failed,
+			},
 		}
+		return_mux_error_response(m, w, r, err3)
+		return
 	}
 }
 
@@ -474,17 +515,6 @@ func handle_exc(w http.ResponseWriter, rqst *http.Request, delay_ms time_in_ms, 
 		slogger.Error(logprefix+"FATAL ERROR", "err", err1,
 			"stack", string(debug.Stack()))
 
-		//var code2 = http_500_internal_server_error
-		//var msg2 = map[string]string{}
-		//msg2["message"] = message_50x_internal_error[1]
-		//var b2, err2 = json.Marshal(msg2)
-		//assert_fatal(err2 == nil)
-		//var json2 = string(b2)
-		//delay_sleep(delay_ms)
-		////http.Error(w, msg2, code2)
-		//http_error_in_json(w, json2, code2)
-		//logfn(rqst, code2, int64(len(json2)), "", "")
-
 		var err2 = &proxy_exc{
 			"",
 			"",
@@ -498,34 +528,10 @@ func handle_exc(w http.ResponseWriter, rqst *http.Request, delay_ms time_in_ms, 
 	case *proxy_exc:
 		slogger.Error(logprefix+" Handler error", "err", err1)
 
-		//var code3 = err1.code
-		//var msg3 = map[string]string{}
-		//for _, kv := range err1.message {
-		//	msg3[kv[0]] = kv[1]
-		//}
-		//var b3, err3 = json.Marshal(msg3)
-		//assert_fatal(err3 == nil)
-		//var json3 = string(b3)
-		//delay_sleep(delay_ms)
-		////http.Error(w, json3, code3)
-		//http_error_in_json(w, string(b3), code3)
-		//logfn(rqst, err1.code, int64(len(json3)), "", err1.auth)
-
 		return_error_response(w, rqst, err1, delay_ms, logprefix, logfn)
 	default:
 		slogger.Error(logprefix+" Runtime panic", "err", err1,
 			"stack", string(debug.Stack()))
-
-		//var code4 = http_500_internal_server_error
-		//var msg4 = map[string]string{}
-		//msg4["message"] = message_50x_internal_error[1]
-		//var b4, err4 = json.Marshal(msg4)
-		//assert_fatal(err4 == nil)
-		//var json4 = string(b4)
-		//delay_sleep(delay_ms)
-		////http.Error(w, msg4, code4)
-		//http_error_in_json(w, json4, code4)
-		//logfn(rqst, code4, int64(len(json4)), "", "")
 
 		var err3 = &proxy_exc{
 			"",
@@ -1021,38 +1027,6 @@ func check_user_is_active(t *keyval_table, uid string) (bool, error_message) {
 	return true, error_message{}
 }
 
-func mux_periodic_work(m *multiplexer) {
-	var conf = &m.conf.Multiplexer
-	if trace_task&tracing != 0 {
-		slogger.Debug(m.logprefix + "Periodic work started")
-	}
-	var now int64 = time.Now().Unix()
-	var mux = &mux_record{
-		Mux_ep:     m.mux_ep,
-		Start_time: now,
-		Timestamp:  now,
-	}
-
-	var interval = (conf.Mux_ep_update_interval).time_duration()
-	var expiry = 3 * interval
-	assert_fatal(interval >= (10 * time.Second))
-	for {
-		if trace_task&tracing != 0 {
-			slogger.Debug(m.logprefix + "Update Mux-ep")
-		}
-		mux.Timestamp = time.Now().Unix()
-		set_mux_ep(m.table, m.mux_ep, mux)
-		var ok = set_mux_ep_expiry(m.table, m.mux_ep, expiry)
-		if !ok {
-			// Ignore an error.
-			slogger.Error(m.logprefix+"DB.Expire() on mux-ep failed",
-				"mux-ep", m.mux_ep)
-		}
-		var jitter = time.Duration(rand.Int64N(int64(interval) / 8))
-		time.Sleep(interval + jitter)
-	}
-}
-
 func return_mux_error_response(m *multiplexer, w http.ResponseWriter, r *http.Request, err *proxy_exc) {
 	var delay_ms = m.conf.Multiplexer.Error_response_delay_ms
 	var logprefix = m.logprefix
@@ -1060,14 +1034,9 @@ func return_mux_error_response(m *multiplexer, w http.ResponseWriter, r *http.Re
 	return_error_response(w, r, err, delay_ms, logprefix, logfn)
 }
 
+// RETURN_ERROR_RESPONSE sends a response to a client.  It does not
+// send details unless authenticated.
 func return_error_response(w http.ResponseWriter, r *http.Request, err1 *proxy_exc, delay_ms time_in_ms, logprefix string, logfn access_logger) {
-	//switch err1 := errx.(type) {
-	//default:
-	//	slogger.Error(logprefix+"Unexpected error (internal)", "err", err)
-	//	raise(err)
-	//case *proxy_exc:
-
-	// Do not send details if not authenticated.
 	var message [][2]string
 	if err1.auth == "" || err1.auth == "-" {
 		message = [][2]string{

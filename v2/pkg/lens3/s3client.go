@@ -27,9 +27,11 @@ import (
 	"math/rand/v2"
 )
 
-// PROBE_ACCESS_MUX accesses a Mux from Registrar or other
-// Multiplexers using a probe-key.  A probe-access starts a backend
-// and amends its setting.  It chooses a Mux under which a backend is
+const s3_region_default = "us-east-1"
+
+// PROBE_ACCESS_MUX accesses a Multiplexer using a probe-key from
+// Registrar.  A probe-access starts a backend and creates absent
+// buckets.  It chooses a Multiplexer under which a backend is
 // running, or randomly.  It uses "us-east-1" region, which can be
 // arbitrary.
 func probe_access_mux(t *keyval_table, pool string) error {
@@ -59,7 +61,7 @@ func probe_access_mux(t *keyval_table, pool string) error {
 	var muxurl = "http://" + ep
 	var provider = credentials.NewStaticCredentialsProvider(
 		secret.Access_key, secret.Secret_key, session)
-	var region = "us-east-1"
+	var region = s3_region_default
 	var options = s3.Options{
 		BaseEndpoint: aws.String(muxurl),
 		Credentials:  provider,

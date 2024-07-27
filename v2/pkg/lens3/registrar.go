@@ -559,6 +559,9 @@ func list_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 	return rspn
 }
 
+// MAKE_POOL_AND_RETURN_RESPONSE performs a make-pool operation.  An
+// error in probe_access_mux() is ignored, in order to display the
+// error condition in the pool "state" field in Web-UI.
 func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.Request) *pool_prop_response {
 	var opr = "make-pool"
 
@@ -573,9 +576,10 @@ func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 		return nil
 	}
 
+	var now int64 = time.Now().Unix()
+
 	// Register pool-name.
 
-	var now int64 = time.Now().Unix()
 	var poolname = &pool_name_record{
 		Owner_uid: u.Uid,
 		Timestamp: now,
@@ -639,6 +643,8 @@ func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 	}
 	set_pool(z.table, pool, pooldata)
 	//set_pool_state(z.table, pool, pool_state_INITIAL, pool_reason_NORMAL)
+
+	var _ = probe_access_mux(z.table, pool)
 
 	var rspn = return_pool_prop(z, w, r, u, pool)
 	return rspn
@@ -731,10 +737,37 @@ func make_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 		return nil
 	}
 
-	// Make the bucket in the backend.  It ignores all errors.
+	// Ask to make a bucket in the backend.
 
-	if !conf.Postpone_probe_access {
-		var _ = probe_access_mux(z.table, pool)
+	//if !conf.Postpone_probe_access {}
+	var err2 = probe_access_mux(z.table, pool)
+	if err2 != nil {
+		var ok2 = delete_bucket_checking(z.table, name)
+		if !ok2 {
+			slogger.Error("Reg: Deleting a bucket failed (ignored)",
+				"pool", pool, "bucket", name)
+		}
+
+		// AHOAHOAHO
+		// "Make bucket failed:"
+		// {"status":"error","reason":{"err":"operation error S3:
+		// ListBuckets, exceeded maximum number of attempts, 3, https
+		// response error StatusCode: 500, RequestID: , HostID: , api
+		// error InternalServerError: Internal Server
+		// Error","message":"Bucket creation failed"}}
+
+		var reason = err2.Error()
+		var err3 = &proxy_exc{
+			"",
+			u.Uid,
+			http_502_bad_gateway,
+			[][2]string{
+				message_500_bucket_creation_failed,
+				{"err", reason},
+			},
+		}
+		return_reg_error_response(z, w, r, err3)
+		return nil
 	}
 
 	var rspn = return_pool_prop(z, w, r, u, pool)
@@ -757,6 +790,8 @@ func delete_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *h
 
 	var ok1 = delete_bucket_checking(z.table, bucket)
 	if !ok1 {
+		slogger.Error("Reg: Deleting a bucket failed (ignored)",
+			"pool", pool, "bucket", bucket)
 		var err1 = &proxy_exc{
 			"",
 			u.Uid,

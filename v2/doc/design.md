@@ -287,6 +287,11 @@ The action to fake a forced removal of a __ma:pool-name__ entry in
 keyval-db should (1) start a new Lens3-Mux + backend pair, and then
 (2) stop an old Lens3-Mux + backend pair.
 
+### Garbages Created in Tests
+
+Test programs will create garbages as bucket names
+"lenticularis-oddity-XXX".
+
 ## Notes on Backends
 
 ### MinIO Clients (MC)

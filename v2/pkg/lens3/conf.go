@@ -81,7 +81,6 @@ type registrar_conf struct {
 	Base_path               string        `json:"base_path"`
 	Claim_uid_map           claim_uid_map `json:"claim_uid_map"`
 	User_approval           user_approval `json:"user_approval"`
-	Postpone_probe_access   bool          `json:"postpone_probe_access"`
 	Uid_allow_range_list    [][2]int      `json:"uid_allow_range_list"`
 	Uid_block_range_list    [][2]int      `json:"uid_block_range_list"`
 	Gid_drop_range_list     [][2]int      `json:"gid_drop_range_list"`
@@ -92,6 +91,7 @@ type registrar_conf struct {
 	Secret_expiration_days  time_in_day   `json:"secret_expiration_days"`
 	Error_response_delay_ms time_in_ms    `json:"error_response_delay_ms"`
 	Ui_session_duration     time_in_sec   `json:"ui_session_duration"`
+	//Postpone_probe_access   bool          `json:"postpone_probe_access"`
 }
 
 type manager_conf struct {
@@ -380,8 +380,8 @@ func check_registrar_entry(e *registrar_conf) {
 		"Bucket_expiration_days",
 		"Secret_expiration_days",
 		"Error_response_delay_ms",
-		"Postpone_probe_access",
 		"Ui_session_duration",
+		//"Postpone_probe_access",
 	} {
 		check_field_required_and_positive(*e, slot, "registrar")
 	}

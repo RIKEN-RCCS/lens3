@@ -318,7 +318,7 @@ const (
 )
 
 func make_failure_reason(s string) pool_reason {
-	return pool_reason("backend returns: " + s)
+	return pool_reason("Backend returns: " + s)
 }
 
 const db_no_expiration = 0

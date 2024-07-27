@@ -1038,7 +1038,7 @@ func return_mux_error_response(m *multiplexer, w http.ResponseWriter, r *http.Re
 // send details unless authenticated.
 func return_error_response(w http.ResponseWriter, r *http.Request, err1 *proxy_exc, delay_ms time_in_ms, logprefix string, logfn access_logger) {
 	var message [][2]string
-	if err1.auth == "" || err1.auth == "-" {
+	if err1.auth == "" && err1.uid == "" {
 		message = [][2]string{
 			message_500_access_rejected,
 		}

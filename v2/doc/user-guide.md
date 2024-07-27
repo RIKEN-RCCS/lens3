@@ -2,10 +2,10 @@
 
 ## Quick Setup of Buckets
 
-Accessing the Web UI first shows __Manage Pools__ section.  A
+Accessing the Web-UI first shows __Manage Pools__ section.  A
 _bucket-pool_ or a _pool_ is a directory to hold buckets.  Each pool
-corresponds to a single MinIO instance.  Buckets and access keys are
-associated to a pool.
+corresponds to a single backend S3 server instance.  Buckets and
+access keys are associated to a pool.
 
 The first step is to create a pool.  Fill a directory as a full path
 and select a unix group, then click the create button (a plus icon).
@@ -14,7 +14,7 @@ The directory needs to be writable to the user:group pair.
 ![Landing page screenshot](ug1.jpg)
 
 __List Pools__ section shows a list of existing pools.  It is a slider
-list.  Check the MinIO-status of the pool just created.  It should be
+list.  Check the "minio-state" of the pool just created.  It should be
 _ready_.  A pool in _inoperable_ state is unusable (often, the reason
 is the directory is not writable).
 
@@ -29,14 +29,12 @@ buckets and the other for access keys.
 
 A bucket has a bucket-policy that specifies a permission to public
 access: _none_, _upload_, _download_, or _public_.  A bucket with the
-_none_-policy is accessible only with access-keys.  These policy names
-are taken from MinIO.
+_none_-policy is accessible only with access keys.
 
-An access-key has a key-policy: _readwrite_, _readonly_, or
+An access key has a key-policy: _readwrite_, _readonly_, or
 _writeonly_.  Accesses to buckets are restricted by these policies.
-These policy names are taken from MinIO.  An expiration date must be a
-future.  An expiration date is actually a time in second, but the UI
-only handles it by date at midnight UTC.
+An expiration date must be a future.  An expiration date is actually a
+time in second, but the UI only handles it by date at midnight UTC.
 
 ![Pool edit screenshot](ug3.jpg)
 
@@ -49,16 +47,15 @@ The S3-endpoint URL can be found in the menu at the top-left corner.
 
 ### Simple UI
 
-The current UI is created with vuejs+vuetify.  It is not good for your
-taste, try simple UI.  Simple UI reveals interactions with Web-API.
-If you are currently accessing the UI by a URL ending with
-".../ui/index.html", the simple UI is avaiable at
-".../ui2/index.html".
+The UI is created with vuejs+vuetify.  It is not of your taste, try
+simple UI.  Simple UI reveals interactions with Web-UI.  If you are
+currently accessing the UI by a URL ending with ".../ui/index.html",
+the simple UI is avaiable at ".../ui2/index.html".
 
 ## S3 Client Access Example
 
 The following example shows accessing an endpoint using the AWS CLI.
-An access-key pair can be obtained by Lens3 Web-API.  Lens3 only works
+An access key pair can be obtained by Lens3 Web-UI.  Lens3 only works
 with the signature algorithm v4, and it is specified as "s3v4".
 
 ```
@@ -86,49 +83,48 @@ messages.  It is on the todo list.
 |:--:|
 | **Fig. Lens3 overview.** |
 
-Lens3 consists of Lens3-Mux and Lens3-Reg -- Lens3-Mux is a
-multiplexer and Lens3-Reg is a setting Web-API.  Others are by
-third-parties.  MinIO is an open-source but commercially supported S3
-server.  Redis is an open-source database system.  A reverse-proxy is
-not specified in Lens3 but it is required for operation.
+Lens3 consists of Multiplexers and Registrar -- Multiplexer is a proxy
+to a backend S3 server, and Registrar is a setting Web-UI.  Others are
+by third-parties.  MinIO is an open-source but commercially supported
+S3 server.  Valkey is an open-source keyval-db database system.  A
+reverse-proxy is not specified in Lens3 but it is required for
+operation.
 
-Lens3-Mux works as a proxy which forwards file access requests to a
-MinIO instance by looking at a bucket name.  Lens3-Mux determines the
-target MinIO instance using an association of a bucket and a user.
-This association is stored in the Redis database.
+Multiplexer forwards access requests to a backend S3 server instance
+by looking at a bucket name.  Multiplexer determines the target
+backend using an association of a bucket and an access key.  This
+association is stored in the keyval-db.
 
-Lens3-Mux is also in charge of starting and stopping a MinIO instance.
-Lens3-Mux starts a MinIO instance on receiving an access request, and
-after a while, Lens3-Mux stops the instance when it becomes idle.
-Lens3-Mux starts a MinIO instance as a user process using "sudo".
+Multiplexer is also in charge of starting and stopping a backend S3
+server instance.  Multiplexer starts a backend on receiving an access
+request, and after a while, Multiplexer stops the instance when it
+becomes idle.  Multiplexer starts a backend as a user process using
+"sudo".
 
-Lens3-Reg provides management of buckets.  Lens3-Reg manages buckets
-by a bucket pool, which is a unit of management in Lens3 and
-corresponds to a single MinIO instance.  A user first creates a bucket
-pool, then registers buckets to the pool.
+Registrar provides management of buckets.  A bucket pool is a unit of
+management in Lens3 and corresponds to a single backend.  A user first
+creates a bucket pool, then registers buckets to the pool.
 
-## Bucket-Pool State (MinIO-state)
+## Bucket-Pool State
 
 A bucket-pool is a management unit of S3 buckets in Lens3 and it has a
-state reflecting the state of a MinIO instance (MinIO-state).  But,
-the state does not include the process status of an instance.
+state reflecting the state of a backend as "minio-state".
 
 Bucket-pool state is:
-* __None__ quickly moves to the __INITIAL__ state.
-* __INITIAL__ indicates a setup is not performed on a MinIO
-    instance.
-* __READY__ indicates a service is ready, a setup for servicing is
-    done.  It does not mean a MinIO instance is running.
+
+* __READY__ and __INITIAL__ indicate a service is usable.  It does not
+  necessarily mean a backend is running.  The INITIAL state was used
+  as the state the backend is not in sync with the Lens3's state.
+  READY and INITIAL are synonymous, currently.
 * __SUSPENED__ indicates a pool is temporarily unusable by server
-    busyness.  It needs several minutes for a cease of the
-    condition.
-* __DISABLED__ indicates a pool is set unusable.  A transition
-    between __READY__ and __DISABLED__ is by actions by an
-    administrator.  The causes of a transition include an expiry of a
-    pool, disabling a user account, or making a pool offline.
+  busyness.  It needs several minutes for a cease of the condition.
+* __DISABLED__ indicates a pool is unusable.  A transition between
+  READY and DISABLED is by actions by an administrator or some
+  expiration conditions.  The causes of a transition include disabling
+  a user account, making a pool offline, or an expiry of a pool.
 * __INOPERABLE__ indicates an error state and a pool is permanently
-    unusable.  Mainly, it has failed to run a MinIO instance.  This
-    pool cannot be used and should be removed.
+  unusable.  Mainly, it has failed to start a backend.  This pool
+  cannot be used and should be removed.
 
 Deletions of buckets and secrets are accepted during the suspension
 state of a pool.  However, it delays to make a user's action take
@@ -162,7 +158,7 @@ immediately.
 ### No Bucket Operations
 
 Lens3 does not accept any bucket operations: creation, deletion, and
-listing.  Buckets can only be managed via Lens3-Reg.  Specifically, a
+listing.  Buckets can only be managed via Registrar.  Specifically, a
 bucket creation request will fail because the request (applying to the
 root path) is not forwarded to a MinIO instance.  A bucket deletion
 will succeed, but it makes the states of Lens3 and a MinIO instance
@@ -193,7 +189,7 @@ of the pool.
 ### No Access Logs
 
 Lens3 does not provide access logs to users, although we understand it
-is useful to users.  Administrators may provide access logs to users
+is useful to users.  Administrators might provide access logs to users
 by request by filtering server logs.
 
 ## Other Limitations
@@ -203,34 +199,35 @@ by request by filtering server logs.
 * No event notifications support.
 * Lens3 does not support listing of buckets by `aws s3 ls`.  Simply,
   Lens3 prohibits accesses to the "/" of the bucket namespace.  It is
-  because the bucket namespace is shared by multiple users (and MinIO
-  instances).
+  because the bucket namespace is shared by all users.
 * Lens3 does not support S3 CLI "presign" command.  Lens3 does not
   recognize a credential attached in a URL.
-* Lens3 does not provide accesses to the rich UI of MinIO or the MC
-  command.
+* Lens3 does not provide accesses to the rich UI provided by a backend
+  server.
 
 ## Glossary
 
 * __bucket pool__: A management unit of S3 buckets.  It corresponds to
-  a single MinIO instance.
-* __probe access__: Lens3-Reg or the administrator tool accesses
-  Lens3-Mux to start a MinIO instance.  Such access is called a probe
-  access.  A probe access is dropped at Lens3-Mux and not forwarded to
+  a single backend.
+* __probe access__: Registrar or the administrator tool accesses
+  Multiplexer to start a MinIO instance.  Such access is called a probe
+  access.  A probe access is dropped at Multiplexer and not forwarded to
   a MinIO instance.
+* __backend__: A backend refers to a backend S3 server instance.  That
+  is, it is a process of MinIO or rclone.
 
 ## Changes from v1.3.1 to v2.1.1
 
 * v2.1 is a code refresh.
 * Users of the service are default-allow (configurable).  Prior
-  registering of users is not necessary.
+  registering of users is optional.
 * It has a choice of a backend, rclone in addition to MinIO.  Note
-  that the current implementation of S3 in rclone-serve-s3 has
+  that the current implementation of rclone as rclone-serve-s3 has
   problems (rclone v1.66.0).
 * Checking access keys is done by Lens3.  v1.3 passed requests to a
   backend unchecked.
 * Records in the keyval-db are not compatible to v1.3.  All records
-  are stored in json.  The keyval-db is changed to Valkey.
+  are stored in json.  The keyval-db is Valkey.
 
 ## Changes from v1.2.1 to v1.3.1
 
@@ -251,7 +248,7 @@ by request by filtering server logs.
 * Access keys have expiration.
 * Rich features are dropped.
 * Some locks in accessing a database are omitted.  Operations by
-  Lens3-Reg and the administrator tool is sloppy.
-* MC commands are directly invoked from Lens3-Reg to change the
-  setting of a MinIO instance.  MC commands were invoked at Lens3-Mux
-  in v1.1.
+  Registrar and the administrator tool is sloppy.
+* MC commands are directly invoked from Registrar to change the
+  setting of a MinIO instance.  MC commands were invoked at
+  Multiplexer in v1.1.

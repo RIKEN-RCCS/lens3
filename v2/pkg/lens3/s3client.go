@@ -30,18 +30,20 @@ import (
 const s3_region_default = "us-east-1"
 
 // PROBE_ACCESS_MUX accesses a Multiplexer using a probe-key from
-// Registrar.  A probe-access starts a backend and creates absent
-// buckets.  It chooses a Multiplexer under which a backend is
-// running, or randomly.  It uses "us-east-1" region, which can be
-// arbitrary.
+// Registrar.  A probe-access starts a backend and makes absent
+// buckets.  It uses "us-east-1" region, which can be arbitrary.
 func probe_access_mux(t *keyval_table, pool string) error {
 	var pooldata = get_pool(t, pool)
 	if pooldata == nil {
-		return fmt.Errorf("Pool not found: pool=(%s)", pool)
+		var err1 = fmt.Errorf("Pool not found: pool=%q", pool)
+		slogger.Error("Probing fails", "pool", pool, "err", err1)
+		panic(nil)
 	}
 	var secret = get_secret(t, pooldata.Probe_key)
 	if secret == nil {
-		return fmt.Errorf("Probe-key not found: pool=(%s)", pool)
+		var err2 = fmt.Errorf("Probe-key not found: pool=%q", pool)
+		slogger.Error("Probing fails", "pool", pool, "err", err2)
+		panic(nil)
 	}
 
 	var ep string
@@ -51,7 +53,9 @@ func probe_access_mux(t *keyval_table, pool string) error {
 	} else {
 		var eps []*mux_record = list_mux_eps(t)
 		if len(eps) == 0 {
-			return fmt.Errorf("No Mux running")
+			var err3 = fmt.Errorf("No Multiplexers running")
+			slogger.Error("Probing fails", "pool", pool, "err", err3)
+			return err3
 		}
 		var i = rand.IntN(len(eps))
 		ep = eps[i].Mux_ep
@@ -70,13 +74,12 @@ func probe_access_mux(t *keyval_table, pool string) error {
 	}
 	var client *s3.Client = s3.New(options)
 	var ctx = context.Background()
-	var v, err1 = client.ListBuckets(ctx,
+	var _, err4 = client.ListBuckets(ctx,
 		&s3.ListBucketsInput{})
-	if err1 != nil {
-		slogger.Error("Probing multiplexer failed", "ep", ep, "err", err1)
-		return err1
+	if err4 != nil {
+		slogger.Error("Probing a Multiplexer errs", "ep", ep, "err", err4)
+		return err4
 	}
-	_ = v
 	return nil
 }
 

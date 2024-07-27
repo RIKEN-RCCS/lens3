@@ -268,16 +268,24 @@ to users.
 
 ### Forced Heartbeat Failure
 
-"kill -STOP" the MinIO process.  It causes heartbeat failure.  Note
-that it leaves "minio" and "sudo" processes in the STOP state.
+Kill by STOP the backend process.  It causes heartbeat failure.  Note
+that it leaves backend and "sudo" processes in the STOP state.
 
-### Forced Termination of Lens3-Mux and MinIO
+### Forced Termination of Lens3-Mux and a backend
+
+Kill the Lens3 services or the backend process.
+
+### Forced Failure in Keyval-DB
+
+Do "chmod" on the keybal-db's store file or directory.
+
+Or, stop the keybal-db service.
 
 ### Forced Expiration of Lens3-Mux Entries in Keyval-DB
 
 The action to fake a forced removal of a __ma:pool-name__ entry in
-keyval-db should (1) start a new Lens3-Mux + MinIO pair, and then (2)
-stop an old Lens3-Mux + MinIO pair.
+keyval-db should (1) start a new Lens3-Mux + backend pair, and then
+(2) stop an old Lens3-Mux + backend pair.
 
 ## Notes on Backends
 
@@ -303,6 +311,17 @@ start.
 Lens3 also looks for a message "Specified port is already in use" for
 a port-in-use error.  Starting a backend will be retried when this
 message is found.
+
+### rclone "rclone serve s3"
+
+The current version of rclone (v1.66.0) does not work on (1) listing
+objects (2) uploading large objects.
+
+It does not support ListObjectsV2.  The old ListObjects works.
+
+It does not support multipart transfer.  Uploads fail but downloads
+work.  Note that the default of multipart threshold is 8MB.  It is
+maybe extremely slow on large objects.
 
 ## Glossary
 

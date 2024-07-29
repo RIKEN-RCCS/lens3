@@ -645,6 +645,7 @@ func make_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 	//set_pool_state(z.table, pool, pool_state_INITIAL, pool_reason_NORMAL)
 
 	var _ = probe_access_mux(z.table, pool)
+	// (An error is already logged).
 
 	var rspn = return_pool_prop(z, w, r, u, pool)
 	return rspn
@@ -742,6 +743,7 @@ func make_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 	//if !conf.Postpone_probe_access {}
 	var err2 = probe_access_mux(z.table, pool)
 	if err2 != nil {
+		// (An error is already logged).
 		var ok2 = delete_bucket_checking(z.table, name)
 		if !ok2 {
 			slogger.Error("Reg: Deleting a bucket failed (ignored)",
@@ -762,7 +764,7 @@ func make_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 			u.Uid,
 			http_502_bad_gateway,
 			[][2]string{
-				message_500_bucket_creation_failed,
+				message_502_bucket_creation_failed,
 				{"err", reason},
 			},
 		}

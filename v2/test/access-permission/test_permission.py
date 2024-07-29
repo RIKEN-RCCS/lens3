@@ -232,6 +232,7 @@ class Access_Test():
 
     def make_buckets(self):
         """Makes buckets one for each policy."""
+        print(f"Making buckets...")
         desc1 = self.client.find_pool(self.working_directory)
         pid = desc1["pool_name"]
         for policy in self.client.bkt_policy_set:
@@ -240,7 +241,7 @@ class Access_Test():
                 bucket = ("lenticularis-oddity-" + random_string(6))
                 pass
             assert bucket not in self.working_buckets
-            print(f"Making a bucket with policy={policy} bucket={bucket}")
+            print(f";; Bucket with policy={policy} bucket={bucket}")
             self.client.make_bucket(self.working_pool, bucket, policy)
             self.working_buckets.add(bucket)
             pass
@@ -271,14 +272,16 @@ class Access_Test():
         # (1) Make an S3 client for each access-key.
         #
 
+        print(f"Making access keys...")
         for policy in self.client.key_policy_set:
-            print(f"Making an access-key with policy={policy} expired={expired}")
+            print(f";; Access-key with policy={policy} expired={expired}")
             self.client.make_secret(self.working_pool, policy, expiration)
             pass
         desc2 = self.client.get_pool(self.working_pool)
         keyslist2 = [k for k in desc2["secrets"]
                      if k["expiration_time"] == expiration]
         assert len(keyslist2) == len(self.client.key_policy_set)
+        print(f"Making S3 cleints...")
         for k in keyslist2:
             access2 = k["access_key"]
             secret2 = k["secret_key"]
@@ -332,7 +335,7 @@ class Access_Test():
         pass
 
     def put_file_in_buckets(self):
-        print("Storing a file in each bucket with the readwrite key.")
+        print("Storing a file in each bucket with the readwrite key...")
         subprocess.run(["rm", "-f", "gomi-file0.txt"])
         subprocess.run(["touch", "gomi-file0.txt"])
         subprocess.run(["shred", "-n", "1", "-s", "64K", "gomi-file0.txt"])

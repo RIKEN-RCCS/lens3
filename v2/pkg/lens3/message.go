@@ -29,6 +29,8 @@ var (
 	message_500_bad_db_entry = error_message{
 		"message", "(internal) Bad keyval-db entry"}
 
+	message_502_bucket_creation_failed = error_message{
+		"message", "Bucket creation failed"}
 	message_503_pool_suspended = error_message{
 		"message", "Pool suspended"}
 )
@@ -70,10 +72,10 @@ var (
 		"message", "Signing by aws.signer failed"}
 	message_500_cannot_start_backend = error_message{
 		"message", "Cannot start backend"}
-	message_500_bucket_creation_failed = error_message{
-		"message", "Bucket creation failed"}
 	message_500_user_account_conflict = error_message{
 		"message", "User accounts conflict"}
+	message_503_proxying_failed = error_message{
+		"message", "Proxying failed"}
 )
 
 // Error messages returned to clients by Registrar.

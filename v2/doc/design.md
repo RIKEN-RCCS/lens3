@@ -109,10 +109,10 @@ An __mn:pool-name__ entry is a backend-process description:
 specifies an administrator access for a backend instance.
 "manager_pid" is unused.
 
-An __mx:mux-endpoint__ entry is a Lens3-Mux description that is a
+An __mx:mux-endpoint__ entry is a Multiplexer description that is a
 record: {"mux_ep", "start_time", "modification_time"}.  A key is
-an endpoint of a Lens3-Mux (a host:port string).  The content has no
-particular use.  A start-time is a time Lens3-Mux started.  A
+an endpoint of a Multiplexer (a host:port string).  The content has no
+particular use.  A start-time is a time Multiplexer started.  A
 modification-time is a time the record is refreshed.
 
 ### Routing-Table (DB=3)
@@ -145,13 +145,13 @@ It is used to find out inactive users (no tools are provided).
 | pi:random     | key-description | \*1 |
 | ky:random     | key-description | \*1 |
 
-This table stores generated randoms for a pool-name or an access-key.
+This table stores generated randoms for a pool-name or an access key.
 An entry is inserted to keep its uniqueness.
 
 A __pi:random__ entry is a pool-name and it is a record: {"owner",
 "modification_time"}, where an owner is a uid.
 
-A __ky:random__ entry is an access-key and it is a record: {"owner",
+A __ky:random__ entry is an access key and it is a record: {"owner",
 "secret_key", "key_policy", "expiration_time", "modification_time"},
 where an owner is a pool-name.  A key-policy is one of {"readwrite",
 "readonly", "writeonly"}, whose names are borrowed from backend.
@@ -168,16 +168,16 @@ mc policy set download alias/bucket
 mc policy set none alias/bucket
 ```
 
-Accesses to deleted buckets in Lens3 are refused at Lens3-Mux, but
+Accesses to deleted buckets in Lens3 are refused at Multiplexer, but
 they remain potentially accessible in backend, which have access policy
-"none" and are accessible using access-keys.
+"none" and are accessible using access keys.
 
 ## Keyval-DB Database Operations
 
 A single keyval-db instance is used, and is not distributed.
 
 It is usually required an uniqueness guarantee, such as for an
-access-keys and ID's for pools, and atomic set is suffice.  A failure
+access keys and ID's for pools, and atomic set is suffice.  A failure
 condition is only considered for MinIO endpoints, and timeouts are set
 to "ma:pool-name" entries.  See the section Keyval-DB Database Keys.
 
@@ -191,7 +191,7 @@ be performed carefully.  They include modifications on the user-list.
 ## Pool State Transition
 
 A bucket-pool will be in a state of: (None), __INITIAL__, __READY__,
-__SUSPENDED__, __DISABLED__, and __INOPERABLE__.  A Lens3-Mux governs
+__SUSPENDED__, __DISABLED__, and __INOPERABLE__.  A Multiplexer governs
 a transition of a state.  Also, a Manager checks a condition at
 heartbeating.
 
@@ -216,7 +216,7 @@ running).  At waking up from suspension, it moves the state to INITIAL
 (not READY) so that it will adjust the state of MinIO to a consistent
 state with the state of Lens3 at the next start.
 
-### Lens3-Mux/Lens3-Reg systemd Services
+### Multiplexer/Registrar systemd Services
 
 All states of services are stored in keyval-db.  It is safe to stop/start
 systemd services.
@@ -243,35 +243,40 @@ code as v1.2.  The code for Vuetify is in the "v1/ui" directory.  See
 ## Security
 
 Security mainly depends on the setting of the frontend proxy.  Please
-consult experts for setting up the proxy.  Accesses to Lens3-Reg are
+consult experts for setting up the proxy.  Accesses to Registrar are
 authenticated as it is behind the proxy, and thus it is of less
-concern.  Accesses to Lens3-Mux is restricted by checks on a pair of a
+concern.  Accesses to Multiplexer is restricted by checks on a pair of a
 bucket and a secret.  The checks are in functions
 "serve_XXX_access()".  Please review those functions intensively.
 
 ## Testing the Service
 
-Release tests on Web-UI shall be performed manually.
+Release tests on Web-UI shall be performed manually.  Some of the
+obvious errors of users should be reported properly.
 
 ### Unwritable bucket-directory
 
 Making a pool for an unwritable bucket-directory is an error.  Check
-the pool become inoperable.  This error is visible to users.
+the pool become inoperable.
 
 ### Unwritable bucket-directory for a bucket
 
-First make a bucket, then remove the directory of the bucket in the
-bucket-directory.  Make the bucket-directory unwritable.  Starting a
-backend tries to make a bucket in the backend, but it should fail.
-Check the pool DOES NOT become inoperable.  This error is NOT visible
-to users.
+Or, first make a pool, and then make the bucket-directory unwritable.
+Making a bucket should fail.  This error should be visible to users as a
+Web-UI error.  Check the pool does not become inoperable.
+
+### Unwritable bucket
+
+Making a bucket should be an error when a regular file exists with the
+same name as the bucket.  This error should be visible to users as a
+Web-UI error.  Check the pool does not become inoperable.
 
 ### Forced Heartbeat Failure
 
 Kill by STOP the backend process.  It causes heartbeat failure.  Note
 that it leaves backend and "sudo" processes in the STOP state.
 
-### Forced Termination of Lens3-Mux and a backend
+### Forced Termination of Multiplexer and a backend
 
 Kill the Lens3 services or the backend process.
 
@@ -281,11 +286,11 @@ Do "chmod" on the keybal-db's store file or directory.
 
 Or, stop the keybal-db service.
 
-### Forced Expiration of Lens3-Mux Entries in Keyval-DB
+### Forced Expiration of Multiplexer Entries in Keyval-DB
 
 The action to fake a forced removal of a __ma:pool-name__ entry in
-keyval-db should (1) start a new Lens3-Mux + backend pair, and then
-(2) stop an old Lens3-Mux + backend pair.
+keyval-db should (1) start a new Multiplexer + backend pair, and then
+(2) stop an old Multiplexer + backend pair.
 
 ### Garbages Created in Tests
 
@@ -330,33 +335,34 @@ maybe extremely slow on large objects.
 
 ## Glossary
 
-* __Probe-key__: An access-key used by Lens3-Reg to tell Lens3-Mux
-  about a wake up of MinIO.  This is key has no corresponding secret.
-  It is distiguished by an empty secret.
+* __Probe-key__: It is an access key used by Registrar to access
+  Multiplexer.  This key has no corresponding secret.  It is used to
+  to make absent buckets in the backend.  It makes bucket records
+  consistent in Lens3 and in the backend.
 
 ## Short-Term Todo, or Deficiency
 
-* Avoid polling of a start of a backend.  Lens3-Mux waits for a start
+* Avoid polling of a start of a backend.  Multiplexer waits for a start
   of a backend by polling in the keyval-db.
 
 * Reject certain bucket-directory paths so that it does service in
   directories with dots.  Servicing in ".ssh" should be avoided, for
   example.
 
-* Make Lens3-Mux reply a message containing a reason of an access
+* Make Multiplexer reply a message containing a reason of an access
   rejection.  It returns only a status code in v1.2.
 
 * Make it not an error when an MC command returns
   "Code=BucketAlreadyOwnedByYou".  It can be ignored safely.
 
-* Make access-key generation of Lens3-Reg like STS.
+* Make access key generation of Registrar like STS.
 
 * Make UI refresh the MinIO state, when a pool is edited and
   transitions such as from READY to INOPERABLE or from SUSPENDED to
   READY.
 
 * Run a reaper of orphaned directories, buckets, and secrets at a
-  Lens3-Reg start.  Adding a bucket/secret and removing a pool may
+  Registrar start.  Adding a bucket/secret and removing a pool may
   have a race.  Or, a crash at creation/deletion of a pool may leave
   an orphaned directory.
 
@@ -392,17 +398,23 @@ starting a backend.  Alternatively, it can be returning 503 with a
 return 502 on long delays.  See
 [rfc7231](https://httpwg.org/specs/rfc7231.htm).
 
-__Backend errors__: Lens3 returns 503 on an error in proxying a
-request.  It should return 502 or 503 with regard to an error.
+__Proxying errors__: Lens3 returns HTTP status 503 on an error in
+proxying a request (that is, when it fails to perform proxying itself
+such as by a connection error).  It is because backends refuse
+connections when they are busy.  For example,
 
-For example, MinIO refuses a connection by ECONNRESET sometimes, maybe
-at a slightly high load (not checked for Lens3-v2.1).
+* MinIO refuses a connection by ECONNRESET sometimes, maybe, at a
+slightly high load (not checked for Lens3-v2).
 
-MinIO also refuses a connection by EPIPE for some illegal accesses.
+* MinIO also refuses a connection by EPIPE for some illegal accesses.
 That is, when trying to put an object by a readonly-key or to put an
-object to a download-bucket without a key.
+object to a download-bucket without a key (never happens in Lens3-v2
+because checkes on keys are done in Lens3).
 
 __Accepting pool creation in busy situations__: Lens3 accepts creation
 of a pool even if it cannot start a backend due to busyness of the
 server.  It is done on purpose to display the error condition in UI's
 "backend_state" slot.
+
+__HTTP status__: AWS S3 clients retries for status 50x except 501.
+See https://pkg.go.dev/github.com/aws/aws-sdk-go-v2/aws/retry

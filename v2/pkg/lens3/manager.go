@@ -260,7 +260,7 @@ func start_backend(w *manager, pool string) *backend_record {
 	var ok1, _ = set_ex_backend_mutex(w.table, pool, ep)
 	if !ok1 {
 		var be1 = wait_for_backend_by_race(w, pool)
-		// (An error is already logged when be1=nil).
+		// (An error is already logged).
 		return be1
 	} else {
 		var expiry = (2 * (w.Backend_start_timeout_ms).time_duration())

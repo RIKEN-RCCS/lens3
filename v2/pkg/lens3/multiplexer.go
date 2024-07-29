@@ -227,9 +227,8 @@ func proxy_access_addenda(m *multiplexer) func(*http.Response) error {
 
 // PROXY_ERROR_HANDLER makes an "ErrorHandler" for
 // httputil/ReverseProxy that returns a response.  Errors in proxying
-// are considered temporary and it returns
-// http_503_service_unavailable, not http_502_bad_gateway.  But, it
-// would have to distinguish errors for 502 or 503.
+// are considered temporary and it returns HTTP status 503.  It is
+// because backends refuse connections when they are busy.
 func proxy_error_handler(m *multiplexer) func(http.ResponseWriter, *http.Request, error) {
 	return func(w http.ResponseWriter, rqst *http.Request, err error) {
 		var ctx = rqst.Context()
@@ -243,14 +242,13 @@ func proxy_error_handler(m *multiplexer) func(http.ResponseWriter, *http.Request
 		}
 		slogger.Error((m.logprefix + "httputil/ReverseProxy() failed"),
 			"pool", pool, "requst", rqst, "err", err)
-		//abort_backend(m.manager, pool)
 
 		var err1 = &proxy_exc{
 			auth,
 			"",
 			http_503_service_unavailable,
 			[][2]string{
-				message_50x_internal_error,
+				message_503_proxying_failed,
 			},
 		}
 		return_mux_error_response(m, w, rqst, err1)
@@ -445,19 +443,20 @@ func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, be *
 }
 
 // SERVE_INTERNAL_ACCESS handles requests by probe_access_mux() from
-// Registrar or other Multiplexers.  It rejects requests from the
-// outside (ie, thru the proxy).  It tries to make buckets in the
-// backend.  Calling make_absent_buckets_in_backend() has a race, but
-// it results in only redundant work.
+// Registrar.  It tries to make buckets in the backend.  It rejects
+// requests from the outside (ie, thru the proxy).  Calling
+// make_absent_buckets_in_backend() is not mutexed, but it results in
+// only redundant work.  It returns http 502 on an error, as clients
+// retry for http 500.
 func serve_internal_access(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record, secret *secret_record) {
 	assert_fatal(secret != nil)
 	var auth = secret.Access_key
 	var pool = secret.Pool
-	slogger.Debug(m.logprefix+"Internal access", "pool", pool)
+	slogger.Debug(m.logprefix+"Probe-access", "pool", pool)
 
 	var peer = r.Header.Get("Remote_Addr")
 	if peer != "" {
-		slogger.Error(m.logprefix+"Bad probe access",
+		slogger.Error(m.logprefix+"Probe-access from outside",
 			"remote", peer)
 		var err1 = &proxy_exc{
 			auth,
@@ -486,12 +485,14 @@ func serve_internal_access(m *multiplexer, w http.ResponseWriter, r *http.Reques
 
 	var err2 = make_absent_buckets_in_backend(m.manager, be)
 	if err2 != nil {
+		var reason = err2.Error()
 		var err3 = &proxy_exc{
 			auth,
 			"",
-			http_500_internal_server_error,
+			http_502_bad_gateway,
 			[][2]string{
-				message_500_bucket_creation_failed,
+				message_502_bucket_creation_failed,
+				{"err", reason},
 			},
 		}
 		return_mux_error_response(m, w, r, err3)
@@ -619,7 +620,7 @@ func ensure_backend_running(m *multiplexer, w http.ResponseWriter, r *http.Reque
 		slogger.Info(m.logprefix+"Start a backend", "pool", pool)
 		var be2 = start_backend(m.manager, pool)
 		if be2 == nil {
-			// (An error already logged).
+			// (An error is already logged).
 			var err1 = &proxy_exc{
 				auth,
 				"",

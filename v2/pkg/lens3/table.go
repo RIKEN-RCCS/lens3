@@ -401,9 +401,8 @@ func raise_on_marshaling_error(err error) {
 			"",
 			"",
 			http_500_internal_server_error,
-			[][2]string{
-				message_500_bad_db_entry,
-			},
+			message_500_bad_db_entry,
+			nil,
 		})
 	}
 }
@@ -416,9 +415,9 @@ func raise_on_set_error(w *valkey.ValkeyResult) {
 			"",
 			"",
 			http_500_internal_server_error,
-			[][2]string{
-				message_500_bad_db_entry,
-			}})
+			message_500_bad_db_entry,
+			nil,
+		})
 	}
 }
 
@@ -430,9 +429,9 @@ func raise_on_setnx_error(w *valkey.ValkeyResult) {
 			"",
 			"",
 			http_500_internal_server_error,
-			[][2]string{
-				message_500_bad_db_entry,
-			}})
+			message_500_bad_db_entry,
+			nil,
+		})
 	}
 }
 
@@ -446,9 +445,9 @@ func raise_on_get_error(w *valkey.ValkeyResult) {
 			"",
 			"",
 			http_500_internal_server_error,
-			[][2]string{
-				message_500_bad_db_entry,
-			}})
+			message_500_bad_db_entry,
+			nil,
+		})
 	}
 }
 
@@ -460,9 +459,9 @@ func check_on_del_failure(w *valkey.ValkeyResult) bool {
 			"",
 			"",
 			http_500_internal_server_error,
-			[][2]string{
-				message_500_bad_db_entry,
-			}})
+			message_500_bad_db_entry,
+			nil,
+		})
 	}
 	return n == 1
 }
@@ -475,9 +474,9 @@ func raise_on_del_failure(w *valkey.ValkeyResult) {
 			"",
 			"",
 			http_500_internal_server_error,
-			[][2]string{
-				message_500_bad_db_entry,
-			}})
+			message_500_bad_db_entry,
+			nil,
+		})
 	}
 	if n != 1 {
 		slogger.Error("db-del() no entry")
@@ -485,9 +484,9 @@ func raise_on_del_failure(w *valkey.ValkeyResult) {
 			"",
 			"",
 			http_500_internal_server_error,
-			[][2]string{
-				message_500_bad_db_entry,
-			}})
+			message_500_bad_db_entry,
+			nil,
+		})
 	}
 }
 
@@ -501,9 +500,9 @@ func check_on_expire_failure(w *valkey.ValkeyResult) bool {
 			"",
 			"",
 			http_500_internal_server_error,
-			[][2]string{
-				message_500_bad_db_entry,
-			}})
+			message_500_bad_db_entry,
+			nil,
+		})
 	}
 	return ok
 }
@@ -600,9 +599,9 @@ func add_user(t *keyval_table, u *user_record) {
 				"",
 				"",
 				http_500_internal_server_error,
-				[][2]string{
-					message_500_user_account_conflict,
-				}})
+				message_500_user_account_conflict,
+				nil,
+			})
 		}
 		var now int64 = time.Now().Unix()
 		var data = &user_claim_record{
@@ -1283,9 +1282,9 @@ func load_db_data(w *valkey.ValkeyResult, data any) bool {
 				"",
 				"",
 				http_500_internal_server_error,
-				[][2]string{
-					message_500_bad_db_entry,
-				}})
+				message_500_bad_db_entry,
+				nil,
+			})
 		}
 	}
 
@@ -1307,9 +1306,9 @@ func load_db_data(w *valkey.ValkeyResult, data any) bool {
 			"",
 			"",
 			http_500_internal_server_error,
-			[][2]string{
-				message_500_bad_db_entry,
-			}})
+			message_500_bad_db_entry,
+			nil,
+		})
 	}
 	return true
 }

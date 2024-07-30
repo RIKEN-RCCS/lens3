@@ -59,7 +59,9 @@ func list_buckets_in_backend(w *manager, be *backend_record) ([]string, error) {
 	}
 	var client *s3.Client = s3.New(options)
 
-	var timeout = (w.Backend_timeout_ms).time_duration()
+	//AHOAHOAHO
+	//var timeout = (w.Backend_timeout_ms).time_duration()
+	var timeout = time.Duration(60 * time.Second)
 	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	var v, err1 = client.ListBuckets(ctx, &s3.ListBucketsInput{})
@@ -97,7 +99,9 @@ func make_bucket_in_backend(w *manager, be *backend_record, bucket *bucket_recor
 	}
 	var client *s3.Client = s3.New(options)
 
-	var timeout = (w.Backend_timeout_ms).time_duration()
+	//AHOAHOAHO
+	//var timeout = (w.Backend_timeout_ms).time_duration()
+	var timeout = time.Duration(60 * time.Second)
 	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	var _, err1 = client.CreateBucket(ctx,
@@ -189,13 +193,23 @@ func unwrap_operation_error(e1 error) error {
 	var e2 smithy.APIError
 	if errors.As(e1, &e2) {
 		//fmt.Printf("*** APIError=(%#v)\n", e2)
+		if trace_task&tracing != 0 {
+			slogger.Debug("Unwrap nested error", "APIError", e2)
+		}
 		return e2
 	}
 	var e3 *awshttp.ResponseError
 	if errors.As(e1, &e3) {
+		var e4 = e3.Unwrap()
 		//var rspn = e3.Response
 		//var body, _ = io.ReadAll(rspn.Body)
-		return e3.Unwrap()
+		if trace_task&tracing != 0 {
+			slogger.Debug("Unwrap nested error", "ResponseError", e4)
+		}
+		return e4
+	}
+	if trace_task&tracing != 0 {
+		slogger.Debug("Unwrap nested error", "OperationError", e1)
 	}
 	return e1
 }

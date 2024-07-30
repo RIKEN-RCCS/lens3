@@ -247,9 +247,8 @@ func proxy_error_handler(m *multiplexer) func(http.ResponseWriter, *http.Request
 			auth,
 			"",
 			http_503_service_unavailable,
-			[][2]string{
-				message_503_proxying_failed,
-			},
+			message_503_proxying_failed,
+			nil,
 		}
 		return_mux_error_response(m, w, rqst, err1)
 
@@ -263,7 +262,7 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer handle_multiplexer_exc(m, w, r)
 		if trace_proxy&tracing != 0 {
-			slogger.Debug(m.logprefix+"Process request",
+			slogger.Debug(m.logprefix+"Check request",
 				"method", r.Method, "resource", r.RequestURI)
 		}
 
@@ -305,9 +304,8 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 				auth,
 				"",
 				http_403_forbidden,
-				[][2]string{
-					message_40x_access_rejected,
-				},
+				message_40x_access_rejected,
+				nil,
 			}
 			return_mux_error_response(m, w, r, err4)
 			return
@@ -317,9 +315,8 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 				auth,
 				"",
 				http_400_bad_request,
-				[][2]string{
-					message_400_bucket_listing_forbidden,
-				},
+				message_400_bucket_listing_forbidden,
+				nil,
 			}
 			return_mux_error_response(m, w, r, err5)
 			return
@@ -405,9 +402,8 @@ func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, be *
 			auth,
 			"",
 			http_500_internal_server_error,
-			[][2]string{
-				message_500_sign_failed,
-			},
+			message_500_sign_failed,
+			nil,
 		})
 	}
 
@@ -422,9 +418,8 @@ func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, be *
 			auth,
 			"",
 			http_500_internal_server_error,
-			[][2]string{
-				message_50x_internal_error,
-			},
+			message_50x_internal_error,
+			nil,
 		})
 	}
 	var ctx1 = r.Context()
@@ -462,9 +457,8 @@ func serve_internal_access(m *multiplexer, w http.ResponseWriter, r *http.Reques
 			auth,
 			"",
 			http_500_internal_server_error,
-			[][2]string{
-				message_500_access_rejected,
-			},
+			message_500_access_rejected,
+			nil,
 		}
 		return_mux_error_response(m, w, r, err1)
 		return
@@ -490,9 +484,9 @@ func serve_internal_access(m *multiplexer, w http.ResponseWriter, r *http.Reques
 			auth,
 			"",
 			http_502_bad_gateway,
-			[][2]string{
-				message_502_bucket_creation_failed,
-				{"err", reason},
+			message_502_bucket_creation_failed,
+			map[string]string{
+				"err": reason,
 			},
 		}
 		return_mux_error_response(m, w, r, err3)
@@ -520,9 +514,8 @@ func handle_exc(w http.ResponseWriter, rqst *http.Request, delay_ms time_in_ms, 
 			"",
 			"",
 			http_500_internal_server_error,
-			[][2]string{
-				message_50x_internal_error,
-			},
+			message_50x_internal_error,
+			nil,
 		}
 		return_error_response(w, rqst, err2, delay_ms, logprefix, logfn)
 		panic(nil)
@@ -538,9 +531,8 @@ func handle_exc(w http.ResponseWriter, rqst *http.Request, delay_ms time_in_ms, 
 			"",
 			"",
 			http_500_internal_server_error,
-			[][2]string{
-				message_50x_internal_error,
-			},
+			message_50x_internal_error,
+			nil,
 		}
 		return_error_response(w, rqst, err3, delay_ms, logprefix, logfn)
 	}
@@ -564,9 +556,8 @@ func check_authenticated(m *multiplexer, r *http.Request) (*secret_record, *prox
 			"",
 			"",
 			http_401_unauthorized,
-			[][2]string{
-				message_40x_access_rejected,
-			},
+			message_40x_access_rejected,
+			nil,
 		}
 		return nil, err1
 	}
@@ -580,9 +571,8 @@ func check_authenticated(m *multiplexer, r *http.Request) (*secret_record, *prox
 			"",
 			"",
 			http_401_unauthorized,
-			[][2]string{
-				message_40x_access_rejected,
-			},
+			message_40x_access_rejected,
+			nil,
 		}
 		return nil, err2
 	}
@@ -594,9 +584,8 @@ func check_authenticated(m *multiplexer, r *http.Request) (*secret_record, *prox
 			"",
 			"",
 			http_403_forbidden,
-			[][2]string{
-				message_40x_access_rejected,
-			},
+			message_40x_access_rejected,
+			nil,
 		}
 		return nil, err3
 	}
@@ -625,9 +614,8 @@ func ensure_backend_running(m *multiplexer, w http.ResponseWriter, r *http.Reque
 				auth,
 				"",
 				http_500_internal_server_error,
-				[][2]string{
-					message_500_cannot_start_backend,
-				},
+				message_500_cannot_start_backend,
+				nil,
 			}
 			return_mux_error_response(m, w, r, err1)
 			return nil
@@ -644,9 +632,8 @@ func ensure_backend_running(m *multiplexer, w http.ResponseWriter, r *http.Reque
 			auth,
 			"",
 			http_503_service_unavailable,
-			[][2]string{
-				message_503_pool_suspended,
-			},
+			message_503_pool_suspended,
+			nil,
 		}
 		return_mux_error_response(m, w, r, err2)
 		return nil
@@ -672,9 +659,8 @@ func ensure_pool_existence(m *multiplexer, w http.ResponseWriter, r *http.Reques
 			auth,
 			"",
 			http_404_not_found,
-			[][2]string{
-				message_404_nonexisting_pool,
-			},
+			message_404_nonexisting_pool,
+			nil,
 		}
 		return_mux_error_response(m, w, r, err1)
 		return nil
@@ -694,9 +680,8 @@ func ensure_frontend_proxy_trusted(m *multiplexer, w http.ResponseWriter, r *htt
 			"",
 			"",
 			http_500_internal_server_error,
-			[][2]string{
-				message_500_access_rejected,
-			},
+			message_500_access_rejected,
+			nil,
 		}
 		return_mux_error_response(m, w, r, err1)
 		return false
@@ -724,9 +709,8 @@ func check_bucket_in_path(m *multiplexer, w http.ResponseWriter, r *http.Request
 			auth,
 			"",
 			http_404_not_found,
-			[][2]string{
-				message_404_no_named_bucket,
-			},
+			message_404_no_named_bucket,
+			nil,
 		}
 		return nil, err2
 	}
@@ -742,9 +726,8 @@ func ensure_bucket_not_expired(m *multiplexer, w http.ResponseWriter, r *http.Re
 			auth,
 			"",
 			http_403_forbidden,
-			[][2]string{
-				message_403_bucket_expired,
-			},
+			message_403_bucket_expired,
+			nil,
 		}
 		return_mux_error_response(m, w, r, err1)
 		return false
@@ -760,9 +743,8 @@ func ensure_bucket_owner(m *multiplexer, w http.ResponseWriter, r *http.Request,
 			auth,
 			"",
 			http_403_forbidden,
-			[][2]string{
-				message_403_not_authorized,
-			},
+			message_403_not_authorized,
+			nil,
 		}
 		return_mux_error_response(m, w, r, err1)
 		return false
@@ -788,9 +770,8 @@ func ensure_pool_state(m *multiplexer, w http.ResponseWriter, r *http.Request, p
 			auth,
 			"",
 			http_403_forbidden,
-			[][2]string{
-				message_403_pool_disabled,
-			},
+			message_403_pool_disabled,
+			nil,
 		}
 		return_mux_error_response(m, w, r, err2)
 		return false
@@ -801,9 +782,8 @@ func ensure_pool_state(m *multiplexer, w http.ResponseWriter, r *http.Request, p
 			auth,
 			"",
 			http_500_internal_server_error,
-			[][2]string{
-				message_500_pool_inoperable,
-			},
+			message_500_pool_inoperable,
+			nil,
 		}
 		return_mux_error_response(m, w, r, err3)
 		return false
@@ -843,9 +823,8 @@ func ensure_permission_by_secret(m *multiplexer, w http.ResponseWriter, r *http.
 			auth,
 			"",
 			http_403_forbidden,
-			[][2]string{
-				message_403_no_permission,
-			},
+			message_403_no_permission,
+			nil,
 		}
 		return_mux_error_response(m, w, r, err1)
 		return false
@@ -880,9 +859,8 @@ func ensure_permission_by_bucket(m *multiplexer, w http.ResponseWriter, r *http.
 			auth,
 			"",
 			http_403_forbidden,
-			[][2]string{
-				message_403_no_permission,
-			},
+			message_403_no_permission,
+			nil,
 		}
 		return_mux_error_response(m, w, r, err1)
 		return false
@@ -908,9 +886,8 @@ func pick_bucket_in_path(m *multiplexer, r *http.Request, auth string) (string, 
 			auth,
 			"",
 			http_400_bad_request,
-			[][2]string{
-				message_40x_access_rejected,
-			},
+			message_40x_access_rejected,
+			nil,
 		}
 		return bucket, err1
 	}
@@ -1002,7 +979,7 @@ func combine_pool_state(state1 pool_state, reason1 pool_reason, state2 pool_stat
 	}
 }
 
-func check_user_is_active(t *keyval_table, uid string) (bool, error_message) {
+func check_user_is_active(t *keyval_table, uid string) (bool, string) {
 	var ui = get_user(t, uid)
 	if ui == nil {
 		slogger.Info("Bad user", "user", uid, "reason", "not registered")
@@ -1025,7 +1002,7 @@ func check_user_is_active(t *keyval_table, uid string) (bool, error_message) {
 		return false, message_403_no_user_account
 	}
 
-	return true, error_message{}
+	return true, ""
 }
 
 func return_mux_error_response(m *multiplexer, w http.ResponseWriter, r *http.Request, err *proxy_exc) {
@@ -1038,26 +1015,24 @@ func return_mux_error_response(m *multiplexer, w http.ResponseWriter, r *http.Re
 // RETURN_ERROR_RESPONSE sends a response to a client.  It does not
 // send details unless authenticated.
 func return_error_response(w http.ResponseWriter, r *http.Request, err1 *proxy_exc, delay_ms time_in_ms, logprefix string, logfn access_logger) {
-	var message [][2]string
-	if err1.auth == "" && err1.uid == "" {
-		message = [][2]string{
-			message_500_access_rejected,
-		}
-	} else {
-		message = err1.message
-	}
 
-	var code1 = err1.code
-	var msg = map[string]string{}
-	for _, kv := range message {
-		msg[kv[0]] = kv[1]
+	var error1 string
+	var info1 map[string]string
+	if err1.auth == "" && err1.uid == "" {
+		error1 = message_500_access_rejected
+		info1 = nil
+	} else {
+		error1 = err1.error
+		info1 = err1.info
 	}
-	var rspn = &error_response{
-		response_common: response_common{
-			Status:    "error",
-			Reason:    msg,
-			Timestamp: time.Now().Unix(),
+	var code1 = err1.code
+	var rspn = &ui_error_response{
+		Status: "error",
+		Reason: ui_error_reason{
+			error1,
+			info1,
 		},
+		Timestamp: time.Now().Unix(),
 	}
 	var b1, err2 = json.Marshal(rspn)
 	assert_fatal(err2 == nil)

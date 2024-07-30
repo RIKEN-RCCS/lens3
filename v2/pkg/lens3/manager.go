@@ -947,8 +947,7 @@ func make_absent_buckets_in_backend(w *manager, be *backend_record) error {
 
 	var buckets_exsting, err1 = list_buckets_in_backend(w, be)
 	if err1 != nil {
-		slogger.Error(w.logprefix+"Backend access failed",
-			"pool", pool, "err", err1)
+		// (An error is already logged).
 		return err1
 	}
 
@@ -972,6 +971,7 @@ func make_absent_buckets_in_backend(w *manager, be *backend_record) error {
 
 		var err3 = make_bucket_in_backend(w, be, b)
 		if err3 != nil && err2 == nil {
+			// (An error is already logged).
 			err2 = err3
 		}
 	}

@@ -40,6 +40,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"os/user"
@@ -750,26 +751,25 @@ func make_bucket_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 				"pool", pool, "bucket", name)
 		}
 
-		// AHOAHOAHO
-		// "Make bucket failed:"
-		// {"status":"error","reason":{"err":"operation error S3:
-		// ListBuckets, exceeded maximum number of attempts, 3, https
-		// response error StatusCode: 500, RequestID: , HostID: , api
-		// error InternalServerError: Internal Server
-		// Error","message":"Bucket creation failed"}}
-
-		var reason = err2.Error()
-		var err3 = &proxy_exc{
-			"",
-			u.Uid,
-			http_502_bad_gateway,
-			[][2]string{
-				message_502_bucket_creation_failed,
-				{"err", reason},
-			},
+		var err3, ok3 = err2.(*proxy_exc)
+		if ok3 {
+			err3.uid = u.Uid
+			return_reg_error_response(z, w, r, err3)
+			return nil
+		} else {
+			var reason = err2.Error()
+			var err4 = &proxy_exc{
+				"",
+				u.Uid,
+				http_502_bad_gateway,
+				[][2]string{
+					message_502_bucket_creation_failed,
+					{"err", reason},
+				},
+			}
+			return_reg_error_response(z, w, r, err4)
+			return nil
 		}
-		return_reg_error_response(z, w, r, err3)
-		return nil
 	}
 
 	var rspn = return_pool_prop(z, w, r, u, pool)
@@ -1825,4 +1825,114 @@ func return_reg_error_response(z *registrar, w http.ResponseWriter, rqst *http.R
 	var logprefix = "Reg: "
 	var logfn = log_reg_access_by_request
 	return_error_response(w, rqst, err, delay_ms, logprefix, logfn)
+}
+
+type probe_access_response struct {
+	Status string `json:"status"`
+	Reason struct {
+		Err     string `json:"err"`
+		Message string `json:"message"`
+	} `json:"reason"`
+}
+
+// PROBE_ACCESS_MUX accesses a Multiplexer using a probe-key from
+// Registrar.  A probe-access tries to make buckets absent in the
+// backend.  It uses list buckets but it is ignored by a Multiplexer.
+// Region and timeout used is fairly arbitrary.
+func probe_access_mux(t *keyval_table, pool string) error {
+	var pooldata = get_pool(t, pool)
+	if pooldata == nil {
+		var err1 = fmt.Errorf("Pool not found: pool=%q", pool)
+		slogger.Error("Probe-access fails", "pool", pool, "err", err1)
+		panic(nil)
+	}
+	var secret = get_secret(t, pooldata.Probe_key)
+	if secret == nil {
+		var err2 = fmt.Errorf("Probe-key not found: pool=%q", pool)
+		slogger.Error("Probe-access fails", "pool", pool, "err", err2)
+		panic(nil)
+	}
+
+	var ep string
+	var be1 = get_backend(t, pool)
+	if be1 != nil {
+		ep = be1.Mux_ep
+	} else {
+		var eps []*mux_record = list_mux_eps(t)
+		if len(eps) == 0 {
+			var err3 = fmt.Errorf("No Multiplexers")
+			slogger.Error("Probe-access fails", "pool", pool, "err", err3)
+			return err3
+		}
+		var i = rand.IntN(len(eps))
+		ep = eps[i].Mux_ep
+	}
+
+	var timeout = time.Duration(60000 * time.Millisecond)
+	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	var url1 = ("http://" + ep)
+
+	// (Use nil:io.Reader for empty body).
+	var r, err4 = http.NewRequestWithContext(ctx, http.MethodGet, url1, nil)
+	if err4 != nil {
+		slogger.Error("Probe-access fails",
+			"pool", pool, "op", "http/Client.NewRequest()", "err", err4)
+		return err4
+	}
+
+	var hash = empty_payload_hash_sha256
+	r.Header.Set("X-Amz-Content-Sha256", hash)
+	var dummy = &backend_record{
+		Backend_ep:  ep,
+		Root_access: secret.Access_key,
+		Root_secret: secret.Secret_key,
+	}
+	var err5 = sign_by_backend_credential(r, dummy)
+	if err5 != nil {
+		slogger.Error("Probe-access fails",
+			"pool", pool, "op", "signer/NewSigner.SignHTTP", "err", err5)
+		return err5
+	}
+
+	var c = &http.Client{
+		Timeout: timeout,
+	}
+	var rspn, err6 = c.Do(r)
+	if err6 != nil {
+		slogger.Error("Probe-access fails",
+			"pool", pool, "op", "http/Client.Do()", "err", err6)
+		return err6
+	}
+	defer rspn.Body.Close()
+
+	var data probe_access_response
+	var d = json.NewDecoder(rspn.Body)
+	//d.DisallowUnknownFields()
+	var err1 = d.Decode(&data)
+	if err1 != nil {
+		slogger.Debug("Reg: Error in reading response body", "err", err1)
+	}
+
+	//var b, err7 = io.ReadAll(rspn.Body)
+	//if err7 != nil {
+	//	slogger.Error("Probe-access fails",
+	//		"pool", pool, "op", "io/ReadAll()", "err", err7)
+	//	return err7
+	//}
+
+	if rspn.StatusCode == http.StatusOK {
+		return nil
+	} else {
+		var err8 = &proxy_exc{
+			"",
+			"",
+			rspn.StatusCode,
+			[][2]string{
+				{"message", data.Reason.Message},
+				{"err", data.Reason.Err},
+			},
+		}
+		return err8
+	}
 }

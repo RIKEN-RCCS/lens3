@@ -35,7 +35,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"net/http"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -80,9 +79,6 @@ type backend_rclone struct {
 	rc_port int
 	rc_user string
 	rc_pass string
-
-	heartbeat_client *http.Client
-	heartbeat_url    string
 
 	*rclone_conf
 }

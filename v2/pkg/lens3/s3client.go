@@ -5,106 +5,46 @@
 
 package lens3
 
-// MEMO: Errors from S3 clients are wrapped or embedded in
-// "aws/smithy/OperationError".  The "OperationError" consists of
-// {ServiceID, OperationName, Err}.  It wraps errors such as
-// "aws/retry/MaxAttemptsError" and "aws/RequestCanceledError".
-// "aws/retry/MaxAttemptsError" further wraps
-// "service/internal/s3shared/ResponseError".  It further wraps
-// "aws/transport/http/ResponseError".  It further wraps
-// "aws/smithy-go/transport/http/ResponseError".  (Note that "awshttp"
-// is an alias of "aws/transport/http").
+// This defines a few S3 operations to a backend server --
+// list-buckets and make-bucket.
+
+// S3 operations return "aws/smithy/OperationError", but it wraps
+// other errors in a deep nest.  Extraction of an S3 operation error
+// from it is done by unwrap_operation_error().
+//
+// See https://aws.github.io/aws-sdk-go-v2/docs/handling-errors/
+
+// MEMO: The "aws/smithy/OperationError" wraps errors in a deep nest
+// such as "aws/retry/MaxAttemptsError", "aws/RequestCanceledError".
+// ResponseError is defined in several packages like
+// "service/internal/s3shared/ResponseError".
+// "aws/transport/http/ResponseError"
+// "aws/smithy-go/transport/http/ResponseError".
 //
 // See https://pkg.go.dev/github.com/aws/smithy-go
 
-// HTTP retry is configurable.  S3 clients retry on HTTP status 50x
-// but 501.
+// MEMO: S3 clients retry on HTTP status 50x but 501.
 //
 // See https://pkg.go.dev/github.com/aws/aws-sdk-go-v2/aws/retry
 
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/aws/retry"
+	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go"
 	"github.com/aws/smithy-go/logging"
 	"log/slog"
-	"math/rand/v2"
 	"time"
 )
 
 const s3_region_default = "us-east-1"
 
-// PROBE_ACCESS_MUX accesses a Multiplexer using a probe-key from
-// Registrar.  A probe-access tries to make buckets absent in the
-// backend.  It uses list buckets but it is ignored by a Multiplexer.
-// Region and timeout used is fairly arbitrary.
-func probe_access_mux(t *keyval_table, pool string) error {
-	// Dummy manager just to pass region and timeout
-	var w = &manager{}
-	w.Backend_region = s3_region_default
-	w.Backend_timeout_ms = time_in_ms(1000)
-
-	var pooldata = get_pool(t, pool)
-	if pooldata == nil {
-		var err1 = fmt.Errorf("Pool not found: pool=%q", pool)
-		slogger.Error("Probe-access fails", "pool", pool, "err", err1)
-		panic(nil)
-	}
-	var secret = get_secret(t, pooldata.Probe_key)
-	if secret == nil {
-		var err2 = fmt.Errorf("Probe-key not found: pool=%q", pool)
-		slogger.Error("Probe-access fails", "pool", pool, "err", err2)
-		panic(nil)
-	}
-
-	var ep string
-	var be1 = get_backend(t, pool)
-	if be1 != nil {
-		ep = be1.Mux_ep
-	} else {
-		var eps []*mux_record = list_mux_eps(t)
-		if len(eps) == 0 {
-			var err3 = fmt.Errorf("No Multiplexers")
-			slogger.Error("Probe-access fails", "pool", pool, "err", err3)
-			return err3
-		}
-		var i = rand.IntN(len(eps))
-		ep = eps[i].Mux_ep
-	}
-
-	var session = ""
-	var url1 = ("http://" + ep)
-	var provider = credentials.NewStaticCredentialsProvider(
-		secret.Access_key, secret.Secret_key, session)
-	var region = w.Backend_region
-	var options = s3.Options{
-		BaseEndpoint:     aws.String(url1),
-		Credentials:      provider,
-		Region:           region,
-		UsePathStyle:     true,
-		Logger:           make_aws_logger(slogger),
-		RetryMaxAttempts: 1,
-	}
-	var client *s3.Client = s3.New(options)
-
-	var timeout = (w.Backend_timeout_ms).time_duration()
-	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	var _, err4 = client.ListBuckets(ctx, &s3.ListBucketsInput{})
-	if err4 != nil {
-		slogger.Error("Probe-access fails", "pool", pool,
-			"ep", ep, "err", err4)
-		return err4
-	}
-	return nil
-}
-
 func list_buckets_in_backend(w *manager, be *backend_record) ([]string, error) {
+	var pool = be.Pool
+
 	var session = ""
 	var url1 = ("http://" + be.Backend_ep)
 	var provider = credentials.NewStaticCredentialsProvider(
@@ -124,8 +64,10 @@ func list_buckets_in_backend(w *manager, be *backend_record) ([]string, error) {
 	defer cancel()
 	var v, err1 = client.ListBuckets(ctx, &s3.ListBucketsInput{})
 	if err1 != nil {
-		fmt.Printf("client.ListBuckets() err=%T %#v\n", err1, err1)
-		return nil, err1
+		var err2 = unwrap_operation_error(err1)
+		slogger.Error("Listing buckets in backend failed",
+			"pool", pool, "err", err2)
+		return nil, err2
 	}
 	var bkts []string
 	for _, b := range v.Buckets {
@@ -138,6 +80,7 @@ func list_buckets_in_backend(w *manager, be *backend_record) ([]string, error) {
 }
 
 func make_bucket_in_backend(w *manager, be *backend_record, bucket *bucket_record) error {
+	var pool = be.Pool
 	var name = bucket.Bucket
 
 	var session = ""
@@ -162,9 +105,10 @@ func make_bucket_in_backend(w *manager, be *backend_record, bucket *bucket_recor
 			Bucket: aws.String(name),
 		})
 	if err1 != nil {
-		slogger.Error("Making a bucket in backend failed",
-			"bucket", name, "err", err1)
-		return err1
+		var err2 = unwrap_operation_error(err1)
+		slogger.Error("Making bucket in backend failed",
+			"pool", pool, "bucket", name, "err", err2)
+		return err2
 	}
 	//fmt.Println("CreateBucket()=", v)
 	return nil
@@ -212,37 +156,6 @@ func heartbeat_backend(w *manager, be *backend_record) int {
 	return http_200_OK
 }
 
-func unwrap_operation_error(e1 error) error {
-	if false {
-		switch e2 := e1.(type) {
-		case *smithy.OperationError:
-			// {ServiceID, OperationName, Err}.
-			switch e3 := (e2.Err).(type) {
-			case *retry.MaxAttemptsError:
-				// {Attempt, Err}.
-				return e3.Err
-			case *aws.RequestCanceledError:
-				// {Err}.
-				return e3
-			default:
-				return e2.Err
-			}
-		default:
-			return e1
-		}
-	}
-
-	var ex = e1
-	for {
-		var e2 = errors.Unwrap(ex)
-		fmt.Printf("*** Unwrap(%#v)=%#v\n", ex, e2)
-		if e2 == nil {
-			return ex
-		}
-		ex = e2
-	}
-}
-
 type slog_writer struct {
 	h slog.Handler
 }
@@ -264,4 +177,25 @@ func (w *slog_writer) Write(buf []byte) (int, error) {
 	r.Add("err", s)
 	var err = w.h.Handle(context.Background(), r)
 	return len(s), err
+}
+
+// UNWRAP_OPERATION_ERROR unwraps nested errors to find out an error
+// from an S3 operation.  It checks smithy/APIError or
+// awshttp/ResponseError.  A returned error is, for example,
+// types/BucketAlreadyOwnedByYou, defined in aws/service/s3/types.
+// Note that APIError is more specific than ResponseError as
+// ResponseError includes smithy/CanceledError, but APIError does not.
+func unwrap_operation_error(e1 error) error {
+	var e2 smithy.APIError
+	if errors.As(e1, &e2) {
+		//fmt.Printf("*** APIError=(%#v)\n", e2)
+		return e2
+	}
+	var e3 *awshttp.ResponseError
+	if errors.As(e1, &e3) {
+		//var rspn = e3.Response
+		//var body, _ = io.ReadAll(rspn.Body)
+		return e3.Unwrap()
+	}
+	return e1
 }

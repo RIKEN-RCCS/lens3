@@ -188,20 +188,20 @@ func (d *backend_minio) heartbeat(*manager) int {
 	}
 
 	var c = d.heartbeat_client
-	var rsp, err1 = c.Get(d.heartbeat_url)
+	var rspn, err1 = c.Get(d.heartbeat_url)
 	if err1 != nil {
 		slogger.Info("BE(minio): Heartbeat failed in http/Client.Get()",
 			"pool", proc.Pool, "err", err1)
 		return http_500_internal_server_error
 	}
-	defer rsp.Body.Close()
-	var _, err2 = io.ReadAll(rsp.Body)
+	defer rspn.Body.Close()
+	var _, err2 = io.ReadAll(rspn.Body)
 	if err2 != nil {
 		slogger.Info("BE(minio): Heartbeat failed in io/ReadAll()",
 			"pool", proc.Pool, "err", err2)
 		return http_500_internal_server_error
 	}
-	return rsp.StatusCode
+	return rspn.StatusCode
 }
 
 // *** MC-COMMANDS ***

@@ -10,40 +10,38 @@ This document describes setting for Lenticularis-S3 (Lens3).
 
 The steps are:
 * Prepare prerequisite software and install Lens3
-* Set up a proxy (Apache-HTTPD)
+* Set up a frontend proxy (Apache-HTTPD)
 * Start Valkey
-* Start Lens3-Mux (a Multiplexer service)
-* Start Lens3-Reg (a Registrar service)
-* Register users
+* Start Lenticularis-S3 service (Multiplexer and Registrar)
 
 ## Assumptions
 
 Lens3 consists of a couple of services as depicted in the
 configuration figure above.  A reverse-proxy can be any server, but
-Apache HTTP Server is used in this guide.  A key-value database
-server, Valkey, runs at port=6378.  The Lens3 services, Lens3-Mux and
-Lens3-Reg, run at port=8003 and port=8004, respectively.  The proxy is
-set up to forward requests to Lens3-Mux and Lens3-Reg.
+Apache HTTP Server is used in this guide.  A keyval-db server, Valkey,
+runs at port=6378.  The Lens3 services, Multiplexer and Registrar,
+run at port=8003 and port=8004, respectively.  The proxy is set up to
+forward requests to Multiplexer and Registrar.
 
 A pseudo user "lens3" is the owner of the services in this guide, who
 is given a privilege of sudoers.  Optionally, a second pseudo user,
 anyone who can access the Lens3 configuration file, may be prepared as
 an administrator.
 
-We assume RedHat/Rocky 8.8 and Python 3.9 at this writing (in June
-2023).
+We assume RedHat/Rocky 8.8 and Golang 1.22 at this writing (in Aug
+2024).
 
 It is highly recommended the server host is not open for users.
 
 * Services and thier ports
   * HTTP Proxy (port=433)
   * Valkey (port=6378)
-  * Lens3-Mux (port=8003)
-  * Lens3-Reg (port=8004)
+  * Multiplexer (port=8003)
+  * Registrar (port=8004)
 
 * User IDs
   * `lens3:lens3` -- a pseudo user for services
-  * `httpd` or `nginx`
+  * `httpd`
 
 * Files and directories
   * /usr/lib/systemd/system/lenticularis-mux.service
@@ -54,11 +52,11 @@ It is highly recommended the server host is not open for users.
   * /var/log/lenticularis-valkey/
   * /run/lenticularis-valkey/ (temporary)
   * /etc/httpd/
-  * /etc/nginx/conf.d/
 
 * Software
   * RedHat/Rocky 8.8
   * Golang 1.22 and later
+  * Valkey 7.2.5
   * git
 
 ## Install Prerequisites
@@ -73,19 +71,12 @@ Some tests are written in Python.
 # dnf install rpm-devel
 ```
 
-Install a proxy, either Apache-HTTPD or NGINX.  Install Apache-HTTPD
-(with optional OpenID Connect).
+Install a proxy, Apache-HTTPD.  Install Apache-HTTPD (with optional
+OpenID Connect).
 
 ```
 # dnf install httpd mod_ssl mod_proxy_html
 # dnf install mod_auth_openidc
-```
-
-Or, install NGINX.
-
-```
-# dnf install nginx
-# dnf install httpd-tools
 ```
 
 ## Install Lens3
@@ -130,15 +121,13 @@ lens3$ exit
 # install -m 755 -c /tmp/mc /usr/local/bin/mc
 ```
 
-Install Lens3 and Python packages.  Installation should be run in the
-"$TOP/v1" directory.  Running `make install` in the "$TOP/v1"
-directory does the same work.
+Install Lens3.  Installation should be run in the "$TOP/v2" directory.
 
 ```
 # su - lens3
-lens3$ cd $TOP/v1
-lens3$ pip3 install --user -r requirements.txt
-lens3$ ls ~/.local/lib/python3.9/site-packages/lenticularis
+lens3$ cd $TOP/v2/pkg/lens3
+lens3$ go get
+lens3$ go build
 ```
 
 ## Prepare Log File Directories
@@ -187,17 +176,17 @@ Modify the firewall to accept connections to port=443 and port=80.
 # firewall-cmd --reload
 ```
 
-## Set up an HTTP Proxy
+## Notes on an HTTP Proxy
 
 HTTP Proxy seeting is highly site dependent.  Please ask the site
 manager for setting.
 
-### A Note on Proxy Path Choices
+### Proxy Path Choices
 
-A path, "location" or "proxypass", should be "/" for Lens3-Mux,
+A path, "location" or "proxypass", should be "/" for Multiplexer,
 because a path cannot be specified for the S3 service.  Thus, when
-Lens3-Mux and Lens3-Reg services are co-hosted, the Lens3-Mux path
-should be "/" and the Lens3-Reg path should be something like
+Multiplexer and Registrar services are co-hosted, the Multiplexer path
+should be "/" and the Registrar path should be something like
 "/lens3.sts/" that is NOT a legitimate bucket name.  We will use
 "lens3.sts" in the following.
 
@@ -208,32 +197,32 @@ S3 API signature calculation algorithm does not support proxy schemes
 [Configure NGINX Proxy for MinIO
 Server](https://min.io/docs/minio/linux/integrations/setup-nginx-proxy-with-minio.html).
 
-### A Note on Required HTTP Headers
+### Required HTTP Headers
 
-Lens3-Reg trusts the "X-Remote-User" header passed by the proxy, which
-holds an authenticated user claim.  Make sure the header is properly
-filtered and prepared by the proxy.
+Registrar requires "X-Remote-User" and "X-Csrf-Token".  Registrar
+trusts the "X-Remote-User" header, which holds an authenticated user
+claim.  Make sure "X-Remote-User" header is properly prepared by the
+proxy.
 
-Lens3-Mux requires {"Host", "X-Forwarded-For", "X-Forwarded-Host",
-"X-Forwarded-Server", "X-Forwarded-Proto", "X-Real-IP"}.  "Connection"
-(for keep-alive) is forced unset for Lens3-Mux.
+Multiplexer requires the headers for the S3 protocol, of course,
+including "Host".
 
-These are all practically standard headers.  Note {"X-Forwarded-For",
-"X-Forwarded-Host", "X-Forwarded-Server"} are implicitly set by Apache-HTTPD.
+Note {"X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Server"} are
+implicitly set by Apache-HTTPD.
 
-## CASE1: Proxy by Apache-HTTPD
+## Set up Proxy by Apache-HTTPD
 
 Set up a configuration file with the needed authentication, and
 (re)start the service.
 
 Prepare a configuration file in "/etc/httpd/conf.d/".  Sample files
-can be found in $TOP/apache/.  Copy one as
+can be found in $TOP/v2/apache/.  Copy one as
 "/etc/httpd/conf.d/lens3proxy.conf" and edit it.  Note running
 "restorecon" sets the "system_u"-user on the file (or, you may run
 "chcon -u system_u" on the file).
 
 ```
-# cp $TOP/apache/lens3proxy-basic.conf /etc/httpd/conf.d/lens3proxy.conf
+# cp $TOP/v2/apache/lens3proxy-basic.conf /etc/httpd/conf.d/lens3proxy.conf
 # chown root:root /etc/httpd/conf.d/lens3proxy.conf
 # chmod 640 /etc/httpd/conf.d/lens3proxy.conf
 # vi /etc/httpd/conf.d/lens3proxy.conf
@@ -245,7 +234,7 @@ can be found in $TOP/apache/.  Copy one as
 A note for proxy setting: A trailing slash in
 ProxyPass/ProxyPassReverse lines is necessary (in both the pattern
 part and the URL part as noted in Apache-HTTPD documents).  It
-instructs the proxy to forward directory accesses to Lens3-Reg.  As a
+instructs the proxy to forward directory accesses to Registrar.  As a
 consequence, accesses by "https://lens3.exmaple.com/lens3.sts"
 (without a slash) will fail.
 
@@ -302,40 +291,7 @@ file.  Change the lines of cert and key in
 > SSLCertificateKeyFile /etc/pki/tls/private/lens3.key
 ```
 
-## CASE2: Proxy by NGINX
-
-The following example is for basic authentication.  First, prepare a
-configuration file in "/etc/nginx/conf.d/", maybe by copying a sample
-file in $TOP/nginx/.
-
-```
-# cp $TOP/nginx/lens3proxy-basic.conf /etc/nginx/conf.d/lens3proxy.conf
-# vi /etc/nginx/conf.d/lens3proxy.conf
-```
-
-Prepare passwords for basic authentication.
-
-```
-# mkdir /etc/nginx/private
-# chown nginx:nginx /etc/nginx/private
-# chmod 770 /etc/nginx/private
-# touch /etc/nginx/private/htpasswd
-# chown nginx:nginx /etc/nginx/private/htpasswd
-# chmod 660 /etc/nginx/private/htpasswd
-# htpasswd -b /etc/nginx/private/htpasswd user pass
-# ......
-```
-
-Stop/start NGINX during configuration changes.
-
-```
-# systemctl stop nginx
-......
-# systemctl enable nginx
-# systemctl start nginx
-```
-
-### A Note about NGINX parameters
+## A Note about NGINX
 
 NGINX has a parameter on the limit "client_max_body_size"
 (default=1MB).  The default value is too small.  The size "10M" seems
@@ -378,7 +334,7 @@ secure.  The following fields need be changed from the sample file:
 
 ```
 # mkdir /etc/lenticularis
-# cp $TOP/unit-file/valkey/valkey.conf /etc/lenticularis/valkey.conf
+# cp $TOP/v2/unit-file/valkey/valkey.conf /etc/lenticularis/valkey.conf
 # chown lens3:lens3 /etc/lenticularis/valkey.conf
 # chmod 660 /etc/lenticularis/valkey.conf
 # vi /etc/lenticularis/valkey.conf
@@ -387,18 +343,19 @@ secure.  The following fields need be changed from the sample file:
 Prepare a systemd unit file for Valkey, and start/restart Valkey.
 
 ```
-# cp $TOP/unit-file/valkey/lenticularis-valkey.service /usr/lib/systemd/system/
+# cp $TOP/v2/unit-file/valkey/lenticularis-valkey.service /usr/lib/systemd/system/
 # systemctl daemon-reload
 # systemctl enable lenticularis-valkey
 # systemctl start lenticularis-valkey
 ```
 
-Lens3-Mux and Lens3-Reg connect to Valkey using the information held in
-"/etc/lenticularis/conf.json".  Copy and edit the configuration file.
-Keep it secure as it holds the password to Valkey.
+Multiplexer and Registrar connect to Valkey using the information held
+in "/etc/lenticularis/conf.json".  Copy and edit the configuration
+file.  KEEP "conf.json" SECURE ALL THE TIME.  It holds the password to
+Valkey.  Access keys are stored in the keyval-db in raw text.
 
 ```
-# cp $TOP/unit-file/conf.json /etc/lenticularis/conf.json
+# cp $TOP/v2/unit-file/conf.json /etc/lenticularis/conf.json
 # chown lens3:lens3 /etc/lenticularis/conf.json
 # chmod 660 /etc/lenticularis/conf.json
 # vi /etc/lenticularis/conf.json
@@ -406,7 +363,7 @@ Keep it secure as it holds the password to Valkey.
 
 ## Store Lens3 Settings in Valkey
 
-Lens3-Mux and Lens3-Reg load the configuration from Valkey.  This
+Multiplexer and Registrar load the configuration from Valkey.  This
 section prepares it.  It is better to run `lens3-admin` on the same
 host running Valkey.  See the following descriptions of the fields of
 the configurations.
@@ -419,16 +376,15 @@ Make the configurations in files to load them in Valkey.
 ```
 # su - lens3
 lens3$ cd ~
-lens3$ cp $TOP/v3/unit-file/mux-conf.json mux-conf.json
+lens3$ cp $TOP/v2/unit-file/mux-conf.json mux-conf.json
 lens3$ cp $TOP/v2/unit-file/reg-conf.json reg-conf.json
 lens3$ vi mux-conf.json
 lens3$ vi reg-conf.json
 ```
 
 Load the Lens3 configuration from the files.  Note `lens3-admin` needs
-"conf.json" containing connection information to Valkey.  KEEP
-"conf.json" SECURE ALL THE TIME -- access keys to S3 are stored in the
-database in raw text.
+"conf.json" containing connection information to the keyval-db.  Keep
+"conf.json" secure, when it is necessary to copy it.
 
 ```
 # cp /etc/lenticularis/conf.json /home/lens3/conf.json
@@ -452,7 +408,7 @@ lens3$ cat mux-conf.json | jq
 lens3$ cat reg-conf.json | jq
 ```
 
-## Set up sudoers for Lens3-Mux
+## Set up sudoers for Multiplexer
 
 Lens3 runs MinIO as a non-root process, and thus, it uses sudo to
 start MinIO.  The provided example setting is that the user "lens3" is
@@ -460,7 +416,7 @@ only allowed to run "/usr/local/bin/minio".  Copy and edit an entry
 in "/etc/sudoers.d/lenticularis-sudoers".
 
 ```
-# cp $TOP/unit-file/mux/lenticularis-sudoers /etc/sudoers.d/
+# cp $TOP/v2/unit-file/lenticularis-sudoers /etc/sudoers.d/
 # vi /etc/sudoers.d/lenticularis-sudoers
 # chmod 440 /etc/sudoers.d/lenticularis-sudoers
 ```
@@ -480,7 +436,7 @@ Storage=persistent
 
 ## (Optional) Set up Log Rotation
 
-Logs from Lens3-Mux, Lens3-Reg, Gunicorn, and Valkey are rotated with
+Logs from a Multiplexer, Registrar, and Valkey are rotated with
 "copytruncate".  Note the "copytruncate" method has a minor race.  The
 USR1 signal to Gunicorn is not used because it would terminate the
 process (in our environment), contrary to the Gunicorn document.  A
@@ -489,20 +445,19 @@ didn't use Python's logging.handlers.TimedRotatingFileHandler, because
 its work differs from what we expected.
 
 ```
-# cp $TOP/unit-file/logrotate/lenticularis /etc/logrotate.d/
+# cp $TOP/v2/unit-file/logrotate/lenticularis /etc/logrotate.d/
 # vi /etc/logrotate.d/lenticularis
 # chmod 644 /etc/logrotate.d/lenticularis
 ```
 
-## Start Lens3-Mux and Lens3-Reg Services
+## Start Multiplexer and Registrar Services
 
-Lens3-Mux and Lens3-Reg will be started as a system service with
+Multiplexer and Registrar will be started as a system service with
 uid:gid=lens3:lens3.  Copy (and edit) the systemd unit files for
-Lens3-Reg and Lens3-Mux.
+Registrar and Multiplexer.
 
 ```
-# cp $TOP/unit-file/reg/lenticularis-reg.service /usr/lib/systemd/system/
-# cp $TOP/unit-file/mux/lenticularis-mux.service /usr/lib/systemd/system/
+# cp $TOP/v2/unit-file/lenticularis-mux.service /usr/lib/systemd/system/
 ```
 
 ```
@@ -571,7 +526,7 @@ Valkey status:
 # systemctl status lenticularis-valkey
 ```
 
-Lens3-Mux and Lens3-Reg status:
+Multiplexer and Registrar status:
 
 ```
 # systemctl status lenticularis-mux
@@ -581,12 +536,12 @@ lens3$ cd ~
 lens3$ lens3-admin -c conf.json show-ep
 ```
 
-The admin command `show-ep` shows the endpoints of Lens3-Mux and MinIO
-instances.  Something goes wrong if there are no entries of Lens3-Mux.
+The admin command `show-ep` shows the endpoints of Multiplexer and MinIO
+instances.  Something goes wrong if there are no entries of Multiplexer.
 
 ## Test Accesses
 
-Access Lens3-Reg by a browser (for example):
+Access Registrar by a browser (for example):
 `http://lens3.example.com/lens3.sts/`
 
 For accessing buckets from S3 client, copy the access/secret keys
@@ -615,7 +570,7 @@ lens3$ aws --endpoint-url https://lens3.example.com/ s3 cp s3://bkt1/somefile1 -
 First check the systemd logs.  Diagnosing errors before a start of
 logging is tricky.
 
-A log of Lens3-Reg may include a string "EXAMINE THE GUNICORN LOG",
+A log of Registrar may include a string "EXAMINE THE GUNICORN LOG",
 which indicates a Gunicorn process finishes by some reason.  Check the
 logs of Gunicorn.
 
@@ -678,7 +633,7 @@ It would happen in an https only site.  It may be fixed by modifying a
 
 ### No Support for Multiple Hosts
 
-Current version requires all the proxy, Lens3-Mux, and Lens3-Reg run
+Current version requires all the proxy, Multiplexer, and Registrar run
 on a single host.  To set up for multiple hosts, it needs at least to
 specify options to Gunicorn to accept non-local connections.
 

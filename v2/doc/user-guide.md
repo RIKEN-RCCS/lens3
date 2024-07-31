@@ -11,7 +11,7 @@ The first step is to create a pool.  Fill a directory as a full path
 and select a unix group, then click the create button (a plus icon).
 The directory needs to be writable to the user:group pair.
 
-![Landing page screenshot](ug1.jpg)
+![Landing page screenshot](../../v1/doc/ug1.jpg)
 
 __List Pools__ section shows a list of existing pools.  It is a slider
 list.  Check the "minio-state" of the pool just created.  It should be
@@ -22,7 +22,7 @@ Select a pool by clicking the edit button (a pencil icon).  It opens
 __Edit a Pool__ section.  Or, delete a pool by clicking the delete
 button (a trash-can icon).
 
-![Pool list screenshot](ug2.jpg)
+![Pool list screenshot](../../v1/doc/ug2.jpg)
 
 __Edit a Pool__ section has two independent subsections -- one for
 buckets and the other for access keys.
@@ -36,14 +36,14 @@ _writeonly_.  Accesses to buckets are restricted by these policies.
 An expiration date must be a future.  An expiration date is actually a
 time in second, but the UI only handles it by date at midnight UTC.
 
-![Pool edit screenshot](ug3.jpg)
+![Pool edit screenshot](../../v1/doc/ug3.jpg)
 
 The last figure shows a screenshot after some operations.  It has one
 private bucket and two access keys (one readwrite, one readonly).
 
 The S3-endpoint URL can be found in the menu at the top-left corner.
 
-![Pool list screenshot](ug4.jpg)
+![Pool list screenshot](../../v1/doc/ug4.jpg)
 
 ### Simple UI
 
@@ -79,7 +79,7 @@ messages.  It is on the todo list.
 
 ## Overview of Lens3
 
-| ![lens3-setting](lens3-setting.svg) |
+| ![lens3-setting](../../v1/doc/lens3-setting.svg) |
 |:--:|
 | **Fig. Lens3 overview.** |
 
@@ -113,9 +113,9 @@ state reflecting the state of a backend as "minio-state".
 Bucket-pool state is:
 
 * __READY__ and __INITIAL__ indicate a service is usable.  It does not
-  necessarily mean a backend is running.  The INITIAL state was used
-  as the state the backend is not in sync with the Lens3's state.
-  READY and INITIAL are synonymous, currently.
+  necessarily mean a backend is running.  READY and INITIAL are
+  synonymous in v2.1.  The INITIAL state was used as the state that
+  the backend is not in sync with the Lens3's state.
 * __SUSPENED__ indicates a pool is temporarily unusable by server
   busyness.  It needs several minutes for a cease of the condition.
 * __DISABLED__ indicates a pool is unusable.  A transition between
@@ -123,7 +123,7 @@ Bucket-pool state is:
   expiration conditions.  The causes of a transition include disabling
   a user account, making a pool offline, or an expiry of a pool.
 * __INOPERABLE__ indicates an error state and a pool is permanently
-  unusable.  Mainly, it has failed to start a backend.  This pool
+  unusable.  Mainly, it means it has failed to start a backend.  This pool
   cannot be used and should be removed.
 
 Deletions of buckets and secrets are accepted during the suspension
@@ -208,14 +208,14 @@ by request by filtering server logs.
 
 ## Glossary
 
-* __backend__: A backend refers to a backend S3 server instance.  That
-  is, it is a process of MinIO or rclone.
-* __bucket pool__: A management unit of S3 buckets.  It corresponds to
-  a single backend.
-* __probe access__: Registrar or the administrator tool accesses
-  Multiplexer to start a MinIO instance.  Such access is called a probe
-  access.  A probe access is dropped at Multiplexer and not forwarded to
-  a MinIO instance.
+* __bucket pool__: A pool is a management unit of S3 buckets.  It
+  corresponds to a single backend.
+* __backend__: A backend refers to a backend S3 server instance.  It
+  is a process of MinIO or rclone.
+* __probe access__: Registrar or the administrator tool accesses a
+  Multiplexer to start a backend instance.  Such access is called a
+  probe access.  A probe access is processed at a Multiplexer and is
+  not forwarded to a backend.
 
 ## Changes from v1.3.1 to v2.1.1
 

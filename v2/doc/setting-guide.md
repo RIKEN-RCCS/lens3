@@ -4,7 +4,7 @@
 
 This document describes setting for Lenticularis-S3 (Lens3).
 
-| ![lens3-setting](lens3-setting.svg) |
+| ![lens3-setting](../../v1/doc/lens3-setting.svg) |
 |:--:|
 | **Fig. Lens3 overview.** |
 

@@ -194,27 +194,28 @@ by request by filtering server logs.
 
 ## Other Limitations
 
-* S3 operations are restricted to simple ones to objects.
-* No STS support.
-* No event notifications support.
+* Lens3 has no STS.
+* Lens3 has no event notifications.
 * Lens3 does not support listing of buckets by `aws s3 ls`.  Simply,
   Lens3 prohibits accesses to the "/" of the bucket namespace.  It is
   because the bucket namespace is shared by all users.
-* Lens3 does not support S3 CLI "presign" command.  Lens3 does not
-  recognize a credential attached in a URL.
+* Lens3 does not support presigned URL.  Lens3 does not recognize a
+  credential parameter in a URL.
 * Lens3 does not provide accesses to the rich UI provided by a backend
   server.
+* Lens3 only keeps track of a single Web-UI session (for a csrf
+  countermeasure).  Access from multiple browsers causes errors.
 
 ## Glossary
 
+* __backend__: A backend refers to a backend S3 server instance.  That
+  is, it is a process of MinIO or rclone.
 * __bucket pool__: A management unit of S3 buckets.  It corresponds to
   a single backend.
 * __probe access__: Registrar or the administrator tool accesses
   Multiplexer to start a MinIO instance.  Such access is called a probe
   access.  A probe access is dropped at Multiplexer and not forwarded to
   a MinIO instance.
-* __backend__: A backend refers to a backend S3 server instance.  That
-  is, it is a process of MinIO or rclone.
 
 ## Changes from v1.3.1 to v2.1.1
 
@@ -227,14 +228,16 @@ by request by filtering server logs.
 * Checking access keys is done by Lens3.  v1.3 passed requests to a
   backend unchecked.
 * Records in the keyval-db are not compatible to v1.3.  All records
-  are stored in json.  The keyval-db is Valkey.
+  are now in json.  The keyval-db is Valkey.
+* Commands to add/delete buckets in backends are invoked by a
+  Multiplexer.  It means it is reverted to v1.1.
 
 ## Changes from v1.2.1 to v1.3.1
 
 * MinIO version is fixed to use the legacy "fs"-mode (it is quite
   old).  In a recent development of erasure-coding, MinIO uses chunked
-  files in storage, which would not be suitable for
-  importing/exporting existing files.
+  files in its storage, which would not be suitable for exporting
+  existing files.
 
 ## Changes from v1.1.1 to v1.2.1
 
@@ -247,8 +250,7 @@ by request by filtering server logs.
   distinct.
 * Access keys have expiration.
 * Rich features are dropped.
-* Some locks in accessing a database are omitted.  Operations by
-  Registrar and the administrator tool is sloppy.
-* MC commands are directly invoked from Registrar to change the
-  setting of a MinIO instance.  MC commands were invoked at
-  Multiplexer in v1.1.
+* Locks in accessing the keyval-db are omitted.  Operations by
+  Registrar and the administrator tool are sometimes sloppy.
+* Commands of MinIO's MC are directly invoked from Registrar.  MC
+  commands were invoked at Multiplexer in v1.1.

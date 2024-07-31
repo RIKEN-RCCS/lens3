@@ -56,6 +56,8 @@ var required_headers = [3]string{
 	"Host", "X-Amz-Content-Sha256", "X-Amz-Date",
 }
 
+const s3_region_default = "us-east-1"
+
 const s3v4_authorization_method = "AWS4-HMAC-SHA256"
 
 const x_amz_date_layout = "20060102T150405Z"
@@ -293,10 +295,10 @@ func check_all_digits(s string) bool {
 	return re.MatchString(s)
 }
 
-// Converts an X-Amz-Date string to one parsable in RFC3339.  It
-// returns "" if a string is ill formed.  The date format is
-// "X-Amz-Date=20060102T150405Z".  (X-Amz-Date is an acceptable string
-// by ISO-8601).
+// Converts an X-Amz-Date string to be parsable in RFC3339.  It
+// returns "" if a string is ill formed.  It should use the date
+// format for X-Amz-Date.  See x_amz_date_layout="20060102T150405Z".
+// (X-Amz-Date is an acceptable string by ISO-8601).
 func fix_x_amz_date(d string) string {
 	if len(d) != 16 {
 		return ""

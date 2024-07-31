@@ -7,6 +7,18 @@ package lens3
 
 // Registrar is a Web-UI for pool management.
 
+// NOTE: Registrar uses a "double submit cookie" for CSRF prevention,
+// that is used in fastapi_csrf_protect.  It uses a cookie+header
+// pair.  A cookie is "fastapi-csrf-token" and a header is
+// "X-Csrf-Token".  A response of GET "/user_info" sets the CSRF state
+// in a client.  See https://github.com/aekasitt/fastapi-csrf-protect
+
+// NOTE: An URL to http.Redirect includes a host:port that matches the
+// pattern in the Apache "ProxyPassReverse" directive.  Otherwise,
+// rewriting by the proxy fails.  A status code can be one of
+// {StatusMovedPermanently(301), StatusSeeOther(303),
+// StatusTemporaryRedirect(307), StatusPermanentRedirect(308)}.
+
 // MEMO: UI expects responses as FastAPI/Starlette's "JSONResponse".
 //
 // media_type = "application/json"
@@ -18,23 +30,11 @@ package lens3
 //   separators=(",", ":"),
 // ).encode("utf-8")
 
-// Registrar uses a "double submit cookie" for CSRF prevention, that
-// is used in fastapi_csrf_protect.  It uses a cookie+header pair.  A
-// cookie is "fastapi-csrf-token" and a header is "X-Csrf-Token".  A
-// response of GET "/user_info" sets the CSRF state of a client.  See
-// https://github.com/aekasitt/fastapi-csrf-protect
+// MEMO: Arrays are initialed by "make(type,0)" if they are to be
+// returned to UI in json.  It makes an empty json entry "key:[]"
+// instead of "key:null".
 
-// NOTE: Arrays are initialed by "make(type,0)" if they are to be
-// returned to UI in json.  It is a trick to make a json entry
-// "key:[]" instead of "key:null".
-
-// NOTE: An URL to http.Redirect includes a host:port that matches the
-// pattern in the Apache "ProxyPassReverse" directive.  Otherwise,
-// rewriting by the proxy fails.  A status code can be one of
-// {StatusMovedPermanently(301), StatusSeeOther(303),
-// StatusTemporaryRedirect(307), StatusPermanentRedirect(308)}.
-
-// NOTE: Maybe, consider adding a "Retry-After" header for 503 error.
+// MEMO: Maybe, consider adding a "Retry-After" header for 503 error.
 
 import (
 	"context"
@@ -45,6 +45,7 @@ import (
 	"net/http"
 	"os/user"
 	"path/filepath"
+	"runtime/debug"
 	"slices"
 	"strconv"
 	"strings"
@@ -174,10 +175,6 @@ type make_secret_request struct {
 	Expiration_time int64  `json:"expiration_time"`
 }
 
-var the_registrar = &registrar{}
-
-//var err_body_not_allowed = errors.New("http: request method or response status code does not allow body")
-
 const (
 	bucket_policy_ui_NONE string = "none"
 	bucket_policy_ui_WO   string = "upload"
@@ -217,8 +214,11 @@ var intern_secret_policy_from_ui = map[string]secret_policy{
 	secret_policy_ui_WO: secret_policy_WO,
 }
 
-// REG_BAD_ARGUMENT_MESSAGE is an error message returned to Web-UI on
-// bad arguments.
+var the_registrar = &registrar{}
+
+// REG_BAD_ARGUMENT_MESSAGE is a partial error message to be returned
+// to Web-UI on bad arguments.  It is copied to proxy_exc.  See
+// decode_request_body_with_error_return().
 type reg_bad_argument_message struct {
 	error string
 	info  map[string]string
@@ -244,8 +244,16 @@ func configure_registrar(z *registrar, t *keyval_table, qch <-chan vacuous, c *r
 }
 
 func start_registrar(z *registrar, wg *sync.WaitGroup) {
+	defer func() {
+		var x = recover()
+		if x != nil {
+			slogger.Error("Reg: Registrar main errs", "err", x,
+				"stack", string(debug.Stack()))
+		}
+	}()
 	defer wg.Done()
 	defer quit_service()
+
 	if trace_task&tracing != 0 {
 		slogger.Debug("Reg: start_registrar()")
 	}

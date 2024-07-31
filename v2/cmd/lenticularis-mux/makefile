@@ -3,7 +3,7 @@
 #FLG=-v -x
 
 all::
-	go build $(FLG) -o a.out
+	go build $(FLG)
 
 fmt::
 	go fmt *.go

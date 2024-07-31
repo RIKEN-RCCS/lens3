@@ -360,10 +360,11 @@ func start_backend_in_mutexed(w *manager, pool string) backend_delegate {
 
 		var err1 = make_absent_buckets_in_backend(w, proc.be)
 		if err1 != nil {
-			//var reason pool_reason = start_failure_in_setup
-			//abort_backend(w, d)
-			//mark_pool_inoperable(w, pooldata, reason)
-			//return nil
+			// (An error is already logged).
+			// LET THE BACKEND CONTINUE TO WORK.
+			// abort_backend(w, d)
+			// mark_pool_inoperable(w, pooldata, reason)
+			// return nil
 		}
 
 		go ping_backend(w, d)
@@ -938,13 +939,14 @@ func wait4_child_process(w *manager, d backend_delegate) {
 
 // MAKE_ABSENT_BUCKETS_IN_BACKEND makes consistent about buckets in a
 // Registrar's record and buckets in the backend.  It runs during
-// starting a backend.  It ignores errors from the backend but returns
-// the first one.  Calling get_backend() won't work yet, because the
-// record has not beeb set in the keyval-db.
+// starting a backend and when requested by Registrar.  It ignores
+// errors from the backend but returns the first one.  Calling
+// get_backend() won't work yet, because the record has not been set
+// in the keyval-db.
 func make_absent_buckets_in_backend(w *manager, be *backend_record) error {
 	var pool = be.Pool
-	var buckets_needed = gather_buckets(w.table, pool)
 
+	var buckets_needed = gather_buckets(w.table, pool)
 	var buckets_exsting, err1 = list_buckets_in_backend(w, be)
 	if err1 != nil {
 		// (An error is already logged).
@@ -954,7 +956,7 @@ func make_absent_buckets_in_backend(w *manager, be *backend_record) error {
 	slogger.Debug(w.logprefix+"Check existing buckets in backend",
 		"pool", pool, "buckets", buckets_exsting)
 
-	var err2 error = nil
+	var errx error = nil
 
 	var now = time.Now()
 	for _, b := range buckets_needed {
@@ -969,11 +971,11 @@ func make_absent_buckets_in_backend(w *manager, be *backend_record) error {
 		slogger.Debug(w.logprefix+"Make a bucket in backend",
 			"pool", pool, "bucket", b.Bucket)
 
-		var err3 = make_bucket_in_backend(w, be, b)
-		if err3 != nil && err2 == nil {
+		var err2 = make_bucket_in_backend(w, be, b)
+		if err2 != nil && errx == nil {
 			// (An error is already logged).
-			err2 = err3
+			errx = err2
 		}
 	}
-	return err2
+	return errx
 }

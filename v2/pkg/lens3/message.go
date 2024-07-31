@@ -5,6 +5,8 @@
 
 package lens3
 
+// Error messages.
+
 const (
 	http_200_OK int = 200
 
@@ -20,9 +22,6 @@ const (
 
 	http_601_too_much_data int = 601
 )
-
-// ERROR_MESSAGE is an error message to be returned to clients.
-type error_message [2]string
 
 // Error messages returned to clients by Multiplexer and Regisrar.
 var (

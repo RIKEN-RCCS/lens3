@@ -108,8 +108,16 @@ func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, qch <-ch
 }
 
 func start_multiplexer(m *multiplexer, wg *sync.WaitGroup) {
+	defer func() {
+		var x = recover()
+		if x != nil {
+			slogger.Error("Mux: Multiplexer main errs", "err", x,
+				"stack", string(debug.Stack()))
+		}
+	}()
 	defer wg.Done()
 	defer quit_service()
+
 	if trace_task&tracing != 0 {
 		slogger.Debug(m.logprefix + "start_multiplexer()")
 	}
@@ -145,8 +153,8 @@ func start_multiplexer(m *multiplexer, wg *sync.WaitGroup) {
 		"ep", m.mux_ep, "err", err1)
 }
 
-// MUX_PERIODIC_WORK registers the endpoint of Multiplexer in the
-// keyval-db in its thread.
+// MUX_PERIODIC_WORK keeps registering the endpoint of Multiplexer in
+// the keyval-db.
 func mux_periodic_work(m *multiplexer) {
 	defer func() {
 		var x = recover()
@@ -342,6 +350,7 @@ func serve_authenticated_access(m *multiplexer, w http.ResponseWriter, r *http.R
 	if !ensure_bucket_owner(m, w, r, bucket, secret, auth) {
 		return
 	}
+
 	if !ensure_bucket_not_expired(m, w, r, bucket, auth) {
 		return
 	}
@@ -439,10 +448,11 @@ func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, be *
 
 // SERVE_INTERNAL_ACCESS handles requests by probe_access_mux() from
 // Registrar.  It tries to make buckets in the backend.  It rejects
-// requests from the outside (ie, thru the proxy).  Calling
-// make_absent_buckets_in_backend() is not mutexed, but it results in
-// only redundant work.  It returns http 502 on an error, as clients
-// retry for http 500.
+// requests from the outside (ie, thru a proxy).  Calling
+// make_absent_buckets_in_backend() is not mutexed.  A critical case
+// is that an error cancels a work to make a bucket in Registrar, but
+// the error is for another bucket.  It returns http 502 on an error,
+// as clients retry for http 500.
 func serve_internal_access(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record, secret *secret_record) {
 	assert_fatal(secret != nil)
 	var auth = secret.Access_key
@@ -479,19 +489,33 @@ func serve_internal_access(m *multiplexer, w http.ResponseWriter, r *http.Reques
 
 	var err2 = make_absent_buckets_in_backend(m.manager, be)
 	if err2 != nil {
-		var reason = err2.Error()
+		var message = prettify_error_message(err2.Error())
 		var err3 = &proxy_exc{
 			auth,
 			"",
 			http_502_bad_gateway,
 			message_502_bucket_creation_failed,
 			map[string]string{
-				"err": reason,
+				"err": message,
 			},
 		}
-		return_mux_error_response(m, w, r, err3)
+		return_mux_error_response_no_delay(m, w, r, err3)
 		return
 	}
+}
+
+// PRETTIFY_ERROR_MESSAGE removes garbages in an error message, such
+// as ":_" followed by nothing.  It is intended for
+// "BucketAlreadyOwnedByYou: ".
+func prettify_error_message(m string) string {
+	var m2 = strings.TrimSpace(m)
+	var m3 string
+	if strings.HasSuffix(m2, ":") {
+		m3 = m2[:len(m2)-1]
+	} else {
+		m3 = m2
+	}
+	return m3
 }
 
 type access_logger = func(rqst *http.Request, code int, length int64, uid string, auth string)
@@ -1007,6 +1031,13 @@ func check_user_is_active(t *keyval_table, uid string) (bool, string) {
 
 func return_mux_error_response(m *multiplexer, w http.ResponseWriter, r *http.Request, err *proxy_exc) {
 	var delay_ms = m.conf.Multiplexer.Error_response_delay_ms
+	var logprefix = m.logprefix
+	var logfn = log_mux_access_by_request
+	return_error_response(w, r, err, delay_ms, logprefix, logfn)
+}
+
+func return_mux_error_response_no_delay(m *multiplexer, w http.ResponseWriter, r *http.Request, err *proxy_exc) {
+	var delay_ms = time_in_ms(0)
 	var logprefix = m.logprefix
 	var logfn = log_mux_access_by_request
 	return_error_response(w, r, err, delay_ms, logprefix, logfn)

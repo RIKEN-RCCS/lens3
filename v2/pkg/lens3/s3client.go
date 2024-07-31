@@ -5,20 +5,20 @@
 
 package lens3
 
-// This defines a few S3 operations to a backend server --
-// list-buckets and make-bucket.
+// This defines a few S3 operations to a backend server: list-buckets
+// and make-bucket.
 
 // S3 operations return "aws/smithy/OperationError", but it wraps
 // other errors in a deep nest.  Extraction of an S3 operation error
-// from it is done by unwrap_operation_error().
+// from it is done by unwrap_operation_error().  The OperationError
+// wraps errors other than operation errors such as
+// "aws/retry/MaxAttemptsError" and "aws/RequestCanceledError".
 //
 // See https://aws.github.io/aws-sdk-go-v2/docs/handling-errors/
 
-// MEMO: The "aws/smithy/OperationError" wraps errors in a deep nest
-// such as "aws/retry/MaxAttemptsError", "aws/RequestCanceledError".
-// ResponseError is defined in several packages like
-// "service/internal/s3shared/ResponseError".
-// "aws/transport/http/ResponseError"
+// MEMO: ResponseError is defined in several packages like
+// "service/internal/s3shared/ResponseError",
+// "aws/transport/http/ResponseError",
 // "aws/smithy-go/transport/http/ResponseError".
 //
 // See https://pkg.go.dev/github.com/aws/smithy-go
@@ -40,8 +40,6 @@ import (
 	"time"
 )
 
-const s3_region_default = "us-east-1"
-
 func list_buckets_in_backend(w *manager, be *backend_record) ([]string, error) {
 	var pool = be.Pool
 
@@ -59,15 +57,16 @@ func list_buckets_in_backend(w *manager, be *backend_record) ([]string, error) {
 	}
 	var client *s3.Client = s3.New(options)
 
-	//AHOAHOAHO
-	//var timeout = (w.Backend_timeout_ms).time_duration()
-	var timeout = time.Duration(60 * time.Second)
+	var timeout = (w.Backend_timeout_ms).time_duration()
+	if timeout < time.Duration(3*time.Second) {
+		slogger.Warn("Backend timeout may be too small", "timeout", timeout)
+	}
 	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	var v, err1 = client.ListBuckets(ctx, &s3.ListBucketsInput{})
 	if err1 != nil {
 		var err2 = unwrap_operation_error(err1)
-		slogger.Error("Listing buckets in backend failed",
+		slogger.Error("s3/Client.ListBuckets in backend errs",
 			"pool", pool, "err", err2)
 		return nil, err2
 	}
@@ -99,9 +98,10 @@ func make_bucket_in_backend(w *manager, be *backend_record, bucket *bucket_recor
 	}
 	var client *s3.Client = s3.New(options)
 
-	//AHOAHOAHO
-	//var timeout = (w.Backend_timeout_ms).time_duration()
-	var timeout = time.Duration(60 * time.Second)
+	var timeout = (w.Backend_timeout_ms).time_duration()
+	if timeout < time.Duration(3*time.Second) {
+		slogger.Warn("Backend timeout may be too small", "timeout", timeout)
+	}
 	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	var _, err1 = client.CreateBucket(ctx,
@@ -110,7 +110,7 @@ func make_bucket_in_backend(w *manager, be *backend_record, bucket *bucket_recor
 		})
 	if err1 != nil {
 		var err2 = unwrap_operation_error(err1)
-		slogger.Error("Making bucket in backend failed",
+		slogger.Error("s3/Client.CreateBucket in backend errs",
 			"pool", pool, "bucket", name, "err", err2)
 		return err2
 	}
@@ -184,15 +184,14 @@ func (w *slog_writer) Write(buf []byte) (int, error) {
 }
 
 // UNWRAP_OPERATION_ERROR unwraps nested errors to find out an error
-// from an S3 operation.  It checks smithy/APIError or
-// awshttp/ResponseError.  A returned error is, for example,
-// types/BucketAlreadyOwnedByYou, defined in aws/service/s3/types.
-// Note that APIError is more specific than ResponseError as
-// ResponseError includes smithy/CanceledError, but APIError does not.
+// from an S3 operation.  A returned error is, for example,
+// types/BucketAlreadyOwnedByYou, defined in aws/service/s3/types.  It
+// checks smithy/APIError or awshttp/ResponseError.  Note that
+// APIError is more specific than ResponseError as ResponseError
+// includes smithy/CanceledError, but APIError does not.
 func unwrap_operation_error(e1 error) error {
 	var e2 smithy.APIError
 	if errors.As(e1, &e2) {
-		//fmt.Printf("*** APIError=(%#v)\n", e2)
 		if trace_task&tracing != 0 {
 			slogger.Debug("Unwrap nested error", "APIError", e2)
 		}
@@ -201,8 +200,7 @@ func unwrap_operation_error(e1 error) error {
 	var e3 *awshttp.ResponseError
 	if errors.As(e1, &e3) {
 		var e4 = e3.Unwrap()
-		//var rspn = e3.Response
-		//var body, _ = io.ReadAll(rspn.Body)
+		//var body, _ = io.ReadAll(e3.Response.Body)
 		if trace_task&tracing != 0 {
 			slogger.Debug("Unwrap nested error", "ResponseError", e4)
 		}

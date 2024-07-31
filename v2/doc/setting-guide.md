@@ -681,3 +681,9 @@ It would happen in an https only site.  It may be fixed by modifying a
 Current version requires all the proxy, Lens3-Mux, and Lens3-Reg run
 on a single host.  To set up for multiple hosts, it needs at least to
 specify options to Gunicorn to accept non-local connections.
+
+## CAVEAT
+
+* __backend_timeout_ms__ in a configuration should be larger than
+  1 sec, and recomended 5 sec.  Error responses from a backend could
+  be delayed which cause all errors to be reported as timeouts.

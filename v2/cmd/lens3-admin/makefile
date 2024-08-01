@@ -5,5 +5,8 @@
 all::
 	go build $(FLG)
 
+install::
+	go install .
+
 fmt::
 	go fmt *.go

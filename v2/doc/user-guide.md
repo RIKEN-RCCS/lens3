@@ -120,6 +120,8 @@ S3 server.  Valkey is an open-source keyval-db database system.  A
 reverse-proxy is not specified in Lens3 but it is required for
 operation.
 
+### Multiplexer
+
 Multiplexer forwards access requests to a backend S3 server instance
 by looking at a bucket name.  Multiplexer determines the target
 backend using an association of a bucket and an access key.  This
@@ -130,6 +132,8 @@ server instance.  Multiplexer starts a backend on receiving an access
 request, and after a while, Multiplexer stops the instance when it
 becomes idle.  Multiplexer starts a backend as a user process using
 "sudo".
+
+### Registrar
 
 Registrar provides management of buckets.  A bucket pool is a unit of
 management in Lens3 and corresponds to a single backend.  A user first
@@ -220,9 +224,9 @@ by request by filtering server logs.
   corresponds to a single backend.
 - __backend__: A backend refers to a backend S3 server instance.  It
   is a process of MinIO or rclone.
-- __probe access__: Registrar or the administrator tool accesses a
+- __probe access__: Registrar or the administrator tool accesses
   Multiplexer to start a backend instance.  Such access is called a
-  probe access.  A probe access is processed at a Multiplexer and is
+  probe access.  A probe access is processed at Multiplexer and is
   not forwarded to a backend.
 
 ## Changes from v1.3.1 to v2.1.1
@@ -233,18 +237,18 @@ by request by filtering server logs.
 - It has a choice of a backend, rclone in addition to MinIO.  Note
   that the current implementation of rclone as rclone-serve-s3 has
   problems (rclone v1.66.0).
-- Checking access keys is done by Lens3.  v1.3 passed requests to a
+- Checking access keys is done in Lens3.  v1.3 passed requests to a
   backend unchecked.
 - Records in the keyval-db are not compatible to v1.3.  All records
-  are now in json.  The keyval-db is Valkey.
-- Commands to add/delete buckets in backends are invoked by a
-  Multiplexer.  It means it is reverted to v1.1.
+  are now in json.  The keyval-db is changed to Valkey.
+- Commands to add/delete buckets in backends are invoked by
+  Multiplexer.  It means it reverted to v1.1.
 
 ## Changes from v1.2.1 to v1.3.1
 
 - MinIO version is fixed to use the legacy "fs"-mode (it is quite
-  old).  In a recent development of erasure-coding, MinIO uses chunked
-  files in its storage, which would not be suitable for exporting
+  old).  In a recent development of MinIO for erasure-coding, MinIO
+  uses chunked files in its storage.  It is not suitable for exporting
   existing files.
 
 ## Changes from v1.1.1 to v1.2.1
@@ -255,7 +259,7 @@ by request by filtering server logs.
   key in v1.1.  This change prohibits performing S3's bucket
   operations, because bucket operations are not forwarded.
 - Bucket name space is shared by all users.  Bucket names must be
-  distinct.
+  unique.
 - Access keys have expiration.
 - Rich features are dropped.
 - Locks in accessing the keyval-db are omitted.  Operations by

@@ -28,10 +28,10 @@ is given a privilege of sudoers.  Optionally, a second pseudo user,
 anyone who can access the Lens3 configuration file, may be prepared as
 an administrator.
 
-We assume RedHat/Rocky 8.8 and Golang 1.22 at this writing (in Aug
-2024).
+IT IS HIGHLY RECOMMENDED THE SERVER HOST IS NOT OPEN FOR USERS.
 
-It is highly recommended the server host is not open for users.
+We assume RedHat/Rocky 8.10 and Golang 1.22 at this writing (in Aug
+2024).
 
 * Services and thier ports
   * HTTP Proxy (port=433)
@@ -61,28 +61,41 @@ It is highly recommended the server host is not open for users.
 
 ## Install Prerequisites
 
-Install "Golang", "Valkey-7", and "Development-Tools" onto the host.
-Some tests are written in Python.
+Install "Golang-1.22", "Valkey-7", and "Development-Tools" onto the
+host.  Some tests are written in Python.
+
+Install basic tools, first.
 
 ```
 # dnf groupinstall "Development Tools"
-# dnf install golang
-# dnf install valkey
 # dnf install rpm-devel
 ```
 
-Install a proxy, Apache-HTTPD.  Install Apache-HTTPD (with optional
-OpenID Connect).
+Install Valkey. But, Valkey is in EPEL.
+
+```
+# dnf install epel-release
+# dnf repolist
+# dnf install valkey
+```
+
+Install Apache-HTTPD with OpenID Connect (optional).
 
 ```
 # dnf install httpd mod_ssl mod_proxy_html
 # dnf install mod_auth_openidc
 ```
 
-## Install Lens3
+Install Golang.  But, Golang in RedHat/Rocky is old.  Download a newer
+one from: https://go.dev/dl/
 
-Note "$TOP" in the following refers to the top directory in the
-downloaded Lens3 package.
+```
+# dnf remove 'golang*'
+# rm -rf /usr/local/go
+# tar -C /usr/local -xzf go1.22.5.linux-amd64.tar.gz
+```
+
+## Make Pseudo User Lens3
 
 Make a pseudo-user for the services.  UID/GID will be selected from a
 lower range below 1000 that won't conflict with true users.  Most of
@@ -92,6 +105,8 @@ appropriately such as by `umask 022`.
 ```
 # useradd -K UID_MIN=301 -K UID_MAX=499 -K GID_MIN=301 -K GID_MAX=499 -U -d /home/lens3 lens3
 ```
+
+## Download MinIO Binaries
 
 Download MinIO binaries "minio" and "mc" from min.io and install them.
 "minio" and "mc" are to be accessible by anyone as permission=755.
@@ -121,22 +136,34 @@ lens3$ exit
 # install -m 755 -c /tmp/mc /usr/local/bin/mc
 ```
 
-Install Lens3.  Installation should be run in the "$TOP/v2" directory.
+## Install Lens3
+
+Note "$TOP" in the following refers to the top directory in the
+downloaded Lens3 package.
+
+Build and install Lens3.  Installation will copy binary files
+("lens3-admin" and "lenticularis-mux") in the "~/go/bin" directory.
 
 ```
 # su - lens3
 lens3$ cd $TOP/v2/pkg/lens3
 lens3$ go get
 lens3$ go build
+lens3$ cd $TOP/v2/cmd/lenticularis-mux
+lens3$ go install
+lens3$ cd $TOP/v2/cmd/lens3-admin/
+lens3$ go install
 ```
 
 ## Prepare Log File Directories
 
+Umm... Valkey seems using Redis's selinux settings.
+
 Create directories for logging, and modify their security attributes.
-Valkey usually requires "redis_log_t" to write its logs, and
-"logrotate" requires "var_log_t" or "redis_log_t".  Note "tmp_t"-type
-won't work due to the policy for "logrotate".  Enforce the attribute
-by "restorecon" (or using "chcon -t redis_log_t").
+Valkey requires "redis_log_t" to write its logs, and logrotate
+requires "var_log_t" or "redis_log_t".  Note "tmp_t"-type won't work
+due to the policy for logrotate.  Enforce the attribute by restorecon
+(or using "chcon -t redis_log_t").
 
 ```
 # mkdir /var/log/lenticularis

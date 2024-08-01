@@ -354,7 +354,7 @@ Lens3 uses a separate Valkey instance running at port=6378 (not
 well-known port=6379).
 
 Prepare a configuration file as "/etc/lenticularis/valkey.conf".
-Change the owner and edit the fields.  Keep it secure, because it
+Change the owner and edit the fields.  KEEP IT SECURE, because it
 includes a password.  Starting Valkey will fail when the owner of
 /etc/lenticularis/valkey.conf is not "lens3".  The "requirepass" field
 needs be changed from the sample file.
@@ -383,8 +383,8 @@ Prepare a systemd unit file for Valkey, and start/restart Valkey.
 
 Multiplexer and Registrar connect to Valkey using the information held
 in "/etc/lenticularis/conf.json".  Copy and edit the configuration
-file.  KEEP "conf.json" SECURE ALL THE TIME.  It holds the password to
-Valkey.  Access keys are stored in the keyval-db in raw text.
+file.  Set the password to Valkey in it.  KEEP "conf.json" SECURE ALL
+THE TIME.  Access keys are stored in the keyval-db in raw text.
 
 ```
 # cp $TOP/v2/unit-file/conf.json /etc/lenticularis/conf.json
@@ -453,6 +453,18 @@ in "/etc/sudoers.d/lenticularis-sudoers".
 # chmod 440 /etc/sudoers.d/lenticularis-sudoers
 ```
 
+## (Optional) Set up Log Rotation
+
+Logs from Multiplexer, Registrar, and Valkey are rotated with
+"copytruncate".  Note the "copytruncate" method has a minor race.  The
+rule for Valkey is a modified copy of /etc/logrotate.d/redis.
+
+```
+# cp $TOP/v2/unit-file/logrotate/lenticularis /etc/logrotate.d/
+# vi /etc/logrotate.d/lenticularis
+# chmod 644 /etc/logrotate.d/lenticularis
+```
+
 ## (Optional) Set up System Logging
 
 Logging in RedHat/Rocky is in memory by default.  It needs a change in
@@ -464,22 +476,6 @@ the setting to keep logs across reboots.
 Storage=persistent
 
 # systemctl restart systemd-journald
-```
-
-## (Optional) Set up Log Rotation
-
-Logs from a Multiplexer, Registrar, and Valkey are rotated with
-"copytruncate".  Note the "copytruncate" method has a minor race.  The
-USR1 signal to Gunicorn is not used because it would terminate the
-process (in our environment), contrary to the Gunicorn document.  A
-rule for Valkey is a modified copy of /etc/logrotate.d/redis.  We
-didn't use Python's logging.handlers.TimedRotatingFileHandler, because
-its work differs from what we expected.
-
-```
-# cp $TOP/v2/unit-file/logrotate/lenticularis /etc/logrotate.d/
-# vi /etc/logrotate.d/lenticularis
-# chmod 644 /etc/logrotate.d/lenticularis
 ```
 
 ## Start Multiplexer and Registrar Services
@@ -599,10 +595,6 @@ lens3$ aws --endpoint-url https://lens3.example.com/ s3 cp s3://bkt1/somefile1 -
 First check the systemd logs.  Diagnosing errors before a start of
 logging is tricky.
 
-A log of Registrar may include a string "EXAMINE THE GUNICORN LOG",
-which indicates a Gunicorn process finishes by some reason.  Check the
-logs of Gunicorn.
-
 ### Examining MinIO Behavior
 
 It is a bit tricky when MinIO does not behave as expected.  In that
@@ -663,8 +655,7 @@ It would happen in an https only site.  It may be fixed by modifying a
 ### No Support for Multiple Hosts
 
 Current version requires all the proxy, Multiplexer, and Registrar run
-on a single host.  To set up for multiple hosts, it needs at least to
-specify options to Gunicorn to accept non-local connections.
+on a single host.
 
 ## CAVEAT
 

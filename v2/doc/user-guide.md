@@ -85,6 +85,28 @@ First, check the status of a pool as shown in __List Pools__ section.
 Next, check error messages from an S3 access.  However, accesses
 rejected at Lens3 only return coarse error messages.
 
+## Troubleshooting (Typical Problems)
+
+- A pool becomes INOPERABLE, when starting the backend S3 server
+  fails.  For diagnosing, the reason button on UI shows the message
+  from the backend.  A typical error is that pool's bucket-directory
+  is not writable.  The message looks like `"mkdir
+  /home/XXX/XXX/.minio.sys: permission denied"` (for the MinIO
+  backend).  Unfortunately, the message might not help much in other
+  error cases.
+
+- MinIO stores its state in a directory ".minio.sys" in pool's
+  bucket-directory.  An inconsistent state could cause MinIO to fail.
+  The contents of ".minio.sys" can be incompatible between versions.
+  It typically happens when a user runs MinIO by yourself.  Recovering
+  from this problem, do two steps: remove the directory ".minio.sys",
+  and delete the pool.
+
+- An existence of regular files in pool's bucket-directory may cause a
+  problem.  Creating a bucket of the same name fails in the backend.
+  MinIO issues an error message with `"BucketAlreadyOwnedByYou"` which
+  appears in a dialog message.
+
 ## Overview of Lens3
 
 | ![lens3-setting](../../v1/doc/lens3-setting.svg) |
@@ -113,29 +135,7 @@ Registrar provides management of buckets.  A bucket pool is a unit of
 management in Lens3 and corresponds to a single backend.  A user first
 creates a bucket pool, then registers buckets to the pool.
 
-## Troubleshooting (Typical Problems)
-
-- A pool becomes INOPERABLE, when starting the backend S3 server
-  fails.  For diagnosing, the reason button on UI shows the message
-  from the backend.  A typical error is that pool's bucket-directory
-  is not writable.  The message looks like `"mkdir
-  /home/XXX/XXX/.minio.sys: permission denied"` (for the MinIO
-  backend).  Unfortunately, the message might not help much in other
-  error cases.
-
-- MinIO stores its state in a directory ".minio.sys" in pool's
-  bucket-directory.  An inconsistent state could cause MinIO to fail.
-  The contents of ".minio.sys" can be incompatible between versions.
-  It typically happens when a user runs MinIO by yourself.  Recovering
-  from this problem, do two steps: remove the directory ".minio.sys",
-  and delete the pool.
-
-- An existence of regular files in pool's bucket-directory may cause a
-  problem.  Creating a bucket of the same name fails in the backend.
-  MinIO issues an error message with `"BucketAlreadyOwnedByYou"` which
-  appears in a dialog message.
-
-## Bucket-Pool State
+### Bucket-Pool State
 
 A bucket-pool is a management unit of S3 buckets in Lens3 and it has a
 state reflecting the state of a backend as "minio-state".
@@ -157,10 +157,8 @@ Bucket-pool state is:
   cannot be used and should be removed.
 
 Deletions of buckets and secrets are accepted during the suspension
-state of a pool.  However, it delays to make a user's action take
-effect, since it is unable to start a MinIO instance in the suspension
-state.  In contrast, additions of buckets and secrets are rejected
-immediately.
+state of a pool, because they are intenal actions in Lens3.  In
+contrast, additions of buckets and secrets are rejected.
 
 ## Restrictions of Lens3
 

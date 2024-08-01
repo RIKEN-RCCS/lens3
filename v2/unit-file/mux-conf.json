@@ -5,7 +5,7 @@
   "multiplexer": {
     "port": 8003,
     "trusted_proxy_list": [
-      "localhost", "fgkvm-010-128-008-030.fdcs.r-ccs.riken.jp"
+      "localhost"
     ],
     "mux_node_name": "localhost",
     "backend": "minio",
@@ -33,13 +33,13 @@
     "command_options": []
   },
   "log": {
-    "access_log_file": "/tmp/lens3-mux-access-log"
+    "access_log_file": "/var/log/lenticularis/lens3-mux-access-log"
   },
   "logging": {
     "logger": {
-      "log_file": "/tmp/lens3-log",
+      "log_file": "/var/log/lenticularis/lens3-log",
       "level": "DEBUG",
-      "tracing": 255,
+      "tracing": 0,
       "source_line": false
     },
     "alert": {
@@ -54,7 +54,7 @@
       "client": "lens3-logger",
       "topic": "Lens3 Alert",
       "username": "lens3",
-      "password": "k7IwUfcKvYgaXfY9kHNoiXOP6RhTAHir9EzPbms8"
+      "password": "lEXw0tR6cB5ueTRkSFLZLsjMEPgQ9ah8QeKwdKUZ"
     },
     "stats": {
       "sample_period": 600

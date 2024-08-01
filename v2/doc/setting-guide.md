@@ -106,6 +106,28 @@ appropriately such as by `umask 022`.
 # useradd -K UID_MIN=301 -K UID_MAX=499 -K GID_MIN=301 -K GID_MAX=499 -U -d /home/lens3 lens3
 ```
 
+## Install Lens3
+
+Note "$TOP" in the following refers to the top directory in the
+downloaded Lens3 package.
+
+Build and install Lens3.  Installation will copy binary files
+("lens3-admin" and "lenticularis-mux") in the "~/go/bin" directory.
+Copy "lenticularis-mux" binary to "/usr/local/bin".
+
+```
+# su - lens3
+lens3$ cd $TOP/v2/pkg/lens3
+lens3$ go get
+lens3$ go build
+lens3$ cd $TOP/v2/cmd/lenticularis-mux
+lens3$ go install
+lens3$ cd $TOP/v2/cmd/lens3-admin/
+lens3$ go install
+lens3$ exit
+# install -m 755 -c /home/lens3/go/bin/lenticularis-mux /usr/local/bin/lenticularis-mux
+```
+
 ## Download MinIO Binaries
 
 Download MinIO binaries "minio" and "mc" from min.io and install them.
@@ -134,25 +156,6 @@ lens3$ mv ./mc.RELEASE.2022-06-10T22-29-12Z ./mc
 lens3$ exit
 # install -m 755 -c /tmp/minio /usr/local/bin/minio
 # install -m 755 -c /tmp/mc /usr/local/bin/mc
-```
-
-## Install Lens3
-
-Note "$TOP" in the following refers to the top directory in the
-downloaded Lens3 package.
-
-Build and install Lens3.  Installation will copy binary files
-("lens3-admin" and "lenticularis-mux") in the "~/go/bin" directory.
-
-```
-# su - lens3
-lens3$ cd $TOP/v2/pkg/lens3
-lens3$ go get
-lens3$ go build
-lens3$ cd $TOP/v2/cmd/lenticularis-mux
-lens3$ go install
-lens3$ cd $TOP/v2/cmd/lens3-admin/
-lens3$ go install
 ```
 
 ## Prepare Log File Directories
@@ -424,8 +427,8 @@ lens3$ lens3-admin -c conf.json load-conf reg-conf.json
 lens3$ lens3-admin -c conf.json show-conf
 ```
 
-Restarting of services, lenticularis-mux and lenticularis-reg, is
-needed after setting configurations.  Run `systemctl restart` on them.
+Restarting the service, lenticularis-mux, is needed after setting
+configurations.  Run `systemctl restart lenticularis-mux`.
 
 Syntax of json can be checked by tools such as "jq" -- command-line
 JSON processor.
@@ -479,9 +482,9 @@ its work differs from what we expected.
 
 ## Start Multiplexer and Registrar Services
 
-Multiplexer and Registrar will be started as a system service with
-uid:gid=lens3:lens3.  Copy (and edit) the systemd unit files for
-Registrar and Multiplexer.
+Multiplexer and Registrar is a single binary, and it will be started
+as a system service.  Copy (and edit) the systemd unit file for the
+service.  It is started as uid:gid=lens3:lens3.
 
 ```
 # cp $TOP/v2/unit-file/lenticularis-mux.service /usr/lib/systemd/system/
@@ -491,9 +494,7 @@ Registrar and Multiplexer.
 # systemctl daemon-reload
 # systemctl enable lenticularis-mux
 # systemctl start lenticularis-mux
-# systemctl enable lenticularis-reg
-# systemctl start lenticularis-reg
-# systemctl status lenticularis-mux lenticularis-reg
+# systemctl status lenticularis-mux
 
 ```
 
@@ -553,18 +554,17 @@ Valkey status:
 # systemctl status lenticularis-valkey
 ```
 
-Multiplexer and Registrar status:
+Multiplexer status:
 
 ```
 # systemctl status lenticularis-mux
-# systemctl status lenticularis-reg
 # su - lens3
 lens3$ cd ~
-lens3$ lens3-admin -c conf.json show-ep
+lens3$ lens3-admin -c conf.json show-mux
 ```
 
-The admin command `show-ep` shows the endpoints of Multiplexer and MinIO
-instances.  Something goes wrong if there are no entries of Multiplexer.
+The admin command `show-mux` shows the endpoints of Multiplexers.
+Something goes wrong if it were empty.
 
 ## Test Accesses
 

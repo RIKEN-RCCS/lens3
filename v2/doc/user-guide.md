@@ -47,9 +47,9 @@ The S3-endpoint URL can be found in the menu at the top-left corner.
 
 ### CAVEATS
 
-- A pool will be expired in 365 days after its creation (it is site
+- A pool will be expired in 180 days after its creation (it is site
   configurable).
-- A user will be expired in 365 days, too, from the last access to
+- A user will be expired in 180 days, too, from the last access to
   Registrar.  However, an expiration of a pool will come first.
 
 ### Simple UI

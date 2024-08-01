@@ -15,10 +15,10 @@
     "uid_block_range_list": [[1,99]],
     "gid_drop_range_list": [[1, 999]],
     "gid_drop_list": [50000],
-    "user_expiration_days": 365,
-    "pool_expiration_days": 365,
-    "bucket_expiration_days": 365,
-    "secret_expiration_days": 365,
+    "user_expiration_days": 180,
+    "pool_expiration_days": 180,
+    "bucket_expiration_days": 180,
+    "secret_expiration_days": 180,
     "error_response_delay_ms": 1000,
     "ui_session_duration": 1800
   },
@@ -27,6 +27,6 @@
     "footer_banner": "This site is operated by exmaple.com"
   },
   "log": {
-    "access_log_file": "/tmp/lens3-reg-access-log"
+    "access_log_file": "/var/log/lenticularis/lens3-reg-access-log"
   }
 }

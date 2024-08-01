@@ -203,8 +203,8 @@ func (x *slog_fork_handler) Enabled(ctx context.Context, l slog.Level) bool {
 }
 
 // SLOG_FORK_HANDLER.HANDLE outputs to both file and alert logger
-// targets.  Note that errors in MQTT (marked by the "alert" key) are
-// not reported.
+// targets.  Note that errors in MQTT publishing (that are marked by
+// the "alert" key) are not reported, because they would recurse.
 func (x *slog_fork_handler) Handle(ctx context.Context, r slog.Record) error {
 	//fmt.Println("SLOG_FORK_HANDLER.Handle")
 	var err1 = x.h1.Handle(ctx, r)

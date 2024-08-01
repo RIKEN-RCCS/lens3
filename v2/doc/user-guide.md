@@ -50,7 +50,7 @@ The S3-endpoint URL can be found in the menu at the top-left corner.
 - A pool will be expired in 365 days after its creation (it is site
   configurable).
 - A user will be expired in 365 days, too, from the last access to
-  Registrar.  An expiration of a pool will come first.
+  Registrar.  However, an expiration of a pool will come first.
 
 ### Simple UI
 
@@ -115,22 +115,25 @@ creates a bucket pool, then registers buckets to the pool.
 
 ## Troubleshooting (Typical Problems)
 
-- A failure in starting the backend S3 server (MinIO) makes the pool
-  INOPERABLE.  For diagnosing, the reason button on UI shows the
-  message from the backend.  However, it may not help much.  It is
-  usually just `"Invalid arguments specified"`.
+- A pool becomes INOPERABLE, when starting the backend S3 server
+  fails.  For diagnosing, the reason button on UI shows the message
+  from the backend.  A typical error is that pool's bucket-directory
+  is not writable.  The message looks like `"mkdir
+  /home/XXX/XXX/.minio.sys: permission denied"` (for the MinIO
+  backend).  Unfortunately, the message might not help much in other
+  error cases.
 
 - MinIO stores its state in a directory ".minio.sys" in pool's
-  bucket-directory.  An inconsistent state could cause MinIO to fail,
-  and make the pool INOPERABLE.  The contents of ".minio.sys" can be
-  incompatible between versions, and it typically happens after
-  updating MinIO.  Recovering from this problem needs two steps:
-  remove the directory ".minio.sys", and delete the pool.
+  bucket-directory.  An inconsistent state could cause MinIO to fail.
+  The contents of ".minio.sys" can be incompatible between versions.
+  It typically happens when a user runs MinIO by yourself.  Recovering
+  from this problem, do two steps: remove the directory ".minio.sys",
+  and delete the pool.
 
 - An existence of regular files in pool's bucket-directory may cause a
-  problem.  Creating a bucket of the same name errs in the backend.
-  MinIO usually issues an error message with
-  "BucketAlreadyOwnedByYou".
+  problem.  Creating a bucket of the same name fails in the backend.
+  MinIO issues an error message with `"BucketAlreadyOwnedByYou"` which
+  appears in a dialog message.
 
 ## Bucket-Pool State
 

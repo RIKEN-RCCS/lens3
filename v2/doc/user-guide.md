@@ -45,6 +45,13 @@ The S3-endpoint URL can be found in the menu at the top-left corner.
 
 ![Pool list screenshot](../../v1/doc/ug4.jpg)
 
+### CAVEATS
+
+- A pool will be expired in 365 days after its creation (it is site
+  configurable).
+- A user will be expired in 365 days, too, from the last access to
+  Registrar.  An expiration of a pool will come first.
+
 ### Simple UI
 
 The UI is created with vuejs+vuetify.  It is not of your taste, try
@@ -74,8 +81,9 @@ $ aws --endpoint-url=http://lens3.example.com/ s3 ls s3://somebucket1/
 
 ### Diagnosing Access Errors
 
-Accesses rejected at Lens3 only return status numbers but no error
-messages.  It is on the todo list.
+First, check the status of a pool as shown in __List Pools__ section.
+Next, check error messages from an S3 access.  However, accesses
+rejected at Lens3 only return coarse error messages.
 
 ## Overview of Lens3
 
@@ -105,6 +113,25 @@ Registrar provides management of buckets.  A bucket pool is a unit of
 management in Lens3 and corresponds to a single backend.  A user first
 creates a bucket pool, then registers buckets to the pool.
 
+## Troubleshooting (Typical Problems)
+
+- A failure in starting the backend S3 server (MinIO) makes the pool
+  INOPERABLE.  For diagnosing, the reason button on UI shows the
+  message from the backend.  However, it may not help much.  It is
+  usually just `"Invalid arguments specified"`.
+
+- MinIO stores its state in a directory ".minio.sys" in pool's
+  bucket-directory.  An inconsistent state could cause MinIO to fail,
+  and make the pool INOPERABLE.  The contents of ".minio.sys" can be
+  incompatible between versions, and it typically happens after
+  updating MinIO.  Recovering from this problem needs two steps:
+  remove the directory ".minio.sys", and delete the pool.
+
+- An existence of regular files in pool's bucket-directory may cause a
+  problem.  Creating a bucket of the same name errs in the backend.
+  MinIO usually issues an error message with
+  "BucketAlreadyOwnedByYou".
+
 ## Bucket-Pool State
 
 A bucket-pool is a management unit of S3 buckets in Lens3 and it has a
@@ -112,17 +139,17 @@ state reflecting the state of a backend as "minio-state".
 
 Bucket-pool state is:
 
-* __READY__ and __INITIAL__ indicate a service is usable.  It does not
+- __READY__ and __INITIAL__ indicate a service is usable.  It does not
   necessarily mean a backend is running.  READY and INITIAL are
   synonymous in v2.1.  The INITIAL state was used as the state that
   the backend is not in sync with the Lens3's state.
-* __SUSPENED__ indicates a pool is temporarily unusable by server
+- __SUSPENED__ indicates a pool is temporarily unusable by server
   busyness.  It needs several minutes for a cease of the condition.
-* __DISABLED__ indicates a pool is unusable.  A transition between
+- __DISABLED__ indicates a pool is unusable.  A transition between
   READY and DISABLED is by actions by an administrator or some
   expiration conditions.  The causes of a transition include disabling
   a user account, making a pool offline, or an expiry of a pool.
-* __INOPERABLE__ indicates an error state and a pool is permanently
+- __INOPERABLE__ indicates an error state and a pool is permanently
   unusable.  Mainly, it means it has failed to start a backend.  This pool
   cannot be used and should be removed.
 
@@ -132,33 +159,12 @@ effect, since it is unable to start a MinIO instance in the suspension
 state.  In contrast, additions of buckets and secrets are rejected
 immediately.
 
-## Troubleshooting (Typical Problems)
-
-* A failure in starting MinIO makes the pool INOPERABLE.  For
-  diagnosing, the reason button on UI shows the message from MinIO.
-  However, it may not help much.  It is just `"Invalid arguments
-  specified"` that is the same despite of the reason.  A message of
-  earlier versions of MinIO was more helpful.
-
-* Starting MinIO may fail after updating MinIO and its MC command.
-  MinIO server stores its state in a directory ".minio.sys" in the
-  directory it services for.  The state can be incompatible between
-  versions, and it makes the pool INOPERABLE.  Recovering from the
-  problem needs two steps: remove the directory ".minio.sys", and
-  delete the pool.
-
-* Recreating a bucket once removed in the same directory causes an
-  internal error.  Lens3 leaves the contents of a removed bucket, and
-  the residue state causes an error.  It is necessary to remove the
-  directory of the bucket, first.  Internally, MinIO issues an error
-  with "Code=BucketAlreadyOwnedByYou".
-
 ## Restrictions of Lens3
 
 ### No Bucket Operations
 
 Lens3 does not accept any bucket operations: creation, deletion, and
-listing.  Buckets can only be managed via Registrar.  Specifically, a
+listing.  Buckets can only be managed by Registrar.  Specifically, a
 bucket creation request will fail because the request (applying to the
 root path) is not forwarded to a MinIO instance.  A bucket deletion
 will succeed, but it makes the states of Lens3 and a MinIO instance
@@ -172,9 +178,10 @@ be recreated.
 
 ### Bucket Naming Restrictions
 
-Bucket names must be in lowercase alphanums and "-" (minus).  Note
-that Lens3 bans a dot.  In addition, Lens3 bans names "aws", "amazon",
-"minio" and the names that begin with "goog" and "g00g".
+Bucket names must be in lowercase alphanums and "-" (minus).  Lens3
+rejects "." (dot) and "_" (underscore).  In addition, Lens3 bans names
+"aws", "amazon", "minio" and the names that begin with "goog" and
+"g00g".
 
 ### No Control on File and Bucket Properties
 
@@ -192,65 +199,65 @@ Lens3 does not provide access logs to users, although we understand it
 is useful to users.  Administrators might provide access logs to users
 by request by filtering server logs.
 
-## Other Limitations
+### Other Limitations
 
-* Lens3 has no STS.
-* Lens3 has no event notifications.
-* Lens3 does not support listing of buckets by `aws s3 ls`.  Simply,
+- Lens3 has no STS.
+- Lens3 has no event notifications.
+- Lens3 does not support listing of buckets by `aws s3 ls`.  Simply,
   Lens3 prohibits accesses to the "/" of the bucket namespace.  It is
   because the bucket namespace is shared by all users.
-* Lens3 does not support presigned URL.  Lens3 does not recognize a
+- Lens3 does not support presigned URL.  Lens3 does not recognize a
   credential parameter in a URL.
-* Lens3 does not provide accesses to the rich UI provided by a backend
+- Lens3 does not provide accesses to the rich UI provided by a backend
   server.
-* Lens3 only keeps track of a single Web-UI session (for a csrf
+- Lens3 only keeps track of a single Web-UI session (for a csrf
   countermeasure).  Access from multiple browsers causes errors.
 
 ## Glossary
 
-* __bucket pool__: A pool is a management unit of S3 buckets.  It
+- __bucket pool__: A pool is a management unit of S3 buckets.  It
   corresponds to a single backend.
-* __backend__: A backend refers to a backend S3 server instance.  It
+- __backend__: A backend refers to a backend S3 server instance.  It
   is a process of MinIO or rclone.
-* __probe access__: Registrar or the administrator tool accesses a
+- __probe access__: Registrar or the administrator tool accesses a
   Multiplexer to start a backend instance.  Such access is called a
   probe access.  A probe access is processed at a Multiplexer and is
   not forwarded to a backend.
 
 ## Changes from v1.3.1 to v2.1.1
 
-* v2.1 is a code refresh.
-* Users of the service are default-allow (configurable).  Prior
+- v2.1 is a code refresh.
+- Users of the service are default-allow (configurable).  Prior
   registering of users is optional.
-* It has a choice of a backend, rclone in addition to MinIO.  Note
+- It has a choice of a backend, rclone in addition to MinIO.  Note
   that the current implementation of rclone as rclone-serve-s3 has
   problems (rclone v1.66.0).
-* Checking access keys is done by Lens3.  v1.3 passed requests to a
+- Checking access keys is done by Lens3.  v1.3 passed requests to a
   backend unchecked.
-* Records in the keyval-db are not compatible to v1.3.  All records
+- Records in the keyval-db are not compatible to v1.3.  All records
   are now in json.  The keyval-db is Valkey.
-* Commands to add/delete buckets in backends are invoked by a
+- Commands to add/delete buckets in backends are invoked by a
   Multiplexer.  It means it is reverted to v1.1.
 
 ## Changes from v1.2.1 to v1.3.1
 
-* MinIO version is fixed to use the legacy "fs"-mode (it is quite
+- MinIO version is fixed to use the legacy "fs"-mode (it is quite
   old).  In a recent development of erasure-coding, MinIO uses chunked
   files in its storage, which would not be suitable for exporting
   existing files.
 
 ## Changes from v1.1.1 to v1.2.1
 
-* Host-style naming of buckets is dropped.
-* Accesses are forwarded to MinIO with respect to a pair of a bucket
+- Host-style naming of buckets is dropped.
+- Accesses are forwarded to MinIO with respect to a pair of a bucket
   name and an access key.  Forwarding decision was only by an access
   key in v1.1.  This change prohibits performing S3's bucket
   operations, because bucket operations are not forwarded.
-* Bucket name space is shared by all users.  Bucket names must be
+- Bucket name space is shared by all users.  Bucket names must be
   distinct.
-* Access keys have expiration.
-* Rich features are dropped.
-* Locks in accessing the keyval-db are omitted.  Operations by
+- Access keys have expiration.
+- Rich features are dropped.
+- Locks in accessing the keyval-db are omitted.  Operations by
   Registrar and the administrator tool are sometimes sloppy.
-* Commands of MinIO's MC are directly invoked from Registrar.  MC
+- Commands of MinIO's MC are directly invoked from Registrar.  MC
   commands were invoked at Multiplexer in v1.1.

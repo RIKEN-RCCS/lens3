@@ -9,10 +9,10 @@ This document describes setting for Lenticularis-S3 (Lens3).
 | **Fig. Lens3 overview.** |
 
 The steps are:
-* Prepare prerequisite software and install Lens3
-* Set up a frontend proxy (Apache-HTTPD)
-* Start Valkey
-* Start Lenticularis-S3 service (Multiplexer and Registrar)
+- Prepare prerequisite software and install Lens3
+- Set up a frontend proxy (Apache-HTTPD)
+- Start Valkey
+- Start Lenticularis-S3 service (Multiplexer and Registrar)
 
 ## Assumptions
 
@@ -33,31 +33,31 @@ IT IS HIGHLY RECOMMENDED THE SERVER HOST IS NOT OPEN FOR USERS.
 We assume RedHat/Rocky 8.10 and Golang 1.22 at this writing (in Aug
 2024).
 
-* Services and thier ports
-  * HTTP Proxy (port=433)
-  * Valkey (port=6378)
-  * Multiplexer (port=8003)
-  * Registrar (port=8004)
+- Services and thier ports
+  - HTTP Proxy (port=433)
+  - Valkey (port=6378)
+  - Multiplexer (port=8003)
+  - Registrar (port=8004)
 
-* User IDs
-  * `lens3:lens3` -- a pseudo user for services
-  * `httpd`
+- User IDs
+  - `lens3:lens3` -- a pseudo user for services
+  - `httpd`
 
-* Files and directories
-  * /usr/lib/systemd/system/lenticularis-mux.service
-  * /usr/lib/systemd/system/lenticularis-valkey.service
-  * /etc/lenticularis/conf.json
-  * /etc/lenticularis/valkey.conf
-  * /var/log/lenticularis/
-  * /var/log/lenticularis-valkey/
-  * /run/lenticularis-valkey/ (temporary)
-  * /etc/httpd/
+- Files and directories
+  - /usr/lib/systemd/system/lenticularis-mux.service
+  - /usr/lib/systemd/system/lenticularis-valkey.service
+  - /etc/lenticularis/conf.json
+  - /etc/lenticularis/valkey.conf
+  - /var/log/lenticularis/
+  - /var/log/lenticularis-valkey/
+  - /run/lenticularis-valkey/ (temporary)
+  - /etc/httpd/
 
-* Software
-  * RedHat/Rocky 8.8
-  * Golang 1.22 and later
-  * Valkey 7.2.5
-  * git
+- Software
+  - RedHat/Rocky 8.8
+  - Golang 1.22 and later
+  - Valkey 7.2.5
+  - git
 
 ## Install Prerequisites
 
@@ -354,13 +354,15 @@ Lens3 uses a separate Valkey instance running at port=6378 (not
 well-known port=6379).
 
 Prepare a configuration file as "/etc/lenticularis/valkey.conf".
-Change the owner and edit the fields.  Starting Valkey will fail when
-the owner of /etc/lenticularis/valkey.conf is not "lens3".  Keep it
-secure.  The following fields need be changed from the sample file:
+Change the owner and edit the fields.  Keep it secure, because it
+includes a password.  Starting Valkey will fail when the owner of
+/etc/lenticularis/valkey.conf is not "lens3".  The "requirepass" field
+needs be changed from the sample file.
 
-* bind: Network interfaces; localhost by default
-* port: A port for Valkey
-* requirepass: A passhprase for Valkey
+Some of the fields:
+- "bind": Network interfaces; localhost by default
+- "port": A port for Valkey
+- "requirepass": A passhprase for Valkey
 
 ```
 # mkdir /etc/lenticularis
@@ -398,8 +400,8 @@ section prepares it.  It is better to run `lens3-admin` on the same
 host running Valkey.  See the following descriptions of the fields of
 the configurations.
 
-* [mux-conf-json.md](mux-conf-json.md)
-* [reg-conf-json.md](reg-conf-json.md)
+- [mux-conf-json.md](mux-conf-json.md)
+- [reg-conf-json.md](reg-conf-json.md)
 
 Make the configurations in files to load them in Valkey.
 
@@ -666,6 +668,6 @@ specify options to Gunicorn to accept non-local connections.
 
 ## CAVEAT
 
-* __backend_timeout_ms__ in a configuration should be larger than
+- __backend_timeout_ms__ in a configuration should be larger than
   1 sec, and recomended 5 sec.  Error responses from a backend could
   be delayed which cause all errors to be reported as timeouts.

@@ -56,13 +56,13 @@ We assume RedHat/Rocky 8.10 and Golang 1.22 at this writing (in Aug
 - Software
   - RedHat/Rocky 8.8
   - Golang 1.22 and later
-  - Valkey 7.2.5
+  - Valkey 7
   - git
 
 ## Install Prerequisites
 
 Install "Golang-1.22", "Valkey-7", and "Development-Tools" onto the
-host.  Some tests are written in Python.
+host.  Some tests in Lens3 use Python.
 
 Install basic tools, first.
 
@@ -71,7 +71,7 @@ Install basic tools, first.
 # dnf install rpm-devel
 ```
 
-Install Valkey. But, Valkey is in EPEL.
+Install Valkey.  Valkey is in EPEL.
 
 ```
 # dnf install epel-release
@@ -97,9 +97,9 @@ one from: https://go.dev/dl/
 
 ## Make Pseudo User Lens3
 
-Make a pseudo-user for the services.  UID/GID will be selected from a
-lower range below 1000 that won't conflict with true users.  Most of
-the installation is performed by the user "lens3".  Fix its umask
+Make a pseudo user for the services.  UID/GID will be selected from
+the lower range below 1000 that won't conflict with real users.  Most
+of the installation is performed by the user "lens3".  Fix its umask
 appropriately such as by `umask 022`.
 
 ```
@@ -160,7 +160,7 @@ lens3$ exit
 
 ## Prepare Log File Directories
 
-Umm... Valkey seems using Redis's selinux settings.
+Valkey seems using Redis's selinux settings.
 
 Create directories for logging, and modify their security attributes.
 Valkey requires "redis_log_t" to write its logs, and logrotate
@@ -220,12 +220,11 @@ should be "/" and the Registrar path should be something like
 "/lens3.sts/" that is NOT a legitimate bucket name.  We will use
 "lens3.sts" in the following.
 
-Please refer to the note on running MinIO with a proxy, saying: "The
-S3 API signature calculation algorithm does not support proxy schemes
-... on a subpath".  See near the bottom of the following page:
+MinIO's note mentions URL path usage behind a proxy, saying: "The S3 API
+signature calculation algorithm does not support proxy schemes ... on
+a subpath".  See near the bottom of the following page.
 
-[Configure NGINX Proxy for MinIO
-Server](https://min.io/docs/minio/linux/integrations/setup-nginx-proxy-with-minio.html).
+[Configure NGINX Proxy for MinIO Server](https://min.io/docs/minio/linux/integrations/setup-nginx-proxy-with-minio.html).
 
 ### Required HTTP Headers
 
@@ -384,7 +383,7 @@ Prepare a systemd unit file for Valkey, and start/restart Valkey.
 Multiplexer and Registrar connect to Valkey using the information held
 in "/etc/lenticularis/conf.json".  Copy and edit the configuration
 file.  Set the password to Valkey in it.  KEEP "conf.json" SECURE ALL
-THE TIME.  Access keys are stored in the keyval-db in raw text.
+THE TIME.  Access keys are stored in Valkey in raw text.
 
 ```
 # cp $TOP/v2/unit-file/conf.json /etc/lenticularis/conf.json
@@ -432,8 +431,8 @@ lens3$ lens3-admin -c conf.json show-conf
 Restarting the service, lenticularis-mux, is needed after setting
 configurations.  Run `systemctl restart lenticularis-mux`.
 
-Syntax of json can be checked by tools such as "jq" -- command-line
-JSON processor.
+Check the syntax of json before loading the configuration.  It can be
+checked by tools such as "jq".  "jq" is a command-line JSON processor.
 
 ```
 lens3$ cat mux-conf.json | jq
@@ -442,10 +441,11 @@ lens3$ cat reg-conf.json | jq
 
 ## Set up sudoers for Multiplexer
 
-Lens3 runs MinIO as a non-root process, and thus, it uses sudo to
-start MinIO.  The provided example setting is that the user "lens3" is
-only allowed to run "/usr/local/bin/minio".  Copy and edit an entry
-in "/etc/sudoers.d/lenticularis-sudoers".
+Lens3 runs a backend S3 server as a non-root process, and it uses sudo
+for it.  Copy and edit an entry in
+"/etc/sudoers.d/lenticularis-sudoers".  The provided example setting
+is that the user "lens3" is only allowed to run "/usr/local/bin/minio"
+via sudo.
 
 ```
 # cp $TOP/v2/unit-file/lenticularis-sudoers /etc/sudoers.d/
@@ -467,8 +467,8 @@ rule for Valkey is a modified copy of /etc/logrotate.d/redis.
 
 ## (Optional) Set up System Logging
 
-Logging in RedHat/Rocky is in memory by default.  It needs a change in
-the setting to keep logs across reboots.
+Logging in RedHat/Rocky is in memory by default.  It needs to be
+changed in the setting to keep logs across reboots.
 
 ```
 # vi /etc/systemd/journald.conf
@@ -481,8 +481,9 @@ Storage=persistent
 ## Start Multiplexer and Registrar Services
 
 Multiplexer and Registrar is a single binary, and it will be started
-as a system service.  Copy (and edit) the systemd unit file for the
-service.  It is started as uid:gid=lens3:lens3.
+as a system service as "lenticularis-mux".  Copy (and edit) the
+systemd unit file for the service.  It is started with the user
+uid:gid=lens3:lens3.
 
 ```
 # cp $TOP/v2/unit-file/lenticularis-mux.service /usr/lib/systemd/system/
@@ -494,46 +495,6 @@ service.  It is started as uid:gid=lens3:lens3.
 # systemctl start lenticularis-mux
 # systemctl status lenticularis-mux
 
-```
-
-## Register Users
-
-Lens3 has its own a list of users (with uid+gid) and a list of
-enablement status of the users.  It does not look at the databases of
-the underlying OS.
-
-See [Administration Guide](admin-guide.md#).
-
-Lens3 stores user information from a CSV file.  An entry in CSV is a
-"ADD" keyword, a uid, a (maybe empty) claim string, and a list of
-groups.  Prepare a list of users in a CSV file.  The 3rd column is
-used for OIDC.
-
-```
-ADD,user1,,group1a,group1b,group1c, ...
-ADD,user2,,group2a,group2b,group2c, ...
-...
-```
-
-Register users by `lens3-admin` command.
-
-```
-lens3$ lens3-admin -c conf.json load-user {csv-file}
-lens3$ lens3-admin -c conf.json show-user
-```
-
-(Optionally) Prepare a list of users enabled to access.  An entry is a
-"ENABLE" prefix and a list of uid's
-
-```
-ENABLE,user1,user2,user3, ...
-```
-
-Register an enabled-user list by `lens3-admin` command.
-
-```
-lens3$ lens3-admin -c conf.json load-user {csv-file}
-lens3$ lens3-admin -c conf.json show-user
 ```
 
 ## Check the Status
@@ -586,6 +547,46 @@ aws_secret_access_key = uDUHMYKSmbqyqB1MGYN57CWMC8eXNHwUL4pcNwROu3xWgpsO
 
 lens3$ aws --endpoint-url https://lens3.example.com/ s3 ls s3://bkt1
 lens3$ aws --endpoint-url https://lens3.example.com/ s3 cp s3://bkt1/somefile1 -
+```
+
+## (Optional) Register Users
+
+Lens3 has its own a list of users (with uid+gid) and a list of
+enablement status of the users.  It does not look at the databases of
+the underlying OS.
+
+See [Administration Guide](admin-guide.md#).
+
+Lens3 stores user information from a CSV file.  An entry in CSV is a
+"ADD" keyword, a uid, a (maybe empty) claim string, and a list of
+groups.  Prepare a list of users in a CSV file.  The 3rd column is
+used for OIDC.
+
+```
+ADD,user1,,group1a,group1b,group1c, ...
+ADD,user2,,group2a,group2b,group2c, ...
+...
+```
+
+Register users by `lens3-admin` command.
+
+```
+lens3$ lens3-admin -c conf.json load-user {csv-file}
+lens3$ lens3-admin -c conf.json show-user
+```
+
+(Optionally) Prepare a list of users enabled to access.  An entry is a
+"ENABLE" prefix and a list of uid's
+
+```
+ENABLE,user1,user2,user3, ...
+```
+
+Register an enabled-user list by `lens3-admin` command.
+
+```
+lens3$ lens3-admin -c conf.json load-user {csv-file}
+lens3$ lens3-admin -c conf.json show-user
 ```
 
 ## Troubleshooting

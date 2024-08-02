@@ -5,15 +5,19 @@
 
 package lens3
 
+// An MQTT client sends logs to MQTT.  It skip logs when it is not
+// connected.  It repeatedly reconnects to the server when it is
+// disconnected.
+//
+// Error logging of MQTT errors adds the attribute "alert=true" in a
+// log message.  It lets the logger skip it to avoid logs recurse.
+
 // Lens3 uses Paho for MQTT v5.  Do not confuse Paho for v3 with v5.
 //
 // MQTT V5
 // https://pkg.go.dev/github.com/eclipse/paho.golang
 // MQTT V3
 // https://pkg.go.dev/github.com/eclipse/paho.mqtt.golang
-
-// Error logging for MQTT adds the attribute "alert=true" in a log
-// message.  It lets skip logging to avoid logs recurse.
 
 // MEMO: Setup passwords for mosquitto
 //
@@ -35,12 +39,14 @@ import (
 	"time"
 )
 
+// MQTT_CLIENT  implements io/Writer.
 type mqtt_client struct {
-	ch_quit_service <-chan vacuous
+	mutex           sync.Mutex
 	cm              *autopaho.ConnectionManager
 	queue           *memory.Queue
-	mutex           sync.Mutex
+	ch_quit_service <-chan vacuous
 	connected       bool
+	config          autopaho.ClientConfig
 	conf            *mqtt_conf
 }
 
@@ -56,7 +62,7 @@ func configure_mqtt(c *mqtt_conf, qch <-chan vacuous) *mqtt_client {
 		return nil
 	}
 	q.queue = memory.New()
-	var conf = autopaho.ClientConfig{
+	q.config = autopaho.ClientConfig{
 		Queue: q.queue,
 
 		ServerUrls: []*url.URL{mqtturl},
@@ -120,20 +126,32 @@ func configure_mqtt(c *mqtt_conf, qch <-chan vacuous) *mqtt_client {
 					defer q.mutex.Unlock()
 					q.connected = false
 				}()
+				go func() {
+					var d = time.Duration(60 * time.Second)
+					var _ = time.AfterFunc(d, func() {
+						reconnect_mqtt_client(q)
+					})
+				}()
 			},
 		},
 	}
-	var ctx = context.Background()
-	var cm, err2 = autopaho.NewConnection(ctx, conf)
-	if err2 != nil {
-		slogger.Error("MQTT: paho/NewConnection() errs",
-			"err", err2, "alert", true)
-		return nil
-	}
-	q.cm = cm
+
+	reconnect_mqtt_client(q)
 
 	if false {
-		var err3 = cm.AwaitConnection(ctx)
+		var ctx = context.Background()
+		var cm, err2 = autopaho.NewConnection(ctx, q.config)
+		if err2 != nil {
+			slogger.Error("MQTT: paho/NewConnection() errs",
+				"err", err2, "alert", true)
+			return nil
+		}
+		q.cm = cm
+	}
+
+	if false {
+		var ctx = context.Background()
+		var err3 = q.cm.AwaitConnection(ctx)
 		if err3 != nil {
 			slogger.Error("MQTT: paho/AwaitConnection() errs",
 				"err", err3, "alert", true)
@@ -144,6 +162,29 @@ func configure_mqtt(c *mqtt_conf, qch <-chan vacuous) *mqtt_client {
 	//go mqtt_client_test__(q)
 
 	return q
+}
+
+// RECONNECT_MQTT_CLIENT starts connecting client to MQTT.  It
+// indefinitely tries to connect to MQTT.
+func reconnect_mqtt_client(q *mqtt_client) {
+	var connected bool
+	func() {
+		q.mutex.Lock()
+		defer q.mutex.Unlock()
+		connected = q.connected
+	}()
+	if connected {
+		return
+	}
+
+	var ctx = context.Background()
+	var cm, err2 = autopaho.NewConnection(ctx, q.config)
+	if err2 != nil {
+		slogger.Error("MQTT: paho/NewConnection() errs",
+			"err", err2, "alert", true)
+		return
+	}
+	q.cm = cm
 }
 
 // PUBLISH_MQTT_MESSAGE publishes a message.  It skips publishing when

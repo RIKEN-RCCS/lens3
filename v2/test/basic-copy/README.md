@@ -9,33 +9,39 @@ It first generates a file of 32MB randoms, and uploads and downloads
 it.  The file size is large enough to start a multipart upload (8MB is
 the default threshold to use a multipart upload).
 
-First, prepare S3 access/secret keys and a bucket in advance.  The
-keys should be stored in the configuration file for AWS CLI, thus in
-"~/.aws/credentials".  And optionally, the S3 signature version should
-be set in the configuration file "~/.aws/config".
+## Set Credentials for AWS CLI
 
-"~/.aws/credentials" looks like:
+First, prepare an S3 access key and a bucket in advance.
 
+Second, store access/secret keys in the configuration file of AWS CLI
+in "~/.aws/credentials".  Optionally, set the S3 signature version in
+the configuration file "~/.aws/config".
+
+"credentials" file looks like:
 ```
+$ cat ~/.aws/credentials
 [default]
 aws_access_key_id = AlmlPM4qXMXKuyzCzbj6
 aws_secret_access_key = OesFyGbSuO76HSs5gfmw69VPMEBtA1t9RxyfzTvg6LXeMsYV
 ```
 
-and "~/.aws/config" looks like:
-
+"config" file looks like:
 ```
+$ cat ~/.aws/config
 [default]
 s3 =
     signature_version = s3v4
 ```
 
-The shell variables "EP" and "BKT" specify the target -- "EP" for an
-endpoint and "BKT" for a bucket.  It reads (sources by ".") a file
-"copy-file-conf.sh" if the file exists.  Copy
-"copy-file-conf-example.sh" as "copy-file-conf.sh" and edit it.  It
-may include variables "SIZ" for the file size, and "DBG" for the
-options to AWS CLI.
+## Run a Test
+
+The shell variables "EP" and "BKT" specify the target: "EP" for an
+endpoint, and "BKT" for a bucket.
+
+It reads (sources by ".") a file "copy-file-conf.sh" if the file
+exists.  Copy "copy-file-conf-example.sh" as "copy-file-conf.sh" and
+edit it.  It may include variables "SIZ" for the file size, and "DBG"
+for the options to AWS CLI.
 
 Running "copy-file.sh" leaves garbage files in the current directory.
 

@@ -525,29 +525,51 @@ lens3$ lens3-admin -c conf.json show-mux
 The admin command `show-mux` shows the endpoints of Multiplexers.
 Something goes wrong if it were empty.
 
-## Test Accesses
+## Access Test
 
-Access Registrar by a browser (for example):
-`http://lens3.example.com/lens3.sts/`
+### Install AWS CLI
 
-For accessing buckets from S3 client, copy the access/secret keys
-created in UI to the AWS "credentials" file.  Note that Lens3 does not
-support listing of buckets by `aws s3 ls`.
+Using AWS Command Line Interface (AWS CLI) is an easiest way to access
+S3 storage.
+
+Instructions of installing AWS CLI can be found at:
+[Install or update to the latest version of the AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
+
+### Set Access Keys in the "credentials" File
+
+A bucket and an access key are needed to acess S3 storage.  First,
+create a pool, a bucket, and a pair of access keys, by accessing Lens3
+Registrar UI by a browser at `http://lens3.example.com/lens3.sts/`,
+for example.
+
+AWS CLI needs the created access/secret keys being stored in the
+"credentials" file.  Copy the keys in the file.
+
+```
+lens3$ vi ~/.aws/credentials
+[default]
+aws_access_key_id = zHb9uscWUDgcJ9ZdYzr6
+aws_secret_access_key = uDUHMYKSmbqyqB1MGYN57CWMC8eXNHwUL4pcNwROu3xWgpsO
+```
+
+Optionally, set the signature version in the "config" file.
 
 ```
 lens3$ vi ~/.aws/config
 [default]
 s3 =
     signature_version = s3v4
-
-lens3$ vi $HOME/.aws/credentials
-[default]
-aws_access_key_id = zHb9uscWUDgcJ9ZdYzr6
-aws_secret_access_key = uDUHMYKSmbqyqB1MGYN57CWMC8eXNHwUL4pcNwROu3xWgpsO
-
-lens3$ aws --endpoint-url https://lens3.example.com/ s3 ls s3://bkt1
-lens3$ aws --endpoint-url https://lens3.example.com/ s3 cp s3://bkt1/somefile1 -
 ```
+
+Access the S3 bucket, here it is "bkt1".
+
+```
+lens3$ aws --endpoint-url https://lens3.example.com/ s3 ls s3://bkt1
+lens3$ aws --endpoint-url https://lens3.example.com/ s3 cp somefile1 s3://bkt1/
+lens3$ aws --endpoint-url https://lens3.example.com/ s3 ls s3://bkt1
+```
+
+Note that Lens3 does not support listing of buckets by `aws s3 ls`.
 
 ## (Optional) Register Users
 

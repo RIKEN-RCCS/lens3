@@ -66,6 +66,22 @@ const (
 	empty_payload_hash_sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 )
 
+// PROXY_ATTACHED_HEADERS lists headers dropped in signing, which a
+// proxy may change.  See the section "ProxyPass" in the Apache-HTTPD
+// document.  It includes other often-used headers: "Connection",
+// "X-Forwarded-Proto", "X-Real-Ip".
+var proxy_attached_headers = []string{
+	"Accept-Encoding",
+	"Amz-Sdk-Invocation-Id",
+	"Amz-Sdk-Request",
+	"X-Forwarded-For",
+	"X-Forwarded-Host",
+	"X-Forwarded-Server",
+	"Connection",
+	"X-Forwarded-Proto",
+	"X-Real-Ip",
+}
+
 // CHECK_CREDENTIAL_IS_GOOD checks the sign in an http request.  It
 // returns OK/NG and a simple reason.  It once signs a request (after
 // copying) using AWS SDK, and compares the result.  It substitutes
@@ -149,11 +165,10 @@ func check_credential_is_good(rqst1 *http.Request, keypair [2]string) (bool, str
 	return true, ""
 }
 
-// SIGN_BY_BACKEND_CREDENTIAL replaces an authorization header in an
-// http request for the backend.  It returns an error code from
-// signer.Signer.SignHTTP().  Note that it drops the headers attached
-// by a frontend proxy, which may confuse the signer in the backend.
-// It also drops some other headers (not necessary).
+// SIGN_BY_BACKEND_CREDENTIAL replaces an authorization header in a
+// request for the key to the backend.  It returns an error code from
+// signer/Signer.SignHTTP().  Note that it drops the headers attached
+// by a proxy, which would confuse the signer in the backend.
 func sign_by_backend_credential(r *http.Request, be *backend_record) error {
 	if false {
 		fmt.Printf("*** r.Host(1)=%v\n", r.Host)
@@ -163,15 +178,9 @@ func sign_by_backend_credential(r *http.Request, be *backend_record) error {
 
 	//fmt.Println("*** be.Backend_ep=", be.Backend_ep)
 
-	r.Header.Del("Accept-Encoding")
-	r.Header.Del("Amz-Sdk-Invocation-Id")
-	r.Header.Del("Amz-Sdk-Request")
-	r.Header.Del("Connection")
-	r.Header.Del("X-Forwarded-For")
-	r.Header.Del("X-Forwarded-Host")
-	r.Header.Del("X-Forwarded-Proto")
-	r.Header.Del("X-Forwarded-Server")
-	r.Header.Del("X-Real-Ip")
+	for _, h := range proxy_attached_headers {
+		r.Header.Del(h)
+	}
 
 	r.Host = be.Backend_ep
 	var credentials = aws.Credentials{

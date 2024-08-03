@@ -204,9 +204,11 @@ func proxy_request_rewriter(m *multiplexer) func(*httputil.ProxyRequest) {
 		var forwarding, ok = x1.(*url.URL)
 		assert_fatal(ok)
 		r.SetURL(forwarding)
-		r.SetXForwarded()
-
 		if false {
+			r.SetXForwarded()
+		}
+
+		if trace_proxy&tracing != 0 {
 			slogger.Debug(m.logprefix+"Forward request",
 				"url", forwarding)
 		}
@@ -304,10 +306,8 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 			serve_internal_access(m, w, r, bucket, authenticated)
 			return
 		case bucket == nil && authenticated == nil:
-			// THIS CAN BE PORT SCANS.
-			if trace_dos&tracing != 0 {
-				slogger.Debug(m.logprefix + "Accessing the top (bucket=nil)")
-			}
+			// Lens3 disallows bucket listing.
+			slogger.Info(m.logprefix+"Bad bucket naming", "bucket", "/")
 			var err4 = &proxy_exc{
 				auth,
 				"",
@@ -439,8 +439,11 @@ func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, be *
 	if trace_proxy&tracing != 0 {
 		slogger.Debug(m.logprefix+"Forward request",
 			"pool", pool, "key", auth,
-			//"method", r2.Method, "resource", r2.RequestURI
 			"request", r2)
+	} else {
+		slogger.Debug(m.logprefix+"Forward request",
+			"pool", pool, "key", auth,
+			"method", r2.Method, "resource", r2.RequestURI)
 	}
 
 	proxy.ServeHTTP(w, r2)

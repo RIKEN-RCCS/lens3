@@ -280,11 +280,12 @@ that it leaves backend and "sudo" processes in the STOP state.
 
 Kill the Lens3 services or the backend process.
 
-### Forced Failure in Keyval-DB
+### Forced Keyval-DB Server Down
 
-Do "chmod" on the keybal-db's store file or directory.
+Stopping the keyval-db is fatal.  Restarting Lens3 is needed.
 
-Or, stop the keybal-db service.
+- Do "chmod" on the keybal-db's store file or directory.
+- Or, stop the keybal-db service.
 
 ### Forced Expiration of Multiplexer Entries in Keyval-DB
 
@@ -292,7 +293,11 @@ The action to fake a forced removal of a __ma:pool-name__ entry in
 keyval-db should (1) start a new Multiplexer + backend pair, and then
 (2) stop an old Multiplexer + backend pair.
 
-### Garbages Created in Tests
+### Force MQTT Server Down
+
+Start/stop the MQTT server, randomly.
+
+### Test Generated Garbages
 
 Test programs will create garbages as bucket names
 "lenticularis-oddity-XXX".

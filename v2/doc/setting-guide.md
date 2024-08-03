@@ -230,14 +230,14 @@ a subpath".  See near the bottom of the following page.
 
 Registrar requires "X-Remote-User" and "X-Csrf-Token".  Registrar
 trusts the "X-Remote-User" header, which holds an authenticated user
-claim.  Make sure "X-Remote-User" header is properly prepared by the
-proxy.
+claim.  Make sure it is properly set by the proxy.
 
-Multiplexer requires the headers for the S3 protocol, of course,
-including "Host".
+Multiplexer requires the headers for the S3 protocol, of course.  It
+needs "Host".  Thus, set "ProxyPreserveHost On" in the Apache-HTTPD
+configuration.
 
 Note {"X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Server"} are
-implicitly set by Apache-HTTPD.
+automatically set by Apache-HTTPD.
 
 ## Set up Proxy by Apache-HTTPD
 

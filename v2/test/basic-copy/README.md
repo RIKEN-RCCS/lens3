@@ -9,13 +9,20 @@ It first generates a file of 32MB randoms, and uploads and downloads
 it.  The file size is large enough to start a multipart upload (8MB is
 the default threshold to use a multipart upload).
 
+## Install AWS CLI
+
+It uses AWS Command Line Interface (AWS CLI).  For instructions of
+installing AWS CLI, See
+[Install AWS CLI](../README.md#install-aws-cli) in "v2/test/README.md"
+file.
+
 ## Set Credentials for AWS CLI
 
 First, prepare an S3 access key and a bucket in advance.
 
 Second, store access/secret keys in the configuration file of AWS CLI
-in "~/.aws/credentials".  Optionally, set the S3 signature version in
-the configuration file "~/.aws/config".
+in "\~/.aws/credentials".  Optionally, set the S3 signature version in
+the configuration file "\~/.aws/config".
 
 "credentials" file looks like:
 ```
@@ -48,9 +55,3 @@ Running "copy-file.sh" leaves garbage files in the current directory.
 Note that it does not test the commands __presign__ and __website__.
 __presign__ is useless because Lens3 does not understand a secret in
 URL.  __website__ will fail in Lens3.
-
-## Info
-
-For S3 CLI, refer to the links:
-* [S3 CLI commands](https://awscli.amazonaws.com/v2/documentation/api/latest/reference/s3/index.html)
-* [S3 CLI API commands](https://awscli.amazonaws.com/v2/documentation/api/latest/reference/s3api/index.html)

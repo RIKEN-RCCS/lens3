@@ -1,0 +1,34 @@
+# ACKNOWLEDGMENT
+
+Lens3 uses the following software.  It may lack software transitively
+used.  Please inform us, if some software is missing.
+
+## S3 Server
+
+- minio
+- rclone
+
+## Golang Modules
+
+- github.com/aws/aws-sdk-go-v2
+- github.com/aws/smithy-go
+- github.com/eclipse/paho.golang
+- github.com/valkey-io/valkey-go
+- golang.org/x/sys
+
+## UI Tools
+
+- vue.js
+- vuetify
+- vite
+
+## Development Tools
+
+- apache
+- git
+- golang
+- httpd-tools
+- nginx
+- nodejs
+- python
+- unzip

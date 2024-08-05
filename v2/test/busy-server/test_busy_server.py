@@ -108,7 +108,7 @@ class Busy_Test():
                 except urllib.error.HTTPError as x:
                     print(f"Making a bucket got an exception: ({x})")
                     msg = self.registrar.urlopen_error_message
-                    how = check_lens3_message(ex.code, msg)
+                    how = check_lens3_message(x.code, msg)
                     if how == "server-busy":
                         got400 += 1
                         print(f"SERVER BUSY, SLEEP IN {self.duration} SEC...")

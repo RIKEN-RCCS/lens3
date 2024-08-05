@@ -75,6 +75,11 @@ class Busy_Test():
                     break
                 except urllib.error.HTTPError as x:
                     print(f"Making a pool got an exception: ({x})")
+
+                    # Making a pool never fails, even when the server
+                    # is busy.  So, the following code will never be
+                    # executed.
+
                     msg = self.registrar.urlopen_error_message
                     how = check_lens3_message(x.code, msg)
                     if how == "server-busy":

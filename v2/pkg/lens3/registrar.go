@@ -82,25 +82,34 @@ type registrar struct {
 
 // Records exchanged via Web-UI.  These are returned in json.
 // XXX_RESPONSE records are returned to UI.  XXX_REQUEST records are
-// passed from UI.  Status is "success" or "error".  See the function
-// set_pool_data() in "v1/ui/src/lens3c.ts" for responses.  These are
-// the same for version v1.2.
+// passed from UI.  Status is "success" or "error".  Decoding a
+// response with "ui_error_response" works for both successful or
+// failure cases.  See the function set_pool_data() in
+// "v1/ui/src/lens3c.ts" for responses UI expects.  These are
+// compatible to version v1.3.
+
+type response_status string
+
+const (
+	status_success response_status = "success"
+	status_error   response_status = "error"
+)
+
+type ui_success_response struct {
+	Status    response_status `json:"status"`
+	Timestamp int64           `json:"time"`
+}
+
+type ui_error_response struct {
+	Status    response_status `json:"status"`
+	Reason    ui_error_reason `json:"reason"`
+	Timestamp int64           `json:"time"`
+}
 
 type ui_error_extra map[string]string
 type ui_error_reason struct {
 	Error string         `json:"error"`
 	Info  ui_error_extra `json:"info"`
-}
-
-type ui_error_response struct {
-	Status    string          `json:"status"`
-	Reason    ui_error_reason `json:"reason"`
-	Timestamp int64           `json:"time"`
-}
-
-type ui_success_response struct {
-	Status    string `json:"status"`
-	Timestamp int64  `json:"time"`
 }
 
 type ui_user_info_response struct {
@@ -499,7 +508,7 @@ func return_user_info(z *registrar, w http.ResponseWriter, r *http.Request) *ui_
 	var now = time.Now().Unix()
 	var rspn = &ui_user_info_response{
 		ui_success_response: ui_success_response{
-			Status:    "success",
+			Status:    status_success,
 			Timestamp: now,
 		},
 		Csrf_token: csrf.Csrf_token[1],
@@ -562,7 +571,7 @@ func list_pool_and_return_response(z *registrar, w http.ResponseWriter, r *http.
 	})
 	var rspn = &ui_pool_list_response{
 		ui_success_response: ui_success_response{
-			Status:    "success",
+			Status:    status_success,
 			Timestamp: time.Now().Unix(),
 		},
 		Pool_list: poollist,
@@ -694,7 +703,7 @@ func delete_pool_and_return_response(z *registrar, w http.ResponseWriter, r *htt
 	// disable_backend_buckets()
 
 	var rspn = &ui_success_response{
-		Status:    "success",
+		Status:    status_success,
 		Timestamp: time.Now().Unix(),
 	}
 	return_success_repsonse(z, w, r, u, rspn)
@@ -907,7 +916,7 @@ func return_pool_prop(z *registrar, w http.ResponseWriter, r *http.Request, u *u
 	var poolprop = copy_pool_prop_to_ui(d)
 	var rspn = &ui_pool_prop_response{
 		ui_success_response: ui_success_response{
-			Status:    "success",
+			Status:    status_success,
 			Timestamp: time.Now().Unix(),
 		},
 		Pool_prop: poolprop,
@@ -1090,7 +1099,7 @@ func check_user_access_with_error_return(z *registrar, w http.ResponseWriter, r 
 				u.Uid,
 				http_503_service_unavailable,
 				message_503_pool_suspended,
-				map[string]string{},
+				nil,
 			}
 			return_reg_error_response(z, w, r, err9)
 			return nil
@@ -1842,20 +1851,20 @@ func return_reg_error_response(z *registrar, w http.ResponseWriter, rqst *http.R
 
 // PROBE_ACCESS_MUX accesses a Multiplexer using a probe-key from
 // Registrar.  A probe-access tries to make buckets absent in the
-// backend.  It uses list buckets but it is ignored by a Multiplexer.
+// backend.  It uses a probe-key and it is ignored by a Multiplexer.
 // Region and timeout used is fairly arbitrary.  Decoding a response
 // with "ui_error_response" works both successful or failure cases.
 func probe_access_mux(t *keyval_table, pool string) error {
 	var pooldata = get_pool(t, pool)
 	if pooldata == nil {
 		var err1 = fmt.Errorf("Pool not found: pool=%q", pool)
-		slogger.Error("Probe-access fails", "pool", pool, "err", err1)
+		slogger.Error("Reg: Probe-access failed", "pool", pool, "err", err1)
 		panic(nil)
 	}
 	var secret = get_secret(t, pooldata.Probe_key)
 	if secret == nil {
 		var err2 = fmt.Errorf("Probe-key not found: pool=%q", pool)
-		slogger.Error("Probe-access fails", "pool", pool, "err", err2)
+		slogger.Error("Reg: Probe-access failed", "pool", pool, "err", err2)
 		panic(nil)
 	}
 
@@ -1867,7 +1876,7 @@ func probe_access_mux(t *keyval_table, pool string) error {
 		var eps []*mux_record = list_mux_eps(t)
 		if len(eps) == 0 {
 			var err3 = fmt.Errorf("No Multiplexers")
-			slogger.Error("Probe-access fails", "pool", pool, "err", err3)
+			slogger.Error("Reg: Probe-access failed", "pool", pool, "err", err3)
 			return err3
 		}
 		var i = rand.IntN(len(eps))
@@ -1882,7 +1891,7 @@ func probe_access_mux(t *keyval_table, pool string) error {
 	// (Use nil:io.Reader for empty body).
 	var r, err4 = http.NewRequestWithContext(ctx, http.MethodGet, url1, nil)
 	if err4 != nil {
-		slogger.Error("Probe-access fails",
+		slogger.Error("Reg: Probe-access failed",
 			"pool", pool, "op", "http/Client.NewRequest()", "err", err4)
 		return err4
 	}
@@ -1896,8 +1905,8 @@ func probe_access_mux(t *keyval_table, pool string) error {
 	}
 	var err5 = sign_by_backend_credential(r, dummy)
 	if err5 != nil {
-		slogger.Error("Probe-access fails",
-			"pool", pool, "op", "signer/NewSigner.SignHTTP", "err", err5)
+		slogger.Error("Reg: Probe-access failed",
+			"pool", pool, "op", "signer/Signer.SignHTTP()", "err", err5)
 		return err5
 	}
 
@@ -1906,7 +1915,7 @@ func probe_access_mux(t *keyval_table, pool string) error {
 	}
 	var rspn, err6 = c.Do(r)
 	if err6 != nil {
-		slogger.Error("Probe-access fails",
+		slogger.Error("Reg: Probe-access failed",
 			"pool", pool, "op", "http/Client.Do()", "err", err6)
 		return err6
 	}
@@ -1915,9 +1924,11 @@ func probe_access_mux(t *keyval_table, pool string) error {
 	var data ui_error_response
 	var d = json.NewDecoder(rspn.Body)
 	//d.DisallowUnknownFields()
-	var err1 = d.Decode(&data)
-	if err1 != nil {
-		slogger.Warn("Reg: Error in reading response body", "err", err1)
+	var err7 = d.Decode(&data)
+	if err7 != nil {
+		slogger.Error("Reg: Probe-access failed",
+			"pool", pool, "op", "json/Decoder.Decode()", "err", err7)
+		return err7
 	}
 
 	if rspn.StatusCode == http.StatusOK {
@@ -1930,6 +1941,8 @@ func probe_access_mux(t *keyval_table, pool string) error {
 			data.Reason.Error,
 			data.Reason.Info,
 		}
+		slogger.Debug("Reg: Probe-access failed",
+			"pool", pool, "err", err8)
 		return err8
 	}
 }

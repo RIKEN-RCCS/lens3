@@ -204,6 +204,11 @@ Lens3 does not provide access logs to users, although we understand it
 is useful to users.  Administrators might provide access logs to users
 by request by filtering server logs.
 
+### Errors are in json
+
+Lens3 returns a response in json not XML, when a request is handled in
+Lens3.
+
 ### Other Limitations
 
 - Lens3 has no STS.

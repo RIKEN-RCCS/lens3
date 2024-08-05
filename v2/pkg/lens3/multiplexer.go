@@ -303,7 +303,7 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 			authenticated.Secret_policy == secret_policy_internal_access)
 		switch {
 		case probing:
-			serve_internal_access(m, w, r, bucket, authenticated)
+			serve_probe_access(m, w, r, bucket, authenticated)
 			return
 		case bucket == nil && authenticated == nil:
 			// Lens3 disallows bucket listing.
@@ -449,14 +449,14 @@ func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, be *
 	proxy.ServeHTTP(w, r2)
 }
 
-// SERVE_INTERNAL_ACCESS handles requests by probe_access_mux() from
+// SERVE_PROBE_ACCESS handles requests by probe_access_mux() from
 // Registrar.  It tries to make buckets in the backend.  It rejects
 // requests from the outside (ie, thru a proxy).  Calling
 // make_absent_buckets_in_backend() is not mutexed.  A critical case
 // is that an error cancels a work to make a bucket in Registrar, but
 // the error is for another bucket.  It returns http 502 on an error,
 // as clients retry for http 500.
-func serve_internal_access(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record, secret *secret_record) {
+func serve_probe_access(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record, secret *secret_record) {
 	assert_fatal(secret != nil)
 	var auth = secret.Access_key
 	var pool = secret.Pool
@@ -505,6 +505,8 @@ func serve_internal_access(m *multiplexer, w http.ResponseWriter, r *http.Reques
 		return_mux_error_response_no_delay(m, w, r, err3)
 		return
 	}
+
+	return_success_response_for_probe(m, w, r, auth)
 }
 
 // PRETTIFY_ERROR_MESSAGE removes garbages in an error message, such
@@ -625,9 +627,10 @@ func ensure_lens3_is_running__(t *keyval_table) bool {
 	return len(muxs) > 0
 }
 
-// ENSURE_BACKEND_RUNNING starts a backend if not running.  Note that
-// it updates an access timestamp before checking a backend.  It is to
-// avoid a race in the start and stop of a backend.
+// ENSURE_BACKEND_RUNNING starts a backend if not running.  Returning
+// nil by start_backend() is a fatal error.  Note that it updates an
+// access timestamp before checking a backend.  It is to avoid a race
+// in the start and stop of a backend.
 func ensure_backend_running(m *multiplexer, w http.ResponseWriter, r *http.Request, pool string, auth string) *backend_record {
 	set_pool_timestamp(m.table, pool)
 
@@ -1032,6 +1035,24 @@ func check_user_is_active(t *keyval_table, uid string) (bool, string) {
 	return true, ""
 }
 
+// RETURN_SUCCESS_RESPONSE_FOR_PROBE returns Okay response.  It is
+// only for a probe access.
+func return_success_response_for_probe(m *multiplexer, w http.ResponseWriter, r *http.Request, auth string) {
+	var code = http_200_OK
+	var rspn = &ui_success_response{
+		Status:    status_success,
+		Timestamp: time.Now().Unix(),
+	}
+	var b1, err1 = json.Marshal(rspn)
+	assert_fatal(err1 == nil)
+	var json1 = string(b1)
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(code)
+	fmt.Fprintln(w, json1)
+	log_mux_access_by_request(r, code, int64(len(json1)), "", auth)
+}
+
 func return_mux_error_response(m *multiplexer, w http.ResponseWriter, r *http.Request, err *proxy_exc) {
 	var delay_ms = m.conf.Multiplexer.Error_response_delay_ms
 	var logprefix = m.logprefix
@@ -1049,7 +1070,6 @@ func return_mux_error_response_no_delay(m *multiplexer, w http.ResponseWriter, r
 // RETURN_ERROR_RESPONSE sends a response to a client.  It does not
 // send details unless authenticated.
 func return_error_response(w http.ResponseWriter, r *http.Request, err1 *proxy_exc, delay_ms time_in_ms, logprefix string, logfn access_logger) {
-
 	var error1 string
 	var info1 map[string]string
 	if err1.auth == "" && err1.uid == "" {
@@ -1061,7 +1081,7 @@ func return_error_response(w http.ResponseWriter, r *http.Request, err1 *proxy_e
 	}
 	var code1 = err1.code
 	var rspn = &ui_error_response{
-		Status: "error",
+		Status: status_error,
 		Reason: ui_error_reason{
 			error1,
 			info1,
@@ -1079,7 +1099,8 @@ func return_error_response(w http.ResponseWriter, r *http.Request, err1 *proxy_e
 
 // HTTP_ERROR_IN_JSON is http/Error() but content-type in json.
 func http_error_in_json(w http.ResponseWriter, error string, code int) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	//w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(code)
 	fmt.Fprintln(w, error)

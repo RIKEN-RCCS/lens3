@@ -250,17 +250,20 @@ func stop_running_backends(w *manager) {
 
 // START_BACKEND mutexes among all threads in all distributed
 // processes of multiplexers, for choosing one who takes the control
-// of starting a backend.
+// of starting a backend.  Returning nil is a fatal error.
 func start_backend(w *manager, pool string) *backend_record {
-	var now int64 = time.Now().Unix()
+	var begin = time.Now()
 	var ep = &backend_mutex_record{
 		Mux_ep:    w.mux_ep,
-		Timestamp: now,
+		Timestamp: time.Now().Unix(),
 	}
 	var ok1, _ = set_ex_backend_mutex(w.table, pool, ep)
 	if !ok1 {
 		var be1 = wait_for_backend_by_race(w, pool)
-		// (An error is already logged).
+		if be1 == nil {
+			// (An error is already logged).
+			return nil
+		}
 		return be1
 	} else {
 		var expiry = (2 * (w.Backend_start_timeout_ms).time_duration())
@@ -270,21 +273,27 @@ func start_backend(w *manager, pool string) *backend_record {
 			slogger.Error(w.logprefix+"DB.Expire() on backend-mutex failed",
 				"pool", pool)
 		}
-		var d = start_backend_in_mutexed(w, pool)
-		if d != nil {
-			var be2 = get_backend(w.table, pool)
-			return be2
+		var be2 = start_backend_in_mutexed(w, pool)
+		if be2 == nil {
+			// (An error is already logged).
+			return nil
 		}
-		return nil
+
+		var elapse = time.Now().Sub(begin)
+		slogger.Debug(w.logprefix+"Time to start backend",
+			"pool", pool, "elapse", elapse)
+
+		//var be2 = get_backend(w.table, pool)
+		return be2
 	}
 }
 
-// START_BACKEND_IN_MUTEXED starts a backend, trying available ports.
-// It fails when all ports are tried and failed.  In that case, a
-// dummy record (with State=pool_state_SUSPENDED) is inserted in the
-// keyval-db, which will block a further backend from starting for a
-// while.
-func start_backend_in_mutexed(w *manager, pool string) backend_delegate {
+// START_BACKEND_IN_MUTEXED starts a backend, trying all available
+// ports.  It fails when all ports are tried and failed.  In that
+// case, a dummy record (with State=pool_state_SUSPENDED) is inserted
+// in the keyval-db, which will block a further backend from starting
+// for a while.  Returning nil is a fatal error.
+func start_backend_in_mutexed(w *manager, pool string) *backend_record {
 	//fmt.Println("start_backend()")
 	//delete_backend(w.table, pool)
 	defer delete_backend_mutex(w.table, pool)
@@ -381,12 +390,12 @@ func start_backend_in_mutexed(w *manager, pool string) backend_delegate {
 		}
 		set_blurred_state(w.table, pool, state1)
 
-		return d
+		return proc.be
 	}
 
 	// All ports are tried and failed.
 
-	slogger.Warn(w.logprefix+"A backend SUSPENDED (no ports)", "pool", pool)
+	slogger.Warn(w.logprefix+"Backend SUSPENDED (no ports)", "pool", pool)
 
 	var now int64 = time.Now().Unix()
 	var suspension = &backend_record{
@@ -412,11 +421,11 @@ func start_backend_in_mutexed(w *manager, pool string) backend_delegate {
 		Pool:      pool,
 		State:     pool_state_SUSPENDED,
 		Reason:    pool_reason_SERVER_BUSY,
-		Timestamp: time.Now().Unix(),
+		Timestamp: now,
 	}
 	set_blurred_state(w.table, pool, state2)
 
-	return nil
+	return suspension
 }
 
 // TRY_START_BACKEND starts a process and waits for a message or a

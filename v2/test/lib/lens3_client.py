@@ -47,12 +47,16 @@ def check_lens3_message(code, s):
     except json.JSONDecodeError as x:
         d = dict()
         pass
-    reason = d.get("reason", "")
-    if code == 400 and reason.startswith("Buckets-directory is already used"):
+    reason1 = d.get("reason", None)
+    reason2 = ""
+    if isinstance(reason1, dict):
+        reason2 = reason1.get("error", "")
+        pass
+    if code == 409 and reason2.startswith("Bucket-directory already taken"):
         return "pool-taken"
-    elif code == 403 and reason.startswith("Bucket name taken"):
+    elif code == 409 and reason2.startswith("Bucket already taken"):
         return "bucket-taken"
-    elif code == 503 and reason.startswith("Cannot start backend for pool"):
+    elif code == 503 and reason2.startswith("Pool suspended"):
         return "server-busy"
     else:
         return "unknown"

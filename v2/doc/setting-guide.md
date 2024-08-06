@@ -365,7 +365,7 @@ Some of the fields:
 
 ```
 # mkdir /etc/lenticularis
-# cp $TOP/v2/unit-file/valkey/valkey.conf /etc/lenticularis/valkey.conf
+# cp $TOP/v2/unit-file/valkey.conf /etc/lenticularis/valkey.conf
 # chown lens3:lens3 /etc/lenticularis/valkey.conf
 # chmod 660 /etc/lenticularis/valkey.conf
 # vi /etc/lenticularis/valkey.conf
@@ -374,7 +374,7 @@ Some of the fields:
 Prepare a systemd unit file for Valkey, and start/restart Valkey.
 
 ```
-# cp $TOP/v2/unit-file/valkey/lenticularis-valkey.service /usr/lib/systemd/system/
+# cp $TOP/v2/unit-file/lenticularis-valkey.service /usr/lib/systemd/system/
 # systemctl daemon-reload
 # systemctl enable lenticularis-valkey
 # systemctl start lenticularis-valkey

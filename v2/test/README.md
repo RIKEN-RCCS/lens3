@@ -2,13 +2,20 @@
 
 ## Tests
 
-- [basic-copy](basic-copy) tests upload/download by AWS CLI.
-* [registrar-access](registrar-access) tests Registrar operations.
-- [access-permission](access-permission) tests accesses with various key policies.
-- [busy-server](busy-server) tests running many S3 backend servers.
-- [sporadic-access](sporadic-access) tests start/stop of S3 backend servers.
-- [disable-user](disable-user) tests disabling a user.
-- [admin-tool](admin-tool) tests some functions of lens3-admin tool.
+- [basic-copy](basic-copy) tests uploading/downloading by AWS CLI.  It
+  is the simplest test.
+
+- [registrar-access](registrar-access) tests some of the Registrar
+  operations.
+
+- [access-permission](access-permission) tests accesses with various
+  key policies.  It checks accesses are properly granted/blocked.  It
+  should be tested before each software release.
+
+- [busy-server](busy-server) tests running many backend servers.
+
+- [sporadic-access](sporadic-access) tests starting/stopping backend
+  servers.
 
 ## Client Setting
 
@@ -54,6 +61,16 @@ __pools_count__ and __backend_awake_duration__ are used in the test
 
 Tests uses "boto3".  Installing "boto3" is system dependent, ie, by
 pip3 or dnf/apt, etc.
+
+By pip3, do
+```
+$ pip3 install --user -r requirements.txt
+```
+
+Or, on Ubuntu, do
+```
+$ apt install python3-boto3
+```
 
 ## Install AWS CLI
 

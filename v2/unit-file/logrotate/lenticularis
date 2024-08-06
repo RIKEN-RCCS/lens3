@@ -1,0 +1,32 @@
+/var/log/lenticularis/lens3-log /var/log/lenticularis/lens3-mux-access-log /var/log/lenticularis/lens3-reg-access-log {
+    weekly 1
+    rotate 60
+    copytruncate
+    dateext
+    delaycompress
+    compress
+    notifempty
+    missingok
+    sharedscripts
+}
+
+/var/log/lenticularis-valkey/lens3-valkey.log {
+    weekly 1
+    rotate 20
+    copytruncate
+    dateext
+    delaycompress
+    compress
+    notifempty
+    missingok
+}
+
+/var/log/lenticularis-valkey/lens3-valkey-dump.rdb {
+    daily
+    rotate 100
+    copy
+    dateext
+    nocompress
+    notifempty
+    missingok
+}

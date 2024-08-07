@@ -64,15 +64,16 @@ var efs2 embed.FS
 
 const reg_api_version = "v1.2"
 
+// REGISTRAR is a record of Registrar.  EP_PORT is a listening port of
+// Registrar (":port").  CH_QUIT_SERVICE is a receiver of a quit
+// notification.
 type registrar struct {
-	// EP_PORT is a listening port of Registrar (":port").
 	ep_port string
 
 	table *keyval_table
 
 	trusted_proxies []net.IP
 
-	// CH_QUIT is to receive quitting notification.
 	ch_quit_service <-chan vacuous
 
 	server *http.Server
@@ -467,7 +468,8 @@ func return_file(z *registrar, w http.ResponseWriter, rqst *http.Request, path s
 // request is assumed as the first request, and it initializes the
 // CSRF state.  u.Ephemeral=true means the user was added
 // automatically.  It makes a list of groups each time for such a
-// user, because groups may be changed.  The groups may be empty.
+// user, because groups may be changed.  The groups can be empty, but
+// that user cannot create a new pool.
 func return_user_info(z *registrar, w http.ResponseWriter, r *http.Request) *ui_user_info_response {
 	var conf = &z.conf.Registrar
 	var opr = "user-info"
@@ -929,8 +931,7 @@ func return_pool_prop(z *registrar, w http.ResponseWriter, r *http.Request, u *u
 // user is granted.  It returns a user record, or nil.  It is OK to
 // call it without a pool (pool="") when creating a pool.
 func check_user_access_with_error_return(z *registrar, w http.ResponseWriter, r *http.Request, pool string, firstsession bool) *user_record {
-	var conf = &z.conf.Registrar
-	_ = conf
+	//var conf = &z.conf.Registrar
 
 	//fmt.Println(";; r.RemoteAddr=", r.RemoteAddr)
 	//fmt.Println(";; X-Remote-User=", r.Header.Get("X-Remote-User"))
@@ -1144,37 +1145,44 @@ func check_user_account(z *registrar, uid string, firstsession bool) *user_recor
 
 	var approving = (conf.User_approval == user_default_allow && firstsession)
 	var u1 = get_user(z.table, uid)
-	if !approving && u1 == nil {
+	if u1 == nil && !approving {
 		return nil
 	}
 
-	// Reject users without local accounts.  It is weird as
-	// authenticated users without local accounts.
+	// Reject users without local accounts.  It is weird as an
+	// authenticated user doesn't have a local account.
 
-	var uu, err1 = user.Lookup(uid)
-	_ = uu
+	var _, err1 = user.Lookup(uid)
 	if err1 != nil {
-		// (type of err1 : user.UnknownUserError).
-		slogger.Error("Reg: user/Lookup() failed", "uid", uid, "err", err1)
+		// (err1 : user/UnknownUserError).
+		slogger.Error("Reg: user/Lookup() errs", "uid", uid, "err", err1)
 		return nil
+	}
+
+	// Approve a new user by registering.
+
+	if u1 == nil {
+		assert_fatal(approving)
+		var u2 = enroll_new_user(z, uid, firstsession)
+		return u2
 	}
 
 	// Check if the user is enabled.
 
-	if u1 != nil {
-		var expiration = time.Unix(u1.Expiration_time, 0)
-		if !u1.Enabled || !time.Now().Before(expiration) {
-			return nil
-		} else {
-			extend_user_expiration_time(z, u1)
-			return u1
-		}
+	assert_fatal(u1 != nil)
+	if !u1.Enabled {
+		return nil
 	}
-
-	// Regiter a new user record.
-
-	var u2 = enroll_new_user(z, uid, firstsession)
-	return u2
+	if !u1.Ephemeral {
+		var expiration = time.Unix(u1.Expiration_time, 0)
+		if !time.Now().Before(expiration) {
+			return nil
+		}
+		return u1
+	} else {
+		extend_user_expiration_time(z, u1)
+		return u1
+	}
 }
 
 // ENROLL_NEW_USER registers a user at an access to Registrar.  It
@@ -1304,11 +1312,12 @@ func check_make_pool_request(z *registrar, u *user_record, pool string, data any
 	// Check GID.  UID is not in the arguments.
 
 	var groups []string
-	if u.Ephemeral {
-		groups = list_groups_of_user(z, u.Uid)
-	} else {
+	if !u.Ephemeral {
 		groups = u.Groups
+	} else {
+		groups = list_groups_of_user(z, u.Uid)
 	}
+
 	var gid = args.Owner_gid
 	if slices.Index(groups, gid) == -1 {
 		return &reg_bad_argument_message{

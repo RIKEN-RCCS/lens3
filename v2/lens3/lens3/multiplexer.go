@@ -285,6 +285,7 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 
 		var authenticated, err1 = check_authenticated(m, r)
 		if err1 != nil {
+			// (An error is already logged).
 			return_mux_error_response(m, w, r, err1)
 			return
 		}
@@ -295,6 +296,7 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 
 		var bucket, err2 = check_bucket_in_path(m, w, r, auth)
 		if err2 != nil {
+			// (An error is already logged).
 			return_mux_error_response(m, w, r, err2)
 			return
 		}
@@ -491,6 +493,7 @@ func serve_probe_access(m *multiplexer, w http.ResponseWriter, r *http.Request, 
 
 	var err2 = make_absent_buckets_in_backend(m.manager, be)
 	if err2 != nil {
+		// (An error is already logged).
 		var message = prettify_error_message(err2.Error())
 		var err3 = &proxy_exc{
 			auth,

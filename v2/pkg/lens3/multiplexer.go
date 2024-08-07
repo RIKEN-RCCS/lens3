@@ -251,7 +251,7 @@ func proxy_error_handler(m *multiplexer) func(http.ResponseWriter, *http.Request
 			auth = poolauth[1]
 		}
 		slogger.Error((m.logprefix + "httputil/ReverseProxy() failed"),
-			"pool", pool, "requst", rqst, "err", err)
+			"pool", pool, "key", auth, "err", err, "requst", rqst)
 
 		var err1 = &proxy_exc{
 			auth,
@@ -436,14 +436,13 @@ func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, be *
 	var ctx3 = context.WithValue(ctx2, "lens3-pool-auth", []string{pool, auth})
 	var r2 = r.WithContext(ctx3)
 
+	slogger.Info(m.logprefix+"Forward request",
+		"pool", pool, "key", auth,
+		"method", r2.Method, "resource", r2.RequestURI)
 	if trace_proxy&tracing != 0 {
 		slogger.Debug(m.logprefix+"Forward request",
 			"pool", pool, "key", auth,
 			"request", r2)
-	} else {
-		slogger.Debug(m.logprefix+"Forward request",
-			"pool", pool, "key", auth,
-			"method", r2.Method, "resource", r2.RequestURI)
 	}
 
 	proxy.ServeHTTP(w, r2)

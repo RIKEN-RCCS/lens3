@@ -303,7 +303,7 @@ func log_access(src string, rqst *http.Request, code int, length int64, uid stri
 	case "mux":
 		var f *os.File = mux_access_log_file
 		var msg1 = fmt.Sprintf(
-			("%s %s %s [%s] %q" + " %s %s %q %q" + " auth=%q" + "\n"),
+			("%s %s %s [%s] %q" + " %s %s %q %q" + " key=%q" + "\n"),
 			h, l, u, t, r,
 			s, b, rf, ua,
 			auth1)

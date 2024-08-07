@@ -1,17 +1,38 @@
-# Contents of "unit-file" Directory
+# Systemd Service Files
 
-See "doc/setting-guide.md".
+See: [v2/doc/setting-guide.md](../doc/setting-guide.md)
 
-## Valkey Setting
+## Lenticularis Service
 
-[valkey/lenticularis-valkey.service](valkey/lenticularis-valkey.service)
-is a systemd service file.  It should be copied in
-"/lib/systemd/system/".  It is a copy of "valkey.service", whose some
-of the settings are moved in "valkey.conf".
+[lenticularis-mux.service](lenticularis-mux.service) is a systemd
+service file.  It should be copied in "/lib/systemd/system/".
 
-[valkey/valkey.conf](valkey/valkey.conf) is a configuration file.  It
-should be copied in "/etc/lenticularis".  Its "requirepass" entry
-should be set.
+[conf.json](conf.json) stores connection information to Valkey.  Copy
+it in "/etc/lenticularis".  KEEP IT SECURE.  Set "password" with
+Valkey's password.
 
-After starting systemd service "lenticularis-valkey", simple testing
-of is `% valkey-cli -p 6378 -a "password-string" -n 1 --scan --pattern '*'`.
+[mux-conf.json](mux-conf.json) and [reg-conf.json](reg-conf.json) are
+Lenticularis settings.  It is loaded in keyval-db (Valkey) with
+"lens3-admin" command.
+
+## Valkey Service
+
+[lenticularis-valkey.service](lenticularis-valkey.service) is a
+systemd service file.  It should be copied in "/lib/systemd/system/".
+It is a modified copy of "valkey.service" in the Valkey package.
+
+[valkey.conf](valkey.conf) is a configuration file.  It should be
+copied in "/etc/lenticularis".  KEEP IT SECURE.  Set "requirepass"
+entry.
+
+After starting systemd service "lenticularis-valkey", a simple test to
+check the start of valkey is:
+
+```
+$ valkey-cli -p 6378 -a "password-string" -n 1 --scan --pattern '*'`.
+```
+
+## Other Setting Files
+
+[lenticularis-logrotate](lenticularis-logrotate) is an optional
+settings for logrotate.

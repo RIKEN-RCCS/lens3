@@ -460,7 +460,7 @@ Logs from Multiplexer, Registrar, and Valkey are rotated with
 rule for Valkey is a modified copy of /etc/logrotate.d/redis.
 
 ```
-# cp $TOP/v2/unit-file/logrotate/lenticularis /etc/logrotate.d/
+# cp $TOP/v2/unit-file/lenticularis-logrotate /etc/logrotate.d/lenticularis
 # vi /etc/logrotate.d/lenticularis
 # chmod 644 /etc/logrotate.d/lenticularis
 ```
@@ -513,7 +513,7 @@ Valkey status:
 # systemctl status lenticularis-valkey
 ```
 
-Multiplexer status:
+Lenticularis status:
 
 ```
 # systemctl status lenticularis-mux

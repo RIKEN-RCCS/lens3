@@ -3,7 +3,7 @@
 ## Quick Setup of Buckets
 
 Accessing the Web-UI first shows __Manage Pools__ section.  A
-_bucket-pool_ or a _pool_ is a directory to hold buckets.  Each pool
+_bucket pool_ or a _pool_ is a directory to hold buckets.  Each pool
 corresponds to a single backend S3 server instance.  Buckets and
 access keys are associated to a pool.
 
@@ -139,12 +139,12 @@ Registrar provides management of buckets.  A bucket pool is a unit of
 management in Lens3 and corresponds to a single backend.  A user first
 creates a bucket pool, then registers buckets to the pool.
 
-### Bucket-Pool State
+### Bucket Pool State
 
-A bucket-pool is a management unit of S3 buckets in Lens3 and it has a
+A bucket pool is a management unit of S3 buckets in Lens3 and it has a
 state reflecting the state of a backend as "minio-state".
 
-Bucket-pool state is:
+Bucket pool state is:
 
 - __READY__ and __INITIAL__ indicate a service is usable.  It does not
   necessarily mean a backend is running.  READY and INITIAL are

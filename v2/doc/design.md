@@ -131,65 +131,52 @@ contains a claim.
 
 __bd:directory and bk:bucket-name__.
 
-## Bucket policy
+## Pool State Transition
 
-Public read/write policy is given to a bucket by Lens3.  Lens3 invokes
-the mc command, one of the following.
+A bucket pool will be in a state of: __INITIAL__, __READY__,
+__SUSPENDED__, __DISABLED__, and __INOPERABLE__.  See the explanation
+in [User-Guide](user-guide.md#bucket-pool-state).
 
-```
-mc policy set public alias/bucket
-mc policy set upload alias/bucket
-mc policy set download alias/bucket
-mc policy set none alias/bucket
-```
+Manager governs a transition of a state.  However, transition is
+implicit, that is, Lens3 keeps no explicit record.  Manager calculates
+the condition.
 
-Accesses to deleted buckets in Lens3 are refused at Multiplexer, but
-they remain potentially accessible in backend, which have access policy
-"none" and are accessible using access keys.
+- __INITIAL__ → __READY__: Don't care.  INITIAL and READY are
+  synonymous in Lens3-v2.
+- __READY__ → __DISABLED__: It is by some setting that disables a
+  pool.  It includes disabling a user account, an expiry of a pool, or
+  making a pool offline.
+- __DISABLED__ → __READY__: It is by a cease of a disabling condition.
+- __READY__ → __SUSPENDED__: The move is on a condition the server is
+  busy, when all reserved ports are used.
+- __SUSPENDED__ → __READY__: The move is done after some time
+  duration.  It will move back and forward between READY and SUSPENDED
+  states if the condition remains.
+- __READY__ → __INOPERABLE__: It is by a failure of starting a
+  backend.  This state is a deadend.  The only operation allowed on an
+  INOPERABLE pool is to remove it.
 
-## Keyval-DB Database Operations
+Deleting buckets and secrets during suspension will alter only the
+state of Lens3 but not the state of a backend (becuase a backend is
+not running).
 
-A single keyval-db instance is used, and is not distributed.
+## Bucket Deletion
 
-It is usually required an uniqueness guarantee, such as for an
-access keys and ID's for pools, and atomic set is suffice.  A failure
-condition is only considered for MinIO endpoints, and timeouts are set
-to "ma:pool-name" entries.  See the section Keyval-DB Database Keys.
+Lens3 Registrar never deletes buckets in the backend.  It just removes
+it from the namespace.  A user can delete a bucket via the S3 delete
+bucket operaion.  However, the deleted status is not reflected in
+Lens3's status.
+
+## Keyval-DB Operations
+
+A single keyval-db instance is used and is not distributed in Lens3.
 
 Keyval-db client routines catches exceptions related to sockets (including
 ConnectionError and TimeoutError).  Others are not checked at all by
 Lens3.
 
-Operations by an administrator is NOT mutexed.  Some operations should
-be performed carefully.  They include modifications on the user-list.
-
-## Pool State Transition
-
-A bucket-pool will be in a state of: (None), __INITIAL__, __READY__,
-__SUSPENDED__, __DISABLED__, and __INOPERABLE__.  A Multiplexer governs
-a transition of a state.  Also, a Manager checks a condition at
-heartbeating.
-
-* __None__ → __INITIAL__: It is a quick transition.
-* __INITIAL__ → __READY__: It is at a start of MinIO.  Note the READY
-  state does not imply a MinIO instance is running.
-* {__INITIAL__, __READY__} → __SUSPENDED__: It is on a condition the
-  server is busy (all reserved ports are used).
-* __SUSPENDED__ → __INITIAL__: It is performed periodically.  It will
-  move back again to the __SUSPENDED__ state if a potential condition
-  remains.
-* {__INITIAL__, __READY__} → __DISABLED__: It is by some setting that
-  disables a pool, including disabling a user account, an expiry of a
-  pool, or making a pool offline.
-* __DISABLED__ → __INITIAL__: It is at a cease of a disabling condition.
-* any → __INOPERABLE__: It is at a failure of starting MinIO.  This
-  state is a deadend.  A bucket-pool should be removed.
-
-Deleting buckets and secrets during suspension will alter only the
-state of Lens3 but not the state of MinIO (becuase MinIO is not
-running).  At waking up from suspension, it moves the state to INITIAL
-(not READY) so that it will adjust the state of MinIO to a consistent
-state with the state of Lens3 at the next start.
+Operations by an administrator tool is NOT mutexed.  Some operations
+should be performed carefully.
 
 ### Multiplexer/Registrar systemd Services
 
@@ -245,6 +232,11 @@ Web-UI error.  Check the pool does not become inoperable.
 Making a bucket should be an error when a regular file exists with the
 same name as the bucket.  This error should be visible to users as a
 Web-UI error.  Check the pool does not become inoperable.
+
+### User Tests
+
+- Disable a user.  It is done by `$ lens3-admin stop-user true uid`
+- Delete a user.  It is done by `$ lens3-admin kill-user uid`
 
 ### Forced Heartbeat Failure
 
@@ -337,7 +329,7 @@ maybe extremely slow on large objects.
 
 * Make access key generation of Registrar like STS.
 
-* Make UI refresh the MinIO state, when a pool is edited and
+* Make UI refresh the pool state, when a pool is edited and
   transitions such as from READY to INOPERABLE or from SUSPENDED to
   READY.
 
@@ -346,9 +338,8 @@ maybe extremely slow on large objects.
   have a race.  Or, a crash at creation/deletion of a pool may leave
   an orphaned directory.
 
-* Make starting a MinIO instance through the frontend proxy.
-  Currently, an arbitrary Mux is chosen.  The proxy can balance the
-  loads.
+* Make starting a backend through the frontend proxy.  Currently,
+  arbitrary Multiplexer is chosen.  The proxy could balance the loads.
 
 * Add a control on the pool status "online".  It is always online,
   currently.

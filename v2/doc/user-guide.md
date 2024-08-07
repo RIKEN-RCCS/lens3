@@ -150,12 +150,12 @@ Bucket pool state is:
   necessarily mean a backend is running.  READY and INITIAL are
   synonymous in v2.1.  The INITIAL state was used as the state that
   the backend is not in sync with the Lens3's state.
-- __SUSPENED__ indicates a pool is temporarily unusable by server
-  busyness.  It needs several minutes for a cease of the condition.
 - __DISABLED__ indicates a pool is unusable.  A transition between
   READY and DISABLED is by actions by an administrator or some
   expiration conditions.  The causes of a transition include disabling
   a user account, making a pool offline, or an expiry of a pool.
+- __SUSPENED__ indicates a pool is temporarily unusable by server
+  busyness.  It needs several minutes for a cease of the condition.
 - __INOPERABLE__ indicates an error state and a pool is permanently
   unusable.  Mainly, it means it has failed to start a backend.  This pool
   cannot be used and should be removed.

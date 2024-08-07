@@ -7,154 +7,133 @@ This describes design notes of Lenticularis-S3.
 * Multiplexer
 * Registrar
 * MinIO (S3 backend server)
-* Valkey (keyval-DB)
+* Valkey (keyval-db)
 
-## Keyval-DB Databases (prefixes of keys)
+## Keyval-DB Entries (prefixes of keys)
+
+All entries in the keyval-db are in json.  Each key in the keyval-db
+is prefixed by two characters plus colon, such as "cf:mux".
+
+Most of the records used in the keyval-db are defined in "table.go".
+The entries for configuration are defined in "conf.go".
 
 Lens3 uses three keyval-db (by database numbers), but the division is
-arbitrary as distinct prefixes are used.  The entries are json.
-
-NOTE: In the tables below, entries with "\*1" are set atomically (by
-"setnx"), and entries with "\*2" are with expiry.
+arbitrary as distinct prefixes are used.
 
 A date+time is by unix seconds.  Registrar also passes a date+time by
 unix seconds.
 
-Multiplexer and Registrar make (potentially) many connections to
-keyval-db, because they use multiple databases.
+Multiplexer service make potentially many connections to the
+keyval-db.
+
+NOTE: In the tables below, entries with "\*1" are set atomically, and
+entries with "\*e" are with expiry.
+
+### Setting Entries (DB-NUMBER=1)
+
+| Key             | Record            | Notes |
+| ----            | ----              | ---- |
+| cf:mux          | mux_conf          | Defined in "conf.go" |
+| cf:reg          | reg_conf          | Defined in "conf.go" |
+| uu:_uid_        | user_record       | User record |
+| um:_claim_      | user_claim_record | ID claim mapping |
+
+These are semi-static information.
+
+__cf:reg__ and __cf:mux__ (literal strings) entries store the settings
+of services.  __cf:mux:mux-name__ is a variant to __cf:mux__ and used
+to choose a specific setting to Multiplexer service, whose mux-name is
+replaced by a string passed to a service.
+
+__uu:uid__ entry is a record of a user.  It is added by an
+administrator tool, to record user's GID and the enabled status.  Or,
+it may be automatically added when accessing Registrar.  Automatically
+added entries are marked by ".Ephemeral=true".
+
+__um:claim__ entry is to map a user claim that is passed by
+authentication to a UID.  It is used when Registrar is configured with
+"claim_uid_map=map".
+
+Primary reason for storing configuration settings (cf:mux and cf:reg)
+in the keyval-db is to let them parsed in advance.  Detecting typos at
+the start of a service is very annoying.
+
+### Storage Entries (DB-NUMBER=2)
+
+| Key            | Record                  | Notes |
+| ----           | ----                    | ---- |
+| po:_pool-name_ | pool_record             | Pool data |
+| bd:_directory_ | bucket_directory_record | (\*1) Directory path string |
+| px:_pool-name_ | pool_name_record        | (\*1) |
+| bx:_bucket_    | bucket_record           | (\*1) |
+| sx:_secret_    | secret_record           | (\*1) Access key pair |
+
+__po:pool-name__ entry is pool data.  It holds the almost-static part
+of pool information.
+
+__bd:directory__ is a bucket-directory entry.  Scanning of these
+entries is necessary to find a list of pool-directories, because Lens3
+does not keep a list.
+
+Lens3 forbids running multiple backends on the same directory.
+However, links to directories can fool the detection of the same path.
+
+__px:pool-name__ entry is used to make the pool-name unique.  It uses
+generated randoms for pool-names.
+
+__bx:bucket__ entry is used to mutex the bucket name.  The bucket
+namespace is shared by all users.
+
+__sx:secret__ entry is an access key.  It uses generated randoms for
+access keys.
+
+### Process Entries (DB-NUMBER=3)
+
+| Key               | Record               | Notes |
+| ----              | ----                 | ---- |
+| mu:_mux-endpoint_ | mux_record           | (\*e) Multiplexer endpoint |
+| de:_pool-name_    | backend_record       | (\*e) |
+| dx:_pool-name_    | backend_mutex_record | (\*1 \*e) |
+| tn:_uid_          | csrf_token_record    | Tokens for CSRF countermeasure |
+| ps:_pool-name_    | blurred_state_record | Approximate state of a pool |
+| pt:_pool-name_    | int64                | Timestamp of last access |
+| ut:_uid_          | int64                | Timestamp of last access |
+
+These are dynamic information, and updated frequently.
+
+__mx:mux-endpoint__ entry is a Multiplexer endpoint.  It is
+periodically updated by a Multiplexer to nofity it is running.
+
+__de:pool-name__ is a record of a backend process.  It is used to
+forward requests to a backend.  A pair of "Root_access" +
+"Root_secret" specifies an administrator access to a backend.
+
+__dx:pool-name__ entry is used to mutex starting a backend.  It is to
+ensure only a single backend to start.
+
+__tn:uid__ entry stores a token pair for CSRF countermeasure.
+
+__ps:pool-name__ entry is an approximate pool state.  It is used to
+notify a user via Web-UI about a pool is the suspended state.  It
+keeps the (imprecise) state information for a while, because the
+precise state information lasts only for a short time and it is not
+usable.
+
+__pt:pool-name__ is the last access timestamp of a pool.  It is used
+to decide when to stop a backend.
+
+__ut:uid__ is the last access timestamp of a user.  It is used to find
+out inactive users.
 
 ### CONSISTENCY OF ENTRIES.
 
 Some entries are dependent each other.  Crash-recovery should remove
 orphaned enties.
 
-__uu:uid and um:claim__.  uid ↔︎ claim is one-to-one if a user-info
+__uu:uid and um:claim__.  UID ↔︎ claim is one-to-one if a user-info
 contains a claim.
 
 __bd:directory and bk:bucket-name__.
-
-### Setting-Table (DB=0)
-
-| Key             | Value     | Notes   |
-| ----            | ----      | ---- |
-| "cf:reg"        | reg-conf  | |
-| "cf:mux"        | mux-conf  | |
-| cf:mux:mux-name | mux-conf  | Optional |
-| uu:uid          | user-info | |
-| um:claim        | uid       | Optional |
-
-The Setting-Table stores semi-static information.
-
-__cf:reg__ and __cf:mux__ (literal strings) entries store the settings
-of services.  __cf:mux:mux-name__ is used to choose a specific setting
-to each Mux service, whose mux-name is replaced by a string in an
-environment variable "LENS3_MUX_NAME" passed to a service.
-
-A __uu:uid__ entry is a record of a user-info: {"uid", "groups",
-"claim", "enabled", "modification_time"}, where "groups" is a string
-list, "claim" is a string (maybe empty), and "enabled" is a boolean.
-
-A __um:claim__ entry is a map from a user claim to a uid.  It is
-optional and an entry is used only when Lens-Reg is configured with
-"claim_uid_map=map".
-
-A primary reason for storing configurations in the database is to let
-them parsed at storing in the database.  Detecting typos at a start of
-a service is very annoying.
-
-### Storage-Table (DB=1)
-
-| Key           | Value         | Notes   |
-| ----          | ----          | ---- |
-| po:pool-name  | pool-description | |
-| ps:pool-name  | pool-state    | |
-| bd:directory  | pool-name       | A bucket-directory (path string) \*1 |
-
-A __po:pool-name__ entry is a pool description: {"pool_name",
-"owner_uid", "owner_gid", "bucket_directory", "probe_key",
-"online_status", "expiration_time", "modification_time"}.  It holds
-the semi-static part of pool information.
-
-A __ps:pool-name__ entry is a pool-state which is a record {"state",
-"reason", "modification_time"}.  A state is one of: {"initial",
-"ready", "suspended", "disabled", "inoperable"}.  A value of reason is
-a string, which can be a long string of an error message.
-
-A __bd:directory__ is a bucket-directory entry.  The entry is
-atomically assigned.  Scanning of these entries is necessary to find a
-list of pool-directories, because Lens3 does not keep a list.
-
-Lens3 forbids running multiple backend instances in the same
-directory.  Note, however, directory links can fool the detection of
-the same directory.  In addition, backend instances may run in the
-same directory transiently in a race in starting/stopping instances.
-
-### Process-Table (DB=2)
-
-| Key             | Value           | Notes   |
-| ----            | ----            | ---- |
-;;| (ma:pool-name)  | backend-manager   | \*1, \*2 |
-;;| mn:pool-name    | backend-process   | |
-| mx:mux-endpoint | Mux-description | \*2 |
-
-An __ma:pool-name__ entry records a backend-manager under which a
-backend process runs.  It is a record: {"mux_ep", "start_time"}.  It
-is atomically set to ensure uniqueness of a running Manager (a loser
-will quit).  A start-time makes the chosen entry distinguishable (but
-not strictly distinguishable).
-
-An __mn:pool-name__ entry is a backend-process description:
-{"backend_ep", "backend_pid", "root_access", "root_secret", "mux_ep",
-"manager_pid", "modification_time"}.  A root_access/root_secret pair
-specifies an administrator access for a backend instance.
-"manager_pid" is unused.
-
-An __mx:mux-endpoint__ entry is a Multiplexer description that is a
-record: {"mux_ep", "start_time", "modification_time"}.  A key is
-an endpoint of a Multiplexer (a host:port string).  The content has no
-particular use.  A start-time is a time Multiplexer started.  A
-modification-time is a time the record is refreshed.
-
-### Routing-Table (DB=3)
-
-| Key            | Value              | Notes   |
-| ----           | ----               | ---- |
-;;| (ep:pool-name) | backend-endpoint   | |
-| ep:pool-name   | backend-process    | \*1, \*2 |
-| bk:bucket-name | bucket-description | A mapping by a bucket-name \*1 |
-| ts:pool-name   | timestamp          | Timestamp on an access (string) |
-| us:uid         | timestamp          | Timestamp on a user access (string) |
-
-An __ep:pool-name__ entry is a backend-endpoint (a host:port string).
-
-A __bk:bucket-name__ entry is a record of a bucket-description:
-{"pool", "bkt_policy", "modification_time"}.  A bkt-policy indicates
-public R/W status of a bucket: {"none", "upload", "download",
-"public"}, whose names are borrowed from backend.
-
-A __ts:pool-name__ entry is a last access timestamp of a pool.  It is
-used to decide whether to stop a backend instance.
-
-A __us:uid__ is an access timestamp of a user.  It is just a record.
-It is used to find out inactive users (no tools are provided).
-
-### Monokey-Table (DB=4)
-
-| Key           | Value           | Notes   |
-| ----          | ----            | ---- |
-| pi:random     | key-description | \*1 |
-| ky:random     | key-description | \*1 |
-
-This table stores generated randoms for a pool-name or an access key.
-An entry is inserted to keep its uniqueness.
-
-A __pi:random__ entry is a pool-name and it is a record: {"owner",
-"modification_time"}, where an owner is a uid.
-
-A __ky:random__ entry is an access key and it is a record: {"owner",
-"secret_key", "key_policy", "expiration_time", "modification_time"},
-where an owner is a pool-name.  A key-policy is one of {"readwrite",
-"readonly", "writeonly"}, whose names are borrowed from backend.
 
 ## Bucket policy
 

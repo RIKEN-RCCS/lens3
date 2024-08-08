@@ -4,10 +4,10 @@ This describes design notes of Lenticularis-S3.
 
 ## Components of Lens3
 
-* Multiplexer
-* Registrar
-* MinIO (S3 backend server)
-* Valkey (keyval-db)
+- Multiplexer
+- Registrar
+- MinIO (S3 backend server)
+- Valkey (keyval-db)
 
 ## Brief Description of Keyval-DB Entries
 
@@ -185,16 +185,16 @@ systemd services.
 
 ## Access Authorization Checks
 
-Lens3's check is minimal.  A permission of acces-keys is r/w and a
-permition of buckets is r/w.  It judges operations as reads by http
-GET and writes by http PUT/POST.
+Lens3's check is minimal.  It is by readable/writable.  A permission
+of acces-keys is R/W and a permition of buckets is R/W.  It judges
+operations as reads for http GET and writes for http PUT/POST.
 
-Lens3 forwards requests to the backend S3 server that are signed by
-the single root credential for the backend.
+Lens3 forwards requests to the backend S3 server by signing with the
+root credential for the backend.
 
 AWS S3 Documents:
 
-* [How Amazon S3 authorizes a request](https://docs.aws.amazon.com/AmazonS3/latest/userguide/how-s3-evaluates-access-control.html)
+[How Amazon S3 authorizes a request](https://docs.aws.amazon.com/AmazonS3/latest/userguide/how-s3-evaluates-access-control.html)
 
 ## Building UI
 
@@ -271,10 +271,6 @@ Test programs will create garbages as bucket names
 
 ## Notes on Backends
 
-### MinIO Clients (MC)
-
-Note that alias commands are local (not connect to a MinIO).
-
 ### MinIO Start Messages
 
 Lens3 recognizes some messages from MinIO at its start to judge a run
@@ -294,6 +290,10 @@ Lens3 also looks for a message "Specified port is already in use" for
 a port-in-use error.  Starting a backend will be retried when this
 message is found.
 
+### MinIO Clients (MC)
+
+Note that alias commands are local (not connect to a MinIO).
+
 ### rclone "rclone serve s3"
 
 The current version of rclone (v1.66.0) does not work on (1) listing
@@ -307,85 +307,85 @@ maybe extremely slow on large objects.
 
 ## Glossary
 
-* __Probe-key__: It is an access key used by Registrar to access
+- __Probe-key__: It is an access key used by Registrar to access
   Multiplexer.  This key has no corresponding secret.  It is used to
   to make absent buckets in the backend.  It makes bucket records
   consistent in Lens3 and in the backend.
 
 ## Short-Term Todo, or Deficiency
 
-* Avoid polling of a start of a backend.  Multiplexer waits for a start
+- Avoid polling of a start of a backend.  Multiplexer waits for a start
   of a backend by polling in the keyval-db.
 
-* Reject certain bucket-directory paths so that it does service in
+- Reject certain bucket-directory paths so that it does service in
   directories with dots.  Servicing in ".ssh" should be avoided, for
   example.
 
-* Make Multiplexer reply a message containing a reason of an access
+- Make Multiplexer reply a message containing a reason of an access
   rejection.  It returns only a status code in v1.2.
 
-* Make it not an error when an MC command returns
+- Make it not an error when an MC command returns
   "Code=BucketAlreadyOwnedByYou".  It can be ignored safely.
 
-* Make access key generation of Registrar like STS.
+- Make access key generation of Registrar like STS.
 
-* Make UI refresh the pool state, when a pool is edited and
+- Make UI refresh the pool state, when a pool is edited and
   transitions such as from READY to INOPERABLE or from SUSPENDED to
   READY.
 
-* Run a reaper of orphaned directories, buckets, and secrets at a
+- Run a reaper of orphaned directories, buckets, and secrets at a
   Registrar start.  Adding a bucket/secret and removing a pool may
   have a race.  Or, a crash at creation/deletion of a pool may leave
   an orphaned directory.
 
-* Make starting a backend through the frontend proxy.  Currently,
+- Make starting a backend through the frontend proxy.  Currently,
   arbitrary Multiplexer is chosen.  The proxy could balance the loads.
 
-* Add a control on the pool status "online".  It is always online,
+- Add a control on the pool status "online".  It is always online,
   currently.
 
-* Add site setting variations.  Examples: Enable users by default (it
+- Add site setting variations.  Examples: Enable users by default (it
   needs explicit enabling users currently); Disallow public access
   buckets at all.
 
-* Add options
+- Add options
   - confirmation at the first use: terms-of-use.
   - description field (just memo) to keys.
   - disable public buckets.
 
 ## RANDOM MEMO
 
-__Removing buckets__: Lens3 does not remove buckets at all.  It just
+- __Removing buckets__: Lens3 does not remove buckets at all.  It just
 makes them inaccessible.  It is because the contents of a bucket is
 useful usually.
 
-__MC command concurrency__: Lens3 assumes concurrently running
+- __MC command concurrency__: Lens3 assumes concurrently running
 multiple MC commands with distinct aliases and distinct config-dirs do
 not interfere.
 
-__Backend start delay__: Lens3 responds to a request in slow on
+- __Backend start delay__: Lens3 responds to a request in slow on
 starting a backend.  Alternatively, it can be returning 503 with a
 "Retry-After" http header.  NGINX (a proxy in front of Lens3) seems to
 return 502 on long delays.  See
 [rfc7231](https://httpwg.org/specs/rfc7231.htm).
 
-__Proxying errors__: Lens3 returns HTTP status 503 on an error in
+- __Proxying errors__: Lens3 returns HTTP status 503 on an error in
 proxying a request (that is, when it fails to perform proxying itself
 such as by a connection error).  It is because backends refuse
 connections when they are busy.  For example,
 
-* MinIO refuses a connection by ECONNRESET sometimes, maybe, at a
+- __Accepting pool creation in busy situations__: Lens3 accepts
+creation of a pool even if it cannot start a backend due to busyness
+of the server.  It is done on purpose to display the error condition
+in UI's "backend_state" slot.
+
+- __HTTP status__: AWS S3 clients retries for status 50x except 501.
+See https://pkg.go.dev/github.com/aws/aws-sdk-go-v2/aws/retry
+
+- MinIO refuses a connection by ECONNRESET sometimes, maybe, at a
 slightly high load (not checked for Lens3-v2).
 
-* MinIO also refuses a connection by EPIPE for some illegal accesses.
+- MinIO also refuses a connection by EPIPE for some illegal accesses.
 That is, when trying to put an object by a readonly-key or to put an
 object to a download-bucket without a key (never happens in Lens3-v2
 because checkes on keys are done in Lens3).
-
-__Accepting pool creation in busy situations__: Lens3 accepts creation
-of a pool even if it cannot start a backend due to busyness of the
-server.  It is done on purpose to display the error condition in UI's
-"backend_state" slot.
-
-__HTTP status__: AWS S3 clients retries for status 50x except 501.
-See https://pkg.go.dev/github.com/aws/aws-sdk-go-v2/aws/retry

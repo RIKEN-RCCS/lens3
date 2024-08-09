@@ -573,9 +573,8 @@ Note that Lens3 does not support listing of buckets by `aws s3 ls`.
 
 ## (Optional) Register Users
 
-Lens3 has its own a list of users (with uid+gid) and a list of
-enablement status of the users.  It does not look at the databases of
-the underlying OS.
+Lens3 keeps its own a list of users (with uid+gid) and a list of
+enablement status of the users.
 
 See [Administration Guide](admin-guide.md#).
 
@@ -607,7 +606,7 @@ ENABLE,user1,user2,user3, ...
 Register an enabled-user list by `lens3-admin` command.
 
 ```
-lens3$ lens3-admin -c conf.json load-user {csv-file}
+lens3$ lens3-admin -c conf.json load-user CSV-FILE
 lens3$ lens3-admin -c conf.json show-user
 ```
 
@@ -615,8 +614,18 @@ lens3$ lens3-admin -c conf.json show-user
 
 ### Early Troubles
 
-First check the systemd logs.  Diagnosing errors before a start of
+Check the systemd logs, first.  Diagnosing errors before a start of
 logging is tricky.
+
+### Verbose Logging
+
+Logs of Lens3 are dumped in "/var/log/lenticularis/lens3-log".
+
+Verbosity of logging can be increased by setting the "tracing"=255.
+It is bit flags in the configuration "mux-conf.json" at
+"logging"."logger"."tracing".  Reloading the configuration by
+"lens3-admin" and restarting the service by "systemctl" are necessary
+to make the changes effective.
 
 ### Examining MinIO Behavior
 

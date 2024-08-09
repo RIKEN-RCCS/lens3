@@ -320,7 +320,8 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 			return_mux_error_response(m, w, r, err4)
 			return
 		case bucket == nil && authenticated != nil:
-			slogger.Debug(m.logprefix + "Access the top with authentication")
+			slogger.Debug(m.logprefix+"Reject access at the top",
+				"key", auth)
 			var err5 = &proxy_exc{
 				auth,
 				"",
@@ -461,7 +462,7 @@ func serve_probe_access(m *multiplexer, w http.ResponseWriter, r *http.Request, 
 	assert_fatal(secret != nil)
 	var auth = secret.Access_key
 	var pool = secret.Pool
-	slogger.Debug(m.logprefix+"Probe-access", "pool", pool)
+	slogger.Debug(m.logprefix+"Serve probe-access", "pool", pool)
 
 	var peer = r.Header.Get("Remote_Addr")
 	if peer != "" {
@@ -661,7 +662,8 @@ func ensure_backend_running(m *multiplexer, w http.ResponseWriter, r *http.Reque
 	case pool_state_DISABLED:
 		panic(nil)
 	case pool_state_SUSPENDED:
-		slogger.Debug(m.logprefix+"Pool suspended", "pool", pool)
+		slogger.Debug(m.logprefix+"Reject access to pool",
+			"pool", pool, "reason", "suspended")
 		var err2 = &proxy_exc{
 			auth,
 			"",
@@ -794,8 +796,8 @@ func ensure_pool_state(m *multiplexer, w http.ResponseWriter, r *http.Request, p
 	case pool_state_READY:
 		// OK.
 	case pool_state_DISABLED:
-		slogger.Debug(m.logprefix+"Bad pool", "pool", pool,
-			"reason", "disabled")
+		slogger.Debug(m.logprefix+"Reject access to bad pool",
+			"pool", pool, "reason", "disabled")
 		var err2 = &proxy_exc{
 			auth,
 			"",
@@ -808,8 +810,8 @@ func ensure_pool_state(m *multiplexer, w http.ResponseWriter, r *http.Request, p
 	case pool_state_SUSPENDED:
 		panic(nil)
 	case pool_state_INOPERABLE:
-		slogger.Debug(m.logprefix+"Bad pool", "pool", pool,
-			"reason", "inoperable")
+		slogger.Debug(m.logprefix+"Reject access to bad pool",
+			"pool", pool, "reason", "inoperable")
 		var err3 = &proxy_exc{
 			auth,
 			"",

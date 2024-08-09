@@ -95,19 +95,20 @@ type registrar_conf struct {
 }
 
 type manager_conf struct {
-	Sudo                      string      `json:"sudo"`
-	Port_min                  int         `json:"port_min"`
-	Port_max                  int         `json:"port_max"`
-	Backend_awake_duration    time_in_sec `json:"backend_awake_duration"`
-	Backend_start_timeout_ms  time_in_ms  `json:"backend_start_timeout_ms"`
-	Backend_timeout_ms        time_in_ms  `json:"backend_timeout_ms"`
-	Backend_region            string      `json:"backend_region"`
-	Backend_no_setup_at_start bool        `json:"backend_no_setup_at_start"`
-	Heartbeat_interval        time_in_sec `json:"heartbeat_interval"`
-	Heartbeat_miss_tolerance  int         `json:"heartbeat_miss_tolerance"`
-	backend_suspension_time   time.Duration
-	backend_stabilize_time    time.Duration
-	backend_linger_time       time.Duration
+	Sudo                         string      `json:"sudo"`
+	Port_min                     int         `json:"port_min"`
+	Port_max                     int         `json:"port_max"`
+	Backend_awake_duration       time_in_sec `json:"backend_awake_duration"`
+	Backend_start_timeout_ms     time_in_ms  `json:"backend_start_timeout_ms"`
+	Backend_timeout_ms           time_in_ms  `json:"backend_timeout_ms"`
+	Backend_region               string      `json:"backend_region"`
+	Backend_no_setup_at_start    bool        `json:"backend_no_setup_at_start"`
+	Heartbeat_interval           time_in_sec `json:"heartbeat_interval"`
+	Heartbeat_miss_tolerance     int         `json:"heartbeat_miss_tolerance"`
+	backend_busy_suspension_time time.Duration
+	backend_suspension_time      time.Duration
+	backend_stabilize_time       time.Duration
+	backend_linger_time          time.Duration
 }
 
 type minio_conf struct {

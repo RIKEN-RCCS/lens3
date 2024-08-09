@@ -200,7 +200,7 @@ func check_rclone_port_in_use(m string, re *regexp.Regexp) *start_result {
 		}
 	} else {
 		return &start_result{
-			start_state: start_failure,
+			start_state: start_persistent_failure,
 			reason:      make_failure_reason(m),
 		}
 	}

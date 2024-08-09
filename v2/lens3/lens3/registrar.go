@@ -89,22 +89,22 @@ type registrar struct {
 // "v1/ui/src/lens3c.ts" for responses UI expects.  These are
 // compatible to version v1.3.
 
-type response_status string
+type ui_response_status string
 
 const (
-	status_success response_status = "success"
-	status_error   response_status = "error"
+	status_success ui_response_status = "success"
+	status_error   ui_response_status = "error"
 )
 
 type ui_success_response struct {
-	Status    response_status `json:"status"`
-	Timestamp int64           `json:"time"`
+	Status    ui_response_status `json:"status"`
+	Timestamp int64              `json:"time"`
 }
 
 type ui_error_response struct {
-	Status    response_status `json:"status"`
-	Reason    ui_error_reason `json:"reason"`
-	Timestamp int64           `json:"time"`
+	Status    ui_response_status `json:"status"`
+	Reason    ui_error_reason    `json:"reason"`
+	Timestamp int64              `json:"time"`
 }
 
 type ui_error_extra map[string]string
@@ -1092,6 +1092,8 @@ func check_user_access_with_error_return(z *registrar, w http.ResponseWriter, r 
 		switch state2 {
 		case pool_state_INITIAL, pool_state_READY:
 			// OK.
+		case pool_state_DISABLED:
+			// OK.
 		case pool_state_SUSPENDED:
 			slogger.Debug("Reg: Bad pool state", "pool", pool,
 				"state", state2, "reason", reason2)
@@ -1104,8 +1106,6 @@ func check_user_access_with_error_return(z *registrar, w http.ResponseWriter, r 
 			}
 			return_reg_error_response(z, w, r, err9)
 			return nil
-		case pool_state_DISABLED:
-			// OK.
 		case pool_state_INOPERABLE:
 			var err10 = &proxy_exc{
 				"",
@@ -1280,7 +1280,7 @@ func make_csrf_tokens(z *registrar, uid string) *csrf_token_record {
 	var ok = set_csrf_token_expiry(z.table, uid, expiry)
 	if !ok {
 		// Ignore an error.
-		slogger.Error("Reg: DB.Expire() on csrf-token record failed",
+		slogger.Error("Reg: DB.Expire(csrf-token-record) failed",
 			"uid", uid)
 	}
 	//var x = get_csrf_token(z.table, uid)

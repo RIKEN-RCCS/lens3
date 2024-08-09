@@ -18,7 +18,7 @@ package lens3
 //
 // MEMO: It does not use "Pdeathsig" in unix/SysProcAttr.  Pdeathsig,
 // or prctl(PR_SET_PDEATHSIG), is Linux.
-//
+
 // MEMO: os/Signal is an interface, while unix/Signal and
 // syscall/Signal are identical and concrete.
 
@@ -79,30 +79,27 @@ type backend_factory interface {
 }
 
 // BACKEND_DELEGATE represents a backend instance.  Its concrete body
-// is defined for each backend type.
+// is defined for each backend type.  GET_SUPER_PART returns a generic
+// part or a superclass.  MAKE_COMMAND_LINE returns a command and
+// environment of a backend instance.  CHECK_STARTUP checks a start of
+// a backend.  It is called each time a backend outputs a line of a
+// message.  It looks for a specific message.  The first argument
+// indicates stdout or stderr by values on_stdout and on_stderr.  The
+// passed strings are accumulated ones all from the start.  ESTABLISH
+// does a server specific initialization at its start.  SHUTDOWN stops
+// a backend in its specific way.  HEARTBEAT pings a backend and
+// returns an http status.  It is an error but status=200.
 type backend_delegate interface {
-	// GET_SUPER_PART returns a generic part or a superclass.
 	get_super_part() *backend_generic
 
-	// MAKE_COMMAND_LINE returns a command and environment of a
-	// backend instance.
 	make_command_line(port int, directory string) backend_command
 
-	// CHECK_STARTUP checks a start of a backend.  It is called each
-	// time a backend outputs a line of a message.  It looks for a
-	// specific message.  The first argument indicates stdout or
-	// stderr by values on_stdout and on_stderr.  The passed strings
-	// are accumulated ones all from the start.
 	check_startup(stdio_stream, []string) *start_result
 
-	// ESTABLISH does a server specific initialization at its start.
 	establish() error
 
-	// SHUTDOWN stops a backend in its specific way.
 	shutdown() error
 
-	// HEARTBEAT pings a backend and returns an http status.  It is an
-	// error but status=200.
 	heartbeat(w *manager) int
 }
 
@@ -176,7 +173,8 @@ const (
 	start_ongoing start_state = iota
 	start_started
 	start_to_retry
-	start_failure
+	start_transient_failure
+	start_persistent_failure
 )
 
 func configure_manager(w *manager, m *multiplexer, t *keyval_table, q chan vacuous, c *mux_conf) {
@@ -192,7 +190,8 @@ func configure_manager(w *manager, m *multiplexer, t *keyval_table, q chan vacuo
 	w.logprefix = m.logprefix
 
 	var awake = (w.Backend_awake_duration).time_duration()
-	w.backend_suspension_time = (awake / 3)
+	w.backend_busy_suspension_time = (awake / 3)
+	w.backend_suspension_time = (15 * 60 * time.Second)
 	w.backend_stabilize_time = (10 * time.Millisecond)
 	w.backend_linger_time = (10 * time.Millisecond)
 
@@ -259,6 +258,7 @@ func start_backend(w *manager, pool string) *backend_record {
 	}
 	var ok1, _ = set_ex_backend_mutex(w.table, pool, ep)
 	if !ok1 {
+		slogger.Info(w.logprefix+"Wait for backend by race", "pool", pool)
 		var be1 = wait_for_backend_by_race(w, pool)
 		if be1 == nil {
 			// (An error is already logged).
@@ -266,11 +266,12 @@ func start_backend(w *manager, pool string) *backend_record {
 		}
 		return be1
 	} else {
+		slogger.Info(w.logprefix+"Start backend", "pool", pool)
 		var expiry = (2 * (w.Backend_start_timeout_ms).time_duration())
 		var ok2 = set_backend_mutex_expiry(w.table, pool, expiry)
 		if !ok2 {
 			// Ignore an error.
-			slogger.Error(w.logprefix+"DB.Expire() on backend-mutex failed",
+			slogger.Error(w.logprefix+"DB.Expire(backend-mutex) failed",
 				"pool", pool)
 		}
 		var be2 = start_backend_in_mutexed(w, pool)
@@ -325,14 +326,18 @@ func start_backend_in_mutexed(w *manager, pool string) *backend_record {
 		switch r1.start_state {
 		case start_ongoing:
 			// (NEVER).
-			slogger.Error(w.logprefix+"Starting a backend failed (on going)",
+			slogger.Error(w.logprefix+"Starting backend badly failed",
 				"pool", pool)
-			return nil
+			panic(nil)
 		case start_started:
 			// OK.
 		case start_to_retry:
 			continue
-		case start_failure:
+		case start_transient_failure:
+			// (An error is already logged).
+			var suspension = suspend_pool(w, d, r1.reason)
+			return suspension
+		case start_persistent_failure:
 			// (An error is already logged).
 			mark_pool_inoperable(w, pooldata, r1.reason)
 			return nil
@@ -353,7 +358,7 @@ func start_backend_in_mutexed(w *manager, pool string) *backend_record {
 			}
 		}()
 		if !ok1 {
-			slogger.Warn(w.logprefix+"Starting a backend failed",
+			slogger.Warn(w.logprefix+"Starting backend failed",
 				"pool", pool, "reason", "manager is in shutdown")
 			abort_backend(w, d)
 			return nil
@@ -370,17 +375,20 @@ func start_backend_in_mutexed(w *manager, pool string) *backend_record {
 		var err1 = make_absent_buckets_in_backend(w, proc.be)
 		if err1 != nil {
 			// (An error is already logged).
-			// LET THE BACKEND CONTINUE TO WORK.
-			// abort_backend(w, d)
-			// mark_pool_inoperable(w, pooldata, reason)
-			// return nil
+			// LET A BACKEND CONTINUE TO WORK.
+			// - abort_backend(w, d)
+			// - mark_pool_inoperable(w, pooldata, reason)
+			// - return nil
 		}
-
-		go ping_backend(w, d)
 
 		var now = time.Now().Unix()
 		proc.be.Timestamp = now
 		set_backend(w.table, pool, proc.be)
+
+		// Backend has started.  Expiration of the backend record is
+		// set in ping_backend().
+
+		go ping_backend(w, d)
 
 		var state1 = &blurred_state_record{
 			Pool:      pool,
@@ -397,34 +405,7 @@ func start_backend_in_mutexed(w *manager, pool string) *backend_record {
 
 	slogger.Warn(w.logprefix+"Backend SUSPENDED (no ports)", "pool", pool)
 
-	var now int64 = time.Now().Unix()
-	var suspension = &backend_record{
-		Pool:        pool,
-		Backend_ep:  "",
-		Backend_pid: 0,
-		State:       pool_state_SUSPENDED,
-		Root_access: "",
-		Root_secret: "",
-		Mux_ep:      w.multiplexer.mux_ep,
-		Mux_pid:     w.multiplexer.mux_pid,
-		Timestamp:   now,
-	}
-	var expiry = proc.backend_suspension_time
-	set_backend(w.table, pool, suspension)
-	var ok3 = set_backend_expiry(w.table, pool, expiry)
-	if !ok3 {
-		slogger.Error(w.logprefix+"DB.Expire() on backend failed",
-			"pool", pool)
-	}
-
-	var state2 = &blurred_state_record{
-		Pool:      pool,
-		State:     pool_state_SUSPENDED,
-		Reason:    pool_reason_SERVER_BUSY,
-		Timestamp: now,
-	}
-	set_blurred_state(w.table, pool, state2)
-
+	var suspension = suspend_pool(w, d, start_failure_server_busy)
 	return suspension
 }
 
@@ -434,6 +415,7 @@ func start_backend_in_mutexed(w *manager, pool string) *backend_record {
 // SIGKILL to SIGTERM to make it work with sudo.
 func try_start_backend(w *manager, d backend_delegate, port int) *start_result {
 	var proc = d.get_super_part()
+	var pool = proc.Pool
 	var thishost, _, err1 = net.SplitHostPort(w.mux_ep)
 	if err1 != nil {
 		slogger.Error(w.logprefix+"Bad endpoint of Mux", "ep", w.mux_ep)
@@ -457,7 +439,7 @@ func try_start_backend(w *manager, d backend_delegate, port int) *start_result {
 	var argv = append(sudo_argv, command.argv...)
 	var envs = append(w.environ, command.envs...)
 
-	slogger.Debug(w.logprefix+"Run a backend", "pool", proc.Pool, "argv", argv)
+	slogger.Debug(w.logprefix+"Run backend", "pool", pool, "argv", argv)
 
 	var ctx = context.Background()
 	var cmd = exec.CommandContext(ctx, argv[0], argv[1:]...)
@@ -491,9 +473,9 @@ func try_start_backend(w *manager, d backend_delegate, port int) *start_result {
 
 	var err3 = cmd.Start()
 	if err3 != nil {
-		slogger.Error("exec/Command.Start() failed", "err", err3)
+		slogger.Error("exec/Command.Start() errs", "err", err3)
 		return &start_result{
-			start_state: start_failure,
+			start_state: start_persistent_failure,
 			reason:      start_failure_exec_failed,
 		}
 	}
@@ -502,8 +484,8 @@ func try_start_backend(w *manager, d backend_delegate, port int) *start_result {
 	var r1 = wait_for_backend_come_up(w, d)
 
 	if trace_proc&tracing != 0 {
-		slogger.Debug(w.logprefix+"A backend started",
-			"pool", proc.Pool, "state", r1.start_state, "stdout", r1.reason)
+		slogger.Debug(w.logprefix+"Backend started",
+			"pool", pool, "state", r1.start_state, "stdout", r1.reason)
 	}
 
 	assert_fatal(r1.start_state != start_ongoing)
@@ -511,13 +493,14 @@ func try_start_backend(w *manager, d backend_delegate, port int) *start_result {
 	return r1
 }
 
-// WAIT_FOR_BACKEND_COME_UP waits until either a backend server (1)
-// outputs an expected message, (2) outputs an error message, (3)
-// outputs too many messages, (4) reaches a timeout, (5) closes both
-// stdout+stderr.  It returns STARTED/TO_RETRY/FAILURE.  It reads the
-// stdio channels as much as available.
+// WAIT_FOR_BACKEND_COME_UP waits until a backend either (1) outputs
+// an expected message, (2) outputs an error message, (3) outputs too
+// many messages, (4) closes both stdout+stderr, (5) reaches a
+// timeout.  It returns STARTED/RETRY/FAILURE.  It reads the stdio
+// channels as much as available.
 func wait_for_backend_come_up(w *manager, d backend_delegate) *start_result {
 	var proc *backend_generic = d.get_super_part()
+	var pool = proc.Pool
 
 	var msg_stdout []string
 	var msg_stderr []string
@@ -526,7 +509,7 @@ func wait_for_backend_come_up(w *manager, d backend_delegate) *start_result {
 	// that to refer to finally collected msg_stdout and msg_stderr.
 
 	defer func() {
-		drain_start_messages_to_log(w, proc.Pool, msg_stdout, msg_stderr)
+		drain_start_messages_to_log(w, pool, msg_stdout, msg_stderr)
 	}()
 
 	var timeout = (proc.Backend_start_timeout_ms).time_duration()
@@ -535,10 +518,10 @@ func wait_for_backend_come_up(w *manager, d backend_delegate) *start_result {
 		select {
 		case msg1, ok1 := <-proc.ch_stdio:
 			if !ok1 {
-				slogger.Warn(w.logprefix+"Starting a backend failed",
-					"pool", proc.Pool, "reason", start_failure_pipe_closed)
+				slogger.Warn(w.logprefix+"Starting backend failed",
+					"pool", pool, "reason", start_failure_pipe_closed)
 				return &start_result{
-					start_state: start_failure,
+					start_state: start_persistent_failure,
 					reason:      start_failure_pipe_closed,
 				}
 			}
@@ -579,9 +562,9 @@ func wait_for_backend_come_up(w *manager, d backend_delegate) *start_result {
 				switch st1.start_state {
 				case start_ongoing:
 					// Skip.
-				case start_failure:
-					slogger.Warn(w.logprefix+"Starting a backend failed",
-						"pool", proc.Pool, "reason", st1.reason)
+				case start_transient_failure, start_persistent_failure:
+					slogger.Warn(w.logprefix+"Starting backend failed",
+						"pool", pool, "reason", st1.reason)
 					return st1
 				default:
 					return st1
@@ -597,20 +580,20 @@ func wait_for_backend_come_up(w *manager, d backend_delegate) *start_result {
 				}
 			}
 			if !(len(msg_stdout) < 500 && len(msg_stderr) < 500) {
-				slogger.Warn(w.logprefix+"Starting a backend failed",
-					"pool", proc.Pool, "reason", start_failure_stdio_flooding)
+				slogger.Warn(w.logprefix+"Starting backend failed",
+					"pool", pool, "reason", start_failure_stdio_flooding)
 				return &start_result{
-					start_state: start_failure,
+					start_state: start_persistent_failure,
 					reason:      start_failure_stdio_flooding,
 				}
 			}
 			continue
 		case <-ch_timeout:
-			slogger.Warn(w.logprefix+"Starting a backend failed",
-				"pool", proc.Pool, "reason", start_failure_timeout)
+			slogger.Warn(w.logprefix+"Starting backend failed",
+				"pool", pool, "reason", start_failure_start_timeout)
 			return &start_result{
-				start_state: start_failure,
-				reason:      start_failure_timeout,
+				start_state: start_transient_failure,
+				reason:      start_failure_start_timeout,
 			}
 		}
 	}
@@ -620,7 +603,6 @@ func wait_for_backend_come_up(w *manager, d backend_delegate) *start_result {
 // started by another thread.  It uses polling.  Its sleep time
 // increases each time: 1ms, 3^1ms, 3^2ms, ... until maximum 1s.
 func wait_for_backend_by_race(w *manager, pool string) *backend_record {
-	slogger.Debug(w.logprefix+"Waiting for backend by race", "pool", pool)
 	var limit = time.Now().Add((w.Backend_start_timeout_ms).time_duration())
 	var sleep int64 = 1
 	for time.Now().Before(limit) {
@@ -631,9 +613,55 @@ func wait_for_backend_by_race(w *manager, pool string) *backend_record {
 		time.Sleep(time.Duration(sleep) * time.Millisecond)
 		sleep = min(sleep*3, 1000)
 	}
-	slogger.Error(w.logprefix+"Waiting for backend by race failed by timeout",
+	slogger.Error(w.logprefix+"Wait for backend by race failed by timeout",
 		"pool", pool)
 	return nil
+}
+
+// SUSPEND_POOL puts a pool in the suspended state.  It will block the
+// service for a certain period.
+func suspend_pool(w *manager, d backend_delegate, reason pool_reason) *backend_record {
+	var proc *backend_generic = d.get_super_part()
+	var pool = proc.Pool
+
+	var duration time.Duration
+	switch reason {
+	case start_failure_server_busy:
+		duration = proc.backend_busy_suspension_time
+	case start_failure_start_timeout:
+		duration = proc.backend_suspension_time
+	default:
+		duration = proc.backend_suspension_time
+	}
+
+	var now int64 = time.Now().Unix()
+	var suspension = &backend_record{
+		Pool:        pool,
+		Backend_ep:  "",
+		Backend_pid: 0,
+		State:       pool_state_SUSPENDED,
+		Root_access: "",
+		Root_secret: "",
+		Mux_ep:      w.multiplexer.mux_ep,
+		Mux_pid:     w.multiplexer.mux_pid,
+		Timestamp:   now,
+	}
+	set_backend(w.table, pool, suspension)
+	var ok3 = set_backend_expiry(w.table, pool, duration)
+	if !ok3 {
+		slogger.Error(w.logprefix+"DB.Expire(dummy-backend) failed",
+			"pool", pool)
+	}
+
+	var state2 = &blurred_state_record{
+		Pool:      pool,
+		State:     pool_state_SUSPENDED,
+		Reason:    reason,
+		Timestamp: now,
+	}
+	set_blurred_state(w.table, pool, state2)
+
+	return suspension
 }
 
 // MARK_POOL_INOPERABLE makes a pool inoperable.
@@ -673,14 +701,14 @@ func ping_backend(w *manager, d backend_delegate) {
 	}()
 
 	var proc = d.get_super_part()
+	var pool = proc.Pool
 	var duration = (w.Backend_awake_duration).time_duration()
 	var interval = (proc.Heartbeat_interval).time_duration()
 	var expiry = (3 * (proc.Heartbeat_interval).time_duration())
-	//var ch_quit_backend = proc.ch_quit_backend
-	var ok1 = set_backend_expiry(w.table, proc.Pool, expiry)
+	var ok1 = set_backend_expiry(w.table, pool, expiry)
 	if !ok1 {
-		slogger.Error(w.logprefix+"DB.Expire() on backend failed",
-			"pool", proc.Pool)
+		slogger.Error(w.logprefix+"DB.Expire(backend) failed",
+			"pool", pool, "action", "(ignored)")
 	}
 
 	proc.heartbeat_misses = 0
@@ -704,9 +732,9 @@ func ping_backend(w *manager, d backend_delegate) {
 		}
 		if proc.heartbeat_misses > 0 {
 			slogger.Error(w.logprefix+"Heartbeat failed",
-				"pool", proc.Pool, "misses", proc.heartbeat_misses)
+				"pool", pool, "misses", proc.heartbeat_misses)
 		} else if trace_proc&tracing != 0 {
-			slogger.Debug(w.logprefix+"Heartbeat", "pool", proc.Pool,
+			slogger.Debug(w.logprefix+"Heartbeat", "pool", pool,
 				"status", status, "misses", proc.heartbeat_misses)
 		}
 		if proc.heartbeat_misses > w.Heartbeat_miss_tolerance {
@@ -716,19 +744,19 @@ func ping_backend(w *manager, d backend_delegate) {
 		// Check lifetime.  Missing pool timestamp means the awake
 		// time elapsed (ts=0 is infinite past).
 
-		var ts = get_pool_timestamp(w.table, proc.Pool)
+		var ts = get_pool_timestamp(w.table, pool)
 		var lifetime = time.Unix(ts, 0).Add(duration)
 		if !time.Now().Before(lifetime) {
-			slogger.Debug(w.logprefix+"Awake time elapsed", "pool", proc.Pool)
+			slogger.Debug(w.logprefix+"Awake time elapsed", "pool", pool)
 			break
 		}
 
 		// Update a record expiration.
 
-		var ok3 = set_backend_expiry(w.table, proc.Pool, expiry)
+		var ok3 = set_backend_expiry(w.table, pool, expiry)
 		if !ok3 {
-			slogger.Error(w.logprefix+"DB.Expire() on backend failed",
-				"pool", proc.Pool)
+			slogger.Error(w.logprefix+"DB.Expire(backend) failed",
+				"pool", pool, "action", "quit backend")
 			break
 		}
 	}
@@ -744,7 +772,7 @@ func ping_backend(w *manager, d backend_delegate) {
 func stop_backend(w *manager, d backend_delegate) {
 	var proc = d.get_super_part()
 	var pool = proc.Pool
-	slogger.Info(w.logprefix+"Stop a backend", "pool", pool)
+	slogger.Info(w.logprefix+"Stop backend", "pool", pool)
 
 	func() {
 		w.mutex.Lock()

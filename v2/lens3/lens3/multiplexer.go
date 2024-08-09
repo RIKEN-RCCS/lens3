@@ -187,7 +187,7 @@ func mux_periodic_work(m *multiplexer) {
 		var ok = set_mux_ep_expiry(m.table, m.mux_ep, expiry)
 		if !ok {
 			// Ignore an error.
-			slogger.Error(m.logprefix+"DB.Expire() on mux-ep failed",
+			slogger.Error(m.logprefix+"DB.Expire(mux-ep) failed",
 				"mux-ep", m.mux_ep)
 		}
 		var jitter = time.Duration(rand.Int64N(int64(interval) / 10))
@@ -638,7 +638,7 @@ func ensure_backend_running(m *multiplexer, w http.ResponseWriter, r *http.Reque
 
 	var be1 = get_backend(m.table, pool)
 	if be1 == nil {
-		slogger.Info(m.logprefix+"Start a backend", "pool", pool)
+		//slogger.Info(m.logprefix+"Start backend", "pool", pool)
 		var be2 = start_backend(m.manager, pool)
 		if be2 == nil {
 			// (An error is already logged).
@@ -658,6 +658,8 @@ func ensure_backend_running(m *multiplexer, w http.ResponseWriter, r *http.Reque
 	switch be1.State {
 	case pool_state_INITIAL, pool_state_READY:
 		// OK.
+	case pool_state_DISABLED:
+		panic(nil)
 	case pool_state_SUSPENDED:
 		slogger.Debug(m.logprefix+"Pool suspended", "pool", pool)
 		var err2 = &proxy_exc{
@@ -669,8 +671,6 @@ func ensure_backend_running(m *multiplexer, w http.ResponseWriter, r *http.Reque
 		}
 		return_mux_error_response(m, w, r, err2)
 		return nil
-	case pool_state_DISABLED:
-		panic(nil)
 	case pool_state_INOPERABLE:
 		panic(nil)
 	default:
@@ -793,8 +793,6 @@ func ensure_pool_state(m *multiplexer, w http.ResponseWriter, r *http.Request, p
 		panic(nil)
 	case pool_state_READY:
 		// OK.
-	case pool_state_SUSPENDED:
-		panic(nil)
 	case pool_state_DISABLED:
 		slogger.Debug(m.logprefix+"Bad pool", "pool", pool,
 			"reason", "disabled")
@@ -807,6 +805,8 @@ func ensure_pool_state(m *multiplexer, w http.ResponseWriter, r *http.Request, p
 		}
 		return_mux_error_response(m, w, r, err2)
 		return false
+	case pool_state_SUSPENDED:
+		panic(nil)
 	case pool_state_INOPERABLE:
 		slogger.Debug(m.logprefix+"Bad pool", "pool", pool,
 			"reason", "inoperable")
@@ -977,10 +977,10 @@ func check_pool_is_suspened(t *keyval_table, pool string) (pool_state, pool_reas
 		panic(nil)
 	case pool_state_READY:
 		return state.State, state.Reason
-	case pool_state_SUSPENDED:
-		return state.State, state.Reason
 	case pool_state_DISABLED:
 		panic(nil)
+	case pool_state_SUSPENDED:
+		return state.State, state.Reason
 	case pool_state_INOPERABLE:
 		panic(nil)
 	default:
@@ -988,8 +988,8 @@ func check_pool_is_suspened(t *keyval_table, pool string) (pool_state, pool_reas
 	}
 }
 
-// COMBINE_POOL_STATE merges the states from check_pool_is_usable
-// (state1) and check_pool_is_suspened (state2).
+// COMBINE_POOL_STATE merges the states, state1 from
+// check_pool_is_usable() and state2 from check_pool_is_suspened().
 func combine_pool_state(state1 pool_state, reason1 pool_reason, state2 pool_state, reason2 pool_reason) (pool_state, pool_reason) {
 	switch state1 {
 	case pool_state_INITIAL:
@@ -1000,10 +1000,10 @@ func combine_pool_state(state1 pool_state, reason1 pool_reason, state2 pool_stat
 		} else {
 			return state1, reason1
 		}
-	case pool_state_SUSPENDED:
-		panic(nil)
 	case pool_state_DISABLED:
 		return state1, reason1
+	case pool_state_SUSPENDED:
+		panic(nil)
 	case pool_state_INOPERABLE:
 		return state1, reason1
 	default:

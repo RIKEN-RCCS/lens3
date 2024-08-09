@@ -255,22 +255,10 @@ type name_timestamp_pair struct {
 	Timestamp int64  `json:"timestamp"`
 }
 
-type routing_bucket_desc_keys__ struct {
-	pool              string
-	bucket_policy     string
-	modification_time int64
-}
-
 // KEY_PAIR is a access key and a secret key.
 type key_pair struct {
 	access_key string
 	secret_record
-}
-
-// POOL_DIRECTORY is returned by list_bucket_directories()
-type pool_directory__ struct {
-	pool      string
-	directory string
 }
 
 // POOL_STATE is a state of a pool.
@@ -279,14 +267,14 @@ type pool_state string
 const (
 	pool_state_INITIAL    pool_state = "initial"
 	pool_state_READY      pool_state = "ready"
-	pool_state_SUSPENDED  pool_state = "suspended"
 	pool_state_DISABLED   pool_state = "disabled"
+	pool_state_SUSPENDED  pool_state = "suspended"
 	pool_state_INOPERABLE pool_state = "inoperable"
 )
 
 // POOL_REASON is a set of reasons of state transitions.  It is not an
-// enumeration, but reasons include stdio messages output from a
-// backend server.  POOL_REMOVED is not stored in the state of a pool.
+// enumeration, and includes reasons of stdio messages output from a
+// backend.  POOL_REMOVED cannot be stored in the state of a pool.
 type pool_reason string
 
 const (
@@ -294,27 +282,27 @@ const (
 
 	pool_reason_NORMAL pool_reason = "-"
 
-	// Reasons for SUSPENDED:
-
-	pool_reason_SERVER_BUSY pool_reason = "server busy"
-
 	// Reasons for DISABLED:
 
 	pool_reason_USER_INACTIVE pool_reason = "user inactive"
 	pool_reason_POOL_EXPIRED  pool_reason = "pool expired"
 	pool_reason_POOL_OFFLINE  pool_reason = "pool offline"
 
+	// Reasons for SUSPENDED:
+
+	start_failure_server_busy   pool_reason = "server busy"
+	start_failure_start_timeout pool_reason = "backend start timeout"
+
 	// Reasons for INOPERABLE:
+
+	// The reasons for INOPERABLE include other stdout messages from a
+	// backend.  See make_failure_reason().
 
 	pool_reason_POOL_REMOVED     pool_reason = "pool removed"
 	start_failure_exec_failed    pool_reason = "exec failed"
-	start_failure_timeout        pool_reason = "timeout"
 	start_failure_pipe_closed    pool_reason = "pipe closed"
 	start_failure_stdio_flooding pool_reason = "stdout/stderr flooding"
-	start_failure_in_setup       pool_reason = "backend setup fails"
-
-	pool_reason_POOL_DISABLED_INITIALLY_ pool_reason = "pool disabled initially"
-	// Reasons include other messages on stdio from a backend server.
+	start_failure_in_setup__     pool_reason = "backend setup fails"
 )
 
 func make_failure_reason(s string) pool_reason {

@@ -30,7 +30,7 @@ and entries with "(\*e)" are set with expiration.
 
 ### Setting Entries (DB-NUMBER=1)
 
-| Key             | Record            | Notes |
+| Key             | Record (struct)   | Notes |
 | ----            | ----              | ---- |
 | cf:mux          | mux_conf          | Defined in "conf.go" |
 | cf:reg          | reg_conf          | Defined in "conf.go" |
@@ -59,7 +59,7 @@ configured with "claim_uid_map=map".
 
 ### Storage Entries (DB-NUMBER=2)
 
-| Key            | Record                  | Notes |
+| Key            | Record (struct)         | Notes |
 | ----           | ----                    | ---- |
 | po:_pool-name_ | pool_record             | Pool data |
 | bd:_directory_ | bucket_directory_record | (\*1) Directory path |
@@ -86,7 +86,7 @@ random.
 
 ### Process Entries (DB-NUMBER=3)
 
-| Key               | Record               | Notes |
+| Key               | Record (struct)      | Notes |
 | ----              | ----                 | ---- |
 | mu:_mux-endpoint_ | mux_record           | (\*e) Multiplexer endpoint |
 | de:_pool-name_    | backend_record       | (\*e) |
@@ -127,10 +127,12 @@ find out inactive users.
 Some entries are dependent each other.  Crash-recovery should remove
 orphaned entries.
 
-__uu:uid and um:claim__.  UID ↔︎ claim is one-to-one if a user-info
-contains a claim.
+A user record __uu:uid__ owns its claim __um:claim__.  They are kept
+one-to-one if a user information contains a claim.
 
-__bd:directory and bk:bucket-name__.
+A pool record __po:pool-name__ owns its component records.  The
+description of a pool is furnished with the sub-records
+__bd:directory__, __bx:bucket__, and __sx:secret__.
 
 ## Pool State Transition
 
@@ -148,29 +150,30 @@ the condition.
   pool.  It includes disabling a user account, an expiry of a pool, or
   making a pool offline.
 - __DISABLED__ → __READY__: It is by a cease of a disabling condition.
-- __READY__ → __SUSPENDED__: The move is on a condition the server is
-  busy, when all reserved ports are used.
+- __READY__ → __SUSPENDED__: The move is on conditions the server is
+  busy or starting a backend timeouts.  The server is busy when all
+  the reserved ports are used.
 - __SUSPENDED__ → __READY__: The move is done after some duration.
-  The state will move back and forward between READY and SUSPENDED if
-  the condition remains.
+  The state will move back and forward between READY and SUSPENDED
+  while the condition remains.
 - __READY__ → __INOPERABLE__: It is by a failure of starting a
-  backend.  This state is a deadend.  The only operation allowed on an
-  INOPERABLE pool is to remove it.
+  backend.  This state is a dead end.  The only operation allowed on
+  an INOPERABLE pool is to remove it.
 
-Deleting buckets and secrets during suspension will alter only the
-state of Lens3 but not the state of a backend (because a backend is
-not running).
+Creating buckets and secrets during suspension will be rejected until
+a backend resumes.
 
 ## Bucket Deletion
 
 Lens3 Registrar never deletes buckets in the backend.  It just removes
-it from the namespace.  A user can delete a bucket via the S3 delete
-bucket operation.  However, the deleted status is not reflected in
-Lens3's status.
+it from the namespace in Lens3.  However, a user can delete a bucket
+via the S3 delete bucket operation.  The deleted status is not
+reflected in Lens3's record.
 
 ## Keyval-DB Operations
 
-A single keyval-db instance is used and is not distributed in Lens3.
+A single keyval-db instance is used and it is not distributed in
+Lens3.
 
 Keyval-db client routines catches exceptions related to sockets (including
 ConnectionError and TimeoutError).  Others are not checked at all by
@@ -217,55 +220,55 @@ bucket and a secret.  The checks are in functions
 Release tests on Web-UI shall be performed manually.  Some of the
 obvious errors of users should be reported properly.
 
-### Unwritable bucket-directory
+#### Unwritable bucket-directory
 
 Making a pool for an unwritable bucket-directory is an error.  Check
 the pool become inoperable.
 
-### Unwritable bucket-directory for a bucket
+#### Unwritable bucket-directory for a bucket
 
 Or, first make a pool, and then make the bucket-directory unwritable.
 Making a bucket should fail.  This error should be visible to users as a
 Web-UI error.  Check the pool does not become inoperable.
 
-### Unwritable bucket
+#### Unwritable bucket
 
 Making a bucket should be an error when a regular file exists with the
 same name as the bucket.  This error should be visible to users as a
 Web-UI error.  Check the pool does not become inoperable.
 
-### User Tests
+#### User Tests
 
 - Disable a user.  It is done by `$ lens3-admin stop-user true uid`
 - Delete a user.  It is done by `$ lens3-admin kill-user uid`
 
-### Forced Heartbeat Failure
+#### Forced Heartbeat Failure
 
 Kill by STOP the backend process.  It causes heartbeat failure.  Note
 that it leaves backend and "sudo" processes in the STOP state.
 
-### Forced Termination of Multiplexer and a backend
+#### Forced Termination of Multiplexer and a backend
 
 Kill the Lens3 services or the backend process.
 
-### Forced Keyval-DB Server Down
+#### Forced Keyval-DB Server Down
 
 Stopping the keyval-db is fatal.  Restarting Lens3 is needed.
 
 - Do "chmod" on the keybal-db's store file or directory.
 - Or, stop the keybal-db service.
 
-### Forced Expiration of Multiplexer Entries in Keyval-DB
+#### Forced Expiration of Multiplexer Entries in Keyval-DB
 
 The action to fake a forced removal of a __ma:pool-name__ entry in
 keyval-db should (1) start a new Multiplexer + backend pair, and then
 (2) stop an old Multiplexer + backend pair.
 
-### Force MQTT Server Down
+#### Force MQTT Server Down
 
 Start/stop the MQTT server, randomly.
 
-### Test Generated Garbage
+#### Test Generated Garbage
 
 Test programs will create garbage as bucket names
 "lenticularis-oddity-XXX".
@@ -349,10 +352,10 @@ maybe extremely slow on large objects.
   needs explicit enabling users currently); Disallow public access
   buckets at all.
 
-- Add options
-  - confirmation at the first use: terms-of-use.
-  - description field (just memo) to keys.
+- Possible options
+  - confirmation of terms-of-use at the first use.
   - disable public buckets.
+  - description field to keys (just a memo).
 
 ## RANDOM MEMO
 

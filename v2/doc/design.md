@@ -18,7 +18,7 @@ Most of the records used in the keyval-db are defined in "table.go".
 The entries for configuration are defined in "conf.go".
 
 Lens3 uses three keyval-db (by database numbers).
-Multiplexer/Registrar service potentially makes three keyval-db
+Multiplexer+Registrar service potentially makes three keyval-db
 clients.  The division of databases is arbitrary as distinct prefixes
 are added to keys.
 
@@ -76,7 +76,7 @@ directory.  Note, however, links to directories can fool the
 uniqueness.
 
 __px:pool-name__ entry is used to make a pool-name unique.  Lens3 uses
-a generated random for a pool-name.
+a generated random as a pool-name.
 
 __bx:bucket__ entry stores bucket data.  It is atomically assigned to
 mutex the bucket name.  The bucket namespace is shared by all users.
@@ -103,12 +103,13 @@ periodically updated by Multiplexer to notify it is running.
 
 __de:pool-name__ entry stores backend process data.  The data is used
 to forward requests to a backend.  A pair of "Root_access" +
-"Root_secret" specifies an administrator access to a backend.
+"Root_secret" specifies an administrator access key to a backend.
 
 __dx:pool-name__ entry is a mutex of starting a backend.  It is used
 to ensure only a single backend starts.
 
-__tn:uid__ entry stores a token pair for CSRF countermeasure.
+__tn:uid__ entry stores a token pair for CSRF countermeasure.  (CSRF
+is cross-site request forgery).
 
 __ps:pool-name__ entry is an approximate pool state.  It is used to
 show via Web-UI a pool is in the suspended state.  It keeps lingering
@@ -121,10 +122,10 @@ used to decide when to stop a backend.
 __ut:uid__ entry is a last access timestamp of a user.  It is used to
 find out inactive users.
 
-### CONSISTENCY OF ENTRIES.
+### Consistency of Entries
 
 Some entries are dependent each other.  Crash-recovery should remove
-orphaned enties.
+orphaned entries.
 
 __uu:uid and um:claim__.  UID ↔︎ claim is one-to-one if a user-info
 contains a claim.
@@ -134,7 +135,7 @@ __bd:directory and bk:bucket-name__.
 ## Pool State Transition
 
 A bucket pool will be in a state of: __INITIAL__, __READY__,
-__SUSPENDED__, __DISABLED__, and __INOPERABLE__.  See the explanation
+__DISABLED__, __SUSPENDED__, and __INOPERABLE__.  See the explanation
 in [User-Guide](user-guide.md#bucket-pool-state).
 
 Manager governs a transition of a state.  However, transition is
@@ -149,22 +150,22 @@ the condition.
 - __DISABLED__ → __READY__: It is by a cease of a disabling condition.
 - __READY__ → __SUSPENDED__: The move is on a condition the server is
   busy, when all reserved ports are used.
-- __SUSPENDED__ → __READY__: The move is done after some time
-  duration.  It will move back and forward between READY and SUSPENDED
-  states if the condition remains.
+- __SUSPENDED__ → __READY__: The move is done after some duration.
+  The state will move back and forward between READY and SUSPENDED if
+  the condition remains.
 - __READY__ → __INOPERABLE__: It is by a failure of starting a
   backend.  This state is a deadend.  The only operation allowed on an
   INOPERABLE pool is to remove it.
 
 Deleting buckets and secrets during suspension will alter only the
-state of Lens3 but not the state of a backend (becuase a backend is
+state of Lens3 but not the state of a backend (because a backend is
 not running).
 
 ## Bucket Deletion
 
 Lens3 Registrar never deletes buckets in the backend.  It just removes
 it from the namespace.  A user can delete a bucket via the S3 delete
-bucket operaion.  However, the deleted status is not reflected in
+bucket operation.  However, the deleted status is not reflected in
 Lens3's status.
 
 ## Keyval-DB Operations
@@ -186,7 +187,7 @@ systemd services.
 ## Access Authorization Checks
 
 Lens3's check is minimal.  It is by readable/writable.  A permission
-of acces-keys is R/W and a permition of buckets is R/W.  It judges
+of access-keys is R/W and a permission of buckets is R/W.  It judges
 operations as reads for http GET and writes for http PUT/POST.
 
 Lens3 forwards requests to the backend S3 server by signing with the
@@ -264,9 +265,9 @@ keyval-db should (1) start a new Multiplexer + backend pair, and then
 
 Start/stop the MQTT server, randomly.
 
-### Test Generated Garbages
+### Test Generated Garbage
 
-Test programs will create garbages as bucket names
+Test programs will create garbage as bucket names
 "lenticularis-oddity-XXX".
 
 ## Notes on Backends
@@ -281,7 +282,7 @@ retries to start MinIO in that case.  The patterns of messages will
 change by MinIO and MC versions.
 
 The samples of messages from MinIO can be found in
-[msg_minio.txt](../pkg/lens3/msg_minio.txt).
+[msg_minio.txt](../lens3/lens3/msg_minio.txt).
 
 Lens3 looks for a message starting with "S3-API:" as a successful
 start.

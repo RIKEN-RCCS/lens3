@@ -203,8 +203,9 @@ AWS S3 Documents:
 ## Building UI
 
 Lens3 UI is created by vuejs+vuetify.  Lens3-v2.1 uses the same UI
-code as v1.2.  The code for Vuetify is in the "v1/ui" directory.  See
-[v1/ui/README.md](../../v1/ui/README.md) for building UI.
+code as v1.2 and v1.3.  The code for Vuetify is in the "v1/ui"
+directory.  See [v1/ui/README.md](../../v1/ui/README.md) for building
+UI.
 
 ## Security
 
@@ -217,52 +218,55 @@ bucket and a secret.  The checks are in functions
 
 ## Testing the Service
 
-Release tests on Web-UI shall be performed manually.  Some of the
-obvious errors of users should be reported properly.
+Release tests on Web-UI shall be performed manually.  Obvious errors
+should be reported to users properly (hopefully).
 
 #### Unwritable bucket-directory
 
-Making a pool for an unwritable bucket-directory is an error.  Check
+Making a pool with an unwritable bucket-directory is an error.  Check
 the pool become inoperable.
 
 #### Unwritable bucket-directory for a bucket
 
-Or, first make a pool, and then make the bucket-directory unwritable.
-Making a bucket should fail.  This error should be visible to users as a
-Web-UI error.  Check the pool does not become inoperable.
+First make a pool normally, and then make the bucket-directory
+unwritable.  Making a bucket should fail.  This error should be
+noticeable to users.  The pool should NOT become inoperable.
 
 #### Unwritable bucket
 
 Making a bucket should be an error when a regular file exists with the
-same name as the bucket.  This error should be visible to users as a
-Web-UI error.  Check the pool does not become inoperable.
+same name.  This error should be noticeable to users.  The pool should
+NOT become inoperable.
 
 #### User Tests
 
 - Disable a user.  It is done by `$ lens3-admin stop-user true uid`
+
 - Delete a user.  It is done by `$ lens3-admin kill-user uid`
 
-#### Forced Heartbeat Failure
+#### Forced Backend Start Failure
 
-Kill by STOP the backend process.  It causes heartbeat failure.  Note
-that it leaves backend and "sudo" processes in the STOP state.
+Replace /usr/local/bin/minio with a dummy such as `sleep 3600`.  It
+should cause a timeout.  The pool should become suspended.
 
-#### Forced Termination of Multiplexer and a backend
+#### Forced Termination of Services
 
-Kill the Lens3 services or the backend process.
+- Kill the backend process by STOP.  It causes heartbeat failure.
+The backend should be terminated.  It leaves backend and "sudo"
+processes in the STOP state.
 
-#### Forced Keyval-DB Server Down
+- Kill the Lens3 service.
 
-Stopping the keyval-db is fatal.  Restarting Lens3 is needed.
+- Kill the backend process.
+
+#### Forced Keyval-DB Down
+
+Stopping the keyval-db is fatal.  Check an error is noticeable to
+users.  Restarting Lens3 is needed.
 
 - Do "chmod" on the keybal-db's store file or directory.
+
 - Or, stop the keybal-db service.
-
-#### Forced Expiration of Multiplexer Entries in Keyval-DB
-
-The action to fake a forced removal of a __ma:pool-name__ entry in
-keyval-db should (1) start a new Multiplexer + backend pair, and then
-(2) stop an old Multiplexer + backend pair.
 
 #### Force MQTT Server Down
 
@@ -321,36 +325,25 @@ maybe extremely slow on large objects.
 - Avoid polling of a start of a backend.  Multiplexer waits for a start
   of a backend by polling in the keyval-db.
 
-- Reject certain bucket-directory paths so that it does service in
-  directories with dots.  Servicing in ".ssh" should be avoided, for
-  example.
+- Make Multiplexer reply messages in XML instead of json on an access
+  rejection.  It only returned an http status code in v1.x.
 
-- Make Multiplexer reply a message containing a reason of an access
-  rejection.  It returns only a status code in v1.2.
-
-- Make it not an error when an MC command returns
-  "Code=BucketAlreadyOwnedByYou".  It can be ignored safely.
+- Make it not an error when MinIO returns the
+  "BucketAlreadyOwnedByYou" error.  It can be ignored safely.
 
 - Make access key generation of Registrar like STS.
 
-- Make UI refresh the pool state, when a pool is edited and
-  transitions such as from READY to INOPERABLE or from SUSPENDED to
-  READY.
+- Make UI refresh the pool state, when a pool is edited and the state
+  transitions.
 
-- Run a reaper of orphaned directories, buckets, and secrets at a
-  Registrar start.  Adding a bucket/secret and removing a pool may
-  have a race.  Or, a crash at creation/deletion of a pool may leave
-  an orphaned directory.
+- Run a reaper of orphaned records (bd:directory, bx:bucket, and
+  sx:secret) at a Registrar restart.  Adding a bucket/secret and
+  removing a pool may have a race.  Or, a crash at creation/deletion
+  of a pool may leave an orphaned entry.
 
-- Make starting a backend through the frontend proxy.  Currently,
-  arbitrary Multiplexer is chosen.  The proxy could balance the loads.
-
-- Add a control on the pool status "online".  It is always online,
-  currently.
-
-- Add site setting variations.  Examples: Enable users by default (it
-  needs explicit enabling users currently); Disallow public access
-  buckets at all.
+- Make starting a backend through the frontend proxy.  The proxy could
+  balance the loads.  (It currently lacks the support for multiple
+  hosts at all).
 
 - Possible options
   - confirmation of terms-of-use at the first use.

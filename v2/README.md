@@ -25,36 +25,30 @@ pool.
 
 ## Guides
 
-[user-guide.md](./doc/user-guide.md) for users.
+- [user-guide.md](./doc/user-guide.md) for users.
+- [admin-guide.md](./doc/admin-guide.md) for administrators to
+  maintain lens3 services.
+- [setting-guide.md](./doc/setting-guide.md) for site managers to
+  install lens3 services.
+- [design.md](./doc/design.md) for programmers to debug.
 
-[admin-guide.md](./doc/admin-guide.md) for administrators to maintain
-lens3 services.
-
-[setting-guide.md](./doc/setting-guide.md) for site managers to install
-lens3 services.
-
-[design.md](./doc/design.md) for programmers to debug.
-
-## ACKNOWLEDGEMENT
+## ACKNOWLEDGMENT
 
 Lens3 is copyrighted by RIKEN R-CCS.  Part of the results is
 obtained by using Fugaku at RIKEN R-CCS.
 
-Lens3 is developed by R-CSS and the authors S. Nishioka and
-T. Ishibashi.  But, the code was reviewed by zzmatu and remaining bugs
-are his responsibility.
+Lens3 is developed by RIKEN R-CCS and by the external authors
+S. Nishioka and T. Ishibashi.  The code was reviewed by zzmatu and
+remaining bugs are his sole responsibility.
 
 Lens3 uses MinIO as a backend S3 server.  Lens3 lacks a way to display
 a credit to MinIO, because it blocks accesses to MinIO's user
-interfaces.  Please refer to [https://min.io](https://min.io).
-
-Lens3 utilizes third-party open source software, which is listed in
-[acknowledgement](ACKNOWLEDGEMENT).
-
-Lens3 is written in Golang-1.22.
+interfaces.  Please refer to [https://min.io](https://min.io/).
 
 Lens3 UI is created with vuejs+vuetify.  Please refer to
 [https://vuejs.org](https://vuejs.org/) and
 [https://vuetifyjs.com](https://vuetifyjs.com/en/).
+
+[THIRDPARTY](THIRDPARTY.md)
 
 __Lenticularis-S3 comes with ABSOLUTELY NO WARRANTY.__

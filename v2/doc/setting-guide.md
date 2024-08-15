@@ -675,7 +675,7 @@ Use "-a password" instead of an environment variable.
 ### Running MinIO by Hand
 
 ```
-lens3$ minio --json --anonymous server --address :9001 /home/UUU/pool-directory
+lens3$ minio --json --anonymous server --address :9001 SOME-PATH
 ```
 
 ### OIDC Redirect Failure
@@ -685,13 +685,11 @@ to lens3, when using an example configuration "lens3proxy-oidc.conf".
 It would happen in an https only site.  It may be fixed by modifying a
 "OIDCRedirectURI" line to a full URL starting with "https:".
 
-### No Support for Multiple Hosts
-
-Current version requires all the proxy, Multiplexer, and Registrar run
-on a single host.
-
 ## CAVEAT
 
 - __backend_timeout_ms__ in a configuration should be larger than
   1 sec, and recomended 5 sec.  Error responses from a backend could
   be delayed which cause all errors to be reported as timeouts.
+
+- Current version does not support of multiple hosts.  It requires all
+the frontend proxy, Multiplexer, and Registrar run on a single host.

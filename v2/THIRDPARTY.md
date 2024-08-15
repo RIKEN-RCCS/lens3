@@ -1,12 +1,16 @@
-# ACKNOWLEDGMENT
+# THIRD-PARTY
 
 Lens3 uses the following software.  It may lack software transitively
 used.  Please inform us, if some software is missing.
 
-## S3 Server
+## AWS S3 Servers
 
 - minio
 - rclone
+
+## Keyval-DB
+
+- valkey
 
 ## Golang Modules
 
@@ -18,17 +22,14 @@ used.  Please inform us, if some software is missing.
 
 ## UI Tools
 
+- vite
 - vue.js
 - vuetify
-- vite
 
 ## Development Tools
 
-- apache
 - git
 - golang
-- httpd-tools
-- nginx
 - nodejs
 - python
-- unzip
+- typescript

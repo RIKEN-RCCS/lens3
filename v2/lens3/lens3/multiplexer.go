@@ -116,7 +116,7 @@ func start_multiplexer(m *multiplexer, wg *sync.WaitGroup) {
 		}
 	}()
 	defer wg.Done()
-	defer quit_service()
+	defer force_quit_service()
 
 	if trace_task&tracing != 0 {
 		slogger.Debug(m.logprefix + "start_multiplexer()")
@@ -528,16 +528,19 @@ func prettify_error_message(m string) string {
 
 type access_logger = func(rqst *http.Request, code int, length int64, uid string, auth string)
 
+// HANDLE_MULTIPLEXER_EXC should be called by defer, directly.
 func handle_multiplexer_exc(m *multiplexer, w http.ResponseWriter, rqst *http.Request) {
+	var x = recover()
 	var delay_ms = m.conf.Multiplexer.Error_response_delay_ms
+	var logprefix = m.logprefix
 	var logfn = log_mux_access_by_request
-	handle_exc(w, rqst, delay_ms, m.logprefix, logfn)
+	handle_exc(x, w, rqst, delay_ms, logprefix, logfn)
 }
 
-func handle_exc(w http.ResponseWriter, rqst *http.Request, delay_ms time_in_ms, logprefix string, logfn access_logger) {
-	var x = recover()
+func handle_exc(x any, w http.ResponseWriter, rqst *http.Request, delay_ms time_in_ms, logprefix string, logfn access_logger) {
 	switch err1 := x.(type) {
 	case nil:
+		// Okay.
 	case *runtime.PanicNilError:
 		slogger.Error(logprefix+"FATAL ERROR", "err", err1,
 			"stack", string(debug.Stack()))
@@ -550,13 +553,20 @@ func handle_exc(w http.ResponseWriter, rqst *http.Request, delay_ms time_in_ms, 
 			nil,
 		}
 		return_error_response(w, rqst, err2, delay_ms, logprefix, logfn)
-		panic(nil)
+
+		// Calling panic does not abort the process, because it is
+		// caught by http server.
+
+		if true {
+			time.Sleep(1000 * time.Millisecond)
+			force_quit_service()
+		}
 	case *proxy_exc:
-		slogger.Error(logprefix+" Handler error", "err", err1)
+		slogger.Error(logprefix+"Handler error", "err", err1)
 
 		return_error_response(w, rqst, err1, delay_ms, logprefix, logfn)
 	default:
-		slogger.Error(logprefix+" Runtime panic", "err", err1,
+		slogger.Error(logprefix+"Runtime panic", "err", err1,
 			"stack", string(debug.Stack()))
 
 		var err3 = &proxy_exc{

@@ -4,23 +4,21 @@ This describes design notes of Lenticularis-S3.
 
 ## Components of Lens3
 
-- Multiplexer
-- Registrar
-- MinIO (S3 backend server)
-- Valkey (keyval-db)
+- Multiplexer + Registrar
+- S3 backend server (MinIO)
+- Keyval-db (Valkey)
 
 ## Brief Description of Keyval-DB Entries
 
 Keys in the keyval-db are prefixed by two characters plus colon, such
-as "cf:mux".  All values are stored in json.
+as "cf:mux".  All values are stored in json.  Most of the value
+records are defined in "table.go".  The other entries for
+configuration are defined in "conf.go".
 
-Most of the records used in the keyval-db are defined in "table.go".
-The entries for configuration are defined in "conf.go".
-
-Lens3 uses three keyval-db (by database numbers).
-Multiplexer+Registrar service potentially makes three keyval-db
-clients.  The division of databases is arbitrary as distinct prefixes
-are added to keys.
+Lens3 uses three keyval-db (by database numbers).  The Lens3 service
+(Multiplexer and Registrar) potentially makes three keyval-db clients.
+The division of databases is arbitrary as the prefixes in keys are
+distinct.
 
 A date+time is in unix seconds.  Registrar communicates a date+time
 with Web-UI in unix seconds, too.
@@ -40,22 +38,22 @@ and entries with "(\*e)" are set with expiration.
 These are semi-static information.
 
 __cf:reg__ and __cf:mux__ (these are literal key strings) entries
-store the settings of services.  __cf:mux:mux-name__ is a variant to
-cf:mux, and used to choose a specific setting to Multiplexer service.
-The mux-name is a string passed as a command argument to a service.
+store the settings of the services.  __cf:mux:mux-name__ is a variant
+to cf:mux, which is for choosing a specific setting to Multiplexer.
+The mux-name may be passed as a command argument to the service.
 
-Primary reason for storing configuration settings (cf:mux and cf:reg)
-in the keyval-db is to let them parsed in advance.  Detecting typos at
-the start of a service is very annoying.
+Primary reason for storing configurations (cf:mux and cf:reg) in the
+keyval-db is to let them parsed in advance.  Detecting typos at the
+start of a service is annoying.
 
 __uu:uid__ entry is a record of a user with user's GID and the enabled
 status.  It may be added by an administrator tool, or, may be added
 automatically when a user accesses Registrar.  Automatically added
-entries are marked by ".Ephemeral=true".
+entries are marked by "Ephemeral=true".
 
-__um:claim__ entry is to map a user claim to a UID, where a claim is
-an ID passed by authentication.  It is used when Registrar is
-configured with "claim_uid_map=map".
+__um:claim__ entry maps a user claim to a UID, where a claim is an ID
+passed by an authentication such as OIDC.  It is used when Registrar
+is configured with "claim_uid_map=map".
 
 ### Storage Entries (DB-NUMBER=2)
 
@@ -67,19 +65,18 @@ configured with "claim_uid_map=map".
 | bx:_bucket_    | bucket_record           | (\*1) Bucket data |
 | sx:_secret_    | secret_record           | (\*1) Access key pair data |
 
-__po:pool-name__ entry is pool data.  It holds the static part of pool
-information.
+__po:pool-name__ entry is pool data.  It stores the static part of
+pool data.
 
 __bd:directory__ entry is a bucket-directory.  It is atomically
 assigned, because Lens3 forbids to run multiple backends on the same
-directory.  Note, however, links to directories can fool the
-uniqueness.
+directory.  Note, however, links to directories can fool uniqueness.
 
 __px:pool-name__ entry is used to make a pool-name unique.  Lens3 uses
 a generated random as a pool-name.
 
-__bx:bucket__ entry stores bucket data.  It is atomically assigned to
-mutex the bucket name.  The bucket namespace is shared by all users.
+__bx:bucket__ entry stores bucket data.  The bucket name is assigned
+in mutex, because the bucket namespace is shared by all users.
 
 __sx:secret__ entry stores access key data.  The key is a generated
 random.
@@ -98,23 +95,26 @@ random.
 
 These are dynamic information and updated frequently.
 
-__mx:mux-endpoint__ entry is an endpoint of Multiplexer.  It is
+__mu:mux-endpoint__ entry is an endpoint of Multiplexer.  It is
 periodically updated by Multiplexer to notify it is running.
 
-__de:pool-name__ entry stores backend process data.  The data is used
-to forward requests to a backend.  A pair of "Root_access" +
-"Root_secret" specifies an administrator access key to a backend.
+__de:pool-name__ entry stores backend process data.  It is used to
+forward requests to a backend.  This record exists while a backend is
+running.  An entry can be a dummy, when the pool is suspended, which
+blocks a backend from starting.  The record includes an access key to
+a backend.  "Root_access" + "Root_secret" is an administrator key pair
+to a backend.
 
 __dx:pool-name__ entry is a mutex of starting a backend.  It is used
 to ensure only a single backend starts.
 
-__tn:uid__ entry stores a token pair for CSRF countermeasure.  (CSRF
-is cross-site request forgery).
+__tn:uid__ entry stores a token pair for CSRF countermeasure.  CSRF is
+cross-site request forgery.
 
 __ps:pool-name__ entry is an approximate pool state.  It is used to
-show via Web-UI a pool is in the suspended state.  It keeps lingering
-state information, because precise state information lasts only for a
-short time.
+show the state of a pool via Web-UI.  It keeps lingering state
+information (of the suspended state), because precise state
+information lasts only for a short time.
 
 __pt:pool-name__ entry is a last access timestamp of a pool.  It is
 used to decide when to stop a backend.
@@ -125,100 +125,98 @@ find out inactive users.
 ### Consistency of Entries
 
 Some entries are dependent each other.  Crash-recovery should remove
-orphaned entries.
-
-A user record __uu:uid__ owns its claim __um:claim__.  They are kept
-one-to-one if a user information contains a claim.
+orphaned entries.  (Crash-recovery is not implemented).
 
 A pool record __po:pool-name__ owns its component records.  The
 description of a pool is furnished with the sub-records
 __bd:directory__, __bx:bucket__, and __sx:secret__.
 
+A user record __uu:uid__ owns its claim __um:claim__.  They are kept
+one-to-one if a user information contains a claim.
+
 ## Pool State Transition
 
-A bucket pool will be in a state of: __INITIAL__, __READY__,
+A bucket pool will be in one of the states: __INITIAL__, __READY__,
 __DISABLED__, __SUSPENDED__, and __INOPERABLE__.  See the explanation
 in [User-Guide](user-guide.md#bucket-pool-state).
 
-Manager governs a transition of a state.  However, transition is
-implicit, that is, Lens3 keeps no explicit record.  Manager calculates
-the condition.
+Manager (a part of Multiplexer) governs the transition of a state.
+However, transition is implicit, that is, Lens3 keeps no explicit
+records.  Manager calculates the condition.
 
 - __INITIAL__ → __READY__: Don't care.  INITIAL and READY are
-  synonymous in Lens3-v2.
+  synonymous in Lens3-v2.1.
 - __READY__ → __DISABLED__: It is by some setting that disables a
   pool.  It includes disabling a user account, an expiry of a pool, or
   making a pool offline.
 - __DISABLED__ → __READY__: It is by a cease of a disabling condition.
-- __READY__ → __SUSPENDED__: The move is on conditions the server is
-  busy or starting a backend timeouts.  The server is busy when all
+- __READY__ → __SUSPENDED__: The move is on conditions that the server
+  is busy or starting a backend timeouts.  The server is busy when all
   the reserved ports are used.
 - __SUSPENDED__ → __READY__: The move is done after some duration.
   The state will move back and forward between READY and SUSPENDED
   while the condition remains.
 - __READY__ → __INOPERABLE__: It is by a failure of starting a
   backend.  This state is a dead end.  The only operation allowed on
-  an INOPERABLE pool is to remove it.
+  INOPERABLE pools is to remove them.
 
 Creating buckets and secrets during suspension will be rejected until
 a backend resumes.
 
-## Bucket Deletion
+## Implementation Specifics
 
-Lens3 Registrar never deletes buckets in the backend.  It just removes
-it from the namespace in Lens3.  However, a user can delete a bucket
-via the S3 delete bucket operation.  The deleted status is not
-reflected in Lens3's record.
+### Keyval-DB Operations
 
-## Keyval-DB Operations
+A single keyval-db instance is used, and it cannot be distributed in
+Lens3-v2.1.
 
-A single keyval-db instance is used and it is not distributed in
-Lens3.
-
-Keyval-db client routines catches exceptions related to sockets (including
-ConnectionError and TimeoutError).  Others are not checked at all by
-Lens3.
-
-Operations by an administrator tool is NOT mutexed.  Some operations
+Operations by the administrator tool are not mutexed.  Some operations
 should be performed carefully.
 
-### Multiplexer/Registrar systemd Services
+Keyval-db client routines don't catch exceptions at all in Lens3-v2.1
+(including ones related to sockets).  Errors in the keyval-db are
+fatal (it raises a panic).
 
-All states of services are stored in keyval-db.  It is safe to stop/start
-systemd services.
+### Authorization Checks
 
-## Access Authorization Checks
+Lens3's authorization check is minimal.  It is only by
+readable/writable.  A permission of access-keys can be R/W and a
+permission of buckets can be R/W.  It judges operations as reads for
+http GET and writes for http PUT/POST.
 
-Lens3's check is minimal.  It is by readable/writable.  A permission
-of access-keys is R/W and a permission of buckets is R/W.  It judges
-operations as reads for http GET and writes for http PUT/POST.
-
-Lens3 forwards requests to the backend S3 server by signing with the
-root credential for the backend.
+Lens3 forwards requests to the backend by signing with the root
+credential for the backend.
 
 AWS S3 Documents:
 
 [How Amazon S3 authorizes a request](https://docs.aws.amazon.com/AmazonS3/latest/userguide/how-s3-evaluates-access-control.html)
 
+### Security
+
+Security mainly depends on the setting of the frontend proxy.  Please
+consult experts for setting up the proxy.
+
+Accesses to Registrar are assumed to be authenticated by the proxy.
+Thus, security is of less concern for Registrar.
+
+Accesses to Multiplexer is checked on a pair of a bucket and a secret.
+The checks are performed in functions "serve_XXX_access()".  Please
+review those functions intensively.
+
+### Multiplexer systemd Service
+
+All states of the service are stored in keyval-db.  It is safe to
+stop/start systemd service.
+
 ## Building UI
 
 Lens3 UI is created by vuejs+vuetify.  Lens3-v2.1 uses the same UI
-code as v1.2 and v1.3.  The code for Vuetify is in the "v1/ui"
-directory.  See [v1/ui/README.md](../../v1/ui/README.md) for building
-UI.
-
-## Security
-
-Security mainly depends on the setting of the frontend proxy.  Please
-consult experts for setting up the proxy.  Accesses to Registrar are
-authenticated as it is behind the proxy, and thus it is of less
-concern.  Accesses to Multiplexer is restricted by checks on a pair of a
-bucket and a secret.  The checks are in functions
-"serve_XXX_access()".  Please review those functions intensively.
+code as v1.3.  The code for Vuetify is in the "v1/ui" directory.  See
+[v1/ui/README.md](../../v1/ui/README.md) for building UI.
 
 ## Testing the Service
 
-Release tests on Web-UI shall be performed manually.  Obvious errors
+Release test on Web-UI shall be performed manually.  Obvious errors
 should be reported to users properly (hopefully).
 
 #### Unwritable bucket-directory
@@ -238,41 +236,48 @@ Making a bucket should be an error when a regular file exists with the
 same name.  This error should be noticeable to users.  The pool should
 NOT become inoperable.
 
-#### User Tests
+#### User tests
 
-- Disable a user.  It is done by `$ lens3-admin stop-user true uid`
+Disable a user.  It is done by `$ lens3-admin stop-user true uid`
 
-- Delete a user.  It is done by `$ lens3-admin kill-user uid`
+Delete a user.  It is done by `$ lens3-admin kill-user uid`
 
-#### Forced Backend Start Failure
+#### Forced backend start failure
 
-Replace /usr/local/bin/minio with a dummy such as `sleep 3600`.  It
-should cause a timeout.  The pool should become suspended.
+A timeout in starting a backend make the pool suspended.  It happens,
+for example, when the remote filesystem blocks its operations.  In
+particular, MinIO doesn't even output the servicing URL in such cases.
 
-#### Forced Termination of Services
+To test such a condition, replace /usr/local/bin/minio with a dummy
+command such as "sleep 3600".  It should cause a timeout.  Check the
+pool should become suspended.
 
-- Kill the backend process by STOP.  It causes heartbeat failure.
-The backend should be terminated.  It leaves backend and "sudo"
-processes in the STOP state.
+#### Forced backends down
 
-- Kill the Lens3 service.
+Kill the backend process by STOP.  It causes heartbeat failure.  The
+backend should be terminated.  Note that it would leave the backend
+and "sudo" processes in the STOP state.
 
-- Kill the backend process.
+Or, kill the backend process, randomly.
 
-#### Forced Keyval-DB Down
+#### Forced keyval-db down
 
 Stopping the keyval-db is fatal.  Check an error is noticeable to
 users.  Restarting Lens3 is needed.
 
-- Do "chmod" on the keybal-db's store file or directory.
+- Stop the keybal-db service.
 
-- Or, stop the keybal-db service.
+- Or, do "chmod" on the keybal-db's store file or directory.
 
-#### Force MQTT Server Down
+#### Force MQTT server down
 
 Start/stop the MQTT server, randomly.
 
-#### Test Generated Garbage
+#### Forced termination of the service
+
+Stop or kill  the Lens3 service.
+
+#### Generated garbage in tests
 
 Test programs will create garbage as bucket names
 "lenticularis-oddity-XXX".
@@ -305,9 +310,11 @@ Note that alias commands are local (not connect to a MinIO).
 ### rclone "rclone serve s3"
 
 The current version of rclone (v1.66.0) does not work on (1) listing
-objects (2) uploading large objects.
+objects and (2) uploading large objects.
 
-It does not support ListObjectsV2.  The old ListObjects works.
+It does not support ListObjectsV2.  The old ListObjects works.  In AWS
+CLI, it is necessary to use the low level API `$ aws s3api
+list-objects`.
 
 It does not support multipart transfer.  Uploads fail but downloads
 work.  Note that the default of multipart threshold is 8MB.  It is
@@ -320,7 +327,7 @@ maybe extremely slow on large objects.
   to make absent buckets in the backend.  It makes bucket records
   consistent in Lens3 and in the backend.
 
-## Short-Term Todo, or Deficiency
+## Short-Term TODO, or Deficiency
 
 - Avoid polling of a start of a backend.  Multiplexer waits for a start
   of a backend by polling in the keyval-db.
@@ -350,7 +357,7 @@ maybe extremely slow on large objects.
   - disable public buckets.
   - description field to keys (just a memo).
 
-## RANDOM MEMO
+## Random MEMO
 
 - __Removing buckets__: Lens3 does not remove buckets at all.  It just
 makes them inaccessible.  It is because the contents of a bucket is
@@ -380,9 +387,9 @@ in UI's "backend_state" slot.
 See https://pkg.go.dev/github.com/aws/aws-sdk-go-v2/aws/retry
 
 - MinIO refuses a connection by ECONNRESET sometimes, maybe, at a
-slightly high load (not checked for Lens3-v2).
+slightly high load (not checked for Lens3-v2.1).
 
 - MinIO also refuses a connection by EPIPE for some illegal accesses.
 That is, when trying to put an object by a readonly-key or to put an
-object to a download-bucket without a key (never happens in Lens3-v2
+object to a download-bucket without a key (never happens in Lens3-v2.1
 because checkes on keys are done in Lens3).

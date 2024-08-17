@@ -60,9 +60,9 @@ type Conf_header struct {
 	Aws_signature string `json:"aws_signature"`
 }
 
-// MULTIPLEXER_CONF is the Mux part of a configuration.  mux_node_name
-// is optional.  NOTE: Trusted_proxy_list should include the frontend
-// proxies and the Mux hosts.
+// MULTIPLEXER_CONF is a Multiplexer configuration.  MUX_NODE_NAME is
+// optional.  TRUSTED_PROXY_LIST should include the hosts of the
+// frontend proxies and Multiplexers.
 type multiplexer_conf struct {
 	Port                    int          `json:"port"`
 	Trusted_proxy_list      []string     `json:"trusted_proxy_list"`
@@ -95,20 +95,20 @@ type registrar_conf struct {
 }
 
 type manager_conf struct {
-	Sudo                         string      `json:"sudo"`
-	Port_min                     int         `json:"port_min"`
-	Port_max                     int         `json:"port_max"`
-	Backend_awake_duration       time_in_sec `json:"backend_awake_duration"`
-	Backend_start_timeout_ms     time_in_ms  `json:"backend_start_timeout_ms"`
-	Backend_timeout_ms           time_in_ms  `json:"backend_timeout_ms"`
-	Backend_region               string      `json:"backend_region"`
-	Backend_no_setup_at_start    bool        `json:"backend_no_setup_at_start"`
-	Heartbeat_interval           time_in_sec `json:"heartbeat_interval"`
-	Heartbeat_miss_tolerance     int         `json:"heartbeat_miss_tolerance"`
-	backend_busy_suspension_time time.Duration
-	backend_suspension_time      time.Duration
-	backend_stabilize_time       time.Duration
-	backend_linger_time          time.Duration
+	Sudo                       string      `json:"sudo"`
+	Port_min                   int         `json:"port_min"`
+	Port_max                   int         `json:"port_max"`
+	Backend_awake_duration     time_in_sec `json:"backend_awake_duration"`
+	Backend_start_timeout_ms   time_in_ms  `json:"backend_start_timeout_ms"`
+	Backend_timeout_ms         time_in_ms  `json:"backend_timeout_ms"`
+	Backend_timeout_suspension time_in_sec `json:"backend_timeout_suspension"`
+	Backend_region             string      `json:"backend_region"`
+	Heartbeat_interval         time_in_sec `json:"heartbeat_interval"`
+	Heartbeat_miss_tolerance   int         `json:"heartbeat_miss_tolerance"`
+	backend_busy_suspension    time.Duration
+	backend_stabilize_time     time.Duration
+	backend_linger_time        time.Duration
+	// Backend_no_setup_at_start bool      `json:"backend_no_setup_at_start"`
 }
 
 type minio_conf struct {
@@ -400,8 +400,8 @@ func check_manager_entry(e *manager_conf) {
 		"Backend_awake_duration",
 		"Backend_start_timeout_ms",
 		"Backend_timeout_ms",
+		"Backend_timeout_suspension",
 		"Backend_region",
-		"Backend_no_setup_at_start",
 		"Heartbeat_interval",
 		"Heartbeat_miss_tolerance",
 	} {

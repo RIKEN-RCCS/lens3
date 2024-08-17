@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -28,7 +29,8 @@ import (
 
 type vacuous = struct{}
 
-// ITE is if-then-else.
+// ITE is if-then-else.  It evals both branches.  DO NOT USE WITH NULL
+// TESTS OR BOUND TESTS.
 func ITE[T any](c bool, e1 T, e2 T) T {
 	if c {
 		return e1
@@ -59,6 +61,7 @@ func (e *proxy_exc) Error() string {
 	return fmt.Sprintf("%#v", e)
 }
 
+// IT ONLY WORKS WHEN IT SHOULD BE DIRECTLY CALLED BY DEFER.
 func handle() any {
 	return recover()
 }
@@ -122,7 +125,7 @@ func generate_random_key() string {
 	return v2[len(v2)-16:]
 }
 
-// get_function_name returns a printable name of a function.
+// GET_FUNCTION_NAME returns a printable name of a function.
 //
 //	var n = get_function_name(cmd.Cancel)
 //	fmt.Println("cmd.Cancel=", n)
@@ -138,8 +141,8 @@ func dump_threads() {
 	fmt.Printf("%s", buf[:len])
 }
 
-// STRINGS_READER is strings.Reader but for multiple strings.  It
-// skips empty strings.  It implements an io.Reader interface.
+// STRINGS_READER is strings/Reader but for multiple strings.  It
+// skips empty strings.  It implements an io/Reader interface.
 type strings_reader struct {
 	ss       []string
 	pos, ind int
@@ -543,6 +546,24 @@ func dump_statistics(verbose bool) {
 		debug.ReadGCStats(&g)
 		slogger.Info("GCStats", "GCStats", g)
 	}
+}
+
+// DESCRIPTIVE_STRING returns a descriptive string of an error.  Some
+// errors are terse for logging.
+func descriptive_string(e error) string {
+	var s strings.Builder
+	var x = e
+	for {
+		if x != e {
+			fmt.Fprintf(&s, "; ")
+		}
+		fmt.Fprintf(&s, "%#v", x)
+		x = errors.Unwrap(x)
+		if x == nil {
+			break
+		}
+	}
+	return s.String()
 }
 
 //func init() {}

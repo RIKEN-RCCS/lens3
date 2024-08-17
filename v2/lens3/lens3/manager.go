@@ -190,10 +190,10 @@ func configure_manager(w *manager, m *multiplexer, t *keyval_table, q chan vacuo
 	w.logprefix = m.logprefix
 
 	var awake = (w.Backend_awake_duration).time_duration()
-	w.backend_busy_suspension_time = (awake / 3)
-	w.backend_suspension_time = (15 * 60 * time.Second)
+	w.backend_busy_suspension = (awake / 3)
 	w.backend_stabilize_time = (10 * time.Millisecond)
 	w.backend_linger_time = (10 * time.Millisecond)
+	//w.backend_timeout_suspension = (15 * 60 * time.Second)
 
 	w.environ = minimal_environ()
 
@@ -627,11 +627,11 @@ func suspend_pool(w *manager, d backend_delegate, reason pool_reason) *backend_r
 	var duration time.Duration
 	switch reason {
 	case start_failure_server_busy:
-		duration = proc.backend_busy_suspension_time
+		duration = proc.backend_busy_suspension
 	case start_failure_start_timeout:
-		duration = proc.backend_suspension_time
+		duration = (proc.Backend_timeout_suspension).time_duration()
 	default:
-		duration = proc.backend_suspension_time
+		duration = (proc.Backend_timeout_suspension).time_duration()
 	}
 
 	var now int64 = time.Now().Unix()

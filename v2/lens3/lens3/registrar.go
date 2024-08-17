@@ -262,7 +262,7 @@ func start_registrar(z *registrar, wg *sync.WaitGroup) {
 		}
 	}()
 	defer wg.Done()
-	defer quit_service()
+	defer force_quit_service()
 
 	if trace_task&tracing != 0 {
 		slogger.Debug("Reg: start_registrar()")
@@ -381,9 +381,9 @@ func start_registrar(z *registrar, wg *sync.WaitGroup) {
 	})
 
 	go func() {
-		var ctx = context.Background()
 		select {
 		case <-z.ch_quit_service:
+			var ctx = context.Background()
 			z.server.Shutdown(ctx)
 		}
 	}()
@@ -393,10 +393,13 @@ func start_registrar(z *registrar, wg *sync.WaitGroup) {
 	slogger.Error("Reg: http/Server.ListenAndServe() EXITS", "err", err1)
 }
 
+// HANDLE_REGISTRAR_EXC should be called by defer, directly.
 func handle_registrar_exc(z *registrar, w http.ResponseWriter, rqst *http.Request) {
+	var x = recover()
 	var delay_ms = z.conf.Registrar.Error_response_delay_ms
+	var logprefix = "Reg: "
 	var logfn = log_reg_access_by_request
-	handle_exc(w, rqst, delay_ms, "Reg:", logfn)
+	handle_exc(x, w, rqst, delay_ms, logprefix, logfn)
 }
 
 func return_file(z *registrar, w http.ResponseWriter, rqst *http.Request, path string, modify_script bool, efs *embed.FS) *[]byte {

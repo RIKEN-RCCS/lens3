@@ -5,6 +5,20 @@
 
 package lens3
 
+// MEMO: The main in Golang will exit with status=2 on an unrecovered
+// panic.
+//
+// Exit code to systemd services:
+// status=1: generic or unspecified error (current practice)
+// status=2: invalid or excess argument(s)
+// status=3: unimplemented feature (for example, "reload")
+// status=4: user had insufficient privilege
+// status=5: program is not installed
+// status=6: program is not configured
+// status=7: program is not running
+//
+// https://refspecs.linuxbase.org/LSB_3.0.0/LSB-PDA/LSB-PDA/iniscrptact.html
+
 import (
 	"flag"
 	"fmt"
@@ -191,21 +205,21 @@ func handle_unix_signals(t *keyval_table) {
 				break watchloop
 			}
 		}
-		quit_service()
+		force_quit_service()
 	}()
 }
 
-// QUIT_SERVICE tells services to quit through the ch_quit_service.
-// It lets the main thread exit, and thus, the remaining part of this
-// function may not run to completion.
-func quit_service() {
+// FORCE_QUIT_SERVICE tells services to quit via the ch_quit_service
+// channel.  It lets the main thread exit, and thus, the remaining
+// part of this function may not run to completion.
+func force_quit_service() {
 	var once sync.Once
 	once.Do(func() {
 		if ch_quit_service == nil {
 			return
 		}
 
-		// Graceful shutdown first.
+		// Gracefully shutdown.
 
 		close(ch_quit_service)
 		ch_quit_service = nil

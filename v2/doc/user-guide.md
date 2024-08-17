@@ -56,8 +56,8 @@ The S3-endpoint URL can be found in the menu at the top-left corner.
 
 The UI is created with vuejs+vuetify.  It is not of your taste, try
 simple UI.  Simple UI reveals interactions with Web-UI.  If you are
-currently accessing the UI by a URL ending with ".../ui/index.html",
-the simple UI is avaiable at ".../ui2/index.html".
+currently accessing the UI by a URL ending with "⋯/ui/index.html",
+the simple UI is available at "⋯/ui2/index.html".
 
 ## S3 Client Access Example
 
@@ -124,8 +124,8 @@ operation.
 
 Multiplexer forwards access requests to a backend S3 server instance
 by looking at a bucket name.  Multiplexer determines the target
-backend using an association of a bucket and an access key.  This
-association is stored in the keyval-db.
+backend using an association of a bucket.  This association is stored
+in the keyval-db.
 
 Multiplexer is also in charge of starting and stopping a backend S3
 server instance.  Multiplexer starts a backend on receiving an access
@@ -154,39 +154,43 @@ Bucket pool state is:
   READY and DISABLED is by actions by an administrator or some
   expiration conditions.  The causes of a transition include disabling
   a user account, making a pool offline, or an expiry of a pool.
-- __SUSPENED__ indicates a pool is temporarily unusable by server
+- __SUSPENDED__ indicates a pool is temporarily unusable by server
   busyness.  It needs several minutes for a cease of the condition.
 - __INOPERABLE__ indicates an error state and a pool is permanently
   unusable.  Mainly, it means it has failed to start a backend.  This pool
   cannot be used and should be removed.
 
 Deletions of buckets and secrets are accepted during the suspension
-state of a pool, because they are intenal actions in Lens3.  In
+state of a pool, because they are internal actions in Lens3.  In
 contrast, additions of buckets and secrets are rejected.
 
 ## Restrictions of Lens3
 
 ### No Bucket Operations
 
-Lens3 does not accept any bucket operations: creation, deletion, and
-listing.  Buckets can only be managed by Registrar.  Specifically, a
-bucket creation request will fail because the request (applying to the
-root path) is not forwarded to a MinIO instance.  A bucket deletion
-will succeed, but it makes the states of Lens3 and a MinIO instance
-inconsistent.  Bucket listing also fails because a request is not
-forwarded.
+Lens3 assumes buckets are only managed by Registrar.  It rejects
+bucket operations, creation and listing.  Specifically, creation and
+listing requests will fail because they won't be forwarded to a
+backend.  In contrast, it accepts bucket deletion.  The S3 delete
+bucket operation will be forwarded to a backend, and it will succeed.
 
-Note: Lens3 manages a run of a MinIO instance and stops the instance
-when it becomes idle.  At restarting a MinIO instance, Lens3 tries to
-restore the state of buckets and that results in a deleted bucket to
-be recreated.
+### No Bucket Deletion
+
+Lens3 Registrar never deletes buckets in the backend.  Lens3 just
+removes them from the namespace.
+
+On the other hand, a user can delete a bucket via the S3 delete bucket
+operation.  However, the deleted status is not reflected in Lens3.
+That causes the bucket will be re-created with empty contents at the
+next start of a backend.  Note that Lens3 tries to make the existence
+of buckets in sync with a backend, at starting a backend.
 
 ### Bucket Naming Restrictions
 
-Bucket names must be in lowercase alphanums and "-" (minus).  Lens3
-rejects "." (dot) and "_" (underscore).  In addition, Lens3 bans names
-"aws", "amazon", "minio" and the names that begin with "goog" and
-"g00g".
+Bucket names must be in lowercase alphanums and "-" (minus).
+Especially, they can't include "." (dot) and "_" (underscore).  Lens3
+rejects all numerals.  Lens3 also rejects names "aws", "amazon",
+"minio" and the names that begin with "goog" and "g00g".
 
 ### No Control on File and Bucket Properties
 
@@ -220,7 +224,7 @@ Lens3.
   credential parameter in a URL.
 - Lens3 does not provide accesses to the rich UI provided by a backend
   server.
-- Lens3 only keeps track of a single Web-UI session (for a csrf
+- Lens3 only keeps track of a single Web-UI session (for CSRF
   countermeasure).  Access from multiple browsers causes errors.
 
 ## Glossary

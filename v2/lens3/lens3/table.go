@@ -5,15 +5,30 @@
 
 package lens3
 
-// A table makes typed records from/to json in the keyval-db.  A table
-// consists of a set of three databases to easy manual inspection in
-// the keyval-db.
+// A table is a set of typed records for the keyval-db.  It consists
+// of three databases to ease manual inspection in the keyval-db.
+
+// This is for Valkey-v7.2.5, and valkey-go-v1.0.40.
+
+// Errors (in most cases timeouts) are fatal.  It calls panic(nil) to
+// inform Multiplexer or Registrar to quit the service.
 //
-// NOTE: Errors related to configuration files are fatal.  Such calls
-// are in the admin tool.  It calls panic(nil).
-
-// This is for Valkey v7.2.5, and valkey-go v1.0.40.
-
+// Errors related to a configuration are fatal.  Such calls are
+// in the administrator tool, and does not affect the work in
+// Multiplexer or Registrar.  They call panic(nil).
+//
+// Clients will keep working when Valkey is once down and restarted.
+// They reconnect to Valkey.  However, the first connection needs to
+// be established at a client creation.
+//
+// Timeouts are set by contexts.  Timeouts for operations (but
+// connections) seem to be not issued.  The timeout value is stored in
+// the TIMEOUT field.
+//
+// Logging messages are supplemented with descriptive_string(err).
+// Error messages by string conversion is sometimes terse.  Strings
+// are by printf("%#v").
+//
 // MEMO: Values of strings are converted by string(), not by
 // valkey.BinaryString().
 
@@ -21,9 +36,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/valkey-io/valkey-go"
 	"slices"
+	"syscall"
 	"time"
 )
 
@@ -31,11 +48,14 @@ type keyval_table struct {
 	setting       valkey.Client
 	storage       valkey.Client
 	process       valkey.Client
+	timeout       time.Duration
 	prefix_to_db  map[string]valkey.Client
 	db_name_to_db map[string]valkey.Client
 }
 
+const keyval_db_timeout = time.Duration(10000 * time.Millisecond)
 const limit_of_id_generation_loop = 30
+const db_no_expiration__ = 0
 
 // Prefixes attached to db keys.  The records of values corresponds to
 // these prefixes.
@@ -255,12 +275,6 @@ type name_timestamp_pair struct {
 	Timestamp int64  `json:"timestamp"`
 }
 
-// KEY_PAIR is a access key and a secret key.
-type key_pair struct {
-	access_key string
-	secret_record
-}
-
 // POOL_STATE is a state of a pool.
 type pool_state string
 
@@ -273,8 +287,9 @@ const (
 )
 
 // POOL_REASON is a set of reasons of state transitions.  It is not an
-// enumeration, and includes reasons of stdio messages output from a
-// backend.  POOL_REMOVED cannot be stored in the state of a pool.
+// enumeration, that is, reasons for INOPERABLE include other reasons
+// of stdio messages from a backend.  See make_failure_reason().
+// POOL_REMOVED cannot be stored in the state of a pool.
 type pool_reason string
 
 const (
@@ -295,9 +310,6 @@ const (
 
 	// Reasons for INOPERABLE:
 
-	// The reasons for INOPERABLE include other stdout messages from a
-	// backend.  See make_failure_reason().
-
 	pool_reason_POOL_REMOVED     pool_reason = "pool removed"
 	start_failure_exec_failed    pool_reason = "exec failed"
 	start_failure_pipe_closed    pool_reason = "pipe closed"
@@ -306,46 +318,81 @@ const (
 )
 
 func make_failure_reason(s string) pool_reason {
-	return pool_reason("Backend returns: " + s)
+	return pool_reason("Backend outputs: " + s)
 }
 
-const db_no_expiration = 0
-
-// MAKE_KEYVAL_TABLE makes keyval-db clients.
+// MAKE_KEYVAL_TABLE makes keyval-db clients.  It retries connecting
+// to the keyval-db up to 60 seconds.  It assumes a failure is by
+// "connection refused", and other errors are fatal.  The error is of
+// type (err1 : *net.OpError{...}).
 func make_keyval_table(conf *db_conf) *keyval_table {
 	var ep = conf.Ep
 	var pw = conf.Password
-	var setting, err1 = valkey.NewClient(valkey.ClientOption{
-		InitAddress: []string{ep},
-		Password:    pw,
-		SelectDB:    setting_db,
-	})
+
+	var setting valkey.Client
+	var err1 error
+	var limit = time.Now().Add(time.Duration(60 * time.Second))
+	for time.Now().Before(limit) {
+		setting, err1 = valkey.NewClient(valkey.ClientOption{
+			InitAddress: []string{ep},
+			Password:    pw,
+			SelectDB:    setting_db,
+		})
+		if err1 == nil {
+			break
+		}
+		if !errors.Is(err1, syscall.ECONNREFUSED) {
+			slogger.Error("keyval-db valkey/NewClient(DB=1) errs",
+				"err", err1, "type", descriptive_string(err1))
+			panic(nil)
+		}
+		//slogger.Debug("Connect to keyval-db failed (sleeping)")
+		time.Sleep(10 * time.Second)
+	}
 	if err1 != nil {
-		slogger.Error("keyval-db client (n=1) error", "err", err1)
+		slogger.Error("keyval-db valkey/NewClient(DB=1) errs",
+			"err", err1, "type", descriptive_string(err1))
 		panic(nil)
 	}
+
+	//var setting, err1 = valkey.NewClient(valkey.ClientOption{
+	//	InitAddress: []string{ep},
+	//	Password:    pw,
+	//	SelectDB:    setting_db,
+	//})
+	//if err1 != nil {
+	//	slogger.Error("keyval-db valkey/NewClient(DB=1) errs",
+	//		"err", err1, "type", descriptive_string(err1))
+	//	panic(nil)
+	//}
+
 	var storage, err2 = valkey.NewClient(valkey.ClientOption{
 		InitAddress: []string{ep},
 		Password:    pw,
 		SelectDB:    storage_db,
 	})
 	if err2 != nil {
-		slogger.Error("keyval-db client (n=2) error", "err", err2)
+		slogger.Error("keyval-db valkey/NewClient(DB=2) errs",
+			"err", err2, "type", descriptive_string(err2))
 		panic(nil)
 	}
+
 	var process, err3 = valkey.NewClient(valkey.ClientOption{
 		InitAddress: []string{ep},
 		Password:    pw,
 		SelectDB:    process_db,
 	})
 	if err3 != nil {
-		slogger.Error("keyval-db client (n=3) error", "err", err3)
+		slogger.Error("keyval-db valkey/NewClient(DB=3) errs",
+			"err", err3, "type", descriptive_string(err3))
 		panic(nil)
 	}
+
 	var t = &keyval_table{
 		setting:       setting,
 		storage:       storage,
 		process:       process,
+		timeout:       keyval_db_timeout,
 		prefix_to_db:  make(map[string]valkey.Client),
 		db_name_to_db: make(map[string]valkey.Client),
 	}
@@ -367,24 +414,28 @@ func make_keyval_table(conf *db_conf) *keyval_table {
 
 	// Wait for a keyval-db.
 
-	for {
-		var db = t.setting
-		var ctx1 = context.Background()
-		//var w = db.Ping(ctx1)
-		var w = db.Do(ctx1, db.B().Ping().Build())
-		if w.Error() == nil {
-			slogger.Debug("Connected to keyval-db", "ep", ep)
-			return t
-		} else {
-			slogger.Debug("Connect to keyval-db failed (sleeping)")
-			time.Sleep(30 * time.Second)
+	if false {
+		for {
+			var db = t.setting
+			var ctx1 = context.Background()
+			//var w = db.Ping(ctx1)
+			var w = db.Do(ctx1, db.B().Ping().Build())
+			if w.Error() == nil {
+				slogger.Debug("Connected to keyval-db", "ep", ep)
+				break
+			} else {
+				slogger.Debug("Connect to keyval-db failed (sleeping)")
+				time.Sleep(30 * time.Second)
+			}
 		}
 	}
+
+	return t
 }
 
 func raise_on_marshaling_error(err error) {
 	if err != nil {
-		slogger.Error("json.Marshal() on db entry failed", "err", err)
+		slogger.Error("json/Marshal() on keyval-db entry errs", "err", err)
 		raise(&proxy_exc{
 			"",
 			"",
@@ -398,7 +449,8 @@ func raise_on_marshaling_error(err error) {
 func raise_on_set_error(w *valkey.ValkeyResult) {
 	var err = w.Error()
 	if err != nil {
-		slogger.Error("db-set() failed", "err", err)
+		slogger.Error("keyval-db set() errs",
+			"err", err, "type", descriptive_string(err))
 		raise(&proxy_exc{
 			"",
 			"",
@@ -412,7 +464,8 @@ func raise_on_set_error(w *valkey.ValkeyResult) {
 func raise_on_setnx_error(w *valkey.ValkeyResult) {
 	var err = w.Error()
 	if err != nil {
-		slogger.Error("db-setnx() failed", "err", err)
+		slogger.Error("keyval-db setnx() errs",
+			"err", err, "type", descriptive_string(err))
 		raise(&proxy_exc{
 			"",
 			"",
@@ -428,7 +481,8 @@ func raise_on_setnx_error(w *valkey.ValkeyResult) {
 func raise_on_get_error(w *valkey.ValkeyResult) {
 	var err = w.Error()
 	if err != nil && !valkey.IsValkeyNil(err) {
-		slogger.Error("db-get() failed", "err", err)
+		slogger.Error("keyval-db get() errs",
+			"err", err, "type", descriptive_string(err))
 		raise(&proxy_exc{
 			"",
 			"",
@@ -442,7 +496,8 @@ func raise_on_get_error(w *valkey.ValkeyResult) {
 func check_on_del_failure(w *valkey.ValkeyResult) bool {
 	var n, err = w.AsInt64()
 	if err != nil {
-		slogger.Error("db-del() failed", "err", err)
+		slogger.Error("keyval-db del() errs",
+			"err", err, "type", descriptive_string(err))
 		raise(&proxy_exc{
 			"",
 			"",
@@ -457,7 +512,8 @@ func check_on_del_failure(w *valkey.ValkeyResult) bool {
 func raise_on_del_failure(w *valkey.ValkeyResult) {
 	var n, err = w.AsInt64()
 	if err != nil {
-		slogger.Error("db-del() failed", "err", err)
+		slogger.Error("keyval-db del() errs",
+			"err", err, "type", descriptive_string(err))
 		raise(&proxy_exc{
 			"",
 			"",
@@ -483,7 +539,8 @@ func raise_on_del_failure(w *valkey.ValkeyResult) {
 func check_on_expire_failure(w *valkey.ValkeyResult) bool {
 	var ok, err = w.AsBool()
 	if err != nil {
-		slogger.Error("db-expire() failed", "err", err)
+		slogger.Error("keyval-db expire() errs",
+			"err", err, "type", descriptive_string(err))
 		raise(&proxy_exc{
 			"",
 			"",
@@ -570,6 +627,8 @@ func get_reg_conf(t *keyval_table, sub string) *reg_conf {
 	}
 	return ITE(ok, &data, nil)
 }
+
+/* USERS */
 
 // ADD_USER adds/modifies a user and its claim entry.  A duplicate
 // claim is an error.
@@ -667,15 +726,17 @@ func clear_user_claim(t *keyval_table, uid string) {
 	for _, k := range ee {
 		var key = k[len(prefix):]
 		var claiminguser = get_user_claim(t, key)
-		if claiminguser.Uid == uid {
-			if trace_db_set&tracing != 0 {
-				slogger.Debug("DB: del", "key", k)
-			}
-			var ctx1 = context.Background()
-			//var w = db.Del(ctx1, k)
-			var w = db.Do(ctx1, db.B().Del().Key(k).Build())
-			raise_on_del_failure(&w)
+		if claiminguser.Uid != uid {
+			continue
 		}
+		if trace_db_set&tracing != 0 {
+			slogger.Debug("DB: del", "key", k)
+		}
+		var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
+		defer cancel()
+		//var w = db.Del(ctx1, k)
+		var w = db.Do(ctx1, db.B().Del().Key(k).Build())
+		raise_on_del_failure(&w)
 	}
 }
 
@@ -989,7 +1050,7 @@ func clean_pool_timestamps(t *keyval_table) {
 	for _, k := range ee {
 		var pool = k[len(prefix):]
 		if !slices.Contains(poollist, pool) {
-			slogger.Error("clean_pool_timestamps() Remove remaining entry",
+			slogger.Warn("Removing junk timestamp entry in keyval-db",
 				"pool", pool)
 			delete_pool_timestamp(t, pool)
 		}
@@ -1035,7 +1096,7 @@ func clean_user_timestamps(t *keyval_table) {
 	for _, k := range ee {
 		var uid = k[len(prefix):]
 		if !slices.Contains(userlist, uid) {
-			slogger.Error("clean_user_timestamps() remove a remaining entry",
+			slogger.Warn("Removing junk timestamp entry in keyval-db",
 				"user", uid)
 			delete_user_timestamp(t, uid)
 		}
@@ -1075,7 +1136,8 @@ func set_with_unique_id_loop(t *keyval_table, prefix string, data any, generator
 		var v, err = json.Marshal(data)
 		raise_on_marshaling_error(err)
 		var k = (prefix + id)
-		var ctx1 = context.Background()
+		var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
+		defer cancel()
 		//var w = db.SetNX(ctx1, k, v, db_no_expiration)
 		var w = db.Do(ctx1, db.B().Setnx().Key(k).Value(string(v)).Build())
 		raise_on_setnx_error(&w)
@@ -1131,7 +1193,8 @@ func delete_secret_key__(t *keyval_table, key string) {
 	var prefix = db_secret_prefix
 	var db = t.prefix_to_db[prefix]
 	var k = (prefix + key)
-	var ctx1 = context.Background()
+	var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
+	defer cancel()
 	//var w = db.Del(ctx1, k)
 	var w = db.Do(ctx1, db.B().Del().Key(k).Build())
 	raise_on_del_failure(&w)
@@ -1183,7 +1246,8 @@ func db_set_with_prefix(t *keyval_table, prefix string, key string, val any) {
 	var k = (prefix + key)
 	var v, err = json.Marshal(val)
 	raise_on_marshaling_error(err)
-	var ctx1 = context.Background()
+	var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
+	defer cancel()
 	//var w = db.Set(ctx1, k, v, db_no_expiration)
 	var w = db.Do(ctx1, db.B().Set().Key(k).Value(string(v)).Build())
 	raise_on_set_error(&w)
@@ -1197,7 +1261,8 @@ func db_setnx_with_prefix(t *keyval_table, prefix string, key string, val any) b
 	var k = (prefix + key)
 	var v, err = json.Marshal(val)
 	raise_on_marshaling_error(err)
-	var ctx1 = context.Background()
+	var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
+	defer cancel()
 	//var w = db.SetNX(ctx1, k, v, db_no_expiration)
 	var w = db.Do(ctx1, db.B().Setnx().Key(k).Value(string(v)).Build())
 	raise_on_setnx_error(&w)
@@ -1211,7 +1276,8 @@ func db_get_with_prefix(t *keyval_table, prefix string, key string, val any) boo
 	}
 	var db = t.prefix_to_db[prefix]
 	var k = (prefix + key)
-	var ctx1 = context.Background()
+	var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
+	defer cancel()
 	//var w = db.Get(ctx1, k)
 	var w = db.Do(ctx1, db.B().Get().Key(k).Build())
 	raise_on_get_error(&w)
@@ -1225,7 +1291,8 @@ func db_expire_with_prefix(t *keyval_table, prefix string, key string, sec int64
 	}
 	var db = t.prefix_to_db[prefix]
 	var k = (prefix + key)
-	var ctx1 = context.Background()
+	var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
+	defer cancel()
 	//var w = db.Expire(ctx1, k, sec)
 	var w = db.Do(ctx1, db.B().Expire().Key(k).Seconds(sec).Build())
 	var ok = check_on_expire_failure(&w)
@@ -1239,7 +1306,8 @@ func db_del_with_prefix(t *keyval_table, prefix string, key string) bool {
 	}
 	var db = t.prefix_to_db[prefix]
 	var k = (prefix + key)
-	var ctx1 = context.Background()
+	var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
+	defer cancel()
 	//var w = db.Del(ctx1, k)
 	var w = db.Do(ctx1, db.B().Del().Key(k).Build())
 	var ok = check_on_del_failure(&w)
@@ -1250,7 +1318,8 @@ func db_del_with_prefix(t *keyval_table, prefix string, key string) bool {
 func db_del_with_prefix_raise__(t *keyval_table, prefix string, key string) {
 	var db = t.prefix_to_db[prefix]
 	var k = (prefix + key)
-	var ctx1 = context.Background()
+	var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
+	defer cancel()
 	//var w = db.Del(ctx1, k)
 	var w = db.Do(ctx1, db.B().Del().Key(k).Build())
 	raise_on_del_failure(&w)
@@ -1258,14 +1327,17 @@ func db_del_with_prefix_raise__(t *keyval_table, prefix string, key string) {
 
 // LOAD_DATA fills a structure by json data in the keyval-db.  It
 // returns true or false about an entry is found.  Note that a get
-// with valkey.IsValkeyNil(err) means a non-exising entry.
+// with valkey.IsValkeyNil(err) means a non-exising entry.  An error
+// for the keyval-db is already checked by raise_on_get_error().
 func load_db_data(w *valkey.ValkeyResult, data any) bool {
 	var b, err1 = w.AsBytes()
 	if err1 != nil {
 		if valkey.IsValkeyNil(err1) {
 			return false
 		} else {
-			slogger.Error("Bad value in keyval-db", "err", err1)
+			// (NEVER).
+			slogger.Error("Bad value in keyval-db",
+				"err", err1, "type", descriptive_string(err1))
 			raise(&proxy_exc{
 				"",
 				"",
@@ -1289,7 +1361,8 @@ func load_db_data(w *valkey.ValkeyResult, data any) bool {
 	d.DisallowUnknownFields()
 	var err2 = d.Decode(data)
 	if err2 != nil {
-		slogger.Error("json.Decode failed", "err", err2)
+		slogger.Error("json/Decoder.Decode() on keyval-db entry errs",
+			"err", err2)
 		raise(&proxy_exc{
 			"",
 			"",
@@ -1313,7 +1386,8 @@ func scan_table(t *keyval_table, prefix string, target string) []string {
 	var db = t.prefix_to_db[prefix]
 	var pattern = prefix + target
 	//var prefix_length = len(prefix)
-	var ctx1 = context.Background()
+	var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
+	defer cancel()
 	//db.Scan(ctx1, 0, pattern, 0).Iterator()
 	var ee []string = make([]string, 0)
 	var cur uint64 = 0
@@ -1321,7 +1395,8 @@ func scan_table(t *keyval_table, prefix string, target string) []string {
 		var w = db.Do(ctx1, db.B().Scan().Cursor(cur).Match(pattern).Build())
 		var e, err = w.AsScanEntry()
 		if err != nil {
-			slogger.Error("Scan in keyval-db failed", "err", err)
+			slogger.Error("keyval-db scan() errs",
+				"err", err, "type", descriptive_string(err))
 			panic(nil)
 		}
 		ee = append(ee, e.Elements...)
@@ -1352,11 +1427,13 @@ func clear_db(t *keyval_table, db valkey.Client, prefix string) {
 	//var w1 = db.Scan(ctx1, 0, pattern, 0).Iterator()
 	var cur uint64 = 0
 	for {
-		var ctx1 = context.Background()
+		var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
+		defer cancel()
 		var w1 = db.Do(ctx1, db.B().Scan().Cursor(cur).Match(pattern).Build())
 		var e, err1 = w1.AsScanEntry()
 		if err1 != nil {
-			slogger.Error("Scan in keyval-db failed (ignored)", "err", err1)
+			slogger.Error("keyval-db scan() errs (ignored)",
+				"err", err1, "type", descriptive_string(err1))
 			return
 		}
 		for _, k := range e.Elements {
@@ -1365,7 +1442,8 @@ func clear_db(t *keyval_table, db valkey.Client, prefix string) {
 			var w2 = db.Do(ctx2, db.B().Del().Key(k).Build())
 			var err2 = w2.Error()
 			if err2 != nil {
-				slogger.Error("Del in keyval-db failed (ignored)", "err", err2)
+				slogger.Error("keyval-db del() errs (ignored)",
+					"err", err2, "type", descriptive_string(err2))
 			}
 			//raise_when_db_fail(w.Err())
 		}
@@ -1399,7 +1477,8 @@ func set_db_raw(t *keyval_table, kv [2]string) {
 		slogger.Error("Bad prefix to keyval-db", "prefix", prefix)
 		panic(nil)
 	}
-	var ctx1 = context.Background()
+	var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
+	defer cancel()
 	//var w = db.Set(ctx1, kv[0], kv[1], db_no_expiration)
 	var w = db.Do(ctx1, db.B().Set().Key(kv[0]).Value(kv[1]).Build())
 	raise_on_set_error(&w)
@@ -1411,7 +1490,8 @@ func adm_del_db_raw(t *keyval_table, key string) {
 		panic(nil)
 	}
 	for name, db := range t.db_name_to_db {
-		var ctx1 = context.Background()
+		var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
+		defer cancel()
 		//var w = db.Del(ctx1, key)
 		var w = db.Do(ctx1, db.B().Del().Key(key).Build())
 		var n, err = w.AsInt64()
@@ -1431,12 +1511,14 @@ func scan_db_raw(t *keyval_table, dbname string) []map[string]string {
 	var keyvals = make([]map[string]string, 0)
 	var cur uint64 = 0
 	for {
-		var ctx1 = context.Background()
+		var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
+		defer cancel()
 		//db.Scan(ctx1, 0, "*", 0).Iterator()
 		var w = db.Do(ctx1, db.B().Scan().Cursor(cur).Match("*").Build())
 		var e, err = w.AsScanEntry()
 		if err != nil {
-			slogger.Error("Scan in keyval-db failed (ignored)", "err", err)
+			slogger.Error("keyval-db scan() errs (ignored)",
+				"err", err, "type", descriptive_string(err))
 			return []map[string]string{}
 		}
 		var kvs = make_key_value_pairs(t, db, e.Elements)
@@ -1454,7 +1536,8 @@ func scan_db_raw(t *keyval_table, dbname string) []map[string]string {
 func make_key_value_pairs(t *keyval_table, db valkey.Client, ee []string) []map[string]string {
 	var keyvals []map[string]string
 	for _, k := range ee {
-		var ctx1 = context.Background()
+		var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
+		defer cancel()
 		//var w = db.Get(ctx1, k)
 		var w = db.Do(ctx1, db.B().Get().Key(k).Build())
 		var val, err1 = w.AsBytes()
@@ -1463,7 +1546,8 @@ func make_key_value_pairs(t *keyval_table, db valkey.Client, ee []string) []map[
 			if valkey.IsValkeyNil(err1) {
 				continue
 			} else {
-				slogger.Error("Get in keyval-db failed", "err", err1)
+				slogger.Error("keyval-db get() errs",
+					"err", err1, "type", descriptive_string(err1))
 				panic(nil)
 			}
 		}

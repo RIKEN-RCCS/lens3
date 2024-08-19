@@ -10,7 +10,7 @@
     sharedscripts
 }
 
-/var/log/lenticularis-valkey/lens3-valkey.log {
+/var/log/lenticularis-valkey/lens3-valkey-log {
     weekly 1
     rotate 20
     copytruncate

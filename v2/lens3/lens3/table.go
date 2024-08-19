@@ -10,20 +10,22 @@ package lens3
 
 // This is for Valkey-v7.2.5, and valkey-go-v1.0.40.
 
-// Errors (in most cases timeouts) are fatal.  It calls panic(nil) to
-// inform Multiplexer or Registrar to quit the service.
+// Errors in keyval-db accesses are fatal (in most cases timeouts).
+// It calls panic(nil) to inform Multiplexer or Registrar to quit the
+// service.
 //
-// Errors related to a configuration are fatal.  Such calls are
-// in the administrator tool, and does not affect the work in
-// Multiplexer or Registrar.  They call panic(nil).
+// Errors related to configuration settings are fatal, too.  Such
+// calls are in the administrator tool, and does not affect the work
+// in Multiplexer or Registrar.  They call panic(nil).
 //
-// Clients will keep working when Valkey is once down and restarted.
-// They reconnect to Valkey.  However, the first connection needs to
-// be established at a client creation.
+// A client will keep working when connecting the keyval-db would
+// fail.  However, a Golang client needs the first connection to be
+// established at the time.  Or, it fails with ECONNREFUSED.  The code
+// is adapted to that behavior.  See the code for
+// "buggy_at_client_creation=true".
 //
-// Timeouts are set by contexts.  Timeouts for operations (but
-// connections) seem to be not issued.  The timeout value is stored in
-// the TIMEOUT field.
+// Timeouts are set by contexts.  The timeout value is stored in the
+// TIMEOUT field.
 //
 // Logging messages are supplemented with descriptive_string(err).
 // Error messages by string conversion is sometimes terse.  Strings
@@ -326,45 +328,52 @@ func make_failure_reason(s string) pool_reason {
 // "connection refused", and other errors are fatal.  The error is of
 // type (err1 : *net.OpError{...}).
 func make_keyval_table(conf *db_conf) *keyval_table {
+	const buggy_at_client_creation = true
+
 	var ep = conf.Ep
 	var pw = conf.Password
 
 	var setting valkey.Client
 	var err1 error
 	var limit = time.Now().Add(time.Duration(60 * time.Second))
-	for time.Now().Before(limit) {
+
+	if buggy_at_client_creation {
+		for time.Now().Before(limit) {
+			setting, err1 = valkey.NewClient(valkey.ClientOption{
+				InitAddress: []string{ep},
+				Password:    pw,
+				SelectDB:    setting_db,
+			})
+			if err1 == nil {
+				break
+			}
+			if !errors.Is(err1, syscall.ECONNREFUSED) {
+				slogger.Error("keyval-db valkey/NewClient(DB=1) errs",
+					"err", err1, "type", descriptive_string(err1))
+				panic(nil)
+			}
+			if trace_db_set&tracing != 0 {
+				slogger.Debug("Connect to keyval-db failed (sleeping)")
+			}
+			time.Sleep(10 * time.Second)
+		}
+		if err1 != nil {
+			slogger.Error("keyval-db valkey/NewClient(DB=1) errs",
+				"err", err1, "type", descriptive_string(err1))
+			panic(nil)
+		}
+	} else {
 		setting, err1 = valkey.NewClient(valkey.ClientOption{
 			InitAddress: []string{ep},
 			Password:    pw,
 			SelectDB:    setting_db,
 		})
-		if err1 == nil {
-			break
-		}
-		if !errors.Is(err1, syscall.ECONNREFUSED) {
+		if err1 != nil {
 			slogger.Error("keyval-db valkey/NewClient(DB=1) errs",
 				"err", err1, "type", descriptive_string(err1))
 			panic(nil)
 		}
-		//slogger.Debug("Connect to keyval-db failed (sleeping)")
-		time.Sleep(10 * time.Second)
 	}
-	if err1 != nil {
-		slogger.Error("keyval-db valkey/NewClient(DB=1) errs",
-			"err", err1, "type", descriptive_string(err1))
-		panic(nil)
-	}
-
-	//var setting, err1 = valkey.NewClient(valkey.ClientOption{
-	//	InitAddress: []string{ep},
-	//	Password:    pw,
-	//	SelectDB:    setting_db,
-	//})
-	//if err1 != nil {
-	//	slogger.Error("keyval-db valkey/NewClient(DB=1) errs",
-	//		"err", err1, "type", descriptive_string(err1))
-	//	panic(nil)
-	//}
 
 	var storage, err2 = valkey.NewClient(valkey.ClientOption{
 		InitAddress: []string{ep},
@@ -414,19 +423,28 @@ func make_keyval_table(conf *db_conf) *keyval_table {
 
 	// Wait for a keyval-db.
 
-	if false {
-		for {
+	if !buggy_at_client_creation {
+		var err4 error
+		for time.Now().Before(limit) {
 			var db = t.setting
 			var ctx1 = context.Background()
 			//var w = db.Ping(ctx1)
 			var w = db.Do(ctx1, db.B().Ping().Build())
-			if w.Error() == nil {
+			err4 = w.Error()
+			if err4 == nil {
 				slogger.Debug("Connected to keyval-db", "ep", ep)
 				break
 			} else {
-				slogger.Debug("Connect to keyval-db failed (sleeping)")
-				time.Sleep(30 * time.Second)
+				if trace_db_set&tracing != 0 {
+					slogger.Debug("Connect to keyval-db failed (sleeping)")
+				}
+				time.Sleep(10 * time.Second)
 			}
+		}
+		if err4 != nil {
+			slogger.Error("keyval-db Ping(DB=1) timeout",
+				"err", err4, "type", descriptive_string(err4))
+			panic(nil)
 		}
 	}
 

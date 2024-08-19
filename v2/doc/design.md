@@ -238,9 +238,12 @@ NOT become inoperable.
 
 #### User tests
 
-Disable a user.  It is done by `$ lens3-admin stop-user true uid`
+Disabling a user or deleting a user is done by the administrator tool.
 
-Delete a user.  It is done by `$ lens3-admin kill-user uid`
+```
+$ lens3-admin stop-user true uid
+$ lens3-admin kill-user uid
+```
 
 #### Forced backend start failure
 
@@ -262,12 +265,18 @@ Or, kill the backend process, randomly.
 
 #### Forced keyval-db down
 
-Stopping the keyval-db is fatal.  Check an error is noticeable to
-users.  Restarting Lens3 is needed.
+It is fatal when the keyval-db not running.  Lens3 should go down when
+the keyval-db is down.  Test both Lens3 at its start and while it is
+running.  Check the Lens3 service is down.
 
-- Stop the keybal-db service.
+```
+# systemctl stop lenticularis-valkey
+```
 
-- Or, do "chmod" on the keybal-db's store file or directory.
+#### (MEMO) keyval-db read-only
+
+Redis gets in the read-only mode when the dump file is non-wriable.
+Valkey seems different.
 
 #### Force MQTT server down
 

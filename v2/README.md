@@ -30,7 +30,7 @@ pool.
   maintain lens3 services.
 - [setting-guide.md](./doc/setting-guide.md) for site managers to
   install lens3 services.
-- [design.md](./doc/design.md) for programmers to debug.
+- [design-notes.md](./doc/design-notes.md) for programmers to debug.
 
 ## ACKNOWLEDGMENT
 

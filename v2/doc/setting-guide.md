@@ -12,9 +12,9 @@ The steps are:
 - Prepare prerequisite software and install Lens3
 - Set up a frontend proxy (Apache-HTTPD)
 - Start Valkey
-- Start Lenticularis-S3 service (Multiplexer and Registrar)
+- Start Lens3 service (lenticularis-mux)
 
-## Assumptions
+## Summary of System Changes
 
 Lens3 consists of a couple of services as depicted in the
 configuration figure above.  A reverse-proxy can be any server, but
@@ -23,16 +23,6 @@ runs at port=6378.  The Lens3 services, Multiplexer and Registrar,
 run at port=8003 and port=8004, respectively.  The proxy is set up to
 forward requests to Multiplexer and Registrar.
 
-A pseudo user "lens3" is the owner of the services in this guide, who
-is given a privilege of sudoers.  Optionally, a second pseudo user,
-anyone who can access the Lens3 configuration file, may be prepared as
-an administrator.
-
-IT IS HIGHLY RECOMMENDED THE SERVER HOST IS NOT OPEN FOR USERS.
-
-We assume RedHat/Rocky 8.10 and Golang 1.22 at this writing (in Aug
-2024).
-
 - Services and thier ports
   - HTTP Proxy (port=433)
   - Valkey (port=6378)
@@ -40,8 +30,8 @@ We assume RedHat/Rocky 8.10 and Golang 1.22 at this writing (in Aug
   - Registrar (port=8004)
 
 - User IDs
-  - `lens3:lens3` -- a pseudo user for services
-  - `httpd`
+  - lens3:lens3 -- a pseudo user for services
+  - httpd
 
 - Files and directories
   - /usr/lib/systemd/system/lenticularis-mux.service
@@ -54,10 +44,20 @@ We assume RedHat/Rocky 8.10 and Golang 1.22 at this writing (in Aug
   - /etc/httpd/
 
 - Software
-  - RedHat/Rocky 8.8
-  - Golang 1.22 and later
+  - RedHat/Rocky 8.10
+  - Golang 1.22
   - Valkey 7
   - git
+
+IT IS HIGHLY RECOMMENDED THE SERVER HOST IS NOT OPEN FOR USERS.
+
+We assume RedHat/Rocky 8.10 and Golang 1.22 at this writing (on Aug
+20th 2024).
+
+A pseudo user "lens3" is the owner of the services in this guide, who
+is given a privilege of sudoers.  Optionally, a second pseudo user,
+anyone who can access the Lens3 configuration file, may be prepared as
+an administrator.
 
 ## Install Prerequisites
 
@@ -86,20 +86,20 @@ Install Apache-HTTPD with OpenID Connect (optional).
 # dnf install mod_auth_openidc
 ```
 
-Install Golang.  But, Golang in RedHat/Rocky is old.  Download a newer
-one from: https://go.dev/dl/
+Install Golang.  Golang in RedHat/Rocky is old.  Download a newer one
+from: https://go.dev/dl/
 
 ```
 # dnf remove 'golang*'
 # rm -rf /usr/local/go
-# tar -C /usr/local -xzf go1.22.5.linux-amd64.tar.gz
+# tar -C /usr/local -xzf go1.22.6.linux-amd64.tar.gz
 ```
 
-## Make Pseudo User Lens3
+## Make Pseudo User
 
-Make a pseudo user for the services.  UID/GID will be selected from
-the lower range below 1000 that won't conflict with real users.  Most
-of the installation is performed by the user "lens3".  Fix its umask
+Make a pseudo user "lens3" for the services.  Most of the installation
+is performed by "lens3".  Her UID/GID will be selected from the lower
+range below 1000 that won't conflict with real users.  Fix her umask
 appropriately such as by `umask 022`.
 
 ```
@@ -111,21 +111,20 @@ appropriately such as by `umask 022`.
 Note "$TOP" in the following refers to the top directory in the
 downloaded Lens3 package.
 
-Build and install Lens3.  Installation will copy binary files
+Build and install Lens3.  Installation will copy the binary files
 ("lens3-admin" and "lenticularis-mux") in the "~/go/bin" directory.
 Copy "lenticularis-mux" binary to "/usr/local/bin".
 
 ```
 # su - lens3
-lens3$ cd $TOP/v2/pkg/lens3
-lens3$ go get
+lens3$ cd $TOP/v2/lens3/lens3
 lens3$ go build
-lens3$ cd $TOP/v2/cmd/lenticularis-mux
+lens3$ cd $TOP/v2/lens3/cmd/lenticularis-mux
 lens3$ go install
-lens3$ cd $TOP/v2/cmd/lens3-admin/
+lens3$ cd $TOP/v2/lens3/cmd/lens3-admin/
 lens3$ go install
 lens3$ exit
-# install -m 755 -c /home/lens3/go/bin/lenticularis-mux /usr/local/bin/lenticularis-mux
+# install -m 755 -c ~lens3/go/bin/lenticularis-mux /usr/local/bin/lenticularis-mux
 ```
 
 ## Download MinIO Binaries
@@ -392,17 +391,17 @@ THE TIME.  Access keys are stored in Valkey in raw text.
 # vi /etc/lenticularis/conf.json
 ```
 
-## Store Lens3 Settings in Valkey
+## Store Lens3 Settings in Keyval-DB
 
-Multiplexer and Registrar load the configuration from Valkey.  This
-section prepares it.  It is better to run `lens3-admin` on the same
-host running Valkey.  See the following descriptions of the fields of
-the configurations.
+Multiplexer and Registrar load the configuration from the keyval-db
+(Valkey).  This section prepares it.  It is better to run
+`lens3-admin` on the same host running the keyval-db.  See the
+following descriptions of the fields of the configurations.
 
 - [mux-conf-json.md](mux-conf-json.md)
 - [reg-conf-json.md](reg-conf-json.md)
 
-Make the configurations in files to load them in Valkey.
+Make the configurations in files to load them in the keyval-db.
 
 ```
 # su - lens3
@@ -480,9 +479,9 @@ Storage=persistent
 
 ## Start Multiplexer and Registrar Services
 
-Multiplexer and Registrar is a single binary, and it will be started
-as a system service as "lenticularis-mux".  Copy (and edit) the
-systemd unit file for the service.  It is started with the user
+Multiplexer and Registrar are two threads in a single binary.  It will
+be started as a system service as "lenticularis-mux".  Copy (and edit)
+the systemd unit file for the service.  It is started with the user
 uid:gid=lens3:lens3.
 
 ```

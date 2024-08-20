@@ -36,7 +36,7 @@ service, called "Lens3-Api", is started as a systemd service, too.
   maintain lens3 services.
 - [setting-guide.md](./v2/doc/setting-guide.md) for site managers to
   install lens3 services.
-- [design.md](./v2/doc/design.md) for programmers to debug.
+- [design-notes.md](./v2/doc/design-notes.md) for programmers to debug.
 
 ## README
 

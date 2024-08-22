@@ -640,12 +640,12 @@ displays ACCESS-KEY in "root_access" and SECRET-KEY in "root_secret".
 The "show-be" command shows information on running MinIO instances.
 
 To use "mc" command, it is necessary to keep a MinIO instance running.
-Run `lens3-admin probe-mux POOL-NAME`, repeatedly, to let it running.
+Run `lens3-admin send-probe POOL-NAME`, repeatedly, to let it running.
 
 ```
 lens3$ lens3-admin -c conf.json show-pool
 lens3$ lens3-admin -c conf.json show-be
-lens3$ lens3-admin -c conf.json probe-mux POOL-NAME
+lens3$ lens3-admin -c conf.json send-probe POOL-NAME
 ```
 
 For example, the commands below enables to dump tracing logs from

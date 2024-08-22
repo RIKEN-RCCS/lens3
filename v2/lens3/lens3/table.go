@@ -1000,6 +1000,11 @@ func set_ex_bucket(t *keyval_table, bucket string, data *bucket_record) (bool, s
 	return false, holder_pool
 }
 
+func set_bucket_by_adm(t *keyval_table, bucket string, data *bucket_record) {
+	assert_fatal(data.Bucket == bucket)
+	db_set_with_prefix(t, db_bucket_prefix, bucket, data)
+}
+
 func get_bucket(t *keyval_table, bucket string) *bucket_record {
 	var data bucket_record
 	var ok = db_get_with_prefix(t, db_bucket_prefix, bucket, &data)
@@ -1193,6 +1198,11 @@ func delete_pool_name_checking(t *keyval_table, pool string) bool {
 func set_ex_secret(t *keyval_table, key string, data *secret_record) bool {
 	var ok = db_setnx_with_prefix(t, db_secret_prefix, key, data)
 	return ok
+}
+
+func set_secret_by_adm(t *keyval_table, key string, data *secret_record) {
+	assert_fatal(data.Access_key == key)
+	db_set_with_prefix(t, db_secret_prefix, key, data)
 }
 
 func get_secret(t *keyval_table, key string) *secret_record {
@@ -1502,7 +1512,7 @@ func set_db_raw(t *keyval_table, kv [2]string) {
 	raise_on_set_error(&w)
 }
 
-func adm_del_db_raw(t *keyval_table, key string) {
+func delete_db_raw_by_adm(t *keyval_table, key string) {
 	if key == "" {
 		slogger.Error("Empty key to keyval-db")
 		panic(nil)

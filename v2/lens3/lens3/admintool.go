@@ -1,4 +1,4 @@
-/* Lens3-admin command.  It a database modifier. */
+/* Command lens3-admin.  It is a keyval-db modifier command. */
 
 // Copyright 2022-2024 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
@@ -107,7 +107,7 @@ func adm_toplevel() {
 	c2.run(adm, args)
 }
 
-func show_user(t *keyval_table, filename string) {
+func adm_dump_user(t *keyval_table, filename string) {
 	var userlist = list_users(t)
 	var users []*user_record = make([]*user_record, 0)
 	for _, uid := range userlist {
@@ -159,7 +159,7 @@ func show_user(t *keyval_table, filename string) {
 	}
 }
 
-func load_user(t *keyval_table, filename string) {
+func adm_load_user(t *keyval_table, filename string) {
 	var r1, err1 = os.Open(filename)
 	if err1 != nil {
 		fmt.Fprintf(os.Stderr, "Open a file (%s) failed: err=(%v)\n",
@@ -267,6 +267,56 @@ func load_user(t *keyval_table, filename string) {
 	}
 }
 
+func adm_time_expiration(t *keyval_table, record string, key string, date string) {
+	var d1 = strings.Replace(date, "T", " ", 1)
+	var d2 time.Time
+	var err1 error
+	d2, err1 = time.Parse(time.DateTime, d1)
+	if err1 != nil {
+		d2, err1 = time.Parse(time.DateOnly, d1)
+	}
+	if err1 != nil {
+		fmt.Fprintf(os.Stderr, "Bad time string %s err=(%v)\n", date, err1)
+		return
+	}
+	switch record {
+	case "user":
+		var r1 *user_record = get_user(t, key)
+		if r1 == nil {
+			fmt.Fprintf(os.Stderr, "No %s %s\n", record, key)
+			return
+		}
+		r1.Expiration_time = d2.Unix()
+		set_user_raw(t, r1)
+	case "pool":
+		var r2 *pool_record = get_pool(t, key)
+		if r2 == nil {
+			fmt.Fprintf(os.Stderr, "No %s %s\n", record, key)
+			return
+		}
+		r2.Expiration_time = d2.Unix()
+		set_pool(t, key, r2)
+	case "bucket":
+		var r3 *bucket_record = get_bucket(t, key)
+		if r3 == nil {
+			fmt.Fprintf(os.Stderr, "No %s %s\n", record, key)
+			return
+		}
+		r3.Expiration_time = d2.Unix()
+		set_bucket_by_adm(t, key, r3)
+	case "secret":
+		var r4 *secret_record = get_secret(t, key)
+		if r4 == nil {
+			fmt.Fprintf(os.Stderr, "No %s %s\n", record, key)
+			return
+		}
+		r4.Expiration_time = d2.Unix()
+		set_secret_by_adm(t, key, r4)
+	default:
+		panic(nil)
+	}
+}
+
 // DUMP_DB returns a record of confs, users, and pools for restoring.
 func dump_db__(t *keyval_table) *dump_data {
 	// Collect confs:
@@ -297,18 +347,18 @@ func dump_db__(t *keyval_table) *dump_data {
 	}
 }
 
-func print_in_json(x any) {
+func adm_print_in_json(x any) {
 	//for _, x := range list {
 	var b1, err1 = json.MarshalIndent(x, "", "    ")
 	if err1 != nil {
-		fmt.Fprintf(os.Stderr, "json.Marshal() failed, err=(%v)\n", err1)
+		fmt.Fprintf(os.Stderr, "json/Marshal() failed, err=(%v)\n", err1)
 		panic(nil)
 	}
 	fmt.Println(string(b1))
 	//}
 }
 
-func dump_in_json_to_file(filename string, users any) {
+func adm_dump_in_json_to_file(filename string, entries any) {
 	var w1 io.Writer
 	if filename != "" {
 		var w2, err1 = os.Create(filename)
@@ -324,14 +374,14 @@ func dump_in_json_to_file(filename string, users any) {
 	}
 	var e = json.NewEncoder(w1)
 	e.SetIndent("", "    ")
-	var err2 = e.Encode(users)
+	var err2 = e.Encode(entries)
 	if err2 != nil {
 		fmt.Fprintf(os.Stderr, "Writing json failed: err=(%v)\n", err2)
 		panic(nil)
 	}
 }
 
-func restore_db(t *keyval_table, filename string) {
+func adm_fill_db(t *keyval_table, filename string) {
 	var r1, err1 = os.Open(filename)
 	if err1 != nil {
 		fmt.Fprintf(os.Stderr, "Open a file (%s) failed: err=(%v)\n",
@@ -362,20 +412,20 @@ func restore_db(t *keyval_table, filename string) {
 	}
 }
 
-func delete_db_entry(t *keyval_table, keys []string) {
+func adm_delete_db_entry(t *keyval_table, keys []string) {
 	for _, key := range keys {
-		adm_del_db_raw(t, key)
+		delete_db_raw_by_adm(t, key)
 	}
 }
 
-func probe_mux(t *keyval_table, pool string) {
+func adm_send_probe(t *keyval_table, pool string) {
 	var err1 = probe_access_mux(t, pool)
 	if err1 != nil {
 		fmt.Println(err1)
 	}
 }
 
-func wipe_out_db(t *keyval_table, everything string) {
+func adm_wipe_out_db(t *keyval_table, everything string) {
 	if everything == "everything" {
 		clear_everything(t)
 	}
@@ -385,7 +435,7 @@ func wipe_out_db(t *keyval_table, everything string) {
 // key+value record in json.  Note that a value is a string of a json
 // record.  (* Each entry two lines; the 1st line is ^key$ and 2nd
 // line is prefix by 4whitespaces as ^____value$. *)
-func dump_db(t *keyval_table) {
+func adm_dump_db(t *keyval_table) {
 	var kv1 = scan_db_raw(t, "setting")
 	print_db_entries(kv1, "Setting")
 	var kv2 = scan_db_raw(t, "storage")
@@ -399,7 +449,7 @@ func print_db_entries(kvlist []map[string]string, title string) {
 	fmt.Println("// " + title)
 	fmt.Println("//----")
 	for _, kv := range kvlist {
-		//print_in_json(kv)
+		//adm_print_in_json(kv)
 		for key, val := range kv {
 			fmt.Printf("%s\n", key)
 			fmt.Printf("    %s\n", string(val))
@@ -408,7 +458,7 @@ func print_db_entries(kvlist []map[string]string, title string) {
 	}
 }
 
-func show_unix_time(s1 string) {
+func adm_show_unix_time(s1 string) {
 	// To accept a dateTtime format as the date_time format.
 	var s2 = strings.Replace(s1, "T", " ", 1)
 
@@ -451,7 +501,7 @@ var cmd_list = []*cmd{
 	&cmd{
 		synopsis: "show-conf",
 
-		doc: `Prints all configuration data in keyval-db.`,
+		doc: `Prints all configuration data in the keyval-db.`,
 
 		run: func(adm *adm, args []string) {
 			var conflist = list_confs(adm.table)
@@ -462,7 +512,7 @@ var cmd_list = []*cmd{
 					fmt.Printf("// Conf %s\n", c.Subject)
 					var c3, err3 = json.MarshalIndent(c, "", "    ")
 					if err3 != nil {
-						fmt.Fprintf(os.Stderr, "json.Marshal() failed: err=(%v)\n",
+						fmt.Fprintf(os.Stderr, "json/Marshal() failed: err=(%v)\n",
 							err3)
 						panic(nil)
 					}
@@ -471,7 +521,7 @@ var cmd_list = []*cmd{
 					fmt.Printf("// Conf %s\n", c.Subject)
 					var c4, err4 = json.MarshalIndent(c, "", "    ")
 					if err4 != nil {
-						fmt.Fprintf(os.Stderr, "json.Marshal() failed: err=(%v)\n",
+						fmt.Fprintf(os.Stderr, "json/Marshal() failed: err=(%v)\n",
 							err4)
 						panic(nil)
 					}
@@ -486,7 +536,8 @@ var cmd_list = []*cmd{
 	&cmd{
 		synopsis: "load-conf file-name.json",
 
-		doc: `Loads a configuration file in the keyval-db.`,
+		doc: `Loads a configuration from a file.  Restarting a service
+	is needed to make the changes effective.`,
 
 		run: func(adm *adm, args []string) {
 			var conf = read_conf(args[1])
@@ -510,11 +561,37 @@ var cmd_list = []*cmd{
 	&cmd{
 		synopsis: "show-user",
 
-		doc: `Prints users in csv format.  It lists ADD rows first, and then a
-	DISABLE row.`,
+		doc: `Prints user records in json.`,
 
 		run: func(adm *adm, args []string) {
-			show_user(adm.table, "")
+			var userlist = list_users(adm.table)
+			var users []*user_record = make([]*user_record, 0)
+			for _, uid := range userlist {
+				var i = get_user(adm.table, uid)
+				if i != nil {
+					users = append(users, i)
+				}
+			}
+			//var filename string
+			//if len(args) == 1 {
+			//	filename = ""
+			//} else {
+			//	filename = args[1]
+			//}
+			adm_dump_in_json_to_file("", users)
+		},
+	},
+
+	&cmd{
+		synopsis: "dump-user",
+
+		doc: `Prints users in csv format.  It first lists rows of ADD
+	entries, and then a single row of DISABLE entries.  It excludes
+	automatically added (ephemeral) users.  See the help on load-user
+	about the data format.`,
+
+		run: func(adm *adm, args []string) {
+			adm_dump_user(adm.table, "")
 		},
 	},
 
@@ -535,7 +612,7 @@ var cmd_list = []*cmd{
 	in csv.`,
 
 		run: func(adm *adm, args []string) {
-			load_user(adm.table, args[1])
+			adm_load_user(adm.table, args[1])
 		},
 	},
 
@@ -590,11 +667,43 @@ var cmd_list = []*cmd{
 				return strings.Compare(
 					a.Bucket_directory, b.Bucket_directory)
 			})
-			for _, x := range pools {
-				print_in_json(x)
-			}
+			//for _, x := range pools {
+			//	adm_print_in_json(x)
+			//}
+			adm_dump_in_json_to_file("", pools)
 		},
 	},
+
+	//&cmd{
+	//	synopsis: "dump-pool [file-name.json]",
+	//
+	//	doc: `Dumps pool records in json.`,
+	//
+	//	run: func(adm *adm, args []string) {
+	//		var poollist = list_pools(adm.table, "*")
+	//		var pools []*pool_prop = make([]*pool_prop, 0)
+	//		for _, pool := range poollist {
+	//			var pooldata = get_pool(adm.table, pool)
+	//			if pooldata == nil {
+	//				fmt.Fprintf(os.Stderr, "No pool found for (%s)\n", pool)
+	//				continue
+	//			}
+	//			var d = gather_pool_prop(adm.table, pool)
+	//			if d == nil {
+	//				continue
+	//			}
+	//			pools = append(pools, d)
+	//		}
+	//
+	//		var filename string
+	//		if len(args) == 1 {
+	//			filename = ""
+	//		} else {
+	//			filename = args[1]
+	//		}
+	//		adm_dump_in_json_to_file(filename, pools)
+	//	},
+	//},
 
 	&cmd{
 		synopsis: "stop-pool true/false pool-name",
@@ -643,7 +752,7 @@ var cmd_list = []*cmd{
 		run: func(adm *adm, args []string) {
 			var bkts = list_buckets(adm.table, "")
 			//for _, x := range bkts {
-			print_in_json(bkts)
+			adm_print_in_json(bkts)
 			//}
 		},
 	},
@@ -670,9 +779,9 @@ var cmd_list = []*cmd{
 
 		run: func(adm *adm, args []string) {
 			var dirs = list_bucket_directories(adm.table)
-			print_in_json(dirs)
+			adm_print_in_json(dirs)
 			// for _, x := range dirs {
-			// 	print_in_json(x)
+			// 	adm_print_in_json(x)
 			// 	//fmt.Printf("%v\n", x)
 			// }
 		},
@@ -685,7 +794,7 @@ var cmd_list = []*cmd{
 
 		run: func(adm *adm, args []string) {
 			var belist []*backend_record = list_backends(adm.table, "*")
-			print_in_json(belist)
+			adm_print_in_json(belist)
 		},
 	},
 
@@ -696,14 +805,14 @@ var cmd_list = []*cmd{
 
 		run: func(adm *adm, args []string) {
 			var muxs []*mux_record = list_mux_eps(adm.table)
-			print_in_json(muxs)
+			adm_print_in_json(muxs)
 		},
 	},
 
 	&cmd{
 		synopsis: "show-timestamp pool/user",
 
-		doc: `Prints last access timestamps of pools/users.`,
+		doc: `Prints last access timestamps of all pools/users.`,
 
 		run: func(adm *adm, args []string) {
 			var pairs []*name_timestamp_pair
@@ -716,88 +825,58 @@ var cmd_list = []*cmd{
 				fmt.Fprintf(os.Stderr, "pool or user (%s)\n", args[1])
 				return
 			}
-			print_in_json(pairs)
+			adm_print_in_json(pairs)
 		},
 	},
 
 	&cmd{
-		synopsis: "dump-user [file-name.json]",
+		synopsis: "time-expiration user/pool/bucket/secret key date",
 
-		doc: `Dumps users for restoring.`,
-
-		run: func(adm *adm, args []string) {
-			//fmt.Println("// dumping...")
-			var userlist = list_users(adm.table)
-			var users []*user_record = make([]*user_record, 0)
-			for _, uid := range userlist {
-				var i = get_user(adm.table, uid)
-				if i != nil {
-					users = append(users, i)
-				}
-			}
-			var filename string
-			if len(args) == 1 {
-				filename = ""
-			} else {
-				filename = args[1]
-			}
-			dump_in_json_to_file(filename, users)
-		},
-	},
-
-	&cmd{
-		synopsis: "dump-pool [file-name.json]",
-
-		doc: `Dumps pools for restoring.`,
+		doc: `Resets expiration date of an entry.  key is uid for user,
+	pool-name for pool, bucket-name for bucket, and secret-key for
+	secret.`,
 
 		run: func(adm *adm, args []string) {
-			//fmt.Println("// dumping...")
-			var poollist = list_pools(adm.table, "*")
-			var pools []*pool_prop = make([]*pool_prop, 0)
-			for _, pool := range poollist {
-				var pooldata = get_pool(adm.table, pool)
-				if pooldata == nil {
-					fmt.Fprintf(os.Stderr, "No pool found for (%s)\n", pool)
-					continue
-				}
-				var d = gather_pool_prop(adm.table, pool)
-				if d == nil {
-					continue
-				}
-				pools = append(pools, d)
+			var printhelp bool = false
+			if len(args) != 4 {
+				printhelp = true
 			}
-
-			var filename string
-			if len(args) == 1 {
-				filename = ""
-			} else {
-				filename = args[1]
+			switch args[1] {
+			case "user", "pool", "bucket", "secret":
+			default:
+				printhelp = true
 			}
-			dump_in_json_to_file(filename, pools)
+			if printhelp {
+				var c = cmd_table[args[0]]
+				fmt.Println(c.synopsis)
+				return
+			}
+			adm_time_expiration(adm.table, args[1], args[2], args[3])
 		},
 	},
 
 	&cmd{
 		synopsis: "dump-db",
 
-		doc: `Dumps all key-value pairs in keyval-db.  It is a repeatation of
-	key-value pairs, with a value part is idented by four whitespaces.
-	Keys are strings and values are records in json.`,
+		doc: `Dumps all key-value pairs in the keyval-db.  It is a
+	repeatation of key-value pairs, with a value part is idented by
+	four whitespaces.  Keys are strings and values are records in
+	json.`,
 
 		run: func(adm *adm, args []string) {
-			dump_db(adm.table)
+			adm_dump_db(adm.table)
 		},
 	},
 
 	&cmd{
-		synopsis: "restore-db file-name.txt",
+		synopsis: "fill-db file-name.txt",
 
-		doc: `Restores key-value entries in keyval-db from a file.  A file
-	should contain a repeatation of key-value pairs.  See the doc on
-	dump-db about the output format.`,
+		doc: `Restores entries in the keyval-db from a file.  It accepts
+	the contents that are generated by dump-db.  See the help on
+	dump-db about the data format.`,
 
 		run: func(adm *adm, args []string) {
-			restore_db(adm.table, args[1])
+			adm_fill_db(adm.table, args[1])
 		},
 	},
 
@@ -808,7 +887,7 @@ var cmd_list = []*cmd{
 	key with a prefix (such as "po:").`,
 
 		run: func(adm *adm, args []string) {
-			delete_db_entry(adm.table, args[1:])
+			adm_delete_db_entry(adm.table, args[1:])
 		},
 	},
 
@@ -818,17 +897,17 @@ var cmd_list = []*cmd{
 		doc: `Removes everything in the keyval-db.`,
 
 		run: func(adm *adm, args []string) {
-			wipe_out_db(adm.table, args[1])
+			adm_wipe_out_db(adm.table, args[1])
 		},
 	},
 
 	&cmd{
-		synopsis: "probe-mux pool-name",
+		synopsis: "send-probe pool-name",
 
-		doc: `Accesses one Mux for probing a pool.  It starts a backend.`,
+		doc: `Accesses Multiplexer for probing.  It starts a backend.`,
 
 		run: func(adm *adm, args []string) {
-			probe_mux(adm.table, args[1])
+			adm_send_probe(adm.table, args[1])
 		},
 	},
 
@@ -838,7 +917,7 @@ var cmd_list = []*cmd{
 		doc: `Converts time in int64.`,
 
 		run: func(adm *adm, args []string) {
-			show_unix_time(args[1])
+			adm_show_unix_time(args[1])
 		},
 	},
 }

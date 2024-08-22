@@ -358,7 +358,7 @@ func start_backend_in_mutexed(w *manager, pool string) *backend_record {
 			}
 		}()
 		if !ok1 {
-			slogger.Warn(w.logprefix+"Starting backend failed",
+			slogger.Warn(w.logprefix+"Starting backend aborted",
 				"pool", pool, "reason", "manager is in shutdown")
 			abort_backend(w, d)
 			return nil
@@ -484,8 +484,8 @@ func try_start_backend(w *manager, d backend_delegate, port int) *start_result {
 	var r1 = wait_for_backend_come_up(w, d)
 
 	if trace_proc&tracing != 0 {
-		slogger.Debug(w.logprefix+"Backend started",
-			"pool", pool, "state", r1.start_state, "stdout", r1.reason)
+		slogger.Debug(w.logprefix+"Starting backend finished (succeed/fail)",
+			"pool", pool, "state", r1.start_state, "reason", r1.reason)
 	}
 
 	assert_fatal(r1.start_state != start_ongoing)

@@ -330,7 +330,7 @@ func start_backend_in_mutexed(w *manager, pool string) *backend_record {
 				"pool", pool)
 			panic(nil)
 		case start_started:
-			// OK.
+			// Okay.
 		case start_to_retry:
 			continue
 		case start_transient_failure:

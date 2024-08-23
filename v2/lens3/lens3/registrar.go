@@ -931,8 +931,8 @@ func return_pool_prop(z *registrar, w http.ResponseWriter, r *http.Request, u *u
 }
 
 // CHECK_USER_ACCESS_WITH_ERROR_RETURN checks an access to a pool by a
-// user is granted.  It returns a user record, or nil.  It is OK to
-// call it without a pool (pool="") when creating a pool.
+// user is granted.  It returns a user record, or nil.  It is normal
+// to call it without a pool (pool="") when creating a pool.
 func check_user_access_with_error_return(z *registrar, w http.ResponseWriter, r *http.Request, pool string, firstsession bool) *user_record {
 	//var conf = &z.conf.Registrar
 
@@ -1066,7 +1066,7 @@ func check_user_access_with_error_return(z *registrar, w http.ResponseWriter, r 
 		var state1, reason1 = check_pool_is_usable(z.table, pooldata)
 		switch state1 {
 		case pool_state_INITIAL, pool_state_READY:
-			// OK.
+			// Okay.
 		case pool_state_SUSPENDED:
 			// (NEVER).
 		case pool_state_DISABLED, pool_state_INOPERABLE:
@@ -1094,9 +1094,9 @@ func check_user_access_with_error_return(z *registrar, w http.ResponseWriter, r 
 		var state2, reason2 = check_pool_is_suspened(z.table, pool)
 		switch state2 {
 		case pool_state_INITIAL, pool_state_READY:
-			// OK.
+			// Okay.
 		case pool_state_DISABLED:
-			// OK.
+			// Okay.
 		case pool_state_SUSPENDED:
 			slogger.Debug("Reg: Bad pool state", "pool", pool,
 				"state", state2, "reason", reason2)

@@ -337,7 +337,7 @@ func execute_command(synopsis string, argv []string, environ []string, timeout t
 	var stderrs = strings.TrimSpace(stderrb.String())
 	switch err2 := err1.(type) {
 	case nil:
-		// OK.
+		// Okay.
 		if verbose {
 			slogger.Debug(prefix+": Command done",
 				"cmd", argv, "exit", wstatus,

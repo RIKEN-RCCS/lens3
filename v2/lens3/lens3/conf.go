@@ -411,7 +411,7 @@ func check_manager_entry(e *manager_conf) {
 
 func check_minio_entry(e *minio_conf) {
 	if len(e.Minio) > 0 && len(e.Mc) > 0 {
-		// OK.
+		// Okay.
 	} else {
 		slogger.Error("Bad backend entry (minio)", "entry", e)
 		panic(nil)
@@ -420,7 +420,7 @@ func check_minio_entry(e *minio_conf) {
 
 func check_rclone_entry(e *rclone_conf) {
 	if len(e.Rclone) > 0 {
-		// OK.
+		// Okay.
 	} else {
 		slogger.Error("Bad backend entry (rclone)", "entry", e)
 		panic(nil)
@@ -430,7 +430,7 @@ func check_rclone_entry(e *rclone_conf) {
 func check_ui_entry(e *UI_conf) {
 	if len(e.S3_url) > 0 &&
 		len(e.Footer_banner) > 0 {
-		// OK.
+		// Okay.
 	} else {
 		slogger.Error("Bad S3 endpoint", "entry", e)
 		panic(nil)
@@ -460,7 +460,7 @@ func check_logging_entry(e *logging_conf) {
 
 func check_logger_entry(e *logger_conf) {
 	if len(e.Log_file) > 0 && len(e.Level) > 0 {
-		// OK.
+		// Okay.
 	} else {
 		slogger.Error("Bad logger entry", "entry", e)
 		panic(nil)
@@ -469,7 +469,7 @@ func check_logger_entry(e *logger_conf) {
 
 func check_alert_entry(e *alert_conf) {
 	if len(e.Level) > 0 {
-		// OK.
+		// Okay.
 	} else {
 		slogger.Error("Bad alert entry", "entry", e)
 		panic(nil)
@@ -478,7 +478,7 @@ func check_alert_entry(e *alert_conf) {
 
 func check_syslog_entry(e *syslog_conf) {
 	if len(e.Facility) > 0 {
-		// OK.
+		// Okay.
 	} else {
 		slogger.Error("Bad Syslog entry", "entry", e)
 		panic(nil)
@@ -487,7 +487,7 @@ func check_syslog_entry(e *syslog_conf) {
 
 func check_mqtt_entry(e *mqtt_conf) {
 	if len(e.Ep) > 0 {
-		// OK.
+		// Okay.
 	} else {
 		slogger.Error("Bad MQTT entry", "entry", e)
 		panic(nil)

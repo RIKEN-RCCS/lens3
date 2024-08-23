@@ -254,7 +254,7 @@ func simplify_rclone_rc_message(s []byte) *rclone_rc_result {
 	}
 	switch msg := m["error"].(type) {
 	case nil:
-		// OK.
+		// Okay.
 	case string:
 		var err2 = fmt.Errorf("%q", msg)
 		return &rclone_rc_result{nil, err2}

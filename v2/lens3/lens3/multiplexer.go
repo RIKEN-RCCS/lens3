@@ -668,7 +668,7 @@ func ensure_backend_running(m *multiplexer, w http.ResponseWriter, r *http.Reque
 
 	switch be1.State {
 	case pool_state_INITIAL, pool_state_READY:
-		// OK.
+		// Okay.
 	case pool_state_DISABLED:
 		panic(nil)
 	case pool_state_SUSPENDED:
@@ -804,7 +804,7 @@ func ensure_pool_state(m *multiplexer, w http.ResponseWriter, r *http.Request, p
 	case pool_state_INITIAL:
 		panic(nil)
 	case pool_state_READY:
-		// OK.
+		// Okay.
 	case pool_state_DISABLED:
 		slogger.Debug(m.logprefix+"Reject access to bad pool",
 			"pool", pool, "reason", "disabled")

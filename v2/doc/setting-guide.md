@@ -30,7 +30,7 @@ forward requests to Multiplexer and Registrar.
   - Registrar (port=8004)
 
 - User IDs
-  - lens3:lens3 -- a pseudo user for services
+  - lens3:lens3 -- a pseudo user for the services
   - httpd
 
 - Files and directories
@@ -47,9 +47,9 @@ forward requests to Multiplexer and Registrar.
   - RedHat/Rocky 8.10
   - Golang 1.22
   - Valkey 7
-  - git
+  - Git
 
-IT IS HIGHLY RECOMMENDED THE SERVER HOST IS NOT OPEN FOR USERS.
+__IT IS HIGHLY RECOMMENDED THE SERVER HOST IS NOT OPEN TO USERS__.
 
 We assume RedHat/Rocky 8.10 and Golang 1.22 at this writing (on Aug
 20th 2024).
@@ -95,6 +95,14 @@ from: https://go.dev/dl/
 # tar -C /usr/local -xzf go1.22.6.linux-amd64.tar.gz
 ```
 
+Make the commands of Golang visible.
+
+```
+# cd /usr/local/bin
+# ln -s ../go/bin/go .
+# ln -s ../go/bin/gofmt .
+```
+
 ## Make Pseudo User
 
 Make a pseudo user "lens3" for the services.  Most of the installation
@@ -104,6 +112,20 @@ appropriately such as by `umask 022`.
 
 ```
 # useradd -K UID_MIN=301 -K UID_MAX=499 -K GID_MIN=301 -K GID_MAX=499 -U -d /home/lens3 lens3
+```
+
+Add "~/go/bin" in the PATH in lens3's ".bashrc".
+
+```
+# su - lens3
+lens3$ vi .bashrc
+```
+
+```
+if ! [[ "$PATH" =~ "$HOME/go/bin" ]] ; then
+    PATH="$HOME/go/bin:$PATH"
+fi
+export PATH
 ```
 
 ## Install Lens3
@@ -118,6 +140,7 @@ Copy "lenticularis-mux" binary to "/usr/local/bin".
 ```
 # su - lens3
 lens3$ cd $TOP/v2/lens3/lens3
+lens3$ go get github.com/riken-rccs/lens3/v2/lens3
 lens3$ go build
 lens3$ cd $TOP/v2/lens3/cmd/lenticularis-mux
 lens3$ go install
@@ -477,12 +500,47 @@ Storage=persistent
 # systemctl restart systemd-journald
 ```
 
+## (Optional) Set up a Message Queue (MQTT)
+
+Lens3 duplicates alert logs to a message queue.  It assumes MQTT v5
+and "mosquitto" for the server.  The assigned MQTT password should be
+set in "mux-conf.json".
+
+```
+# dnf install mosquitto
+# mosquitto_passwd -c /etc/mosquitto/password.txt lens3
+# mosquitto_passwd -b /etc/mosquitto/password.txt lens3 password
+# chmod 440 /etc/mosquitto/password.txt
+# vi /etc/mosquitto/mosquitto.conf
+-#allow_anonymous true
++allow_anonymous false
+-#password_file
++password_file /etc/mosquitto/password.txt
+```
+
+```
+# systemctl enable mosquitto
+# systemctl start mosquitto
+# systemctl status mosquitto
+```
+
+It is necessary to reload "mux-conf.json" and to restart the service
+after changing the password.
+
+```
+# su - lens3
+lens3$ vi mux-conf.json
+lens3$ lens3-admin -c conf.json load-conf mux-conf.json
+lens3$ exit
+# systemctl restart lenticularis-mux
+```
+
 ## Start Multiplexer and Registrar Services
 
-Multiplexer and Registrar are two threads in a single binary.  It will
-be started as a system service as "lenticularis-mux".  Copy (and edit)
-the systemd unit file for the service.  It is started with the user
-uid:gid=lens3:lens3.
+Multiplexer and Registrar are two threads in a single binary.  They
+will be started as a system service as "lenticularis-mux".  Copy the
+systemd unit file for the service.  It is started with the user
+"lens3" (uid:gid=lens3:lens3).
 
 ```
 # cp $TOP/v2/unit-file/lenticularis-mux.service /usr/lib/systemd/system/
@@ -493,7 +551,6 @@ uid:gid=lens3:lens3.
 # systemctl enable lenticularis-mux
 # systemctl start lenticularis-mux
 # systemctl status lenticularis-mux
-
 ```
 
 ## Check the Status

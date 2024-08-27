@@ -414,3 +414,23 @@ slightly high load (not checked for Lens3-v2.1).
 That is, when trying to put an object by a readonly-key or to put an
 object to a download-bucket without a key (never happens in Lens3-v2.1
 because checkes on keys are done in Lens3).
+
+- Lens3 assumes a proxy (an http front-end) terminates SSL connections
+and performs authentications.  It expects to receive a user identity
+in an http header X-REMOTE-USER.
+
+- Lens3 assumes a running environment isolated from users.  MinIO runs
+as a user process and thus a user can kill/stop the process.  It is
+not a problem because another MinIO process will be started and the
+operation will continue.  However, stopping the MinIO processes will
+leave zombies (due to the behavior of sudo).
+
+- Heartbeating may not be useful, because the configuration
+"backend_awake_duration" is usually short.  The backend may be stopped
+before heartbeating failure reaches a preset count.
+
+- sudo and SIGSTOP (???): A sudo shows a peculiar behavior at a stop
+signal: It stops itself when a subprocess got stopped.  A sudo process
+(which runs as a root) can be stopped by a user, because the MinIO
+runs as a usual user under sudo.  This results in the MinIO process is
+never waited for.

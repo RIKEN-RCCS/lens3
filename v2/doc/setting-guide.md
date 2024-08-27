@@ -419,10 +419,9 @@ THE TIME.  Access keys are stored in Valkey in raw text.
 Multiplexer and Registrar load the configuration from the keyval-db
 (Valkey).  This section prepares it.  It is better to run
 `lens3-admin` on the same host running the keyval-db.  See the
-following descriptions of the fields of the configurations.
+following description of the fields of the configurations.
 
-- [mux-conf-json.md](mux-conf-json.md)
-- [reg-conf-json.md](reg-conf-json.md)
+- [configuration.md](configuration.md)
 
 Make the configurations in files to load them in the keyval-db.
 

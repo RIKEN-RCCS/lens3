@@ -22,14 +22,17 @@ stored in the keyval-db.
 
 ### "multiplexer" configuration
 
-- **port": 8003,
-- **trusted_proxy_list": [
-      "localhost"
-    ],
-- **mux_node_name": "localhost",
-- **backend": "minio",
-- **mux_ep_update_interval": 307,
-- **error_response_delay_ms": 1000
+- **port**: is 8003.  It is a port number to be used by Multiplexer.
+- **trusted_proxy_list**: is ["localhost"].  It is hostnames of the
+  frontend proxy and Registrar.
+- **mux_node_name**: is "localhost".  It is optional.  It is a
+  hostname of Multiplexer which is used when Registrar accesses
+  Multiplexer.
+- **backend**: is "minio" or "rclone".
+- **mux_ep_update_interval**: is an interval for which Multiplexer
+  repeatedly sets its endpoint to the keyval-db.
+- **error_response_delay_ms**: is a delay added when sending a
+  response for a failed http request.
 
 ### "manager" configuration
 
@@ -67,29 +70,31 @@ stored in the keyval-db.
 
 ### "logging" configuration
 
-- logger.**log_file**: is "/var/log/lenticularis/lens3-log".
-- logger.**level**: is one of {"ERR", "WARNING", "INFO", "DEBUG"}.
+- **logger.log_file**: is "/var/log/lenticularis/lens3-log".
+- **logger.level**: is one of {"ERR", "WARNING", "INFO", "DEBUG"}.
   Set "DEBUG" for usefulness.
-- logger.**tracing**: is bit flags to make logging verbose.  Set 0 or
+- **logger.tracing**: is bit flags to make logging verbose.  Set 0 or
   255.  Tracing logs are at "DEBUG" level.
-- logger.**source_line**: is true or false, to include source line
-  information.  See Golang's logging facility.
+- **logger.source_line**: is true or false, to include source code
+  line information.  See Golang's logging facility.
 
-- **alert**: is an optional section for alerting.
-- alert.**queue**: is "syslog" or "mqtt".
-- alert.**level**: is a logger level.  Logs of this level or higher
-  are sent to the alert queue.  Set "WARNING" for usefulness.
+- **alert**: is an optional section for alerting.  Some of the logs
+  can be sent to syslog or MQTT.
+- **alert.queue**: is "syslog" or "mqtt".
+- **alert.level**: is a logger level.  Logs of this level or higher
+  are sent to the alert queue.  Set "ERR" or "WARNING" usually.
 
-- syslog.**facility**: is "LOCAL7".
+- **syslog.facility**: is "LOCAL7".
 
-- mqtt.**ep**: is "localhost:1883".
-- mqtt.**client**: is "lens3-logger".  It is an MQTT client.
-- mqtt.**topic**: is "Lens3 Alert".  It is an MQTT topic.
-- mqtt.**username**: is "lens3".  It is an MQTT user ID.
-- mqtt.**password**: is a password.  It should match the password for
-  one for the MQTT user.
+- **mqtt.ep**: is "localhost:1883".
+- **mqtt.client**: is a client ID.  It is for keeping MQTT sessions.
+- **mqtt.topic**: is a topic of messages.
+- **mqtt.username**: is "lens3".  A user with its password should be
+  registered in the MQTT server.
+- **mqtt.password**: is a password for the MQTT user.
 
-- "stats".**sample_period**: is an interval to dump memory stats.
+- **stats.sample_period**: is an interval to dump memory stats.  Use 0
+  for disable dumps.
 
 ## reg-conf.json
 
@@ -102,14 +107,21 @@ stored in the keyval-db.
 
 ### "registrar" configuration
 
-- **port**: is 8004, a port number to be used by Registrar.
-- **server_ep**: is "localhost:8004", a concatenation of the hostname
-  and the port.  It is used to redirect http requests to Registrar.
-- **trusted_proxy_list**: is ["localhost"], a hostname of frontend
-  proxy.
+- **port**: is 8004.  It is a port number to be used by Registrar.
+- **server_ep**: is "localhost:8004".  It is a hostname and port pair.
+  It is used to redirect http requests (that is, "/lens3.sts/" to
+  "/lens3.sts/ui/index.html").  The frontend proxy will translate
+  "localhost" appropriately.
+- **trusted_proxy_list**: is ["localhost"].  It is a hostname of
+  the frontend proxy.
 - **base_path**: is "/lens3.sts".
-- **claim_uid_map**: "id",
-- **user_approval**: "allow",
+- **claim_uid_map**: is one of {"id", "email-name", "map"}.  It
+  selects interpretation of authentication names from OIDC.  "id" uses
+  a passed name, "email-name" picks the part before at-mark, and "map"
+  uses mapping registered in the keyval-db.
+- **user_approval**: is "allow" or "block".  When "block", users need
+  to be registered in the keyval-db.  Unregistered users will be
+  rejected.
 - **uid_allow_range_list**: [[1,99999]],
 - **uid_block_range_list**: [[1,999]],
 - **gid_drop_range_list**: [[1,999]],
@@ -118,8 +130,11 @@ stored in the keyval-db.
 - **pool_expiration_days**: 180,
 - **bucket_expiration_days**: 180,
 - **secret_expiration_days**: 180,
-- **error_response_delay_ms**: 1000,
-- **ui_session_duration**: 1800
+- **error_response_delay_ms**: is a delay added when sending a
+  response for a failed http request.
+- **ui_session_duration**: is a duration of UI sessions for CSRF
+  prevention.  It needs to refresh a cookie by reloading
+  "/ui/index.html".
 
 ### "ui" configuration
 

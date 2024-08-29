@@ -11,7 +11,7 @@ service as "lenticularis-mux -c /etc/lenticularis/conf.json".
 - **password**: is a password string that should match with
   "requirepass" entry in "valkey.conf".
 
-## mux-conf.json
+## Multiplexer Configuration: mux-conf.json
 
 "mux-conf.json" contains the setting of Multiplexer.  The contents are
 stored in the keyval-db.
@@ -108,7 +108,7 @@ stored in the keyval-db.
 - **stats.sample_period**: is an interval to dump memory stats.  Use 0
   to disable dumps.
 
-## reg-conf.json
+## Registrar Configuration: reg-conf.json
 
 "reg-conf.json" contains the setting of Registrar.  The contents are
 stored in the keyval-db.
@@ -161,8 +161,8 @@ stored in the keyval-db.
 
 "ui" section stores messages displayed in Web-UI.
 
-- **ui.s3_url**: is something like ["https://lens3.exmaple.com"]().
-- **ui.footer_banner**: is "This site is operated by exmaple.com".
+- **ui.s3_url**: is something like "https://lens3․example․com".
+- **ui.footer_banner**: is "This site is operated by example.com".
 
 ### "log" configuration
 

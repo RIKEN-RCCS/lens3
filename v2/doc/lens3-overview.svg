@@ -137,7 +137,7 @@
 <rect x="6075" y="2250" width="900" height="90"
 	stroke="#000000" stroke-width="8px"/>
 <!-- Text -->
-<text xml:space="preserve" x="4500" y="2880" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">Redis</text>
+<text xml:space="preserve" x="4500" y="2880" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">Valkey</text>
 <!-- Text -->
 <text xml:space="preserve" x="2340" y="630" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">(reverse-proxy)</text>
 <!-- Text -->
@@ -151,6 +151,6 @@
 <!-- Text -->
 <text xml:space="preserve" x="4365" y="630" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">Lens3-Mux</text>
 <!-- Text -->
-<text xml:space="preserve" x="4365" y="1755" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">Lens3-Api</text>
+<text xml:space="preserve" x="4365" y="1755" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">Lens3-Ref</text>
 </g>
 </svg>

@@ -94,7 +94,7 @@ stored in the keyval-db.
 - **mqtt.password**: is a password for the MQTT user.
 
 - **stats.sample_period**: is an interval to dump memory stats.  Use 0
-  for disable dumps.
+  to disable dumps.
 
 ## reg-conf.json
 

@@ -105,8 +105,8 @@ stored in the keyval-db.
   registered in the MQTT server.
 - **mqtt.password**: is a password for the MQTT user.
 
-- **stats.sample_period**: is an interval to dump memory stats.  Use 0
-  to disable dumps.
+- **stats.sample_period** (in sec): is an interval to dump memory
+  stats.  Use 0 to disable dumps.
 
 ## Registrar Configuration: reg-conf.json
 
@@ -148,7 +148,8 @@ stored in the keyval-db.
   the expiration.
 - **pool_expiration_days**: is 180 days.  A pool will expire in 180
   days after creation.
-- **bucket_expiration_days**: is 180 days.
+- **bucket_expiration_days**: is 180 days.  A bucket will expire in
+  180 days after creation.
 - **secret_expiration_days**: is 180 days.  Creating a secret valid
   longer than 180 days will be rejected.
 - **error_response_delay_ms**: is a delay added when sending a
@@ -161,7 +162,7 @@ stored in the keyval-db.
 
 "ui" section stores messages displayed in Web-UI.
 
-- **ui.s3_url**: is something like "https://lens3․example․com".
+- **ui.s3_url**: is something like "https⦂//lens3․example․com".
 - **ui.footer_banner**: is "This site is operated by example.com".
 
 ### "log" configuration

@@ -151,6 +151,6 @@
 <!-- Text -->
 <text xml:space="preserve" x="4365" y="630" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">Lens3-Mux</text>
 <!-- Text -->
-<text xml:space="preserve" x="4365" y="1755" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">Lens3-Ref</text>
+<text xml:space="preserve" x="4365" y="1755" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">Lens3-Reg</text>
 </g>
 </svg>

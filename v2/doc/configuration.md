@@ -22,19 +22,23 @@ stored in the keyval-db.
 
 ### "multiplexer" configuration
 
+"multiplexer" section defines Multiplexer operations.
+
 - **port**: is 8003.  It is a port number to be used by Multiplexer.
 - **trusted_proxy_list**: is ["localhost"].  It is hostnames of the
   frontend proxy and Registrar.
 - **mux_node_name**: is "localhost".  It is optional.  It is a
-  hostname of Multiplexer which is used when Registrar accesses
-  Multiplexer.
+  hostname on which Multiplexer is running, and it is used when
+  Registrar accesses Multiplexer.
 - **backend**: is "minio" or "rclone".
 - **mux_ep_update_interval**: is an interval for which Multiplexer
-  repeatedly sets its endpoint to the keyval-db.
+  repeatedly sets its endpoint in the keyval-db.
 - **error_response_delay_ms**: is a delay added when sending a
   response for a failed http request.
 
 ### "manager" configuration
+
+"manager" section defines the behavior of backend instances.
 
 - **sudo**: is "/usr/bin/sudo".
 - **port_min**: is the range of ports to be used (lower bound).
@@ -56,19 +60,27 @@ stored in the keyval-db.
 
 ### "minio" configuration
 
+"minio" section is for MinIO backend.
+
 - **minio**: is "/usr/local/bin/minio".
 - **mc**: is "/usr/local/bin/mc".
 
 ### "rclone" configuration
+
+"rclone" section is for rclone-serve-s3 backend.
 
 - **rclone**: is "/usr/local/bin/rclone".
 - **command_options**: is a list of options passed to rclone command.
 
 ### "log" configuration
 
+"log" section defines the access log file.
+
 - **access_log_file**: is "/var/log/lenticularis/lens3-mux-access-log".
 
 ### "logging" configuration
+
+"logging" section defines logging operation.
 
 - **logger.log_file**: is "/var/log/lenticularis/lens3-log".
 - **logger.level**: is one of {"ERR", "WARNING", "INFO", "DEBUG"}.
@@ -107,6 +119,8 @@ stored in the keyval-db.
 
 ### "registrar" configuration
 
+"registrar" section defines Registrar operations.
+
 - **port**: is 8004.  It is a port number to be used by Registrar.
 - **server_ep**: is "localhost:8004".  It is a hostname and port pair.
   It is used to redirect http requests (that is, "/lens3.sts/" to
@@ -116,20 +130,27 @@ stored in the keyval-db.
   the frontend proxy.
 - **base_path**: is "/lens3.sts".
 - **claim_uid_map**: is one of {"id", "email-name", "map"}.  It
-  selects interpretation of authentication names from OIDC.  "id" uses
-  a passed name, "email-name" picks the part before at-mark, and "map"
-  uses mapping registered in the keyval-db.
+  selects interpretation of names from authentication (such as OIDC).
+  "id" uses a passed name as an UID, "email-name" picks the part
+  before at-mark, and "map" uses mapping registered in the keyval-db.
 - **user_approval**: is "allow" or "block".  When "block", users need
   to be registered in the keyval-db.  Unregistered users will be
   rejected.
-- **uid_allow_range_list**: [[1,99999]],
-- **uid_block_range_list**: [[1,999]],
-- **gid_drop_range_list**: [[1,999]],
-- **gid_drop_list**: [50000],
-- **user_expiration_days**: 180,
-- **pool_expiration_days**: 180,
-- **bucket_expiration_days**: 180,
-- **secret_expiration_days**: 180,
+- **uid_allow_range_list**: is a list of ranges.  User's UID should be
+  in one of the ranges.
+- **uid_block_range_list**: is a list of ranges.  User's UID should
+  not be in any of the ranges.  The block list has precedence.
+- **gid_drop_range_list**: is a list of ranges.  User's GID list is
+  filtered by these ranges.
+- **gid_drop_list**: is a list of GID's.  User's GID list is filtered
+  by the values.
+- **user_expiration_days**: is 180 days.  Accessing Registrar extends
+  the expiration.
+- **pool_expiration_days**: is 180 days.  A pool will expire in 180
+  days after creation.
+- **bucket_expiration_days**: is 180 days.
+- **secret_expiration_days**: is 180 days.  Creating a secret valid
+  longer than 180 days will be rejected.
 - **error_response_delay_ms**: is a delay added when sending a
   response for a failed http request.
 - **ui_session_duration**: is a duration of UI sessions for CSRF
@@ -138,14 +159,18 @@ stored in the keyval-db.
 
 ### "ui" configuration
 
-- **ui.s3_url**: "https://lens3.exmaple.com",
-- **ui.footer_banner**: "This site is operated by exmaple.com"
+"ui" section stores messages displayed in Web-UI.
+
+- **ui.s3_url**: is something like ["https://lens3.exmaple.com"]().
+- **ui.footer_banner**: is "This site is operated by exmaple.com".
 
 ### "log" configuration
 
-- **log.access_log_file**: "/var/log/lenticularis/lens3-reg-access-log"
+"log" section defines the access log file.
+
+- **log.access_log_file**: is "/var/log/lenticularis/lens3-reg-access-log".
 
 ### "logging" configuration
 
-- **logging**: entry is optional and the same as mux-conf.  The one in
+"logging" section is optional and the same as mux-conf.  The one in
 mux-conf has precedence if both reg-conf and mux-conf define one.

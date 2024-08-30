@@ -3,11 +3,19 @@
 ## Administration Command (lens3-admin)
 
 The "lens3-admin" command is used to modify keyval-db entries.  It is
-installed in "~lens3/go/bin". Note that it does not mutex accesses by
-Registrar, and moreover, modifications can be inconsistent.  The
-command should typically be run on the same host of Lens3 services.
+installed in "~lens3/go/bin".  The command should typically be run on
+the same host of Lens3 services.  Note that it does not mutex accesses
+with Registrar, and moreover, modifications can make the contents in
+the keyval-db inconsistent.
+
 It will print the list of sub-commands by running
 "lens3-admin -c conf.json".
+
+```
+lens3$ lens3-admin -c conf.json
+Or,
+lens3$ lens3-admin -c conf.json help
+```
 
 ### User and Pool Mangement
 
@@ -18,11 +26,11 @@ lens3$ lens3-admin -c conf.json show-user
 lens3$ lens3-admin -c conf.json show-pool
 ```
 
-Or, it can disable users or pools.
+It can disable users or pools.
 
 ```
-lens3$ lens3-admin -c conf.json stop-user true uid
-lens3$ lens3-admin -c conf.json stop-pool true pool-name
+lens3$ lens3-admin -c conf.json stop-user true UID
+lens3$ lens3-admin -c conf.json stop-pool true POOL-NAME
 ```
 
 ### User Registration
@@ -30,39 +38,39 @@ lens3$ lens3-admin -c conf.json stop-pool true pool-name
 "lens3-admin" is used to register users.  Registering users is
 necessary when the configuration is "user_approval=block".
 
-User list is modified by loading/storing a CSV file.  Loading a CSV file is
-incremental, that is, it does not reset the whole data.
+The user list can be modified by loading a CSV-file.  Loading a
+CSV-file is incremental, that is, it does not reset the whole data.
 
 ```
-lens3$ lens3-admin -c conf.json load-user user-list.csv
-lens3$ lens3-admin -c conf.json dump-user > user-list.csv
+lens3$ lens3-admin -c conf.json load-user USER-LIST.csv
+lens3$ lens3-admin -c conf.json dump-user > USER-LIST.csv
 ```
 
-A CSV file consists of lines of {ADD, MODIFY, DELETE, ENABLE,
+A CSV-file consists of lines of {ADD, MODIFY, DELETE, ENABLE,
 DISABLE}-rows.
 
-ADD-row is: ADD,uid,claim,group,... (the rest is a group list).
+An ADD-row is: ADD,uid,claim,group,... (the rest is a group list).
 
 It is one for each user.  The "claim" field is optional and only used
-when the configuration is "claim_uid_map=map".  It is a user's key of
-authentication returned by OIDC (OpenID Connect).  A group list needs
-at least one entry.
+when the configuration is "claim_uid_map=map".  It is a user's name
+returned by authentication, such as OIDC (OpenID Connect).  A group
+list needs at least one entry.
 
-MODIFY-row is simliar to ADD-row.  Adding resets the existing user and
-deletes the pools it owned.  Modifying keeps the pools.
+A MODIFY-row is simliar to an ADD-row.  Adding resets the existing
+user and deletes the pools it owned.  Modifying keeps the pools.
 
-DELETE-row is: DELETE,uid,...
+A DELETE-row is: DELETE,uid,...
 
-ENABLE-row and DISABLE-row are similar.
+An ENABLE-row and a DISABLE-row are similar.
 
-Rows in a CSV file are processed in the order that the all ADD/MODIFY
-rows first, then DELETE, ENABLE, and DISABLE rows in this order.
+Rows in a CSV-file are processed in the order that all ADD/MODIFY rows
+first, then DELETE, ENABLE, and DISABLE rows in this order.
 
 Spaces around a comma or trailing commas are not allowed in CSV.
 
 ## System Maintenance
 
-### Updating MinIO and Mc Binaries
+### No Updating MinIO and Mc Binaries
 
 MinIO and Mc commands should NOT be updated.  Note that Lens3 only
 works with a specific old version of MinIO.
@@ -77,31 +85,13 @@ interval about 15 minutes.  Log-rotating of snapshots is recommended.
 
 ### Keyval-DB Backup
 
-Backup of the keyval-db is done by dump-db and fill-db commands.  A
-dump is a text file with keys and values.  A key part is a string, and
-a value part is in json and it is indented by four spaces.
+Backup of the keyval-db is done by "lens3-admin" with dump-db and
+fill-db commands.  A dump is a text file with keys and values.  A key
+part is a string, and a value part is a record in json and it is
+indented by four spaces.
 
 ```
-lens3$ lens3-admin -c conf.json dump-db
-lens3$ lens3-admin -c conf.json fill-db dump.json
+lens3$ lens3-admin -c conf.json dump-db > DUMP.txt
 lens3$ lens3-admin -c conf.json wipe-out-db everything
+lens3$ lens3-admin -c conf.json fill-db DUMP.txt
 ```
-
-## S3 Signature Algorithm Version
-
-Lens3 works only with the signature v4.  That is, an authentication
-header must include the string "AWS4-HMAC-SHA256".
-
-## MinIO Vulnerability Information
-
-* https://github.com/minio/minio/security
-* https://blog.min.io/tag/security-advisory/
-* https://www.cvedetails.com/vulnerability-list/vendor_id-18671/Minio.html
-
-A list in cvedetails.com is a summary of vulnerability databases
-created by cvedetails.com.
-
-## More Verbose Logging
-
-The configuration "logging.logger.tracing=255" can increase logging
-verbosity.  It is bit flags, and 255 is all bits on.

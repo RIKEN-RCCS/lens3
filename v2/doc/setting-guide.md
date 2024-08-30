@@ -128,7 +128,7 @@ fi
 export PATH
 ```
 
-## Install Lens3
+## Build and Install Lens3
 
 Note "$TOP" in the following refers to the top directory in the
 downloaded Lens3 package.
@@ -403,9 +403,10 @@ Prepare a systemd unit file for Valkey, and start/restart Valkey.
 ```
 
 Multiplexer and Registrar connect to Valkey using the information held
-in "/etc/lenticularis/conf.json".  Copy and edit the configuration
-file.  Set the password to Valkey in it.  KEEP "conf.json" SECURE ALL
-THE TIME.  Access keys are stored in Valkey in raw text.
+in "/etc/lenticularis/conf.json".  KEEP IT SECURE ALL THE TIME.  Copy
+and edit the configuration file.  Set the Valkey's password in it.
+Note that Lens3 stores everything in Valkey, including S3 access keys
+which are stored in raw text.
 
 ```
 # cp $TOP/v2/unit-file/conf.json /etc/lenticularis/conf.json
@@ -449,9 +450,6 @@ lens3$ lens3-admin -c conf.json load-conf reg-conf.json
 lens3$ lens3-admin -c conf.json show-conf
 ```
 
-Restarting the service, lenticularis-mux, is needed after setting
-configurations.  Run `systemctl restart lenticularis-mux`.
-
 Check the syntax of json before loading the configuration.  It can be
 checked by tools such as "jq".  "jq" is a command-line JSON processor.
 
@@ -459,6 +457,10 @@ checked by tools such as "jq".  "jq" is a command-line JSON processor.
 lens3$ cat mux-conf.json | jq
 lens3$ cat reg-conf.json | jq
 ```
+
+We do not start the service, lenticularis-mux, yet.  But, in general,
+restarting the service is needed after changing the configuration.
+Run `systemctl restart lenticularis-mux`.
 
 ## Set up sudoers for Multiplexer
 
@@ -501,7 +503,7 @@ Storage=persistent
 
 ## (Optional) Set up a Message Queue (MQTT)
 
-Lens3 duplicates alert logs to a message queue.  It assumes MQTT v5
+Lens3 can duplicate alert logs to a message queue.  It assumes MQTT v5
 and "mosquitto" for the server.  The assigned MQTT password should be
 set in "mux-conf.json".
 
@@ -539,7 +541,7 @@ lens3$ exit
 Multiplexer and Registrar are two threads in a single binary.  They
 will be started as a system service as "lenticularis-mux".  Copy the
 systemd unit file for the service.  It is started with the user
-"lens3" (uid:gid=lens3:lens3).
+"lens3" (UID:GID=lens3:lens3).
 
 ```
 # cp $TOP/v2/unit-file/lenticularis-mux.service /usr/lib/systemd/system/
@@ -628,40 +630,39 @@ Note that Lens3 does not support listing of buckets by `aws s3 ls`.
 
 ## (Optional) Register Users
 
-Lens3 keeps its own a list of users (with uid+gid) and a list of
-enablement status of the users.
+Registering users is required when Lens3's configuration has a setting
+"user_approval=block".  Lens3 keeps its own a list of users
+(UID + GID's) and a list of enablement statuses of users.
 
 See [Administration Guide](admin-guide.md#).
 
-Lens3 stores user information from a CSV file.  An entry in CSV is a
-"ADD" keyword, a uid, a (maybe empty) claim string, and a list of
-groups.  Prepare a list of users in a CSV file.  The 3rd column is
-used for OIDC.
+Lens3 loads user information from a CSV-file.  Each entry in CSV is a
+"ADD" keyword followed by a UID, a claim string, and a list of groups.
+A claim string (3rd column) can be empty, which is a name from
+authentication (such as OIDC).  Prepare a list of users in a CSV-file.
 
 ```
+lens3$ vi CSV-FILE.csv
 ADD,user1,,group1a,group1b,group1c, ...
 ADD,user2,,group2a,group2b,group2c, ...
+ADD,user3,,group3a,group3b,group3c, ...
 ...
+```
+
+Optionally, a CSV-file may contain a list of users enabled/disabled to
+access.  An entry is a "ENABLE"/"DISABLE" prefix followed by a list of
+UID's.
+
+```
+lens3$ vi CSV-FILE.csv
+ENABLE,user1,user2,user3, ...
+DISABLE,user4,user5,user6, ...
 ```
 
 Register users by `lens3-admin` command.
 
 ```
-lens3$ lens3-admin -c conf.json load-user {csv-file}
-lens3$ lens3-admin -c conf.json show-user
-```
-
-(Optionally) Prepare a list of users enabled to access.  An entry is a
-"ENABLE" prefix and a list of uid's
-
-```
-ENABLE,user1,user2,user3, ...
-```
-
-Register an enabled-user list by `lens3-admin` command.
-
-```
-lens3$ lens3-admin -c conf.json load-user CSV-FILE
+lens3$ lens3-admin -c conf.json load-user CSV-FILE.csv
 lens3$ lens3-admin -c conf.json show-user
 ```
 
@@ -672,29 +673,49 @@ lens3$ lens3-admin -c conf.json show-user
 Check the systemd logs, first.  Diagnosing errors before a start of
 logging is tricky.
 
-### Verbose Logging
+```
+# systemctl status lenticularis-mux
+Or,
+# journalctl
+```
+
+### More Verbose Logging
 
 Logs of Lens3 are dumped in "/var/log/lenticularis/lens3-log".
 
-Verbosity of logging can be increased by setting the "tracing"=255.
-It is bit flags in the configuration "mux-conf.json" at
-"logging"."logger"."tracing".  Reloading the configuration by
-"lens3-admin" and restarting the service by "systemctl" are necessary
-to make the changes effective.
+The configuration "logging.logger.tracing=255" can increase logging
+verbosity.  It is bit flags, and 255 is all bits on.
+
+The setting of "logging.logger.tracing" is in the configuration
+"mux-conf.json".  Reloading the configuration by "lens3-admin" and
+restarting the service by "systemctl" are needed to make changes
+effective.
+
+### Running MinIO by Hand
+
+A major trouble is starting MinIO.  Try to start MinIO by hand.
+
+```
+lens3$ /usr/loca/bin/minio --json --anonymous server --address :9012 SOME-PATH
+Or,
+lens3$ /usr/bin/sudo -n -u SOME-UID -g SOME-GID \
+    /usr/loca/bin/minio --json --anonymous server --address :9012 SOME-PATH
+```
 
 ### Examining MinIO Behavior
 
 It is a bit tricky when MinIO won't behave as expected.  In that case,
-it will help to connect to MinIO with "mc" command.  It is possible to
-dump MinIO's tracing information, for example.
+it will help to connect to MinIO with "mc" command.  It allows to dump
+MinIO's tracing information, for example.
 
 The necessary information to use "mc" command is a URL of a MinIO
 endpoint, and administrator's key pair.  These can be obtained by
 `lens3-admin show-be` command ("be" is a short for backend).  It
 displays MinIO's endpoint (host:port) in "backend_ep" field.  It also
-displays ACCESS-KEY in "root_access" and SECRET-KEY in "root_secret".
-The "show-be" command shows information on running MinIO instances.
+displays an access-key in "root_access" and a secret-key in
+"root_secret".
 
+The "show-be" command shows information on running MinIO instances.
 To use "mc" command, it is necessary to keep a MinIO instance running.
 Run `lens3-admin send-probe POOL-NAME`, repeatedly, to let it running.
 
@@ -704,13 +725,13 @@ lens3$ lens3-admin -c conf.json show-be
 lens3$ lens3-admin -c conf.json send-probe POOL-NAME
 ```
 
-For example, the commands below enables to dump tracing logs from
-MinIO.  ALIAS-NAME can be any string.  URL would be
-"http:// + _backend_ep_", something like, `http://localhost:9012`.
+For example, the sequence of commands below enables to dump tracing
+logs from MinIO.  ALIAS-NAME can be any string.  A URL string would be
+"http:// + _backend_ep_", like `http://localhost:9012`.
 
 ```
 lens3$ mc alias set ALIAS-NAME URL ACCESS-KEY SECRET-KEY
-lens3$ mc admin trace -v ALIAS
+lens3$ mc admin trace -v ALIAS-NAME
 ```
 
 ### Clean Start for Messy Troubles
@@ -727,16 +748,10 @@ lens3$ valkey-cli -p 6378 -n 3 --scan --pattern '*'
 
 Use "-a password" instead of an environment variable.
 
-### Running MinIO by Hand
-
-```
-lens3$ minio --json --anonymous server --address :9001 SOME-PATH
-```
-
 ### OIDC Redirect Failure
 
 OIDC may err with "Invalid parameter: redirect_uri" and fail to return
-to lens3, when using an example configuration "lens3proxy-oidc.conf".
+to Lens3, when using an example configuration "lens3proxy-oidc.conf".
 It would happen in an https only site.  It may be fixed by modifying a
 "OIDCRedirectURI" line to a full URL starting with "https:".
 
@@ -747,4 +762,18 @@ It would happen in an https only site.  It may be fixed by modifying a
   be delayed which cause all errors to be reported as timeouts.
 
 - Current version does not support of multiple hosts.  It requires all
-the frontend proxy, Multiplexer, and Registrar run on a single host.
+  the frontend proxy, Valkey, Multiplexer, and Registrar run on a
+  single host.
+
+- Lens3 works only with the signature algorithm version	 v4 of AWS S3.
+  That is, an authentication header must include the string
+  "AWS4-HMAC-SHA256".
+
+## MinIO Vulnerability Information
+
+* https://github.com/minio/minio/security
+* https://blog.min.io/tag/security-advisory/
+* https://www.cvedetails.com/vulnerability-list/vendor_id-18671/Minio.html
+
+A list in cvedetails.com is a summary of vulnerability databases
+created by cvedetails.com.

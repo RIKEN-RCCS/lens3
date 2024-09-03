@@ -121,10 +121,10 @@ operation.
 
 ### Multiplexer
 
-Multiplexer forwards access requests to a backend S3 server instance
-by looking at a bucket name.  Multiplexer determines the target
-backend using an association of a bucket and a pool.  This association
-is stored in the keyval-db.
+Multiplexer (Lens3-Mux) forwards access requests to a backend S3
+server instance by looking at a bucket name.  Multiplexer determines
+the target backend using an association of a bucket and a pool.  This
+association is stored in the keyval-db.
 
 Multiplexer is also in charge of starting and stopping a backend S3
 server instance.  Multiplexer starts a backend on receiving an access
@@ -134,9 +134,9 @@ becomes idle.  Multiplexer runs a backend as a user process using
 
 ### Registrar
 
-Registrar provides management of buckets.  A pool is a unit of
-management in Lens3 and it corresponds to a single backend.  A user
-first creates a pool, then registers buckets to the pool.
+Registrar (Lens3-Reg) provides management of buckets.  A pool is a
+unit of management in Lens3 and it corresponds to a single backend.  A
+user first creates a pool, then registers buckets to the pool.
 
 ### Pool State
 

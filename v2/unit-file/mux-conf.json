@@ -1,0 +1,63 @@
+{
+  "subject": "mux",
+  "version": "v2.1",
+  "aws_signature": "AWS4-HMAC-SHA256",
+  "multiplexer": {
+    "port": 8003,
+    "trusted_proxy_list": [
+      "localhost"
+    ],
+    "mux_node_name": "localhost",
+    "backend": "minio",
+    "mux_ep_update_interval": 307,
+    "error_response_delay_ms": 1000
+  },
+  "manager": {
+    "sudo": "/usr/bin/sudo",
+    "port_min": 9000,
+    "port_max": 9029,
+    "backend_awake_duration": 300,
+    "backend_start_timeout_ms": 60000,
+    "backend_timeout_ms": 5000,
+    "backend_timeout_suspension": 600,
+    "backend_region": "us-east-1",
+    "heartbeat_interval": 61,
+    "heartbeat_miss_tolerance": 4
+  },
+  "minio": {
+    "minio": "/usr/local/bin/minio",
+    "mc": "/usr/local/bin/mc"
+  },
+  "rclone": {
+    "rclone": "/usr/local/bin/rclone",
+    "command_options": []
+  },
+  "log": {
+    "access_log_file": "/var/log/lenticularis/lens3-mux-access-log"
+  },
+  "logging": {
+    "logger": {
+      "log_file": "/var/log/lenticularis/lens3-log",
+      "level": "DEBUG",
+      "tracing": 0,
+      "source_line": false
+    },
+    "alert": {
+      "queue": "mqtt",
+      "level": "WARNING"
+    },
+    "syslog": {
+      "facility": "LOCAL7"
+    },
+    "mqtt": {
+      "ep": "localhost:1883",
+      "client": "lens3-logger",
+      "topic": "Lens3 Alert",
+      "username": "lens3",
+      "password": "lEXw0tR6cB5ueTRkSFLZLsjMEPgQ9ah8QeKwdKUZ"
+    },
+    "stats": {
+      "sample_period": 600
+    }
+  }
+}

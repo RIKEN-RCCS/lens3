@@ -1,0 +1,9 @@
+{
+  "s3_ep": "https://lens3.example.com",
+  "reg_ep": "https://lens3.example.com/lens3.sts",
+  "gid": "some-group",
+  "home": "/home/some-user/pool-test",
+  "auth": "oidc",
+  "cred": ["some-uuid"],
+  "ssl_verify": true
+}

@@ -1,0 +1,19 @@
+{
+  "s3_ep": "http://lens3.example.com",
+  "size": 65536,
+  "count": 10,
+  "threads": 10,
+  "period": 300,
+  "fluctuation": 20,
+  "stores": [
+    {"bucket": "lenticularis-oddity-001",
+     "access_key": "c2ijHxuxQm1ZMFgG4E2E",
+     "secret_key": "Zk3wxgZbSqukewbNspxPZ9BEKMCj2xCvTGcGi0tMDHSeGfwr"},
+    {"bucket": "lenticularis-oddity-002",
+     "access_key": "c2ijHxuxQm1ZMFgG4E2E",
+     "secret_key": "Zk3wxgZbSqukewbNspxPZ9BEKMCj2xCvTGcGi0tMDHSeGfwr"},
+    {"bucket": "lenticularis-oddity-003",
+     "access_key": "c2ijHxuxQm1ZMFgG4E2E",
+     "secret_key": "Zk3wxgZbSqukewbNspxPZ9BEKMCj2xCvTGcGi0tMDHSeGfwr"}
+  ]
+}

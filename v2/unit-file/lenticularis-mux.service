@@ -1,0 +1,19 @@
+[Unit]
+Description=Lenticularis-mux service
+After=syslog.target network-online.target remote-fs.target nss-lookup.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=lens3
+Group=lens3
+WorkingDirectory=/var/tmp
+RuntimeDirectory=lenticularis-mux
+RuntimeDirectoryMode=0755
+StandardOutput=journal
+StandardError=journal
+#PrivateTmp=true
+ExecStart=lenticularis-mux -c /etc/lenticularis/conf.json
+
+[Install]
+WantedBy=multi-user.target

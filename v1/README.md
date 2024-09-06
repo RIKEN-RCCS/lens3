@@ -1,22 +1,18 @@
 # Lens3
 
-Lenticularis-S3 is an AWS S3 multiplexer to service multiple server
+Lenticularis-S3 is a multiplexer to MinIO to service multiple MinIO
 instances at a single access point.
 
 ## Overview
 
-Lenticularis-S3 (Lens3) provides an AWS S3 service at a single access
-point while using an existing S3 server.  An S3 service is usually
-owned by a single user (unix root), but it may not be acceptable by
-site's security policy.  Lens3 starts multiple S3 servers (backend
-server instances) one for each user, which confines operations by
-user's permission.
+Lenticularis-S3 (Lens3) provides an S3 service by running multiple
+MinIO instances at a single access point.  MinIO is an S3 object
+storage server.  Please refer to [https://min.io](https://min.io)
+about MinIO.  While a MinIO service is usually owned by a single user,
+Lens3 starts multiple MinIO instances one for each user to confine
+operations by user's permission.
 
-Lens3 uses MinIO as an S3 object storage server.  MinIO is an
-open-source, commercially supported S3 server.  Please refer about
-MinIO to [https://min.io](https://min.io/).
-
-| ![lens3-overview](./v2/doc/lens3-overview.svg) |
+| ![lens3-overview](./doc/lens3-overview.svg) |
 |:--:|
 | **Fig. Lens3 overview.** |
 
@@ -31,17 +27,13 @@ service, called "Lens3-Api", is started as a systemd service, too.
 
 ## Guides
 
-- [user-guide.md](./v2/doc/user-guide.md) for users.
-- [admin-guide.md](./v2/doc/admin-guide.md) for administrators to
+- [user-guide.md](./doc/user-guide.md) for users.
+- [admin-guide.md](./doc/admin-guide.md) for administrators to
   maintain lens3 services.
-- [setting-guide.md](./v2/doc/setting-guide.md) for site managers to
+- [setting-guide.md](./doc/setting-guide.md) for site managers to
   install lens3 services.
-- [design-notes.md](./v2/doc/design-notes.md) for programmers to debug.
+- [design.md](./doc/design.md) for programmers to debug.
 
-## README
-
-- [README v2](./v2/README.md)
-- [README v1](./v1/README.md)
 
 ## ACKNOWLEDGMENT
 
@@ -60,8 +52,18 @@ Lens3 UI is created with vuejs+vuetify.  Please refer to
 [https://vuejs.org](https://vuejs.org/) and
 [https://vuetifyjs.com](https://vuetifyjs.com/en/).
 
-[Third party software for v2](./v2/THIRDPARTY.md)
+[THIRDPARTY](THIRDPARTY.md)
 
-[Third party software for v1](./v1/THIRDPARTY.md)
+## Directories
+
+```
+doc                  documents
+src/lenticularis     source code
+ui                   UI source code (Vuetify)
+unit-file            configuration and systemd templates
+nginx                example settings of a proxy
+apache               example settings of a proxy
+test                 test code
+```
 
 __Lenticularis-S3 comes with ABSOLUTELY NO WARRANTY.__

@@ -1,0 +1,15 @@
+;; -*-Coding: utf-8; Mode: Fundamental;-*-
+
+Samples of MinIO MC-command messages.
+
+% /usr/local/bin/mc --version
+
+mc version RELEASE.2022-06-10T22-29-12Z
+
+% /usr/local/bin/mc --json --config-dir=/tmp/lens3-mc-693842665 alias set pool--b8famgv26p1b http://localhost:8080 K9Cvs9bSxgaeW8U7OtZP qgEHK3EETvAZiq64pXhORHBuLBoc9KB3cAZBpvdar9E76mXv --api S3v4
+
+{"status":"success","alias":"pool--b8famgv26p1b","URL":"http://localhost:8080","accessKey":"K9Cvs9bSxgaeW8U7OtZP","secretKey":"qgEHK3EETvAZiq64pXhORHBuLBoc9KB3cAZBpvdar9E76mXv","api":"S3v4","path":"auto"}
+
+% /usr/local/bin/mc --json --config-dir=/tmp/lens3-mc-693842665 admin service stop pool--b8famgv26p1b
+
+{"status":"success","serverURL":"pool--b8famgv26p1b"}

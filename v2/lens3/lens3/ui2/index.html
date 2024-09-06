@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <style type="text/css">
+      .label {
+          width: 20em !important;
+          display: inline-block;
+      }
+    </style>
+    <title>Lens3 Pool Manager</title>
+  </head>
+  <body onload="start_ui();">
+    <div>LENS3 POOL MANAGER</div>
+    <div>
+      <button onclick="kick_show_pool_make()">New bucket pool</button>
+      <button onclick="kick_show_pool_list()">Show bucket pools</button>
+    </div>
+
+    <div id="pool_make_section">
+      <hr />
+      <div><span class="label">POOL MAKE</span></div>
+      <div>
+        <span class="label">Buckets directory (absolute path):</span>
+        <input id="pool_directory" size="30" />
+      </div>
+      <div>
+        <span class="label">User:</span>
+        <input id="pool_owner" size="30" disabled />
+      </div>
+      <div>
+        <span class="label">Group:</span>
+        <select id="group_choices"></select>
+        <div>
+          <button onclick="kick_make_pool()">Create</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="pool_list_section">
+      <hr />
+      <div><span class="label">POOL LIST</span></div>
+      <div id="list_of_pools"></div>
+    </div>
+
+    <div id="buckets_section">
+      <hr />
+      <div>
+	<span class="label">POOL EDIT</span>
+      </div>
+      <div>
+        <span class="label">Buckets directory (absolute path):</span>
+        <input id="buckets_directory" size="30" disabled />
+      </div>
+
+      <hr />
+      <div>
+        <span class="label">BUCKETS</span>
+      </div>
+      <div>
+        <div>New bucket</div>
+        <span class="label">
+          <input id="bucket_name" size="30" placeholder="bucket name" />
+          <select id="bucket_policy" required>
+            <option selected>none</option>
+            <option>public</option>
+            <option>upload</option>
+            <option>download</option>
+          </select>
+        </span>
+        <button onclick="kick_make_bucket()">Add bucket</button>
+        <span>(a policy is for public accesses)</span>
+      </div>
+
+      <div>
+        <span class="label">Existing buckets and policies</span>
+        <div id="list_of_buckets"></div>
+      </div>
+    </div>
+
+    <div id="secrets_section">
+      <hr />
+      <div>
+        <span class="label">ACCESS KEYS</span>
+      </div>
+      <div>
+        <span class="label">Expiration:</span>
+        <input type="date" id="secret_expiration" />
+        <span>(00:00:00 UTC)</span>
+      </div>
+      <div>
+        <span class="label">Access keys (rw)</span>
+        <button onclick="kick_make_secret('readwrite')">Create key</button>
+      </div>
+      <div id="list_of_secrets_rw"></div>
+
+      <div>
+        <span class="label">Access keys (ro)</span>
+        <button onclick="kick_make_secret('readonly')">Create key</button>
+      </div>
+      <div id="list_of_secrets_ro"></div>
+
+      <div>
+        <span class="label">Access keys (wo)</span>
+        <button onclick="kick_make_secret('writeonly')">Create key</button>
+      </div>
+      <div id="list_of_secrets_wo"></div>
+    </div>
+
+    <div>
+      <hr />
+      <div>
+        <span class="label">SERVER RESPONSE</span>
+      </div>
+      <div id="server_response"></div>
+      <div>
+        <button onclick="kick_test_csrf()">Test CSRF</button> (Calls API
+        with a fake csrf-token header)
+      </div>
+      <div>
+        <button onclick="kick_dump()">Dump</button> (Dumps some internal
+        data on the javascript console)
+      </div>
+    </div>
+
+    PLACE_BASE_PATH_SETTING_HERE
+    <script src="lens3ui.js"></script>
+    <div hidden>Lens3-v1.2 2023-06-14</div>
+  </body>
+</html>

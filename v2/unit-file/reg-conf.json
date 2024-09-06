@@ -1,0 +1,32 @@
+{
+  "subject": "reg",
+  "version": "v2.1",
+  "aws_signature": "AWS4-HMAC-SHA256",
+  "registrar": {
+    "port": 8004,
+    "server_ep": "localhost:8004",
+    "trusted_proxy_list": [
+      "localhost"
+    ],
+    "base_path": "/lens3.sts",
+    "claim_uid_map": "id",
+    "user_approval": "allow",
+    "uid_allow_range_list": [[1,99999]],
+    "uid_block_range_list": [[1,999]],
+    "gid_drop_range_list": [[1,999]],
+    "gid_drop_list": [50000],
+    "user_expiration_days": 180,
+    "pool_expiration_days": 180,
+    "bucket_expiration_days": 180,
+    "secret_expiration_days": 180,
+    "error_response_delay_ms": 1000,
+    "ui_session_duration": 1800
+  },
+  "ui": {
+    "s3_url": "https://lens3.exmaple.com",
+    "footer_banner": "This site is operated by exmaple.com"
+  },
+  "log": {
+    "access_log_file": "/var/log/lenticularis/lens3-reg-access-log"
+  }
+}

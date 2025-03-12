@@ -373,10 +373,15 @@ maybe extremely slow on large objects.
   balance the loads.  (It currently lacks the support for multiple
   hosts at all).
 
-- Possible options
+- Possible configuration options
   - confirmation of terms-of-use at the first use.
-  - disable public buckets.
-  - description field to keys (just a memo).
+  - disabling use of public buckets.
+  - memo field to key-pairs (for just a memo).
+
+- Add a "motd"-like message field in UI.  It will be stored in a
+  separated field from configurations.
+
+- (Fix consistent ordering in adding database fields).
 
 ## Random MEMO
 

@@ -378,10 +378,15 @@ maybe extremely slow on large objects.
   - disabling use of public buckets.
   - memo field to key-pairs (for just a memo).
 
-- Add a "motd"-like message field in UI.  It will be stored in a
-  separated field from configurations.
+- Add a "motd"-like message field in UI.  It may be stored in a
+  separated field in the configuration.
 
-- (Fix consistent ordering in adding database fields).
+- (Document consistent ordering in adding database fields).
+
+- Prepare an RPM release.
+
+- Check the status of Google's "Material Web".  It is in pause in
+  2024.
 
 ## Random MEMO
 

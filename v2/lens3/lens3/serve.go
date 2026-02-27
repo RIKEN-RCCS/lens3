@@ -23,9 +23,10 @@ import (
 	"flag"
 	"fmt"
 	"golang.org/x/sys/unix"
+	"log/slog"
 	"net"
 	"net/http"
-	"net/http/pprof"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"runtime"
@@ -60,7 +61,7 @@ func Run_lenticularis_mux() {
 	}
 	if *flag_pprof != 0 {
 		var port int = *flag_pprof
-		go start_pprof_service(port)
+		go service_profiler(slogger, port)
 	}
 
 	var services = [2]string{"", ""}
@@ -247,15 +248,13 @@ func force_quit_service() {
 	//<-make(chan vacuous)
 }
 
-func start_pprof_service(port int) {
+// SERVICE_PROFILER starts the http server for "go tool pprof".  Note
+// importing "net/http/pprof" initializes profiler in DefaultServeMux.
+func service_profiler(logger *slog.Logger, port int) {
 	var ep = net.JoinHostPort("", strconv.Itoa(port))
-	var pprofrouter = http.NewServeMux()
-	pprofrouter.HandleFunc("/debug/pprof/", pprof.Index)
-	pprofrouter.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-	pprofrouter.HandleFunc("/debug/pprof/profile", pprof.Profile)
-	pprofrouter.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-	pprofrouter.HandleFunc("/debug/pprof/trace", pprof.Trace)
-	var err1 = http.ListenAndServe(ep, pprofrouter)
-	fmt.Fprintf(os.Stderr, "Starting pprof failed: err=%v\n", err1)
+	var router = http.DefaultServeMux
+	logger.Info("Enabling pprof", "port", port)
+	var err1 = http.ListenAndServe(ep, router)
+	logger.Error("Enabling pprof failed", "error", err1)
 	print_usage_and_exit()
 }

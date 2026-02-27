@@ -41,6 +41,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/riken-rccs/s3-baby-server/pkg/awss3aide"
 )
 
 // MULTIPLEXER is a single object, "the_multiplexer".  EP_PORT is a
@@ -585,11 +587,11 @@ func handle_exc(x any, w http.ResponseWriter, rqst *http.Request, delay_ms time_
 // (nil,nil) when an authorization header is missing.
 func check_authenticated(m *multiplexer, r *http.Request) (*secret_record, *proxy_exc) {
 	var header = r.Header.Get("Authorization")
-	var cred authorization_s3v4 = scan_aws_authorization(header)
-	if cred.signature == "" {
+	var cred *awss3aide.Authorization_s3v4 = awss3aide.Scan_aws_authorization(header)
+	if cred.Signature == "" {
 		return nil, nil
 	}
-	var auth string = cred.credential[0]
+	var auth string = cred.Credential[0]
 	var secret *secret_record = get_secret(m.table, auth)
 	if secret == nil {
 		slogger.Info(m.logprefix+"Bad credential", "key", auth,
@@ -605,8 +607,9 @@ func check_authenticated(m *multiplexer, r *http.Request) (*secret_record, *prox
 	}
 	assert_fatal(secret.Access_key == auth)
 	var keypair = [2]string{secret.Access_key, secret.Secret_key}
-	var ok, reason1 = check_credential_is_good(r, keypair)
-	if !ok {
+	//var ok, reason1 = check_credential_is_good(r, keypair)
+	var reason1, err1 = awss3aide.Check_credential(r, keypair, 60*time.Second)
+	if err1 != nil {
 		slogger.Info(m.logprefix+"Bad credential", "key", auth,
 			"reason", reason1)
 		var err2 = &proxy_exc{

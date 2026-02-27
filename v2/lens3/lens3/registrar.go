@@ -1914,12 +1914,19 @@ func probe_access_mux(t *keyval_table, pool string) error {
 		Backend_ep:  ep,
 		Root_access: secret.Access_key,
 		Root_secret: secret.Secret_key,
-	}
-	var err5 = sign_by_backend_credential(r, dummy)
-	if err5 != nil {
+y	}
+	var host, _, err51 = net.SplitHostPort(ep)
+	if err51 != nil {
 		slogger.Error("Reg: Probe-access failed",
-			"pool", pool, "op", "signer/Signer.SignHTTP()", "err", err5)
-		return err5
+			"pool", pool, "op", "net.SplitHostPort()", "ep", ep, "err", err51)
+		return err51
+	}
+	var keypair = [2]string{secret.Access_key, secret.Secret_key}
+	var err52 = Sign_by_credential(r, host, keypair)
+	if err52 != nil {
+		slogger.Error("Reg: Probe-access failed",
+			"pool", pool, "op", "signer/Signer.SignHTTP()", "err", err52)
+		return err52
 	}
 
 	var c = &http.Client{

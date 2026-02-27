@@ -7,14 +7,14 @@ package lens3
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"log/syslog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
+
+	"github.com/riken-rccs/s3-baby-server/pkg/httpaide"
 )
 
 // SLOGGER is a logger.  It uses a default one first, but it will be
@@ -277,36 +277,21 @@ func log_reg_access_by_request(rqst *http.Request, code int, length int64, uid s
 	log_access("reg", rqst, code, length, uid, auth)
 }
 
-const common_log_time_layout = "02/Jan/2006:15:04:05 -0700"
-
 // LOG_ACCESS logs accesses for both Multiplexer and Registrar.  The
 // AUTH is an access-key, and it is always "-" for Registrar.
 func log_access(src string, rqst *http.Request, code int, length int64, uid string, auth string) {
-	var uid1 = ITE(uid != "", uid, "-")
-	var auth1 = ITE(auth != "", auth, "-")
-
-	// l: RFC 1413 client identity by identd
-	// u: user
-	// rf: Referer
-
-	var h = rqst.RemoteAddr
-	var l = "-"
-	var u = uid1
-	var t = time.Now().Format(common_log_time_layout)
-	var r = fmt.Sprintf("%s %s %s", rqst.Method, rqst.URL, rqst.Proto)
-	var s = fmt.Sprintf("%d", code)
-	var b = fmt.Sprintf("%d", length)
-	var rf = "-"
-	var ua = rqst.Header.Get("User-Agent")
-
+	var user string
+	if !(auth == "" || auth == "-") {
+		user = auth
+	} else if uid != "" {
+		user = uid
+	} else {
+		user = "-"
+	}
+	var msg1 = httpaide.Log_access(rqst, code, length, user)
 	switch src {
 	case "mux":
 		var f *os.File = mux_access_log_file
-		var msg1 = fmt.Sprintf(
-			("%s %s %s [%s] %q" + " %s %s %q %q" + " key=%q" + "\n"),
-			h, l, u, t, r,
-			s, b, rf, ua,
-			auth1)
 		var _, err1 = f.WriteString(msg1)
 		if err1 != nil {
 			slogger.Error("Mux() Wrinting access log failed",
@@ -314,11 +299,7 @@ func log_access(src string, rqst *http.Request, code int, length int64, uid stri
 		}
 	case "reg":
 		var f *os.File = reg_access_log_file
-		var msg2 = fmt.Sprintf(
-			("%s %s %s [%s] %q" + " %s %s %q %q" + "\n"),
-			h, l, u, t, r,
-			s, b, rf, ua)
-		var _, err2 = f.WriteString(msg2)
+		var _, err2 = f.WriteString(msg1)
 		if err2 != nil {
 			slogger.Error("Reg() Wrinting access log failed",
 				"err", err2)

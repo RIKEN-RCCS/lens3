@@ -1,9 +1,7 @@
-/* S3 Server Delegate for Rclone "rclone serve s3". */
-
-// Copyright 2022-2024 RIKEN R-CCS
+// Copyright 2022-2026 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
 
-package lens3
+// S3 Server Delegate for Rclone "rclone serve s3"
 
 // This is a backend for rclone.  The target is rclone-v1.66.0.
 
@@ -30,6 +28,8 @@ package lens3
 //
 // MEMO: vfs caching creates a cache in "~/.cache/rclone", and the
 // subdirectories are "vfs/local" and "vfsMeta/local".
+
+package lens3
 
 import (
 	"encoding/json"
@@ -92,7 +92,7 @@ type backend_factory_rclone struct {
 var the_backend_rclone_factory = &backend_factory_rclone{}
 
 func (fa *backend_factory_rclone) configure(conf *mux_conf) {
-	fa.rclone_conf = &conf.Rclone
+	fa.rclone_conf = conf.Rclone
 	fa.backend_conf.use_n_ports = 2
 }
 

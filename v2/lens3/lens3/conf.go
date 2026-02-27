@@ -1,14 +1,14 @@
-/* A conf file reader. */
-
-// Copyright 2022-2024 RIKEN R-CCS
+// Copyright 2022-2026 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
 
-package lens3
+// A Conf File Reader
 
 // Configuration Files.  The configurations are stored in the
 // keyval-db.  Configuration files are read and checked against
 // definitions.  It accepts extra fields.  Reading configuration files
 // are by the admin tool, and the errors are fatal.
+
+package lens3
 
 import (
 	"bytes"
@@ -39,8 +39,9 @@ type mux_conf struct {
 	Conf_header
 	Multiplexer multiplexer_conf `json:"multiplexer"`
 	Manager     manager_conf     `json:"manager"`
-	Minio       minio_conf       `json:"minio"`
-	Rclone      rclone_conf      `json:"rclone"`
+	Minio       *minio_conf      `json:"minio"`
+	Rclone      *rclone_conf     `json:"rclone"`
+	S3baby      *s3baby_conf     `json:"baby-server"`
 	Log         access_log_conf  `json:"log"`
 	Logging     *logging_conf    `json:"logging"`
 }
@@ -118,6 +119,11 @@ type minio_conf struct {
 
 type rclone_conf struct {
 	Rclone          string   `json:"rclone"`
+	Command_options []string `json:"command_options"`
+}
+
+type s3baby_conf struct {
+	Path            string   `json:"path"`
 	Command_options []string `json:"command_options"`
 }
 
@@ -213,11 +219,13 @@ type backend_name string
 const (
 	backend_name_minio  backend_name = "minio"
 	backend_name_rclone backend_name = "rclone"
+	backend_name_s3baby backend_name = "baby-server"
 )
 
 var backend_list = []backend_name{
 	backend_name_minio,
 	backend_name_rclone,
+	backend_name_s3baby,
 }
 
 const bad_message = "Bad json conf file."
@@ -297,9 +305,11 @@ func check_mux_conf(conf *mux_conf) {
 	check_manager_entry(&conf.Manager)
 	switch conf.Multiplexer.Backend {
 	case "minio":
-		check_minio_entry(&conf.Minio)
+		check_minio_entry(conf.Minio)
 	case "rclone":
-		check_rclone_entry(&conf.Rclone)
+		check_rclone_entry(conf.Rclone)
+	case "baby-server":
+		check_s3baby_entry(conf.S3baby)
 	}
 	check_access_log_entry(&conf.Log)
 }
@@ -410,7 +420,7 @@ func check_manager_entry(e *manager_conf) {
 }
 
 func check_minio_entry(e *minio_conf) {
-	if len(e.Minio) > 0 && len(e.Mc) > 0 {
+	if e != nil && len(e.Minio) > 0 && len(e.Mc) > 0 {
 		// Okay.
 	} else {
 		slogger.Error("Bad backend entry (minio)", "entry", e)
@@ -419,10 +429,19 @@ func check_minio_entry(e *minio_conf) {
 }
 
 func check_rclone_entry(e *rclone_conf) {
-	if len(e.Rclone) > 0 {
+	if e != nil && len(e.Rclone) > 0 {
 		// Okay.
 	} else {
 		slogger.Error("Bad backend entry (rclone)", "entry", e)
+		panic(nil)
+	}
+}
+
+func check_s3baby_entry(e *s3baby_conf) {
+	if e != nil && len(e.Path) > 0 {
+		// Okay.
+	} else {
+		slogger.Error("Bad backend entry (baby-server)", "entry", e)
 		panic(nil)
 	}
 }

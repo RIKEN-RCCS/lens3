@@ -1,7 +1,7 @@
-/* S3 Server Delegate for MinIO. */
-
-// Copyright 2022-2024 RIKEN R-CCS
+// Copyright 2022-2026 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
+
+// S3 Server Delegate for MinIO.
 
 package lens3
 
@@ -54,7 +54,7 @@ type backend_factory_minio struct {
 var the_backend_minio_factory = &backend_factory_minio{}
 
 func (fa *backend_factory_minio) configure(conf *mux_conf) {
-	fa.minio_conf = &conf.Minio
+	fa.minio_conf = conf.Minio
 	fa.backend_conf.use_n_ports = 1
 }
 

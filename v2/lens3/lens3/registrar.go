@@ -1,11 +1,7 @@
-/* Lens3-Registrar.  Registrar of buckets and secrets. */
-
-// Copyright 2022-2024 RIKEN R-CCS
+// Copyright 2022-2026 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
 
-package lens3
-
-// Registrar is a Web-UI for pool management.
+// Lens3-Registrar.  Registrar is a Web-UI for pool management.
 
 // NOTE: Registrar uses a "double submit cookie" for CSRF prevention,
 // that is used in fastapi_csrf_protect.  It uses a cookie+header
@@ -36,6 +32,8 @@ package lens3
 
 // MEMO: Maybe, consider adding a "Retry-After" header for 503 error.
 
+package lens3
+
 import (
 	"context"
 	"encoding/json"
@@ -51,6 +49,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/riken-rccs/s3-baby-server/pkg/awss3aide"
 )
 
 // UI scripts are stored in Golang's embedded files.
@@ -233,6 +233,8 @@ type reg_bad_argument_message struct {
 	error string
 	info  map[string]string
 }
+
+const empty_payload_hash_sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
 func configure_registrar(z *registrar, t *keyval_table, qch <-chan vacuous, c *reg_conf) {
 	z.table = t
@@ -1910,11 +1912,6 @@ func probe_access_mux(t *keyval_table, pool string) error {
 
 	var hash = empty_payload_hash_sha256
 	r.Header.Set("X-Amz-Content-Sha256", hash)
-	var dummy = &backend_record{
-		Backend_ep:  ep,
-		Root_access: secret.Access_key,
-		Root_secret: secret.Secret_key,
-y	}
 	var host, _, err51 = net.SplitHostPort(ep)
 	if err51 != nil {
 		slogger.Error("Reg: Probe-access failed",
@@ -1922,7 +1919,7 @@ y	}
 		return err51
 	}
 	var keypair = [2]string{secret.Access_key, secret.Secret_key}
-	var err52 = Sign_by_credential(r, host, keypair)
+	var err52 = awss3aide.Sign_by_credential(r, host, keypair)
 	if err52 != nil {
 		slogger.Error("Reg: Probe-access failed",
 			"pool", pool, "op", "signer/Signer.SignHTTP()", "err", err52)

@@ -1,10 +1,7 @@
-/* Lens3-Multiplexer.  Main part of Lens3. */
-
-// Copyright 2022-2024 RIKEN R-CCS.
+// Copyright 2022-2026 RIKEN R-CCS.
 // SPDX-License-Identifier: BSD-2-Clause
 
-package lens3
-
+/* Lens3-Multiplexer.  Main part of Lens3. */
 // Multiplexer is a proxy to backend S3 servers.
 
 // NOTE: Do not call panic(http/ErrAbortHandler) to abort processing
@@ -21,6 +18,8 @@ package lens3
 
 // MEMO: httputil/ReverseProxy <: Handler as it implements
 // ServeHTTP().
+
+package lens3
 
 import (
 	"context"
@@ -409,7 +408,22 @@ func serve_anonymous_access(m *multiplexer, w http.ResponseWriter, r *http.Reque
 func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, be *backend_record, auth string, proxy http.Handler) {
 	// Replace an authorization header.
 
-	var err1 = sign_by_backend_credential(r, be)
+	var host, _, err51 = net.SplitHostPort(be.Backend_ep)
+	if err51 != nil {
+		slogger.Error("Mux: Forward-access failed",
+			"op", "net.SplitHostPort()",
+			"ep", be.Backend_ep, "err", err51)
+		raise(&proxy_exc{
+			auth,
+			"",
+			http_500_internal_server_error,
+			message_500_sign_failed,
+			nil,
+		})
+	}
+	//var err1 = sign_by_backend_credential(r, be)
+	var keypair = [2]string{be.Root_access, be.Root_secret}
+	var err1 = awss3aide.Sign_by_credential(r, host, keypair)
 	if err1 != nil {
 		slogger.Error(m.logprefix+"aws.signer/SignHTTP() errs", "err", err1)
 		raise(&proxy_exc{

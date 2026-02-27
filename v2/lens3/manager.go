@@ -85,16 +85,16 @@ type backend_factory interface {
 // a backend.  It is called each time a backend outputs a line of a
 // message.  It looks for a specific message.  The first argument
 // indicates stdout or stderr by values on_stdout and on_stderr.  The
-// passed strings are accumulated ones all from the start.  ESTABLISH
-// does a server specific initialization at its start.  SHUTDOWN stops
-// a backend in its specific way.  HEARTBEAT pings a backend and
-// returns an http status.  It is an error but status=200.
+// passed strings are accumulated all from the start.  ESTABLISH does
+// a server specific initialization at its start.  SHUTDOWN stops a
+// backend in its specific way.  HEARTBEAT pings a backend and returns
+// an http status.  It is an error but status=200.
 type backend_delegate interface {
 	get_super_part() *backend_generic
 
 	make_command_line(port int, directory string) backend_command
 
-	check_startup(stdio_stream, []string) *start_result
+	check_startup(stdio_stream_indicator, []string) *start_result
 
 	establish() error
 
@@ -145,12 +145,12 @@ type backend_command struct {
 // THE_MANAGER is the single multiplexer instance.
 var the_manager = &manager{}
 
-// STDIO_STREAM is an indicator of which of a stream of stdio, stdout
-// or stderr.  It is stored in a STDIO_MESSAGE.
-type stdio_stream int
+// STDIO_STREAM_INDICATOR is an indicator of which of a stream of
+// stdio, stdout or stderr.  It is stored in a STDIO_MESSAGE.
+type stdio_stream_indicator int
 
 const (
-	on_stdout stdio_stream = iota + 1
+	on_stdout stdio_stream_indicator = iota + 1
 	on_stderr
 )
 
@@ -158,7 +158,7 @@ const (
 // Each is one line of a message.  It is keyed by ON_STDOUT or
 // ON_STDERR to indicate a message is from stdout or stderr.
 type stdio_message struct {
-	stdio_stream
+	stdio_stream_indicator
 	string
 }
 
@@ -527,7 +527,7 @@ func wait_for_backend_come_up(w *manager, d backend_delegate) *start_result {
 			}
 			var some_messages_on_stdout bool = false
 			var some_messages_on_stderr bool = false
-			switch msg1.stdio_stream {
+			switch msg1.stdio_stream_indicator {
 			case on_stdout:
 				msg_stdout = append(msg_stdout, msg1.string)
 				some_messages_on_stdout = true
@@ -543,7 +543,7 @@ func wait_for_backend_come_up(w *manager, d backend_delegate) *start_result {
 					if !ok2 {
 						break
 					}
-					switch msg2.stdio_stream {
+					switch msg2.stdio_stream_indicator {
 					case on_stdout:
 						msg_stdout = append(msg_stdout, msg2.string)
 						some_messages_on_stdout = true
@@ -844,8 +844,8 @@ func start_disgorging_stdio(w *manager, d backend_delegate, ch_stdio chan<- stdi
 	}()
 }
 
-// DISGORGE_STDIO_TO_LOG dumps stdout+stderr messages to logs.  It
-// receives messages written by threads started in
+// DISGORGE_STDIO_TO_LOG dumps stdout+stderr messages to the logger.
+// It receives messages written by threads started in
 // start_disgorging_stdio().
 func disgorge_stdio_to_log(w *manager, proc *backend_generic) {
 	var pool = proc.Pool
@@ -857,7 +857,7 @@ func disgorge_stdio_to_log(w *manager, proc *backend_generic) {
 		//fmt.Println("LINE: ", x1.int, x1.string)
 		//var m = strings.TrimSpace(x1.string)
 		var m = x1.string
-		if x1.stdio_stream == on_stdout {
+		if x1.stdio_stream_indicator == on_stdout {
 			slogger.Info(w.logprefix+"stdout message", "pool", pool, "stdout", m)
 		} else {
 			slogger.Info(w.logprefix+"stderr message", "pool", pool, "stderr", m)

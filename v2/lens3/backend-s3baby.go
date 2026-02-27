@@ -1,9 +1,24 @@
 // Copyright 2022-2026 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
 
-// Server Delegate for S3 Baby-server
+// Backend Delegate for S3 Baby-server
 
 // S3 Baby-server is at https://github.com/riken-rccs/s3-baby-server
+
+// Baby-server prints messages in "slog" logging format.  Typical
+// start-up failure is bad-directory or port-in-use.
+
+// [error case: port-in-use]
+// time=2026-02-27T14:01:38.754Z level=INFO msg="Starting Baby-server"
+//   address=127.0.0.1:9000 proto=http access-key=s3baby version=v1.2.1
+// time=2026-02-27T14:01:38.754Z level=ERROR msg="http.ListenAndServe()
+//   failed" error="listen tcp 127.0.0.1:9000: bind: address already in
+//   use"
+//
+// [error case: bad-directory]
+// time=2026-02-27T14:00:21.297Z level=ERROR msg="os.Chdir() to pool
+//   directory failed" directory=/bad-dir error="chdir /bad-dir: no
+//   such file or directory"
 
 package lens3
 
@@ -15,6 +30,8 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/riken-rccs/s3-baby-server/pkg/quotedstring"
 )
 
 // Messages Patterns.  These are messages from Baby-server at its
@@ -51,11 +68,6 @@ var (
 // BACKEND_DELEGATE.
 type backend_s3baby struct {
 	backend_generic
-
-	port       int
-	access_key string
-	secret_key string
-
 	*s3baby_conf
 }
 
@@ -76,8 +88,6 @@ func (fa *backend_s3baby_factory) make_delegate(pool string) backend_delegate {
 	var d = &backend_s3baby{}
 	d.backend_conf = &fa.backend_conf
 	d.s3baby_conf = the_backend_s3baby_factory.s3baby_conf
-	d.access_key = random_string(10)
-	d.secret_key = random_string(20)
 	runtime.SetFinalizer(d, finalize_backend_s3baby)
 	return d
 }
@@ -93,30 +103,27 @@ func (d *backend_s3baby) get_super_part() *backend_generic {
 }
 
 func (d *backend_s3baby) make_command_line(port int, directory string) backend_command {
-	d.port = (port + 1)
 	var ep1 = net.JoinHostPort("", strconv.Itoa(port))
-	//var ep2 = net.JoinHostPort("", strconv.Itoa(port+1))
 	var keypair = fmt.Sprintf("%s,%s", d.be.Root_access, d.be.Root_secret)
 	var argv = []string{
 		d.Path, "serve", ep1, directory,
 	}
-	if keypair != "" {
-		argv = append(argv, "-cred", keypair)
-	}
-	if true {
+	if false {
 		argv = append(argv, "-log", "debug")
 		argv = append(argv, "-log-access")
 		argv = append(argv, "-prof", "6060")
 	}
 	argv = append(argv, d.Command_options...)
-	var envs = []string{}
+	var envs = []string{
+		fmt.Sprintf("S3BBS_CRED=%s", keypair),
+	}
 	return backend_command{argv, envs}
 }
 
-// CHECK_STARTUP decides the server state.  All s3baby's messages at a
-// start are on stderr.
-func (d *backend_s3baby) check_startup(stream stdio_stream, mm []string) *start_result {
-	if stream == on_stdout {
+// CHECK_STARTUP decides the server state.  It ignores messages on
+// stderr.
+func (d *backend_s3baby) check_startup(stream stdio_stream_indicator, mm []string) *start_result {
+	if stream == on_stderr {
 		return &start_result{
 			start_state: start_ongoing,
 			reason:      pool_reason_NORMAL,
@@ -126,18 +133,10 @@ func (d *backend_s3baby) check_startup(stream stdio_stream, mm []string) *start_
 
 	// Check failure.  Failure messages can be both by S3 and RC.
 
-	var got_s3_failure = s3baby_response_s3_failure_re.MatchString
-	var failure_s3_found, m1 = find_one(mm, got_s3_failure)
+	var failure_s3_found, m1 = find_one(mm, got_s3baby_error_log)
 	if failure_s3_found {
 		var r1 = check_s3baby_port_in_use(m1, s3baby_response_s3_failure_re)
 		return r1
-	}
-
-	var got_rc_failure = s3baby_response_rc_failure_re.MatchString
-	var failure_rc_found, m2 = find_one(mm, got_rc_failure)
-	if failure_rc_found {
-		var r2 = check_s3baby_port_in_use(m2, s3baby_response_rc_failure_re)
-		return r2
 	}
 
 	// Check an expected message.
@@ -163,6 +162,23 @@ func (d *backend_s3baby) check_startup(stream stdio_stream, mm []string) *start_
 	return &start_result{
 		start_state: start_ongoing,
 		reason:      pool_reason_NORMAL,
+	}
+}
+
+func got_s3baby_error_log(m string) bool {
+	var mm, err1 = quotedstring.Slog_parse(m)
+	if err1 != nil {
+		// Ignore an ill-formed log entry.
+		return false
+	}
+	var kv = make(map[string]string)
+	for _, e := range mm {
+		kv[e[0]] = e[1]
+	}
+	if kv["level"] == "ERROR" {
+		return true
+	} else {
+		return false
 	}
 }
 

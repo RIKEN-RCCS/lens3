@@ -138,7 +138,7 @@ func (d *backend_rclone) make_command_line(port int, directory string) backend_c
 
 // CHECK_STARTUP decides the server state.  All rclone's messages at a
 // start are on stderr.
-func (d *backend_rclone) check_startup(stream stdio_stream, mm []string) *start_result {
+func (d *backend_rclone) check_startup(stream stdio_stream_indicator, mm []string) *start_result {
 	if stream == on_stdout {
 		return &start_result{
 			start_state: start_ongoing,

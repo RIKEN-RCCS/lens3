@@ -102,7 +102,7 @@ func (d *backend_minio) make_command_line(port int, directory string) backend_co
 // of an error with messages "level=FATAL", it diagnoses the cause of
 // the error by the first fatal message.  It returns a retry response
 // only on the port-in-use error.
-func (d *backend_minio) check_startup(stream stdio_stream, ss []string) *start_result {
+func (d *backend_minio) check_startup(stream stdio_stream_indicator, ss []string) *start_result {
 	//fmt.Println("minio.check_startup(%v)", ss)
 	if stream == on_stderr {
 		return &start_result{

@@ -1,0 +1,34 @@
+;; -*-Coding: utf-8; Mode: Fundamental;-*-
+
+# Samples of Start-up Messages: S3 Baby-server
+
+## Version
+
+% ./s3-baby-server version
+v1.2.1
+
+## Start OK
+
+% ./s3-baby-server serve 127.0.0.1:9000 ~/pool
+
+time=2026-02-27T13:05:14.801Z level=INFO msg="Starting Baby-server" address=127.0.0.1:9000 proto=http access-key=s3baby version=v1.2.1
+
+## Error: Bad directory
+
+% ./s3-baby-server serve 127.0.0.1:9000 /bad-dir
+
+time=2026-02-27T14:09:13.052Z level=ERROR msg="os.Chdir() to pool directory failed" directory=/bad-dir error="chdir /bad-dir: no such file or directory"
+
+## Error: Port Busy
+
+% ./s3-baby-server serve 127.0.0.1:9000 ~/pool
+
+time=2026-02-27T14:01:38.754Z level=INFO msg="Starting Baby-server" address=127.0.0.1:9000 proto=http access-key=s3baby version=v1.2.1
+time=2026-02-27T14:01:38.754Z level=ERROR msg="http.ListenAndServe() failed" error="listen tcp 127.0.0.1:9000: bind: address already in use"
+
+## Error: Bad Port
+
+% ./s3-baby-server serve 127.0.0.1:80 ~/pool
+
+time=2026-02-27T14:11:25.556Z level=INFO msg="Starting Baby-server" address=127.0.0.1:80 proto=http access-key=s3baby version=v1.2.1
+time=2026-02-27T14:11:25.556Z level=ERROR msg="http.ListenAndServe() failed" error="listen tcp 127.0.0.1:80: bind: permission denied"

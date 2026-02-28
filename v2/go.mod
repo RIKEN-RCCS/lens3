@@ -6,7 +6,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.41.2
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.10
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.96.2
-	github.com/aws/smithy-go v1.24.1
+	github.com/aws/smithy-go v1.24.2
 	github.com/eclipse/paho.golang v0.23.0
 	github.com/riken-rccs/s3-baby-server/pkg/awss3aide v1.2.2
 	github.com/riken-rccs/s3-baby-server/pkg/httpaide v1.2.2

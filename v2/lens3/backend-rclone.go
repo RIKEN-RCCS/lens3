@@ -1,9 +1,10 @@
 // Copyright 2022-2026 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
 
-// S3 Server Delegate for Rclone "rclone serve s3"
+// S3 Server Delegate for RCLONE
 
-// This is a backend for rclone.  The target is rclone-v1.66.0.
+// This is a backend for RCLONE.  The target is rclone-v1.66.0.
+// RCLONE server can be run by "rclone serve s3".
 
 // MEMO: Starting rclone-serve-s3.
 //
@@ -75,40 +76,36 @@ var (
 // BACKEND_RCLONE is a manager for rclone.
 type backend_rclone struct {
 	backend_generic
+	conf *backend_rclone_factory
 
 	rc_port int
 	rc_user string
 	rc_pass string
+}
 
+// BACKEND_RCLONE_FACTORY.  See "backend_minio.go".
+type backend_rclone_factory struct {
+	factory_generic
 	*rclone_conf
 }
 
-// BACKEND_FACTORY_RCLONE.  See "backend_minio.go".
-type backend_factory_rclone struct {
-	*rclone_conf
-	backend_conf
+var the_backend_rclone_factory = &backend_rclone_factory{}
+
+func (f *backend_rclone_factory) configure(conf *mux_conf) {
+	f.rclone_conf = conf.Rclone
+	f.use_n_ports = 2
 }
 
-var the_backend_rclone_factory = &backend_factory_rclone{}
-
-func (fa *backend_factory_rclone) configure(conf *mux_conf) {
-	fa.rclone_conf = conf.Rclone
-	fa.backend_conf.use_n_ports = 2
-}
-
-func (fa *backend_factory_rclone) make_delegate(pool string) backend_delegate {
+func (f *backend_rclone_factory) make_delegate(pool string) backend_delegate {
 	var d = &backend_rclone{}
-	// Set the super part.
-	d.backend_conf = &fa.backend_conf
-	// Set the local part.
-	d.rclone_conf = the_backend_rclone_factory.rclone_conf
+	d.conf = f
 	d.rc_user = random_string(10)
 	d.rc_pass = random_string(20)
 	runtime.SetFinalizer(d, finalize_backend_rclone)
 	return d
 }
 
-func (fa *backend_factory_rclone) clean_at_exit() {
+func (f *backend_rclone_factory) clean_at_exit() {
 }
 
 func finalize_backend_rclone(d *backend_rclone) {
@@ -124,14 +121,14 @@ func (d *backend_rclone) make_command_line(port int, directory string) backend_c
 	var ep2 = net.JoinHostPort("", strconv.Itoa(port+1))
 	var keypair = fmt.Sprintf("%s,%s", d.be.Root_access, d.be.Root_secret)
 	var argv = []string{
-		d.Rclone, "serve", "s3",
+		d.conf.Rclone, "serve", "s3",
 		directory,
 		"--config", "notfound",
 		"--addr", ep1, "--auth-key", keypair,
 		"--rc", "--rc-addr", ep2,
 		"--rc-user", d.rc_user, "--rc-pass", d.rc_pass,
 	}
-	argv = append(argv, d.Command_options...)
+	argv = append(argv, d.conf.Command_options...)
 	var envs = []string{}
 	return backend_command{argv, envs}
 }
@@ -212,17 +209,17 @@ func (d *backend_rclone) establish() error {
 
 // SHUTDOWN stops a server using RC core/quit.
 func (d *backend_rclone) shutdown() error {
-	var proc = d.get_super_part()
 	slogger.Debug("BE(rclone): Stopping rclone",
-		"pool", proc.Pool, "pid", proc.cmd.Process.Pid)
+		"pool", d.Pool, "pid", d.cmd.Process.Pid)
 	var v1 = rclone_rc_core_quit(d)
 	return v1.err
 }
 
 // HEARTBEAT calls s3.Client.ListBuckets() and returns a status code.
 func (d *backend_rclone) heartbeat(w *manager) int {
-	var proc = d.get_super_part()
-	var be = get_backend(w.table, proc.Pool)
+	//var proc = d.get_super_part()
+	//var be = get_backend(w.table, proc.Pool)
+	var be = d.be
 	if be == nil {
 		return http_404_not_found
 	}
@@ -271,14 +268,14 @@ func simplify_rclone_rc_message(s []byte) *rclone_rc_result {
 func execute_rclone_rc_cmd(d *backend_rclone, synopsis string, command []string) *rclone_rc_result {
 	var port = net.JoinHostPort("", strconv.Itoa(d.rc_port))
 	var argv = []string{
-		d.Rclone, "rc",
+		d.conf.Rclone, "rc",
 		"--url", port,
 		"--user", d.rc_user,
 		"--pass", d.rc_pass,
 	}
 	argv = append(argv, command...)
 
-	var timeout = (d.Backend_start_timeout_ms).time_duration()
+	var timeout = (d.conf.Backend_start_timeout_ms).time_duration()
 	var verbose = (trace_proc&tracing != 0)
 	var stdouts, stderrs, err1 = execute_command(synopsis, argv, d.environ,
 		timeout, "BE(rclone)", verbose)

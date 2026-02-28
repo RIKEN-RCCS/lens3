@@ -160,7 +160,7 @@ func start_lenticularis_service(confpath string, services [2]string) {
 		var w = the_manager
 		configure_multiplexer(m, w, t, chquit, muxconf)
 		configure_manager(w, m, t, chquit, muxconf)
-		defer w.factory.clean_at_exit()
+		defer w.backend_factory.clean_at_exit()
 		go start_multiplexer(m, &wg)
 	}
 
@@ -182,11 +182,11 @@ func start_lenticularis_service(confpath string, services [2]string) {
 }
 
 func print_usage_and_exit() {
-	var usage = `Usage: lenticularis-mux -c conf [mux/reg/mux+reg]
+	var usage = `lenticularis-mux -c conf [mux/reg/mux+reg]
   where the mux part can be mux:xxx to specify a different
   configuration.  No arguments mean mux+reg.`
 
-	fmt.Fprintf(os.Stderr, usage)
+	fmt.Fprintf(os.Stderr, "Usage: %s", usage)
 	flag.PrintDefaults()
 	os.Exit(1)
 }

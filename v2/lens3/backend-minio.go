@@ -1,7 +1,7 @@
 // Copyright 2022-2026 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
 
-// S3 Server Delegate for MinIO.
+// S3 Server Delegate for MinIO
 
 package lens3
 
@@ -34,41 +34,37 @@ var (
 // BACKEND_MINIO is a delegate for MinIO.
 type backend_minio struct {
 	backend_generic
+	conf *backend_minio_factory
 
 	mc_alias      string
 	mc_config_dir string
 
 	heartbeat_client *http.Client
 	heartbeat_url    string
-
-	*minio_conf
 }
 
-// BACKEND_FACTORY_MINIO is a factory and holds the static and common
+// BACKEND_MINIO_FACTORY is a factory and holds the static and common
 // part of a MinIO backend.
-type backend_factory_minio struct {
+type backend_minio_factory struct {
+	factory_generic
 	*minio_conf
-	backend_conf
 }
 
-var the_backend_minio_factory = &backend_factory_minio{}
+var the_backend_minio_factory = &backend_minio_factory{}
 
-func (fa *backend_factory_minio) configure(conf *mux_conf) {
-	fa.minio_conf = conf.Minio
-	fa.backend_conf.use_n_ports = 1
+func (f *backend_minio_factory) configure(conf *mux_conf) {
+	f.minio_conf = conf.Minio
+	f.use_n_ports = 1
 }
 
-func (fa *backend_factory_minio) make_delegate(pool string) backend_delegate {
+func (f *backend_minio_factory) make_delegate(pool string) backend_delegate {
 	var d = &backend_minio{}
-	// Set the super part.
-	d.backend_conf = &fa.backend_conf
-	// Set the local part.
-	d.minio_conf = the_backend_minio_factory.minio_conf
+	d.conf = f
 	runtime.SetFinalizer(d, finalize_backend_minio)
 	return d
 }
 
-func (fa *backend_factory_minio) clean_at_exit() {
+func (f *backend_minio_factory) clean_at_exit() {
 	clean_minio_tmp()
 }
 
@@ -86,7 +82,7 @@ func (d *backend_minio) get_super_part() *backend_generic {
 func (d *backend_minio) make_command_line(port int, directory string) backend_command {
 	var ep = net.JoinHostPort("", strconv.Itoa(port))
 	var argv = []string{
-		d.Minio,
+		d.conf.Minio,
 		"--json", "--anonymous", "server",
 		"--address", ep, directory}
 	var envs = []string{
@@ -164,9 +160,8 @@ func (d *backend_minio) establish() error {
 // SHUTDOWN stops a server using MC admin-service-stop.
 func (d *backend_minio) shutdown() error {
 	//fmt.Println("minio.shutdown()")
-	var proc = d.get_super_part()
 	slogger.Debug("BE(minio): Stopping MinIO",
-		"pool", proc.Pool, "pid", proc.cmd.Process.Pid)
+		"pool", d.Pool, "pid", d.cmd.Process.Pid)
 	//assert_fatal(d.mc_alias != nil)
 	var v1 = minio_mc_admin_service_stop(d)
 	return v1.err
@@ -176,14 +171,13 @@ func (d *backend_minio) shutdown() error {
 // http status code.  It returns 500 on a connection failure.
 func (d *backend_minio) heartbeat(*manager) int {
 	//fmt.Println("minio.heartbeat()")
-	var proc = d.get_super_part()
 
 	if d.heartbeat_client == nil {
-		var timeout = (proc.Backend_timeout_ms).time_duration()
+		var timeout = (d.conf.Backend_timeout_ms).time_duration()
 		d.heartbeat_client = &http.Client{
 			Timeout: timeout,
 		}
-		var ep = proc.be.Backend_ep
+		var ep = d.be.Backend_ep
 		d.heartbeat_url = fmt.Sprintf("http://%s/minio/health/live", ep)
 	}
 
@@ -191,14 +185,14 @@ func (d *backend_minio) heartbeat(*manager) int {
 	var rspn, err1 = c.Get(d.heartbeat_url)
 	if err1 != nil {
 		slogger.Info("BE(minio): Heartbeat failed in http/Client.Get()",
-			"pool", proc.Pool, "err", err1)
+			"pool", d.Pool, "err", err1)
 		return http_500_internal_server_error
 	}
 	defer rspn.Body.Close()
 	var _, err2 = io.ReadAll(rspn.Body)
 	if err2 != nil {
 		slogger.Info("BE(minio): Heartbeat failed in io/ReadAll()",
-			"pool", proc.Pool, "err", err2)
+			"pool", d.Pool, "err", err2)
 		return http_500_internal_server_error
 	}
 	return rspn.StatusCode
@@ -272,13 +266,13 @@ func simplify_minio_mc_message(s []byte) *minio_mc_result {
 func execute_minio_mc_cmd(d *backend_minio, synopsis string, command []string) *minio_mc_result {
 	assert_fatal(d.mc_alias != "" && d.mc_config_dir != "")
 	var argv = []string{
-		d.Mc,
+		d.conf.Mc,
 		"--json",
 		fmt.Sprintf("--config-dir=%s", d.mc_config_dir),
 	}
 	argv = append(argv, command...)
 
-	var timeout = (d.Backend_start_timeout_ms).time_duration()
+	var timeout = (d.conf.Backend_start_timeout_ms).time_duration()
 	var verbose = (trace_proc&tracing != 0)
 	var stdouts, stderrs, err1 = execute_command(synopsis, argv, d.environ,
 		timeout, "BE(minio)", verbose)

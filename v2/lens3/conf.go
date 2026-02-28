@@ -1,7 +1,7 @@
 // Copyright 2022-2026 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
 
-// A Conf File Reader
+// Conf File Reader
 
 // Configuration Files.  The configurations are stored in the
 // keyval-db.  Configuration files are read and checked against
@@ -304,11 +304,11 @@ func check_mux_conf(conf *mux_conf) {
 	check_multiplexer_entry(&conf.Multiplexer)
 	check_manager_entry(&conf.Manager)
 	switch conf.Multiplexer.Backend {
-	case "minio":
+	case backend_name_minio:
 		check_minio_entry(conf.Minio)
-	case "rclone":
+	case backend_name_rclone:
 		check_rclone_entry(conf.Rclone)
-	case "baby-server":
+	case backend_name_s3baby:
 		check_s3baby_entry(conf.S3baby)
 	}
 	check_access_log_entry(&conf.Log)

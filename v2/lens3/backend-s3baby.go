@@ -3,17 +3,19 @@
 
 // Backend Delegate for S3 Baby-server
 
-// S3 Baby-server is at https://github.com/riken-rccs/s3-baby-server
+// Baby-server is at https://github.com/riken-rccs/s3-baby-server
 
 // Baby-server prints messages in "slog" logging format.  Typical
-// start-up failure is bad-directory or port-in-use.
-
-// [error case: port-in-use]
-// time=2026-02-27T14:01:38.754Z level=INFO msg="Starting Baby-server"
+// start-up failure is port-in-use or bad-directory.
+//
+// [successful case]
+// time=2026-02-28T07:39:17.895Z level=INFO msg="Starting Baby-server"
 //   address=127.0.0.1:9000 proto=http access-key=s3baby version=v1.2.1
-// time=2026-02-27T14:01:38.754Z level=ERROR msg="http.ListenAndServe()
-//   failed" error="listen tcp 127.0.0.1:9000: bind: address already in
-//   use"
+//
+// [error case: port-in-use]
+// time=2026-02-28T07:37:37.409Z level=ERROR msg="net.Listen() failed"
+//   address=127.0.0.1:9000 error="listen tcp 127.0.0.1:9000: bind: address
+//   already in use"
 //
 // [error case: bad-directory]
 // time=2026-02-27T14:00:21.297Z level=ERROR msg="os.Chdir() to pool
@@ -23,76 +25,57 @@
 package lens3
 
 import (
-	"encoding/json"
+	"context"
+	"crypto/tls"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/riken-rccs/s3-baby-server/pkg/awss3aide"
 	"github.com/riken-rccs/s3-baby-server/pkg/quotedstring"
 )
 
-// Messages Patterns.  These are messages from Baby-server at its
-// start-up.  Checking port-in-use matches against the substring
-// extracted from the failure message.
+// Messages Patterns.  Checking port-in-use is to match against the
+// usual message.
 var (
-	s3baby_date_time_pattern = `\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}`
-	s3baby_url_pattern       = `http://([^:]*|\[[^\]]*\]):([0-9]*)/`
-
-	s3baby_response_expected_re = regexp.MustCompile(
-		`^` + date_time_pattern +
-			` NOTICE: Local file system at [^:]*:` +
-			` Starting s3 server on \[` + url_pattern + `\]$`)
-
-	s3baby_response_s3_failure_re = regexp.MustCompile(
-		`^` + date_time_pattern +
-			` Failed to s3: (.*)$`)
-
-	s3baby_response_rc_failure_re = regexp.MustCompile(
-		`^` + date_time_pattern +
-			` Failed to start remote control: (.*)$`)
-
 	s3baby_response_port_in_use_re = regexp.MustCompile(
-		`^` + `failed to init server: listen tcp :[0-9]*:` +
-			` bind: address already in use$`)
-
-	s3baby_response_control_url_re = regexp.MustCompile(
-		`^` + date_time_pattern +
-			` NOTICE: Serving remote control on ` +
-			url_pattern + `$`)
+		`bind: address already in use`)
 )
 
 // BACKEND_S3BABY is a manager for Baby-server and implements
-// BACKEND_DELEGATE.
+// backend_delegate.
 type backend_s3baby struct {
 	backend_generic
-	*s3baby_conf
+	conf *backend_s3baby_factory
 }
 
-// BACKEND_S3BABY_FACTORY implements BACKEND_FACTORY.
+// BACKEND_S3BABY_FACTORY implements backend_factory.
 type backend_s3baby_factory struct {
+	factory_generic
 	*s3baby_conf
-	backend_conf
 }
 
 var the_backend_s3baby_factory = &backend_s3baby_factory{}
 
-func (fa *backend_s3baby_factory) configure(conf *mux_conf) {
-	fa.s3baby_conf = conf.S3baby
-	fa.backend_conf.use_n_ports = 1
+func (f *backend_s3baby_factory) configure(conf *mux_conf) {
+	f.s3baby_conf = conf.S3baby
+	f.use_n_ports = 1
 }
 
-func (fa *backend_s3baby_factory) make_delegate(pool string) backend_delegate {
+func (f *backend_s3baby_factory) make_delegate(pool string) backend_delegate {
 	var d = &backend_s3baby{}
-	d.backend_conf = &fa.backend_conf
-	d.s3baby_conf = the_backend_s3baby_factory.s3baby_conf
+	d.conf = f
 	runtime.SetFinalizer(d, finalize_backend_s3baby)
 	return d
 }
 
-func (fa *backend_s3baby_factory) clean_at_exit() {
+func (f *backend_s3baby_factory) clean_at_exit() {
 }
 
 func finalize_backend_s3baby(d *backend_s3baby) {
@@ -106,14 +89,14 @@ func (d *backend_s3baby) make_command_line(port int, directory string) backend_c
 	var ep1 = net.JoinHostPort("", strconv.Itoa(port))
 	var keypair = fmt.Sprintf("%s,%s", d.be.Root_access, d.be.Root_secret)
 	var argv = []string{
-		d.Path, "serve", ep1, directory,
+		d.conf.Path, "serve", ep1, directory,
 	}
 	if false {
 		argv = append(argv, "-log", "debug")
 		argv = append(argv, "-log-access")
 		argv = append(argv, "-prof", "6060")
 	}
-	argv = append(argv, d.Command_options...)
+	argv = append(argv, d.conf.Command_options...)
 	var envs = []string{
 		fmt.Sprintf("S3BBS_CRED=%s", keypair),
 	}
@@ -129,27 +112,23 @@ func (d *backend_s3baby) check_startup(stream stdio_stream_indicator, mm []strin
 			reason:      pool_reason_NORMAL,
 		}
 	}
-	//fmt.Printf("s3baby.check_startup(%v)\n", mm)
 
-	// Check failure.  Failure messages can be both by S3 and RC.
+	var msgs = convert_s3baby_logging(mm)
 
-	var failure_s3_found, m1 = find_one(mm, got_s3baby_error_log)
-	if failure_s3_found {
-		var r1 = check_s3baby_port_in_use(m1, s3baby_response_s3_failure_re)
+	fmt.Printf("s3baby.check_startup(%v)\n", msgs)
+
+	// Check failure.
+
+	var failure_found, m1 = find_one(msgs, got_s3baby_error)
+	if failure_found {
+		var r1 = got_s3baby_port_in_use(m1)
 		return r1
 	}
 
 	// Check an expected message.
 
-	var got_expected = s3baby_response_expected_re.MatchString
-	var expected_found, m3 = find_one(mm, got_expected)
+	var expected_found, m3 = find_one(msgs, got_s3baby_expected)
 	if expected_found {
-		var got_control = s3baby_response_control_url_re.MatchString
-		var control_found, _ = find_one(mm, got_control)
-		if !control_found {
-			slogger.Warn("BE(s3baby): Got an expected message" +
-				" but no control messages")
-		}
 		if trace_proc&tracing != 0 {
 			slogger.Debug("BE(s3baby): Got an expected message", "output", m3)
 		}
@@ -159,22 +138,45 @@ func (d *backend_s3baby) check_startup(stream stdio_stream_indicator, mm []strin
 		}
 	}
 
+	// Otherwise.
+
 	return &start_result{
 		start_state: start_ongoing,
 		reason:      pool_reason_NORMAL,
 	}
 }
 
-func got_s3baby_error_log(m string) bool {
-	var mm, err1 = quotedstring.Slog_parse(m)
-	if err1 != nil {
-		// Ignore an ill-formed log entry.
+func convert_s3baby_logging(mm []string) []map[string]string {
+	var acc []map[string]string
+	var m string
+	for _, m = range mm {
+		if !strings.HasPrefix(m, "time=") {
+			// Ignore an ill-formed log entry.
+			continue
+		}
+		var mm, err1 = quotedstring.Slog_parse(m)
+		if err1 != nil {
+			// Ignore an ill-formed log entry.
+			continue
+		}
+		var kv = make(map[string]string)
+		for _, e := range mm {
+			kv[e[0]] = e[1]
+		}
+		acc = append(acc, kv)
+	}
+	return acc
+}
+
+func got_s3baby_expected(kv map[string]string) bool {
+	if kv["level"] == "INFO" && kv["msg"] == "Starting Baby-server" {
+		return true
+	} else {
 		return false
 	}
-	var kv = make(map[string]string)
-	for _, e := range mm {
-		kv[e[0]] = e[1]
-	}
+}
+
+func got_s3baby_error(kv map[string]string) bool {
 	if kv["level"] == "ERROR" {
 		return true
 	} else {
@@ -182,11 +184,11 @@ func got_s3baby_error_log(m string) bool {
 	}
 }
 
-func check_s3baby_port_in_use(m string, re *regexp.Regexp) *start_result {
+func got_s3baby_port_in_use(kv map[string]string) *start_result {
+	var m = kv["error"]
+	var re = s3baby_response_port_in_use_re
 	var w1 = re.FindStringSubmatch(m)
-	assert_fatal(w1 != nil && len(w1) == 2)
-	var port_in_use = s3baby_response_port_in_use_re.MatchString(w1[1])
-	if port_in_use {
+	if w1 != nil {
 		return &start_result{
 			start_state: start_to_retry,
 			reason:      pool_reason_NORMAL,
@@ -203,19 +205,18 @@ func (d *backend_s3baby) establish() error {
 	return nil
 }
 
-// SHUTDOWN stops a server using RC core/quit.
+// SHUTDOWN stops the server.
 func (d *backend_s3baby) shutdown() error {
-	var proc = d.get_super_part()
 	slogger.Debug("BE(s3baby): Stopping s3baby",
-		"pool", proc.Pool, "pid", proc.cmd.Process.Pid)
-	var v1 = s3baby_rc_core_quit(d)
-	return v1.err
+		"pool", d.Pool, "pid", d.cmd.Process.Pid)
+	var v1 = control_s3baby_server(d, "quit")
+	return v1
 }
 
 // HEARTBEAT calls s3.Client.ListBuckets() and returns a status code.
 func (d *backend_s3baby) heartbeat(w *manager) int {
-	var proc = d.get_super_part()
-	var be = get_backend(w.table, proc.Pool)
+	//var proc = d.get_super_part()
+	var be = d.be
 	if be == nil {
 		return http_404_not_found
 	}
@@ -223,76 +224,87 @@ func (d *backend_s3baby) heartbeat(w *manager) int {
 	return code
 }
 
-// S3BABY_RC_RESULT is a decoding of an output of an RC-command.  On an
-// error, it returns {nil,error}.
-type s3baby_rc_result struct {
-	value map[string]any
-	err   error
-}
+// A way to send control messages to Baby-server can be found in
+// "test/control/control-client.go" in
+// https://github.com/riken-rccs/s3-baby-server
 
-// SIMPLIFY_S3BABY_RC_MESSAGE returns a 2-tuple {value,nil} on
-// success, or {nil,err} on failure or decoding error.  An empty
-// output "{}" is a proper success.  A failure output looks like
-// {"error":message,...}.
-func simplify_s3baby_rc_message(s []byte) *s3baby_rc_result {
-	var s2 = string(s)
-	var r = strings.NewReader(s2)
-	var dec = json.NewDecoder(r)
-	var m map[string]any
-	var err1 = dec.Decode(&m)
+func control_s3baby_server(d *backend_s3baby, command string) error {
+	if !(command == "quit" || command == "stat") {
+		slogger.Error("BE(s3baby): Bad control command",
+			"command", command)
+		var errx = fmt.Errorf("BE(s3baby): Bad control command: %s", command)
+		return errx
+	}
+
+	var be = d.be
+	if be == nil {
+		slogger.Error("BE(s3baby): No backend record")
+		var errx = fmt.Errorf("BE(s3baby): No backend record: pool=%s",
+			d.Pool)
+		return errx
+	}
+
+	var cred = [2]string{be.Root_access, be.Root_secret}
+
+	var timeout = time.Duration(60000 * time.Millisecond)
+	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	var ep = be.Backend_ep
+	var host, _, err1 = net.SplitHostPort(ep)
 	if err1 != nil {
-		slogger.Error("BE(s3baby): Bad message from s3baby-rc",
-			"output", s2, "err", err1)
-		return &s3baby_rc_result{nil, err1}
-	}
-	switch msg := m["error"].(type) {
-	case nil:
-		// Okay.
-	case string:
-		var err2 = fmt.Errorf("%q", msg)
-		return &s3baby_rc_result{nil, err2}
-	default:
-		var err3 = fmt.Errorf("Non-string error message: %q", m)
-		slogger.Error("BE(s3baby): Bad message from s3baby-rc",
-			"err", err3)
-		return &s3baby_rc_result{nil, err3}
-	}
-	return &s3baby_rc_result{m, nil}
-}
-
-// EXECUTE_S3BABY_RC_CMD runs an RC-command and checks its output.
-func execute_s3baby_rc_cmd(d *backend_s3baby, synopsis string, command []string) *s3baby_rc_result {
-	//var port = net.JoinHostPort("", strconv.Itoa(d.port))
-	var argv = []string{}
-	argv = append(argv, command...)
-
-	var timeout = (d.Backend_start_timeout_ms).time_duration()
-	var verbose = (trace_proc&tracing != 0)
-	var stdouts, stderrs, err1 = execute_command(synopsis, argv, d.environ,
-		timeout, "BE(s3baby)", verbose)
-	if err1 != nil {
-		return &s3baby_rc_result{nil, err1}
+		slogger.Error("BE(s3baby): net.SplitHostPort() on backend-ep failed",
+			"ep", ep, "error", err1)
+		return err1
 	}
 
-	var v1 = simplify_s3baby_rc_message([]byte(stdouts))
-	if v1.err == nil {
-		if trace_proc&tracing != 0 {
-			slogger.Debug("BE(s3baby): RC-command Okay",
-				"cmd", command)
-		} else {
-			slogger.Debug("BE(s3baby): RC-command Okay",
-				"cmd", synopsis)
-		}
+	var url1 = (ep + "/bbs.ctl/" + command)
+	var body io.Reader = nil
+
+	var r, err4 = http.NewRequestWithContext(ctx, http.MethodPost, url1, body)
+	if err4 != nil {
+		slogger.Debug("BE(s3baby): http.NewRequestWithContext() failed",
+			"url", url1, "error", err4)
+		return err4
+	}
+
+	//r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	var hash = empty_payload_hash_sha256
+	r.Header.Set("X-Amz-Content-Sha256", hash)
+
+	var err5 = awss3aide.Sign_by_credential(r, host, cred)
+	if err5 != nil {
+		slogger.Warn("BE(s3baby): S3-Signing failed",
+			"error", err5)
+		return err5
+	}
+
+	// Set to skip https server certificate verification.
+
+	var xport = &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	var c = &http.Client{
+		Transport: xport,
+		Timeout:   timeout,
+	}
+	var rspn, err6 = c.Do(r)
+	if err6 != nil {
+		slogger.Warn("BE(s3baby): http.Client.Do() failed",
+			"error", err6)
+		return err6
+	}
+	defer rspn.Body.Close()
+
+	if rspn.StatusCode == http.StatusOK {
+		return nil
 	} else {
-		slogger.Error("BE(s3baby): RC-command failed",
-			"cmd", argv, "err", v1.err,
-			"stdout", stdouts, "stderr", stderrs)
+		slogger.Warn("BE(s3baby): http.Client.Do() returns not OK",
+			"status", rspn.StatusCode)
+		var err8 = fmt.Errorf("BE(s3baby): http.Client.Do() returns=%d",
+			rspn.StatusCode)
+		return err8
 	}
-	return v1
-}
 
-func s3baby_rc_core_quit(d *backend_s3baby) *s3baby_rc_result {
-	var v1 = execute_s3baby_rc_cmd(d, "core/quit",
-		[]string{"core/quit"})
-	return v1
+	return nil
 }

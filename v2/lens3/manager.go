@@ -1,9 +1,7 @@
-/* A sentinel for an S3 backend server process. */
-
 // Copyright 2022-2024 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
 
-package lens3
+// A Sentinel for an S3 Backend Server
 
 // Manager watches backend servers and records thier outputs in logs.
 // The first few lines from a backend are used to check its start.  A
@@ -18,9 +16,11 @@ package lens3
 //
 // MEMO: It does not use "Pdeathsig" in unix/SysProcAttr.  Pdeathsig,
 // or prctl(PR_SET_PDEATHSIG), is Linux.
-
+//
 // MEMO: os/Signal is an interface, while unix/Signal and
-// syscall/Signal are identical and concrete.
+// syscall/Signal are concrete and they are identical.
+
+package lens3
 
 import (
 	"bufio"
@@ -45,8 +45,8 @@ import (
 // the manager is in shutdown.  ENVIRON holds a copy of the minimal
 // list of environs.  LOGPREFIX≡"Mux(ep): " is a printing name of this
 // Manager.  CH_QUIT_SERVICE is to receive quitting notification.
-// MUTEX protects accesses to the processes list.  A Manager starts
-// threads to ping backend service.
+// MUTEX protects accesses to the process list.  A Manager starts
+// threads to ping backend services.
 type manager struct {
 	multiplexer *multiplexer
 
@@ -54,7 +54,7 @@ type manager struct {
 
 	mux_ep string
 
-	factory backend_factory
+	backend_factory backend_factory
 
 	process              map[string]backend_delegate
 	shutdown_in_progress bool
@@ -125,14 +125,20 @@ type backend_generic struct {
 
 	mutex sync.Mutex
 
-	*manager_conf
-	*backend_conf
+	conf *factory_generic
 }
 
-// BACKEND_CONF is static parameters that are thought to be a part of
-// manager_conf.  It is set by factory's make_delegate().  USE_N_PORTS
-// is the number of ports used per backend.  It is use_n_ports=1 for
-// MinIO and use_n_ports=2 for rclone.
+// FACTORY_GENERIC is a common part of a backend-factory.  It is
+// embedded in a factory and shared by backend instances.
+type factory_generic struct {
+	*manager_conf
+	backend_conf
+}
+
+// BACKEND_CONF is common parameters to all backends.  USE_N_PORTS is
+// the number of ports used per backend.  It is set by factory's
+// configure().  It is use_n_ports=1 usually, but use_n_ports=2 for
+// RCLONE as it uses a control port.
 type backend_conf struct {
 	use_n_ports int
 }
@@ -198,24 +204,26 @@ func configure_manager(w *manager, m *multiplexer, t *keyval_table, q chan vacuo
 	w.environ = minimal_environ()
 
 	switch c.Multiplexer.Backend {
-	case "minio":
-		w.factory = the_backend_minio_factory
-	case "rclone":
-		w.factory = the_backend_rclone_factory
+	case backend_name_minio:
+		w.backend_factory = the_backend_minio_factory
+	case backend_name_rclone:
+		w.backend_factory = the_backend_rclone_factory
+	case backend_name_s3baby:
+		w.backend_factory = the_backend_s3baby_factory
 	default:
 		slogger.Error(w.logprefix+"Configuration error, unknown backend",
 			"backend", c.Multiplexer.Backend)
 		panic(nil)
 	}
 
-	w.factory.configure(c)
+	w.backend_factory.configure(c)
 }
 
 // INITIALIZE_BACKEND_GENERIC initializes the super part of a
 // backend.  The ep and pid of a backend are set later.
-func initialize_backend_generic(w *manager, proc *backend_generic, pooldata *pool_record) {
-	proc.pool_record = *pooldata
-	proc.be = &backend_record{
+func initialize_backend_generic(w *manager, dx *backend_generic, pooldata *pool_record) {
+	dx.pool_record = *pooldata
+	dx.be = &backend_record{
 		Pool:        pooldata.Pool,
 		Backend_ep:  "",
 		Backend_pid: 0,
@@ -226,8 +234,8 @@ func initialize_backend_generic(w *manager, proc *backend_generic, pooldata *poo
 		Mux_pid:     w.multiplexer.mux_pid,
 		Timestamp:   0,
 	}
-	proc.environ = w.environ
-	proc.manager_conf = &w.manager_conf
+	dx.environ = w.environ
+	dx.conf.manager_conf = &w.manager_conf
 }
 
 // STOP_RUNNING_BACKENDS stops all backends for quitting.  Note that
@@ -306,16 +314,16 @@ func start_backend_in_mutexed(w *manager, pool string) *backend_record {
 		return nil
 	}
 
-	var d = w.factory.make_delegate(pool)
+	var d = w.backend_factory.make_delegate(pool)
 
 	// Initialize the super part.  The following fields will be set in
-	// starting a backend: {proc.cmd, proc.ch_stdio,
-	// proc.ch_quit_backend}
+	// starting a backend: {dx.cmd, dx.ch_stdio,
+	// dx.ch_quit_backend}
 
-	var proc *backend_generic = d.get_super_part()
-	initialize_backend_generic(w, proc, pooldata)
+	var dx *backend_generic = d.get_super_part()
+	initialize_backend_generic(w, dx, pooldata)
 
-	var available_ports = list_available_ports(w, proc.use_n_ports)
+	var available_ports = list_available_ports(w, dx.conf.use_n_ports)
 
 	if trace_proc&tracing != 0 {
 		slogger.Debug(w.logprefix+"start_backend()", "ports", available_ports)
@@ -343,8 +351,8 @@ func start_backend_in_mutexed(w *manager, pool string) *backend_record {
 			return nil
 		}
 
-		assert_fatal(proc.cmd.Process != nil)
-		//var pid = proc.cmd.Process.Pid
+		assert_fatal(dx.cmd.Process != nil)
+		//var pid = dx.cmd.Process.Pid
 
 		var ok1 bool
 		func() {
@@ -364,7 +372,7 @@ func start_backend_in_mutexed(w *manager, pool string) *backend_record {
 			return nil
 		}
 
-		go disgorge_stdio_to_log(w, proc)
+		go disgorge_stdio_to_log(w, dx)
 
 		// Sleep shortly for a backend to be stable.
 
@@ -372,7 +380,7 @@ func start_backend_in_mutexed(w *manager, pool string) *backend_record {
 
 		d.establish()
 
-		var err1 = make_absent_buckets_in_backend(w, proc.be)
+		var err1 = make_absent_buckets_in_backend(w, dx.be)
 		if err1 != nil {
 			// (An error is already logged).
 			// LET A BACKEND CONTINUE TO WORK.
@@ -382,8 +390,8 @@ func start_backend_in_mutexed(w *manager, pool string) *backend_record {
 		}
 
 		var now = time.Now().Unix()
-		proc.be.Timestamp = now
-		set_backend(w.table, pool, proc.be)
+		dx.be.Timestamp = now
+		set_backend(w.table, pool, dx.be)
 
 		// Backend has started.  Expiration of the backend record is
 		// set in ping_backend().
@@ -398,7 +406,7 @@ func start_backend_in_mutexed(w *manager, pool string) *backend_record {
 		}
 		set_blurred_state(w.table, pool, state1)
 
-		return proc.be
+		return dx.be
 	}
 
 	// All ports are tried and failed.
@@ -414,22 +422,22 @@ func start_backend_in_mutexed(w *manager, pool string) *backend_record {
 // success/failure.  Note that it changes a cancel function from
 // SIGKILL to SIGTERM to make it work with sudo.
 func try_start_backend(w *manager, d backend_delegate, port int) *start_result {
-	var proc = d.get_super_part()
-	var pool = proc.Pool
+	var dx *backend_generic = d.get_super_part()
+	var pool = dx.Pool
 	var thishost, _, err1 = net.SplitHostPort(w.mux_ep)
 	if err1 != nil {
 		slogger.Error(w.logprefix+"Bad endpoint of Mux", "ep", w.mux_ep)
 		panic(nil)
 	}
-	proc.be.Backend_ep = net.JoinHostPort(thishost, strconv.Itoa(port))
+	dx.be.Backend_ep = net.JoinHostPort(thishost, strconv.Itoa(port))
 	if trace_proc&tracing != 0 {
 		slogger.Debug(w.logprefix+"try_start_backend()",
-			"ep", proc.be.Backend_ep)
+			"ep", dx.be.Backend_ep)
 	}
 
-	var user = proc.Owner_uid
-	var group = proc.Owner_gid
-	var directory = proc.Bucket_directory
+	var user = dx.Owner_uid
+	var group = dx.Owner_gid
+	var directory = dx.Bucket_directory
 	var command = d.make_command_line(port, directory)
 	var sudo_argv = []string{
 		w.Sudo,
@@ -464,10 +472,10 @@ func try_start_backend(w *manager, d backend_delegate, port int) *start_result {
 
 	var ch_stdio = make(chan stdio_message)
 	var ch_quit_backend = make(chan vacuous)
-	proc.cmd = cmd
-	proc.ch_stdio = ch_stdio
-	proc.ch_quit_backend = ch_quit_backend
-	proc.ch_quit_backend_send = ch_quit_backend
+	dx.cmd = cmd
+	dx.ch_stdio = ch_stdio
+	dx.ch_quit_backend = ch_quit_backend
+	dx.ch_quit_backend_send = ch_quit_backend
 
 	start_disgorging_stdio(w, d, ch_stdio)
 
@@ -480,7 +488,7 @@ func try_start_backend(w *manager, d backend_delegate, port int) *start_result {
 		}
 	}
 
-	proc.be.Backend_pid = cmd.Process.Pid
+	dx.be.Backend_pid = cmd.Process.Pid
 	var r1 = wait_for_backend_come_up(w, d)
 
 	if trace_proc&tracing != 0 {
@@ -499,8 +507,8 @@ func try_start_backend(w *manager, d backend_delegate, port int) *start_result {
 // timeout.  It returns STARTED/RETRY/FAILURE.  It reads the stdio
 // channels as much as available.
 func wait_for_backend_come_up(w *manager, d backend_delegate) *start_result {
-	var proc *backend_generic = d.get_super_part()
-	var pool = proc.Pool
+	var dx *backend_generic = d.get_super_part()
+	var pool = dx.Pool
 
 	var msg_stdout []string
 	var msg_stderr []string
@@ -512,11 +520,11 @@ func wait_for_backend_come_up(w *manager, d backend_delegate) *start_result {
 		drain_start_messages_to_log(w, pool, msg_stdout, msg_stderr)
 	}()
 
-	var timeout = (proc.Backend_start_timeout_ms).time_duration()
+	var timeout = (dx.conf.Backend_start_timeout_ms).time_duration()
 	var ch_timeout = time.After(timeout)
 	for {
 		select {
-		case msg1, ok1 := <-proc.ch_stdio:
+		case msg1, ok1 := <-dx.ch_stdio:
 			if !ok1 {
 				slogger.Warn(w.logprefix+"Starting backend failed",
 					"pool", pool, "reason", start_failure_pipe_closed)
@@ -539,7 +547,7 @@ func wait_for_backend_come_up(w *manager, d backend_delegate) *start_result {
 			// (* time.Sleep(10 * time.Millisecond) *)
 			for len(msg_stdout) < 500 && len(msg_stderr) < 500 {
 				select {
-				case msg2, ok2 := <-proc.ch_stdio:
+				case msg2, ok2 := <-dx.ch_stdio:
 					if !ok2 {
 						break
 					}
@@ -621,17 +629,17 @@ func wait_for_backend_by_race(w *manager, pool string) *backend_record {
 // SUSPEND_POOL puts a pool in the suspended state.  It will block the
 // service for a certain period.
 func suspend_pool(w *manager, d backend_delegate, reason pool_reason) *backend_record {
-	var proc *backend_generic = d.get_super_part()
-	var pool = proc.Pool
+	var dx *backend_generic = d.get_super_part()
+	var pool = dx.Pool
 
 	var duration time.Duration
 	switch reason {
 	case start_failure_server_busy:
-		duration = proc.backend_busy_suspension
+		duration = dx.conf.backend_busy_suspension
 	case start_failure_start_timeout:
-		duration = (proc.Backend_timeout_suspension).time_duration()
+		duration = (dx.conf.Backend_timeout_suspension).time_duration()
 	default:
-		duration = (proc.Backend_timeout_suspension).time_duration()
+		duration = (dx.conf.Backend_timeout_suspension).time_duration()
 	}
 
 	var now int64 = time.Now().Unix()
@@ -677,13 +685,13 @@ func mark_pool_inoperable(w *manager, pooldata *pool_record, reason pool_reason)
 
 // ABORT_BACKEND tells the pinger thread to shutdown the backend.
 func abort_backend(w *manager, d backend_delegate) {
-	var proc = d.get_super_part()
+	var dx *backend_generic = d.get_super_part()
 	func() {
-		proc.mutex.Lock()
-		defer proc.mutex.Unlock()
-		if proc.ch_quit_backend_send != nil {
-			close(proc.ch_quit_backend_send)
-			proc.ch_quit_backend_send = nil
+		dx.mutex.Lock()
+		defer dx.mutex.Unlock()
+		if dx.ch_quit_backend_send != nil {
+			close(dx.ch_quit_backend_send)
+			dx.ch_quit_backend_send = nil
 		}
 	}()
 }
@@ -700,22 +708,22 @@ func ping_backend(w *manager, d backend_delegate) {
 		}
 	}()
 
-	var proc = d.get_super_part()
-	var pool = proc.Pool
+	var dx *backend_generic = d.get_super_part()
+	var pool = dx.Pool
 	var duration = (w.Backend_awake_duration).time_duration()
-	var interval = (proc.Heartbeat_interval).time_duration()
-	var expiry = (3 * (proc.Heartbeat_interval).time_duration())
+	var interval = (dx.conf.Heartbeat_interval).time_duration()
+	var expiry = (3 * (dx.conf.Heartbeat_interval).time_duration())
 	var ok1 = set_backend_expiry(w.table, pool, expiry)
 	if !ok1 {
 		slogger.Error(w.logprefix+"DB.Expire(backend) failed",
 			"pool", pool, "action", "(ignored)")
 	}
 
-	proc.heartbeat_misses = 0
+	dx.heartbeat_misses = 0
 	for {
 		var ok2 bool
 		select {
-		case _, ok2 = <-proc.ch_quit_backend:
+		case _, ok2 = <-dx.ch_quit_backend:
 			assert_fatal(!ok2)
 			break
 		default:
@@ -726,18 +734,18 @@ func ping_backend(w *manager, d backend_delegate) {
 
 		var status = d.heartbeat(w)
 		if status == 200 {
-			proc.heartbeat_misses = 0
+			dx.heartbeat_misses = 0
 		} else {
-			proc.heartbeat_misses += 1
+			dx.heartbeat_misses += 1
 		}
-		if proc.heartbeat_misses > 0 {
+		if dx.heartbeat_misses > 0 {
 			slogger.Error(w.logprefix+"Heartbeat failed",
-				"pool", pool, "misses", proc.heartbeat_misses)
+				"pool", pool, "misses", dx.heartbeat_misses)
 		} else if trace_proc&tracing != 0 {
 			slogger.Debug(w.logprefix+"Heartbeat", "pool", pool,
-				"status", status, "misses", proc.heartbeat_misses)
+				"status", status, "misses", dx.heartbeat_misses)
 		}
-		if proc.heartbeat_misses > w.Heartbeat_miss_tolerance {
+		if dx.heartbeat_misses > w.Heartbeat_miss_tolerance {
 			break
 		}
 
@@ -770,8 +778,8 @@ func ping_backend(w *manager, d backend_delegate) {
 // is going to be shutdown.  It waits for a short time to avoid the
 // race, assuming all requests are finished in the wait.
 func stop_backend(w *manager, d backend_delegate) {
-	var proc = d.get_super_part()
-	var pool = proc.Pool
+	var dx *backend_generic = d.get_super_part()
+	var pool = dx.Pool
 	slogger.Info(w.logprefix+"Stop backend", "pool", pool)
 
 	func() {
@@ -792,7 +800,7 @@ func stop_backend(w *manager, d backend_delegate) {
 	if err1 == nil {
 		return
 	}
-	var err2 = proc.cmd.Cancel()
+	var err2 = dx.cmd.Cancel()
 	if err2 != nil {
 		slogger.Error(w.logprefix+"exec/Command.Cancel() on backend failed",
 			"pool", pool, "err", err2)
@@ -804,8 +812,8 @@ func stop_backend(w *manager, d backend_delegate) {
 // immediately.  It drains one line at a time.  It will stop the
 // backend when both the stdout+stderr are closed.
 func start_disgorging_stdio(w *manager, d backend_delegate, ch_stdio chan<- stdio_message) {
-	var proc = d.get_super_part()
-	var cmd *exec.Cmd = proc.cmd
+	var dx *backend_generic = d.get_super_part()
+	var cmd *exec.Cmd = dx.cmd
 
 	var stdout1, err1 = cmd.StdoutPipe()
 	if err1 != nil {
@@ -847,10 +855,10 @@ func start_disgorging_stdio(w *manager, d backend_delegate, ch_stdio chan<- stdi
 // DISGORGE_STDIO_TO_LOG dumps stdout+stderr messages to the logger.
 // It receives messages written by threads started in
 // start_disgorging_stdio().
-func disgorge_stdio_to_log(w *manager, proc *backend_generic) {
-	var pool = proc.Pool
+func disgorge_stdio_to_log(w *manager, dx *backend_generic) {
+	var pool = dx.Pool
 	for {
-		var x1, ok1 = <-proc.ch_stdio
+		var x1, ok1 = <-dx.ch_stdio
 		if !ok1 {
 			break
 		}
@@ -938,9 +946,9 @@ func list_backends_under_manager(w *manager) []*backend_record {
 }
 
 func wait4_child_process(w *manager, d backend_delegate) {
-	var proc = d.get_super_part()
-	var pid = proc.cmd.Process.Pid
-	//var pid = proc.be.Backend_pid
+	var dx *backend_generic = d.get_super_part()
+	var pid = dx.cmd.Process.Pid
+	//var pid = dx.be.Backend_pid
 	for {
 		//var options int = unix.WNOHANG
 		var options int = 0

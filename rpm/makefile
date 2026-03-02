@@ -1,7 +1,7 @@
 ## makefile
 
+BUILDDIR = ~/rpmbuild/BUILD
 BUILDBIN = ~/rpmbuild/BUILD/usr/local/bin
-BUILDLIC = ~/rpmbuild/BUILD/usr/share/licenses/lenticularis-s3
 
 all::
 	@echo "Run 'make cp' then 'make rpm'"
@@ -14,8 +14,17 @@ cp::
 	mkdir -p $(BUILDBIN)
 	cp -p ../v2/cmd/lenticularis-mux/lenticularis-mux $(BUILDBIN)
 	cp -p ../v2/cmd/lens3-admin/lens3-admin $(BUILDBIN)
-	mkdir -p $(BUILDLIC)
-	cp -p ../LICENSE $(BUILDLIC)
+	mkdir -p $(BUILDDIR)/usr/share/licenses/lenticularis
+	cp -p ../LICENSE $(BUILDDIR)/usr/share/licenses/lenticularis
+	mkdir -p $(BUILDDIR)/usr/lib/sysusers.d
+	cp -p lenticularis.conf $(BUILDDIR)/usr/lib/sysusers.d
+
+dump::
+	rpm --eval '_arch=%{_arch}'
+	rpm --eval '?dist=%{?dist}'
+	rpm --eval 'buildroot=%{buildroot}; '
+	rpm --eval '_sysusersdir=%{_sysusersdir}'
+	# rpm --showrc
 
 lint::
 	rpmlint lenticularis-s3.spec

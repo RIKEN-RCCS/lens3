@@ -18,18 +18,12 @@ This RPM does what is on the setup procedure.
   - Store Lens3 settings in the keyval-db
   - Set up sudoers for Lens3's Multiplexer
   - Set up log rotation
-  - Start Lens3's services: Multiplexer and Registrar 
+  - Start Lens3's services: Multiplexer and Registrar
 
 But, this procedure skips some of the steps.
 
   - Set up system logging
   - Set up MQTT
-
-Most of the installation can be performed by a pseudo user.  The
-pseudo user name is "lenticularis-s3" while it is "lens3" in the
-setting-guide.md.  Its UID/GID will be selected from UID_MIN=301,
-UID_MAX=499, GID_MIN=301, GID_MAX=499, and home is
-"/usr/lib/lenticularis-s3".
 
 In building RPM, we refer to the following descriptions:
 
@@ -49,10 +43,38 @@ Setup.  It creates ~/rpmbuild and subdirectories in it.
 
 ```
 rpmdev-setuptree
+```
+
+A SPEC skeleton file is created with the following.
+
+```
 rpmdev-newspec lenticularis-s3
 ```
 
 ## Run make
+
+```
+make cp
+make rpm
+```
+
+## Pseudo User Creation in RPM
+
+Lens3 needs a pseudo user "lenticularis".  Its UID/GID will be
+dynamically assigned by "sysusers", and its home is
+"/var/lib/lenticularis".  The pseudo user name is "lenticularis" while
+it is "lens3" in the setting-guide.md.
+
+"lenticularis.conf" is copied to /usr/lib/sysusers.d/.
+
+Check the user assignment.
+
+```
+rpm -q --qf='[%{SYSUSERS}\n]' ~/rpmbuild/RPMS/x86_64/lenticularis-s3-2.2.1-1.el10.x86_64.rpm
+```
+
+See
+https://docs.fedoraproject.org/en-US/packaging-guidelines/UsersAndGroups/
 
 ## MEMO
 

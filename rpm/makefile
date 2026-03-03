@@ -11,22 +11,58 @@ rpm::
 	rpmbuild -v -bb ~/rpmbuild/SPECS/lenticularis-s3.spec
 
 cp::
-	mkdir -p $(BUILDBIN)
-	cp -p ../v2/cmd/lenticularis-mux/lenticularis-mux $(BUILDBIN)
-	cp -p ../v2/cmd/lens3-admin/lens3-admin $(BUILDBIN)
-	mkdir -p $(BUILDDIR)/usr/share/licenses/lenticularis
-	cp -p ../LICENSE $(BUILDDIR)/usr/share/licenses/lenticularis
 	mkdir -p $(BUILDDIR)/usr/lib/sysusers.d
-	cp -p lenticularis.conf $(BUILDDIR)/usr/lib/sysusers.d
+	cp lenticularis-user.conf $(BUILDDIR)/usr/lib/sysusers.d/
+	##
+	mkdir -p $(BUILDDIR)/usr/share/licenses/lenticularis
+	cp ../LICENSE $(BUILDDIR)/usr/share/licenses/lenticularis/
+	##
+	mkdir -p $(BUILDDIR)/usr/local/bin
+	cp ../v2/cmd/lenticularis-mux/lenticularis-mux $(BUILDDIR)/usr/local/bin/
+	cp ../v2/cmd/lens3-admin/lens3-admin $(BUILDDIR)/usr/local/bin/
+	##
+	mkdir -p $(BUILDDIR)/etc/sudoers.d
+	cp ../v2/unit-file/lenticularis-sudoers $(BUILDDIR)/etc/sudoers.d/
+	##
+	mkdir -p $(BUILDDIR)/usr/lib/systemd/system
+	cp ../v2/unit-file/lenticularis-mux.service $(BUILDDIR)/usr/lib/systemd/system/
+	cp ../v2/unit-file/lenticularis-valkey.service $(BUILDDIR)/usr/lib/systemd/system/
+	##
+	mkdir -p $(BUILDDIR)/etc/httpd/conf.d
+	cp ../v2/apache/lens3proxy-basic.conf $(BUILDDIR)/etc/httpd/conf.d/lens3proxy.conf
+	##
+	mkdir -p $(BUILDDIR)/etc/lenticularis
+	cp ../v2/unit-file/conf.json $(BUILDDIR)/etc/lenticularis/
+	cp ../v2/unit-file/valkey.conf $(BUILDDIR)/etc/lenticularis/
+	##
+	mkdir -p $(BUILDDIR)/var/lib/lenticularis
+	cp ../v2/unit-file/mux-conf.json $(BUILDDIR)/var/lib/lenticularis/
+	cp ../v2/unit-file/reg-conf.json $(BUILDDIR)/var/lib/lenticularis/
+	##
+	mkdir -p $(BUILDDIR)/var/log/lenticularis
+	##
+	mkdir -p $(BUILDDIR)/etc/logrotate.d
+	cp ../v2/unit-file/lenticularis-logrotate $(BUILDDIR)/etc/logrotate.d/
 
 dump::
-	rpm --eval '_arch=%{_arch}'
-	rpm --eval '?dist=%{?dist}'
-	rpm --eval 'buildroot=%{buildroot}; '
-	rpm --eval '_sysusersdir=%{_sysusersdir}'
+	rpm --eval '_arch=%{_arch}' \
+	--eval 'dist=%{?dist}' \
+	--eval 'buildroot=%{buildroot}' \
+	--eval '_sysconfdir=%{_sysconfdir}' \
+	--eval '_sysusersdir=%{_sysusersdir}' \
+	--eval 'S:4=%{S:4}'
+
 	# rpm --showrc
 
 lint::
 	rpmlint lenticularis-s3.spec
 
 ##	rpmlint ~/rpmbuild/SPECS/lenticularis-s3.spec
+
+RPM = ~/rpmbuild/RPMS/x86_64/lenticularis-s3-2.2.1-1.el10.x86_64.rpm
+
+show-scripts::
+	rpm -q --scripts $(RPM)
+
+show-user::
+	rpm -q --qf='[%{SYSUSERS}\n]' $(RPM)

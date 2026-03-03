@@ -25,14 +25,6 @@ But, this procedure skips some of the steps.
   - Set up system logging
   - Set up MQTT
 
-In building RPM, we refer to the following descriptions:
-
-  - https://www.redhat.com/en/blog/create-rpm-package
-  - https://rpm-software-management.github.io/rpm/manual/spec.html
-  - https://docs.fedoraproject.org/en-US/package-maintainers/Packaging_Tutorial/
-
-"create-rpm-package" is in Nov. 2020.
-
 ## Prerequisite
 
 ```
@@ -74,6 +66,7 @@ rpm -q --qf='[%{SYSUSERS}\n]' ~/rpmbuild/RPMS/x86_64/lenticularis-s3-2.2.1-1.el1
 ```
 
 See
+https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/appendix-managing-users-groups-ssh-keys-and-secrets-in-image-mode-for-rhel
 https://docs.fedoraproject.org/en-US/packaging-guidelines/UsersAndGroups/
 
 ## MEMO
@@ -81,3 +74,41 @@ https://docs.fedoraproject.org/en-US/packaging-guidelines/UsersAndGroups/
 In SPEC file, add `%autosetup -T`, where `-T` is to skip unpacking the
 source.  See
 https://rpm-software-management.github.io/rpm/manual/spec.html
+
+## MEMO
+
+In building RPM, we refer to the following descriptions:
+  - https://rpm-software-management.github.io/rpm/manual/spec.html
+  - https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/packaging_and_distributing_software/introduction-to-rpm
+  - https://docs.fedoraproject.org/en-US/package-maintainers/Packaging_Tutorial/
+
+Very basic ("create-rpm-package" is in Nov. 2020):
+  - https://www.redhat.com/en/blog/create-rpm-package
+
+Software Collections for Red Hat:
+  - https://docs.redhat.com/en/documentation/red_hat_software_collections/2/html/packaging_guide/index
+
+Example:
+- https://rockylinux.pkgs.org/10/rockylinux-appstream-x86_64/valkey-8.0.7-1.el10_1.x86_64.rpm.html
+- https://git.rockylinux.org/staging/rpms/valkey/-/tree/r10/SPECS
+
+Sections of SPEC file:
+
+- Preamble
+- Build scriptlets
+  - %build
+  - %install
+- Runtime scriptlets
+- %files section
+- %changelog section
+
+;; install -p -D -m 0644 %{S:4} %{buildroot}%{_sysusersdir}/%{name}.conf
+
+Selinux configuration:
+
+- dnf info "selinux-policy-targeted"
+- dnf info "policycoreutils"
+
+Hints:
+
+https://fedoraproject.org/wiki/PackagingDrafts/SELinux

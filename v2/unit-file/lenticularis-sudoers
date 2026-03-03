@@ -1,2 +1,2 @@
-Defaults env_keep += "MINIO_ROOT_USER MINIO_ROOT_PASSWORD MINIO_BROWSER"
-lens3 ALL=(ALL,!root) NOPASSWD: /usr/local/bin/minio
+Defaults env_keep += "S3BBS_CRED"
+lenticularis ALL=(ALL,!root) NOPASSWD: /usr/local/bin/s3-baby-server

@@ -141,11 +141,11 @@
 <!-- Text -->
 <text xml:space="preserve" x="2340" y="630" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">(reverse-proxy)</text>
 <!-- Text -->
-<text xml:space="preserve" x="6200" y="630" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">S3 server</text>
+<text xml:space="preserve" x="6000" y="630" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">S3 server</text>
 <!-- Text -->
-<text xml:space="preserve" x="6200" y="1530" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">S3 server</text>
+<text xml:space="preserve" x="6000" y="1530" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">S3 server</text>
 <!-- Text -->
-<text xml:space="preserve" x="6200" y="2880" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">S3 server</text>
+<text xml:space="preserve" x="6000" y="2880" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">S3 server</text>
 <!-- Text -->
 <text xml:space="preserve" x="450" y="630" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">Internet</text>
 <!-- Text -->

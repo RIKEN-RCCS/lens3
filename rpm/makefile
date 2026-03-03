@@ -11,15 +11,15 @@ rpm::
 	rpmbuild -v -bb ~/rpmbuild/SPECS/lenticularis-s3.spec
 
 cp::
-	mkdir -p $(BUILDDIR)/usr/lib/sysusers.d
-	cp lenticularis-user.conf $(BUILDDIR)/usr/lib/sysusers.d/
-	##
 	mkdir -p $(BUILDDIR)/usr/share/licenses/lenticularis
 	cp ../LICENSE $(BUILDDIR)/usr/share/licenses/lenticularis/
 	##
 	mkdir -p $(BUILDDIR)/usr/local/bin
 	cp ../v2/cmd/lenticularis-mux/lenticularis-mux $(BUILDDIR)/usr/local/bin/
 	cp ../v2/cmd/lens3-admin/lens3-admin $(BUILDDIR)/usr/local/bin/
+	##
+	mkdir -p $(BUILDDIR)/usr/lib/sysusers.d
+	cp ../v2/unit-file/lenticularis-user.conf $(BUILDDIR)/usr/lib/sysusers.d/
 	##
 	mkdir -p $(BUILDDIR)/etc/sudoers.d
 	cp ../v2/unit-file/lenticularis-sudoers $(BUILDDIR)/etc/sudoers.d/
@@ -28,8 +28,8 @@ cp::
 	cp ../v2/unit-file/lenticularis-mux.service $(BUILDDIR)/usr/lib/systemd/system/
 	cp ../v2/unit-file/lenticularis-valkey.service $(BUILDDIR)/usr/lib/systemd/system/
 	##
-	mkdir -p $(BUILDDIR)/etc/httpd/conf.d
-	cp ../v2/apache/lens3proxy-basic.conf $(BUILDDIR)/etc/httpd/conf.d/lens3proxy.conf
+	mkdir -p $(BUILDDIR)/usr/lib/systemd/system-preset
+	cp ../v2/unit-file/50-lenticularis.preset $(BUILDDIR)/usr/lib/systemd/system-preset/
 	##
 	mkdir -p $(BUILDDIR)/etc/lenticularis
 	cp ../v2/unit-file/conf.json $(BUILDDIR)/etc/lenticularis/
@@ -39,7 +39,11 @@ cp::
 	cp ../v2/unit-file/mux-conf.json $(BUILDDIR)/var/lib/lenticularis/
 	cp ../v2/unit-file/reg-conf.json $(BUILDDIR)/var/lib/lenticularis/
 	##
+	mkdir -p $(BUILDDIR)/etc/httpd/conf.d
+	cp ../v2/apache/lens3proxy-basic.conf $(BUILDDIR)/etc/httpd/conf.d/lens3proxy.conf
+	##
 	mkdir -p $(BUILDDIR)/var/log/lenticularis
+	mkdir -p $(BUILDDIR)/var/log/lenticularis-valkey
 	##
 	mkdir -p $(BUILDDIR)/etc/logrotate.d
 	cp ../v2/unit-file/lenticularis-logrotate $(BUILDDIR)/etc/logrotate.d/
@@ -61,8 +65,15 @@ lint::
 
 RPM = ~/rpmbuild/RPMS/x86_64/lenticularis-s3-2.2.1-1.el10.x86_64.rpm
 
+test-install::
+	rpm -ivvh --test $(RPM)
+	# rpm -Uvvh --test $(RPM)
+
 show-scripts::
 	rpm -q --scripts $(RPM)
 
 show-user::
 	rpm -q --qf='[%{SYSUSERS}\n]' $(RPM)
+
+show-files::
+	rpm -q --list $(RPM)

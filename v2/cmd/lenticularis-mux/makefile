@@ -2,11 +2,14 @@
 
 #FLG=-v -x
 
-all::
+build::
 	go build $(FLG)
 
 install::
-	go install .
+	go install
 
 fmt::
 	go fmt *.go
+
+vet::
+	go vet *.go

@@ -77,6 +77,13 @@ https://rpm-software-management.github.io/rpm/manual/spec.html
 
 ## MEMO
 
+RPM supports "sysusers".  Putting a file in /usr/lib/sysusers.d, RPM
+will take care of it.  (systemctl restart systemd-sysusers).
+
+https://rpm-software-management.github.io/rpm/manual/users_and_groups.html
+
+## MEMO
+
 In building RPM, we refer to the following descriptions:
   - https://rpm-software-management.github.io/rpm/manual/spec.html
   - https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/packaging_and_distributing_software/introduction-to-rpm
@@ -112,3 +119,7 @@ Selinux configuration:
 Hints:
 
 https://fedoraproject.org/wiki/PackagingDrafts/SELinux
+
+RPM Macros:
+
+https://github.com/systemd/systemd/blob/main/src/rpm/macros.systemd.in

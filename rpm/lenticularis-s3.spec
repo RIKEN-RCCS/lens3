@@ -12,9 +12,11 @@ ExclusiveArch:  x86_64
 # BuildRequires:
 
 Requires:       httpd mod_ssl mod_proxy_html mod_auth_openidc
-Requires:       valkey = 8
-Requires:       mosquitto = 2
-Requires:       logrotate = 3
+Requires:       valkey
+Requires:       mosquitto
+Requires:       logrotate
+
+Requires(post): policycoreutils-python-utils openssl
 
 %description
 Lenticularis-S3 is an AWS-S3 access multiplexer for servicing multiple
@@ -28,17 +30,8 @@ cp -rp * %{buildroot}
 
 %post
 
+%__systemd_sysusers
 # systemctl restart systemd-sysusers
-
-# mkdir -p /var/log/lenticularis
-# mkdir -p /var/log/lenticularis-valkey
-
-# chmod 440 /etc/sudoers.d/lenticularis-sudoers
-# chmod 644 /etc/logrotate.d/lenticularis-logrotate
-# chown lenticularis:lenticularis /var/log/lenticularis
-# chmod 700 /var/log/lenticularis
-# chown lenticularis:lenticularis /var/log/lenticularis-valkey
-# chmod 700 /var/log/lenticularis-valkey
 
 if [ $1 -eq 1 ] ; then
     semanage fcontext -a -t redis_log_t "/var/log/lenticularis-valkey(/.*)?"
@@ -46,6 +39,7 @@ if [ $1 -eq 1 ] ; then
     restorecon -v /etc/httpd/conf.d/lens3proxy.conf
 fi
 
+echo "Print selinux state"
 semanage fcontext -l | grep lenticularis-valkey
 ls -dlZ /var/log/lenticularis
 ls -dlZ /var/log/lenticularis-valkey
@@ -55,11 +49,9 @@ if [ $1 -eq 1 ] ; then
     semanage port -a -t http_port_t -p tcp 8003
     semanage port -a -t http_port_t -p tcp 8004
     semanage port -a -t redis_port_t -p tcp 6378
-    semanage port --list
+    # semanage port --list
     setsebool -P httpd_can_network_connect 1
 fi
-
-semanage port --list
 
 if [ $1 -eq 1 ] ; then
     firewall-cmd --reload --quiet
@@ -74,10 +66,10 @@ fi
 if [ $1 -eq 1 ] ; then
     # Run in first install, not upgrade.
     pw=$(openssl rand -base64 24 | tr '+/' 'XY')
-    sed -e "s/\"password\": \"[0-9a-zA-Z]*\"/\"password\": \"${pw}\"/" -i /etc/lenticularis/conf.json
+    sed -e "s/\"password\": \"[0-9a-zA-Z]*\"/\"password\": \"${pw}\"/" -i /etc/lenticularis/lens3.conf
     sed -e "s/requirepass \"[0-9a-zA-Z]*\"/requirepass \"${pw}\"/" -i /etc/lenticularis/valkey.conf
-    chown lenticularis:lenticularis /etc/lenticularis/conf.json
-    chmod 660 /etc/lenticularis/conf.json
+    chown lenticularis:lenticularis /etc/lenticularis/lens3.conf
+    chmod 660 /etc/lenticularis/lens3.conf
     chown lenticularis:lenticularis /etc/lenticularis/valkey.conf
     chmod 660 /etc/lenticularis/valkey.conf
 fi
@@ -88,9 +80,9 @@ fi
 
 %systemd_post lenticularis-valkey.service
 
-/usr/local/bin/lens3-admin -c /var/lib/lenticularis/conf.json load-conf /var/lib/lenticularis/mux-conf.json
-/usr/local/bin/lens3-admin -c /var/lib/lenticularis/conf.json load-conf /var/lib/lenticularis/reg-conf.json
-/usr/local/bin/lens3-admin -c /var/lib/lenticularis/conf.json show-conf
+/usr/local/bin/lens3-admin -c /etc/lenticularis/lens3.conf load-conf /var/lib/lenticularis/mux-conf.json
+/usr/local/bin/lens3-admin -c /etc/lenticularis/lens3.conf load-conf /var/lib/lenticularis/reg-conf.json
+/usr/local/bin/lens3-admin -c /etc/lenticularis/lens3.conf show-conf
 
 # systemctl daemon-reload
 # systemctl enable lenticularis-mux
@@ -107,17 +99,15 @@ fi
 %attr(644, -, -) /usr/lib/sysusers.d/lenticularis-user.conf
 %attr(644, -, -) /etc/logrotate.d/lenticularis-logrotate
 %attr(770, lenticularis, lenticularis) /var/lib/lenticularis
-%attr(700, lenticularis, lenticularis) /var/log/lenticularis
-%attr(700, lenticularis, lenticularis) /var/log/lenticularis-valkey
+%dir %attr(700, lenticularis, lenticularis) /var/log/lenticularis
+%dir %attr(700, lenticularis, lenticularis) /var/log/lenticularis-valkey
 %attr(700, lenticularis, lenticularis) /etc/lenticularis
-# %%attr(660, lenticularis, lenticularis) /etc/lenticularis/conf.json
+# %%attr(660, lenticularis, lenticularis) /etc/lenticularis/lens3.conf
 # %%attr(660, lenticularis, lenticularis) /etc/lenticularis/valkey.conf
 %attr(440, -, -) /etc/sudoers.d/lenticularis-sudoers
 %attr(660, -, -) /etc/httpd/conf.d/lens3proxy.conf
-
-%dnl %config(noreplace) %{_sysconfdir}/logrotate.d/%{name}
-
 %license /usr/share/licenses/lenticularis/LICENSE
+%dnl %config(noreplace) %{_sysconfdir}/logrotate.d/%{name}
 # %%doc add-docs-here
 
 %changelog

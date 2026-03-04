@@ -32,7 +32,7 @@ cp::
 	cp ../v2/unit-file/50-lenticularis.preset $(BUILDDIR)/usr/lib/systemd/system-preset/
 	##
 	mkdir -p $(BUILDDIR)/etc/lenticularis
-	cp ../v2/unit-file/conf.json $(BUILDDIR)/etc/lenticularis/
+	cp ../v2/unit-file/lens3.conf $(BUILDDIR)/etc/lenticularis/
 	cp ../v2/unit-file/valkey.conf $(BUILDDIR)/etc/lenticularis/
 	##
 	mkdir -p $(BUILDDIR)/var/lib/lenticularis
@@ -61,9 +61,13 @@ dump::
 lint::
 	rpmlint lenticularis-s3.spec
 
-##	rpmlint ~/rpmbuild/SPECS/lenticularis-s3.spec
-
 RPM = ~/rpmbuild/RPMS/x86_64/lenticularis-s3-2.2.1-1.el10.x86_64.rpm
+
+rpm-install::
+	dnf -v --rpmverbosity=debug install $(RPM)
+
+rpm-uninstall::
+	dnf -v remove lenticularis-s3
 
 test-install::
 	rpm -ivvh --test $(RPM)

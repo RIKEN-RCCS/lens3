@@ -72,6 +72,9 @@ func adm_toplevel() {
 
 	assert_fatal(flag_conf != nil)
 	var dbconf = read_db_conf(*flag_conf)
+	if dbconf == nil {
+		return
+	}
 	//fmt.Println(dbconf)
 	if flag_conf != nil {
 		tracing = 0xff

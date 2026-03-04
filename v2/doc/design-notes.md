@@ -241,17 +241,17 @@ NOT become inoperable.
 Disabling a user or deleting a user is done by the administrator tool.
 
 ```
-$ lens3-admin -c conf.json stop-user true _uid_
-$ lens3-admin -c conf.json kill-user _uid_
+$ lenticularis-admin -c lens3.conf stop-user true _uid_
+$ lenticularis-admin -c lens3.conf kill-user _uid_
 ```
 
 Changing expiration time is done similarly.
 
 ```
-$ lens3-admin -c conf.json time-expiration user _uid_ _date_
-$ lens3-admin -c conf.json time-expiration pool _pool-name_ _date_
-$ lens3-admin -c conf.json time-expiration bucket _bucket-name_ _date_
-$ lens3-admin -c conf.json time-expiration secret _access-key_ _date_
+$ lenticularis-admin -c lens3.conf time-expiration user _uid_ _date_
+$ lenticularis-admin -c lens3.conf time-expiration pool _pool-name_ _date_
+$ lenticularis-admin -c lens3.conf time-expiration bucket _bucket-name_ _date_
+$ lenticularis-admin -c lens3.conf time-expiration secret _access-key_ _date_
 ```
 
 A date string is like `2024-08-20T00:00:00` or `2024-09-20`, missing

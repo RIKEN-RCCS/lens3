@@ -1,7 +1,6 @@
 ## makefile
 
 BUILDDIR = ~/rpmbuild/BUILD
-BUILDBIN = ~/rpmbuild/BUILD/usr/local/bin
 
 all::
 	@echo "Run 'make cp' then 'make rpm'"
@@ -16,7 +15,7 @@ cp::
 	##
 	mkdir -p $(BUILDDIR)/usr/local/bin
 	cp ../v2/cmd/lenticularis-mux/lenticularis-mux $(BUILDDIR)/usr/local/bin/
-	cp ../v2/cmd/lens3-admin/lens3-admin $(BUILDDIR)/usr/local/bin/
+	cp ../v2/cmd/lenticularis-admin/lenticularis-admin $(BUILDDIR)/usr/local/bin/
 	##
 	mkdir -p $(BUILDDIR)/usr/lib/sysusers.d
 	cp ../v2/unit-file/lenticularis-user.conf $(BUILDDIR)/usr/lib/sysusers.d/
@@ -29,7 +28,7 @@ cp::
 	cp ../v2/unit-file/lenticularis-valkey.service $(BUILDDIR)/usr/lib/systemd/system/
 	##
 	mkdir -p $(BUILDDIR)/usr/lib/systemd/system-preset
-	cp ../v2/unit-file/50-lenticularis.preset $(BUILDDIR)/usr/lib/systemd/system-preset/
+	#cp ../v2/unit-file/lenticularis.preset $(BUILDDIR)/usr/lib/systemd/system-preset/50-lenticularis.preset
 	##
 	mkdir -p $(BUILDDIR)/etc/lenticularis
 	cp ../v2/unit-file/lens3.conf $(BUILDDIR)/etc/lenticularis/
@@ -68,6 +67,9 @@ rpm-install::
 
 rpm-uninstall::
 	dnf -v remove lenticularis-s3
+
+del-user::
+	userdel lenticularis
 
 test-install::
 	rpm -ivvh --test $(RPM)

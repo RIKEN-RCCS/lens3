@@ -1,13 +1,13 @@
-/* Pool Data. */
-
-// Copyright 2022-2024 RIKEN R-CCS.
+// Copyright 2022-2026 RIKEN R-CCS.
 // SPDX-License-Identifier: BSD-2-Clause
 
-package lens3
+// Pool Data.
 
 // Description of a pool is spread in entries in the keyval-db, and
 // GATHER_POOL_PROP() collects the data from the entries.  It is
 // called by Registrar and admin tools.
+
+package lens3
 
 import (
 	"cmp"

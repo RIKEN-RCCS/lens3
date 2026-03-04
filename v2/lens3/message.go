@@ -1,7 +1,7 @@
-/* Lens3 Messages Returned to Clients. */
-
-// Copyright 2022-2024 RIKEN R-CCS.
+// Copyright 2022-2026 RIKEN R-CCS.
 // SPDX-License-Identifier: BSD-2-Clause
+
+// Lens3 Messages Returned to Clients.
 
 package lens3
 

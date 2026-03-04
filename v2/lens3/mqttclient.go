@@ -1,9 +1,7 @@
-/* MQTT Client for Event Notification. */
-
-// Copyright 2022-2024 RIKEN R-CCS
+// Copyright 2022-2026 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
 
-package lens3
+// MQTT Client for Event Notification.
 
 // An MQTT client sends logs to MQTT.  It skip logs when it is not
 // connected.  It repeatedly reconnects to the server when it is
@@ -27,6 +25,8 @@ package lens3
 // # vi /etc/mosquitto/mosquitto.conf
 //   allow_anonymous false
 //   password_file /etc/mosquitto/password.txt
+
+package lens3
 
 import (
 	"context"

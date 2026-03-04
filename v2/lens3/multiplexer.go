@@ -1,7 +1,8 @@
 // Copyright 2022-2026 RIKEN R-CCS.
 // SPDX-License-Identifier: BSD-2-Clause
 
-/* Lens3-Multiplexer.  Main part of Lens3. */
+// Lens3-Multiplexer.  Main part of Lens3.
+
 // Multiplexer is a proxy to backend S3 servers.
 
 // NOTE: Do not call panic(http/ErrAbortHandler) to abort processing

@@ -28,10 +28,21 @@ server instances at a single access point.
 
 cp -rp * %{buildroot}
 
+echo "Set a password for Valkey access." >/dev/stderr
+
+if [ $1 -eq 1 ] ; then
+    # Run in first install, not upgrade.
+    pw=$(openssl rand -base64 24 | tr '+/' 'XY')
+    sed -e "s/\"password\": \"[0-9a-zA-Z]*\"/\"password\": \"${pw}\"/" -i %{buildroot}/etc/lenticularis/lens3.conf
+    sed -e "s/requirepass \"[0-9a-zA-Z]*\"/requirepass \"${pw}\"/" -i %{buildroot}/etc/lenticularis/valkey.conf
+fi
+
 %post
 
 %__systemd_sysusers
 # systemctl restart systemd-sysusers
+
+echo "Running Lenticularis-S3 post install." >/dev/stderr
 
 if [ $1 -eq 1 ] ; then
     semanage fcontext -a -t redis_log_t "/var/log/lenticularis-valkey(/.*)?"
@@ -39,7 +50,6 @@ if [ $1 -eq 1 ] ; then
     restorecon -v /etc/httpd/conf.d/lens3proxy.conf
 fi
 
-echo "Print selinux state"
 semanage fcontext -l | grep lenticularis-valkey
 ls -dlZ /var/log/lenticularis
 ls -dlZ /var/log/lenticularis-valkey
@@ -61,49 +71,41 @@ if [ $1 -eq 1 ] ; then
     firewall-cmd --reload
 fi
 
-# Set a password for Valkey access.
+# %%systemd_post lenticularis-valkey.service
 
-if [ $1 -eq 1 ] ; then
-    # Run in first install, not upgrade.
-    pw=$(openssl rand -base64 24 | tr '+/' 'XY')
-    sed -e "s/\"password\": \"[0-9a-zA-Z]*\"/\"password\": \"${pw}\"/" -i /etc/lenticularis/lens3.conf
-    sed -e "s/requirepass \"[0-9a-zA-Z]*\"/requirepass \"${pw}\"/" -i /etc/lenticularis/valkey.conf
-    chown lenticularis:lenticularis /etc/lenticularis/lens3.conf
-    chmod 660 /etc/lenticularis/lens3.conf
-    chown lenticularis:lenticularis /etc/lenticularis/valkey.conf
-    chmod 660 /etc/lenticularis/valkey.conf
-fi
+systemctl daemon-reload
+systemctl enable lenticularis-valkey
+systemctl start lenticularis-valkey
 
-# systemctl daemon-reload
-# systemctl enable lenticularis-valkey
-# systemctl start lenticularis-valkey
+/usr/local/bin/lenticularis-admin -c /etc/lenticularis/lens3.conf load-conf /var/lib/lenticularis/mux-conf.json
+/usr/local/bin/lenticularis-admin -c /etc/lenticularis/lens3.conf load-conf /var/lib/lenticularis/reg-conf.json
+/usr/local/bin/lenticularis-admin -c /etc/lenticularis/lens3.conf show-conf
 
-%systemd_post lenticularis-valkey.service
+# %%systemd_post lenticularis-mux.service
 
-/usr/local/bin/lens3-admin -c /etc/lenticularis/lens3.conf load-conf /var/lib/lenticularis/mux-conf.json
-/usr/local/bin/lens3-admin -c /etc/lenticularis/lens3.conf load-conf /var/lib/lenticularis/reg-conf.json
-/usr/local/bin/lens3-admin -c /etc/lenticularis/lens3.conf show-conf
+systemctl daemon-reload
+systemctl enable lenticularis-mux
+systemctl start lenticularis-mux
 
-# systemctl daemon-reload
-# systemctl enable lenticularis-mux
-# systemctl start lenticularis-mux
-
-%systemd_post lenticularis-mux.service
+# chown lenticularis:lenticularis /etc/lenticularis/lens3.conf
+# chmod 660 /etc/lenticularis/lens3.conf
+# chown lenticularis:lenticularis /etc/lenticularis/valkey.conf
+# chmod 660 /etc/lenticularis/valkey.conf
 
 %files
-%attr(755, -, -) /usr/local/bin/lens3-admin
+%attr(755, -, -) /usr/local/bin/lenticularis-admin
 %attr(755, -, -) /usr/local/bin/lenticularis-mux
 %attr(644, -, -) /usr/lib/systemd/system/lenticularis-mux.service
 %attr(644, -, -) /usr/lib/systemd/system/lenticularis-valkey.service
-%attr(644, -, -) /usr/lib/systemd/system-preset/50-lenticularis.preset
+# %%attr(644, -, -) /usr/lib/systemd/system-preset/50-lenticularis.preset
 %attr(644, -, -) /usr/lib/sysusers.d/lenticularis-user.conf
 %attr(644, -, -) /etc/logrotate.d/lenticularis-logrotate
 %attr(770, lenticularis, lenticularis) /var/lib/lenticularis
-%dir %attr(700, lenticularis, lenticularis) /var/log/lenticularis
-%dir %attr(700, lenticularis, lenticularis) /var/log/lenticularis-valkey
-%attr(700, lenticularis, lenticularis) /etc/lenticularis
-# %%attr(660, lenticularis, lenticularis) /etc/lenticularis/lens3.conf
-# %%attr(660, lenticularis, lenticularis) /etc/lenticularis/valkey.conf
+%dir %attr(770, lenticularis, lenticularis) /var/log/lenticularis
+%dir %attr(770, lenticularis, lenticularis) /var/log/lenticularis-valkey
+%dir %attr(770, lenticularis, lenticularis) /etc/lenticularis
+%attr(660, lenticularis, lenticularis) /etc/lenticularis/lens3.conf
+%attr(660, lenticularis, lenticularis) /etc/lenticularis/valkey.conf
 %attr(440, -, -) /etc/sudoers.d/lenticularis-sudoers
 %attr(660, -, -) /etc/httpd/conf.d/lens3proxy.conf
 %license /usr/share/licenses/lenticularis/LICENSE

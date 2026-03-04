@@ -13,7 +13,7 @@ Valkey's password.
 
 [mux-conf.json](mux-conf.json) and [reg-conf.json](reg-conf.json) are
 Lenticularis settings.  It is loaded in keyval-db (Valkey) with
-"lens3-admin" command.
+"lenticularis-admin" command.
 
 ## Valkey Service
 

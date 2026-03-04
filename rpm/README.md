@@ -55,13 +55,12 @@ But, this procedure skips some of the optional steps.
 
 Lens3 needs a pseudo user "lenticularis".  Its UID/GID will be
 dynamically assigned by "sysusers", and its home is
-"/var/lib/lenticularis".  The pseudo user name is "lenticularis" while
-it is "lens3" in the setting-guide.md.
+"/var/lib/lenticularis".  "lenticularis-user.conf" is copied to
+/usr/lib/sysusers.d/.
 
-"lenticularis-user.conf" is copied to /usr/lib/sysusers.d/.
-
-RPM supports "sysusers".  Putting a file in /usr/lib/sysusers.d, RPM
-will take care of it.  (systemctl restart systemd-sysusers).
+RPM says it supports "sysusers".  By putting a file in
+/usr/lib/sysusers.d, RPM will take care of it.  (systemctl restart
+systemd-sysusers).
 
 https://rpm-software-management.github.io/rpm/manual/users_and_groups.html
 
@@ -71,8 +70,7 @@ Check the user assignment.
 rpm -q --qf='[%{SYSUSERS}\n]' ~/rpmbuild/RPMS/x86_64/lenticularis-s3-2.2.1-1.el10.x86_64.rpm
 ```
 See
-https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/appendix-managing-users-groups-ssh-keys-and-secrets-in-image-mode-for-rhel
-https://docs.fedoraproject.org/en-US/packaging-guidelines/UsersAndGroups/
+https://rpm.org/docs/4.19.x/manual/users_and_groups.html
 
 ## MEMO on RPM Spec: Requires(post)
 
@@ -109,30 +107,28 @@ it shall be written like "pkg > 1, pkg < 3" or "pkg >= 2.0.0, pkg <
 
 http://ftp.rpm.org/api/4.4.2.2/rpmvercmp_8c-source.html
 
-## MEMO on RPM: MEMO
+## MEMO on RPM Spec: Printing Messages
 
-In SPEC file, add `%autosetup -T`, where `-T` is to skip unpacking the
-source.  See
-https://rpm-software-management.github.io/rpm/manual/spec.html
+"echo" will print a message while installation, but only when with
+verbose (-v).  But, stderr is printed always.
 
-## MEMO on RPM: MEMO
+## MEMO on RPM Spec: BASICS OF RPM SPEC
 
-In building RPM, we refer to the following descriptions:
+The following descriptions are maybe helpful in building RPM:
+
   - https://rpm-software-management.github.io/rpm/manual/spec.html
   - https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/packaging_and_distributing_software/introduction-to-rpm
-  - https://docs.fedoraproject.org/en-US/package-maintainers/Packaging_Tutorial/
 
 Very basic ("create-rpm-package" is in Nov. 2020):
+
   - https://www.redhat.com/en/blog/create-rpm-package
 
-Software Collections for Red Hat:
-  - https://docs.redhat.com/en/documentation/red_hat_software_collections/2/html/packaging_guide/index
+RPM Spec Example (Valkey):
 
-Example:
-- https://rockylinux.pkgs.org/10/rockylinux-appstream-x86_64/valkey-8.0.7-1.el10_1.x86_64.rpm.html
-- https://git.rockylinux.org/staging/rpms/valkey/-/tree/r10/SPECS
+  - https://git.rockylinux.org/staging/rpms/valkey/-/tree/r10/SPECS
+  - https://rockylinux.pkgs.org/10/rockylinux-appstream-x86_64/valkey-8.0.7-1.el10_1.x86_64.rpm.html
 
-Sections of SPEC file:
+Sections of SPEC file consist of:
 
 - Preamble
 - Build scriptlets
@@ -142,17 +138,6 @@ Sections of SPEC file:
 - %files section
 - %changelog section
 
-;; install -p -D -m 0644 %{S:4} %{buildroot}%{_sysusersdir}/%{name}.conf
+RPM Macro Source:
 
-Selinux configuration:
-
-- dnf info "selinux-policy-targeted"
-- dnf info "policycoreutils"
-
-Hints:
-
-https://fedoraproject.org/wiki/PackagingDrafts/SELinux
-
-RPM Macros:
-
-https://github.com/systemd/systemd/blob/main/src/rpm/macros.systemd.in
+  - https://github.com/systemd/systemd/blob/main/src/rpm/macros.systemd.in

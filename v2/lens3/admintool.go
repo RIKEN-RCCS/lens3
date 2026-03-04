@@ -1,7 +1,7 @@
-/* Command lens3-admin.  It is a keyval-db modifier command. */
-
-// Copyright 2022-2024 RIKEN R-CCS
+// Copyright 2022-2026 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
+
+// Command lenticularis-admin.  It is a keyval-db modifier command.
 
 package lens3
 
@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-func Run_lens3_admin() {
+func Run_lenticularis_admin() {
 	slog.SetLogLoggerLevel(slog.LevelDebug)
 	make_adm_command_table()
 	adm_toplevel()

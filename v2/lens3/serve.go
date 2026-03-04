@@ -1,9 +1,7 @@
-/* Service Runner. */
-
-// Copyright 2022-2024 RIKEN R-CCS.
+// Copyright 2022-2026 RIKEN R-CCS.
 // SPDX-License-Identifier: BSD-2-Clause
 
-package lens3
+// Service Runner.
 
 // MEMO: The main in Golang will exit with status=2 on an unrecovered
 // panic.
@@ -18,6 +16,8 @@ package lens3
 // status=7: program is not running
 //
 // https://refspecs.linuxbase.org/LSB_3.0.0/LSB-PDA/LSB-PDA/iniscrptact.html
+
+package lens3
 
 import (
 	"flag"

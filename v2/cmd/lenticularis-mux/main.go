@@ -1,4 +1,4 @@
-/* lenticularis-mux service. */
+// lenticularis-mux service.
 
 package main
 

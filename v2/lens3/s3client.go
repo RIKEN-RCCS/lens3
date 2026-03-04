@@ -1,13 +1,11 @@
-/* AWS S3 Client for a Backend. */
-
-// Copyright 2022-2024 RIKEN R-CCS
+// Copyright 2022-2026 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
 
-package lens3
+// AWS S3 Client for a Backend.
 
 // This defines a few S3 operations to a backend server: list-buckets
 // and make-bucket.
-
+//
 // S3 operations return "aws/smithy/OperationError", but it wraps
 // other errors in a deep nest.  Extraction of an S3 operation error
 // from it is done by unwrap_operation_error().  The OperationError
@@ -26,6 +24,8 @@ package lens3
 // MEMO: S3 clients retry on HTTP status 50x but 501.
 //
 // See https://pkg.go.dev/github.com/aws/aws-sdk-go-v2/aws/retry
+
+package lens3
 
 import (
 	"context"

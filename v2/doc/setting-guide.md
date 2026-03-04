@@ -36,7 +36,7 @@ forward requests to Multiplexer and Registrar.
 - Files and directories
   - /usr/lib/systemd/system/lenticularis-mux.service
   - /usr/lib/systemd/system/lenticularis-valkey.service
-  - /etc/lenticularis/conf.json
+  - /etc/lenticularis/lens3.conf
   - /etc/lenticularis/valkey.conf
   - /var/log/lenticularis/
   - /var/log/lenticularis-valkey/
@@ -76,7 +76,7 @@ onto the host.  Some tests in Lens3 use Python.
 ```
 
 Build and install Lens3.  Copy the binary files ("lenticularis-mux"
-and "lens3-admin") to "/usr/local/bin".
+and "lenticularis-admin") to "/usr/local/bin".
 
 ```
 $ cd $TOP/v2/
@@ -85,7 +85,7 @@ $ make build
 $ exit
 # su -
 # install -m 755 -c $TOP/v2/cmd/lenticularis-mux/lenticularis-mux /usr/local/bin/
-# install -m 755 -c $TOP/v2/cmd/lens3-admin/lens3-admin /usr/local/bin/
+# install -m 755 -c $TOP/v2/cmd/lenticularis-admin/lenticularis-admin /usr/local/bin/
 ```
 
 ## Install Prerequisites
@@ -339,23 +339,23 @@ Prepare a systemd unit file for Valkey, and start/restart Valkey.
 ```
 
 Multiplexer and Registrar connect to Valkey using the information held
-in "/etc/lenticularis/conf.json".  KEEP IT SECURE ALL THE TIME.  Copy
+in "/etc/lenticularis/lens3.conf".  KEEP IT SECURE ALL THE TIME.  Copy
 and edit the configuration file.  Set the Valkey's password in it.
 Note that Lens3 stores everything in Valkey, including S3 access keys
 which are stored in raw text.
 
 ```
-# cp $TOP/v2/unit-file/conf.json /etc/lenticularis/conf.json
-# chown lenticularis:lenticularis /etc/lenticularis/conf.json
-# chmod 660 /etc/lenticularis/conf.json
-# vi /etc/lenticularis/conf.json
+# cp $TOP/v2/unit-file/lens3.conf /etc/lenticularis/lens3.conf
+# chown lenticularis:lenticularis /etc/lenticularis/lens3.conf
+# chmod 660 /etc/lenticularis/lens3.conf
+# vi /etc/lenticularis/lens3.conf
 ```
 
 ## Store Lens3 Settings in Keyval-DB
 
 Multiplexer and Registrar load the configuration from the keyval-db
 (Valkey).  This section prepares it.  It is better to run
-`lens3-admin` on the same host running the keyval-db.  See the
+`lenticularis-admin` on the same host running the keyval-db.  See the
 following description of the fields of the configurations.
 
 - [configuration.md](configuration.md)
@@ -371,19 +371,19 @@ lenticularis$ vi mux-conf.json
 lenticularis$ vi reg-conf.json
 ```
 
-Load the Lens3 configuration from the files.  Note `lens3-admin` needs
-"conf.json" containing connection information to the keyval-db.  Keep
-"conf.json" secure, when it is necessary to copy it.
+Load the Lens3 configuration from the files.  Note
+`lenticularis-admin` needs "lens3.conf" containing connection
+information to the keyval-db.  Keep "lens3.conf" secure, when it is
+necessary to copy it.
 
 ```
-# cp /etc/lenticularis/conf.json /home/lenticularis/conf.json
-# chown lenticularis:lenticularis /home/lenticularis/conf.json
-# chmod 660 /home/lenticularis/conf.json
+# cp /etc/lenticularis/lens3.conf ~lenticularis/lens3.conf
+# chown lenticularis:lenticularis ~lenticularis/lens3.conf
+# chmod 660 ~lenticularis/lens3.conf
 # su - lenticularis
-lenticularis$ cd ~
-lenticularis$ lens3-admin -c conf.json load-conf mux-conf.json
-lenticularis$ lens3-admin -c conf.json load-conf reg-conf.json
-lenticularis$ lens3-admin -c conf.json show-conf
+lenticularis$ lenticularis-admin -c lens3.conf load-conf mux-conf.json
+lenticularis$ lenticularis-admin -c lens3.conf load-conf reg-conf.json
+lenticularis$ lenticularis-admin -c lens3.conf show-conf
 ```
 
 Check the syntax of json before loading the configuration.  It can be
@@ -467,7 +467,7 @@ after changing the password.
 ```
 # su - lenticularis
 lenticularis$ vi mux-conf.json
-lenticularis$ lens3-admin -c conf.json load-conf mux-conf.json
+lenticularis$ lenticularis-admin -c lens3.conf load-conf mux-conf.json
 lenticularis$ exit
 # systemctl restart lenticularis-mux
 ```
@@ -512,7 +512,7 @@ Lenticularis status:
 # systemctl status lenticularis-mux
 # su - lenticularis
 lenticularis$ cd ~
-lenticularis$ lens3-admin -c conf.json show-mux
+lenticularis$ lenticularis-admin -c lens3.conf show-mux
 ```
 
 The admin command `show-mux` shows the endpoints of Multiplexers.
@@ -595,11 +595,11 @@ ENABLE,user1,user2,user3, ...
 DISABLE,user4,user5,user6, ...
 ```
 
-Register users by `lens3-admin` command.
+Register users by `lenticularis-admin` command.
 
 ```
-lenticularis$ lens3-admin -c conf.json load-user CSV-FILE.csv
-lenticularis$ lens3-admin -c conf.json show-user
+lenticularis$ lenticularis-admin -c lens3.conf load-user CSV-FILE.csv
+lenticularis$ lenticularis-admin -c lens3.conf show-user
 ```
 
 ## Troubleshooting
@@ -623,8 +623,8 @@ The configuration "logging.logger.tracing=255" can increase logging
 verbosity.  It is bit flags, and 255 is all bits on.
 
 The setting of "logging.logger.tracing" is in the configuration
-"mux-conf.json".  Reloading the configuration by "lens3-admin" and
-restarting the service by "systemctl" are needed to make changes
+"mux-conf.json".  Reloading the configuration by "lenticularis-admin"
+and restarting the service by "systemctl" are needed to make changes
 effective.
 
 ### Running an S3 Server by Hand
@@ -725,19 +725,19 @@ MinIO's tracing information, for example.
 
 The necessary information to use "mc" command is a URL of a MinIO
 endpoint, and administrator's key pair.  These can be obtained by
-`lens3-admin show-be` command ("be" is a short for backend).  It
+`lenticularis-admin show-be` command ("be" is a short for backend).  It
 displays MinIO's endpoint (host:port) in "backend_ep" field.  It also
 displays an access-key in "root_access" and a secret-key in
 "root_secret".
 
 The "show-be" command shows information on running MinIO instances.
 To use "mc" command, it is necessary to keep a MinIO instance running.
-Run `lens3-admin send-probe POOL-NAME`, repeatedly, to let it running.
+Run `lenticularis-admin send-probe POOL-NAME`, repeatedly, to let it running.
 
 ```
-lenticularis$ lens3-admin -c conf.json show-pool
-lenticularis$ lens3-admin -c conf.json show-be
-lenticularis$ lens3-admin -c conf.json send-probe POOL-NAME
+lenticularis$ lenticularis-admin -c lens3.conf show-pool
+lenticularis$ lenticularis-admin -c lens3.conf show-be
+lenticularis$ lenticularis-admin -c lens3.conf send-probe POOL-NAME
 ```
 
 For example, the sequence of commands below enables to dump tracing

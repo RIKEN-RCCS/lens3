@@ -1,7 +1,7 @@
-/* Small functions. */
-
-// Copyright 2022-2024 RIKEN R-CCS
+// Copyright 2022-2026 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
+
+// Small functions.
 
 package lens3
 

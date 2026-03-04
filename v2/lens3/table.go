@@ -1,9 +1,7 @@
-/* Accessors to the Keyval-DB (Valkey). */
-
-// Copyright 2022-2024 RIKEN R-CCS
+// Copyright 2022-2026 RIKEN R-CCS
 // SPDX-License-Identifier: BSD-2-Clause
 
-package lens3
+// Accessors to the Keyval-DB (Valkey).
 
 // A table is a set of typed records for the keyval-db.  It consists
 // of three databases to ease manual inspection in the keyval-db.
@@ -33,6 +31,8 @@ package lens3
 //
 // MEMO: Values of strings are converted by string(), not by
 // valkey.BinaryString().
+
+package lens3
 
 import (
 	"bytes"

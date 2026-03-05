@@ -79,7 +79,7 @@ func adm_toplevel() {
 	if flag_conf != nil {
 		tracing = 0xff
 	}
-	var t = make_keyval_table(dbconf)
+	var t = make_keyval_table(dbconf, true)
 	var adm = &adm{
 		dbconf: dbconf,
 		table:  t,

@@ -54,13 +54,15 @@ But, this procedure skips some of the optional steps.
 ## MEMO on RPM Spec: Pseudo User Creation in RPM
 
 Lens3 needs a pseudo user "lenticularis".  Its UID/GID will be
-dynamically assigned by "sysusers", and its home is
-"/var/lib/lenticularis".  "lenticularis-user.conf" is copied to
-/usr/lib/sysusers.d/.
+dynamically assigned by "sysusers".  Its home is
+"/var/lib/lenticularis".
 
-RPM says it supports "sysusers".  By putting a file in
-/usr/lib/sysusers.d, RPM will take care of it.  (systemctl restart
-systemd-sysusers).
+Note the user by "sysusers" is not yet visible at copying by the
+"%file" section.  So, it explicitly chowns in the "%post" section.
+
+RPM says it supports "sysusers" -- by putting a file in
+/usr/lib/sysusers.d, RPM will take care of it.  However, it seems not.
+This spec-file runs "systemd-sysusers" in the "%post" section.
 
 https://rpm-software-management.github.io/rpm/manual/users_and_groups.html
 
@@ -70,11 +72,17 @@ Check the user assignment.
 rpm -q --qf='[%{SYSUSERS}\n]' ~/rpmbuild/RPMS/x86_64/lenticularis-s3-2.2.1-1.el10.x86_64.rpm
 ```
 See
-https://rpm.org/docs/4.19.x/manual/users_and_groups.html
+
+  - https://rpm.org/docs/4.19.x/manual/users_and_groups.html
+
+## MEMO on RPM Spec: Starting services
+
+"%systemd_post" does not start the service, even when "system-preset"
+is specified.  This spec-file uses "systemctl start".
 
 ## MEMO on RPM Spec: Requires(post)
 
-The script in this RPM uses the following commands.
+This spec-file uses the following commands.
 
   - "/usr/sbin/semanage" (in Python) is in "policycoreutils-python-utils"
   - ("/usr/sbin/restorecon" restorecon -> setfiles)
@@ -83,15 +91,15 @@ The script in this RPM uses the following commands.
   - "/usr/bin/firewall-cmd" is in "firewalld"
   - "/usr/bin/openssl" is in "openssl"
 
-And, it needs packages "policycoreutils-python-utils" and "openssl".
-Note other "policycoreutils" and "firewalld" are in @core which is
-installed in "Minimal Install".
+It needs packages "policycoreutils-python-utils" and "openssl".
+Remaining "policycoreutils" and "firewalld" are in @core and are
+expected to be installed.
 
 See `dnf groupinfo core`.
 
 ## MEMO on RPM Spec: Requires Version Comparison
 
-Versions of requirement are currently latest.  The spec file does not
+Requirement of versions are current latest.  This spec-file does not
 specify versions at all.
 
   - httpd 2.4
@@ -99,11 +107,12 @@ specify versions at all.
   - Mosquitto 2
   - logrotate 3
 
-Version comparison is very poor, and specifying only the major version
-is rather complex.  It is because the parts of alhanum are selected
-and compared in strcmp's order.  For example, when wanting version=2,
-it shall be written like "pkg > 1, pkg < 3" or "pkg >= 2.0.0, pkg <
-3.0.0", where shorter "2." does not work.
+Note that version comparison in RPM Spec is very poor.  Specifying
+only the major version is rather boring.  Version comparison extracts
+the parts of alhanum and compares them in strcmp's order.  For
+example, when wanting version=2, it shall be written like "pkg > 1,
+pkg < 3" or "pkg >= 2.0.0, pkg < 3.0.0", where shorter "2." does not
+work.
 
 http://ftp.rpm.org/api/4.4.2.2/rpmvercmp_8c-source.html
 
@@ -114,29 +123,26 @@ verbose (-v).  But, stderr is printed always.
 
 ## MEMO on RPM Spec: BASICS OF RPM SPEC
 
-The following descriptions are maybe helpful in building RPM:
+The following descriptions are maybe in writing RPM Spec:
 
   - https://rpm-software-management.github.io/rpm/manual/spec.html
   - https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/packaging_and_distributing_software/introduction-to-rpm
 
-Very basic ("create-rpm-package" is in Nov. 2020):
-
-  - https://www.redhat.com/en/blog/create-rpm-package
-
-RPM Spec Example (Valkey):
-
-  - https://git.rockylinux.org/staging/rpms/valkey/-/tree/r10/SPECS
-  - https://rockylinux.pkgs.org/10/rockylinux-appstream-x86_64/valkey-8.0.7-1.el10_1.x86_64.rpm.html
-
 Sections of SPEC file consist of:
 
-- Preamble
-- Build scriptlets
-  - %build
-  - %install
-- Runtime scriptlets
-- %files section
-- %changelog section
+  - Preamble
+  - Build scriptlets
+    - %build
+    - %install
+  - Runtime scriptlets
+  - %files section
+  - %changelog section
+
+RPM Spec Examples (httpd and valkey):
+
+  - https://git.rockylinux.org/staging/rpms/httpd/-/tree/r10/SPECS
+  - https://git.rockylinux.org/staging/rpms/valkey/-/tree/r10/SPECS
+  - https://rockylinux.pkgs.org/10/rockylinux-appstream-x86_64/valkey-8.0.7-1.el10_1.x86_64.rpm.html
 
 RPM Macro Source:
 

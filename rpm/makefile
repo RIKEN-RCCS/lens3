@@ -73,7 +73,9 @@ del-user::
 
 test-install::
 	rpm -ivvh --test $(RPM)
-	# rpm -Uvvh --test $(RPM)
+
+test-upgrade::
+	rpm -Uvvh --test $(RPM)
 
 show-scripts::
 	rpm -q --scripts $(RPM)

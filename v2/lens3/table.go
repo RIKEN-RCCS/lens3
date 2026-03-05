@@ -3,24 +3,22 @@
 
 // Accessors to the Keyval-DB (Valkey).
 
-// A table is a set of typed records for the keyval-db.  It consists
-// of three databases to ease manual inspection in the keyval-db.
-
-// This is for Valkey-v7.2.5, and valkey-go-v1.0.40.
-
+// A table is a set of typed records for the keyval-db.  A table
+// consists of three databases to ease manual inspection in the
+// keyval-db.
+//
 // Errors in keyval-db accesses are fatal (in most cases timeouts).
-// It calls panic(nil) to inform Multiplexer or Registrar to quit the
-// service.
+// It calls panic(nil) to inform Multiplexer or Registrar to quit.
 //
-// Errors related to configuration settings are fatal, too.  Such
-// calls are in the administrator tool, and does not affect the work
-// in Multiplexer or Registrar.  They call panic(nil).
+// Errors related to configurations are fatal, too.  They call
+// panic(nil).  Such calls are from the administrator tool, and does
+// not affect the work in Multiplexer or Registrar.
 //
-// A client will keep working when connecting the keyval-db would
-// fail.  However, a Golang client needs the first connection to be
-// established at the time.  Or, it fails with ECONNREFUSED.  The code
-// is adapted to that behavior.  See the code for
-// "buggy_at_client_creation=true".
+// A client of the keyval-db should keep working when a connection
+// would fail.  However, Golang's client requires establishing a
+// connection at the first time.  Otherwise, it fails with
+// ECONNREFUSED.  The code is adapted to that behavior.  See the code
+// for "buggy_behavior_at_client_creation=true".
 //
 // Timeouts are set by contexts.  The timeout value is stored in the
 // TIMEOUT field.
@@ -323,12 +321,12 @@ func make_failure_reason(s string) pool_reason {
 	return pool_reason("Backend outputs: " + s)
 }
 
-// MAKE_KEYVAL_TABLE makes keyval-db clients.  It retries connecting
-// to the keyval-db up to 60 seconds.  It assumes a failure is by
-// "connection refused", and other errors are fatal.  The error is of
-// type (err1 : *net.OpError{...}).
-func make_keyval_table(conf *db_conf) *keyval_table {
-	const buggy_at_client_creation = true
+// MAKE_KEYVAL_TABLE makes a set of keyval-db clients.  It retries a
+// connection to the keyval-db up to 60 seconds (unless fail_at_once).
+// It assumes a failure is by "connection refused", and other errors
+// are fatal.  The error is of type (err1 : *net.OpError{...}).
+func make_keyval_table(conf *db_conf, fail_at_once bool) *keyval_table {
+	const buggy_behavior_at_client_creation = true
 
 	var ep = conf.Ep
 	var pw = conf.Password
@@ -337,7 +335,7 @@ func make_keyval_table(conf *db_conf) *keyval_table {
 	var err1 error
 	var limit = time.Now().Add(time.Duration(60 * time.Second))
 
-	if buggy_at_client_creation {
+	if buggy_behavior_at_client_creation {
 		for time.Now().Before(limit) {
 			setting, err1 = valkey.NewClient(valkey.ClientOption{
 				InitAddress: []string{ep},
@@ -351,6 +349,9 @@ func make_keyval_table(conf *db_conf) *keyval_table {
 				slogger.Error("keyval-db valkey/NewClient(DB=1) errs",
 					"err", err1, "type", descriptive_string(err1))
 				panic(nil)
+			}
+			if fail_at_once {
+				break
 			}
 			if trace_db_set&tracing != 0 {
 				slogger.Debug("Connect to keyval-db failed (sleeping)")
@@ -423,7 +424,7 @@ func make_keyval_table(conf *db_conf) *keyval_table {
 
 	// Wait for a keyval-db.
 
-	if !buggy_at_client_creation {
+	if !buggy_behavior_at_client_creation {
 		var err4 error
 		for time.Now().Before(limit) {
 			var db = t.setting

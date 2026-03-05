@@ -36,7 +36,7 @@ import (
 	"time"
 )
 
-const lens3_version string = "v2.1.1"
+const lens3_version string = "v2.2.1"
 
 var ch_quit_service chan<- vacuous = nil
 
@@ -107,7 +107,7 @@ func start_lenticularis_service(confpath string, services [2]string) {
 		fmt.Fprintf(os.Stderr, "Reading db conf filed: %q\n", confpath)
 		os.Exit(1)
 	}
-	var t = make_keyval_table(dbconf)
+	var t = make_keyval_table(dbconf, false)
 
 	var count int = 0
 	var muxconf *mux_conf = nil

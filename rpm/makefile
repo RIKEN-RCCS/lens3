@@ -39,7 +39,7 @@ cp::
 	cp ../v2/unit-file/reg-conf.json $(BUILDDIR)/var/lib/lenticularis/
 	##
 	mkdir -p $(BUILDDIR)/etc/httpd/conf.d
-	cp ../v2/apache/lens3proxy-basic.conf $(BUILDDIR)/etc/httpd/conf.d/lens3proxy.conf
+	cp ../v2/proxy-apache/lens3proxy-basic.conf $(BUILDDIR)/etc/httpd/conf.d/lens3proxy.conf
 	##
 	mkdir -p $(BUILDDIR)/var/log/lenticularis
 	mkdir -p $(BUILDDIR)/var/log/lenticularis-valkey

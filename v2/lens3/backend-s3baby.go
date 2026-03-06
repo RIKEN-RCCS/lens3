@@ -51,8 +51,7 @@ var (
 // BACKEND_S3BABY is a manager for Baby-server and implements
 // backend_delegate.
 type backend_s3baby struct {
-	backend_generic
-	conf *backend_s3baby_factory
+	delegate_generic
 }
 
 // BACKEND_S3BABY_FACTORY implements backend_factory.
@@ -63,14 +62,19 @@ type backend_s3baby_factory struct {
 
 var the_backend_s3baby_factory = &backend_s3baby_factory{}
 
-func (f *backend_s3baby_factory) configure(conf *mux_conf) {
-	f.s3baby_conf = conf.S3baby
+func (f *backend_s3baby_factory) get_factory_generic_part() *factory_generic {
+	return &f.factory_generic
+}
+
+func (f *backend_s3baby_factory) configure_factory(conf *mux_conf, wc *manager_conf) {
+	f.manager_conf = wc
 	f.use_n_ports = 1
+	f.s3baby_conf = conf.S3baby
 }
 
 func (f *backend_s3baby_factory) make_delegate(pool string) backend_delegate {
 	var d = &backend_s3baby{}
-	d.conf = f
+	d.factory = f
 	runtime.SetFinalizer(d, finalize_backend_s3baby)
 	return d
 }
@@ -81,22 +85,33 @@ func (f *backend_s3baby_factory) clean_at_exit() {
 func finalize_backend_s3baby(d *backend_s3baby) {
 }
 
-func (d *backend_s3baby) get_super_part() *backend_generic {
-	return &(d.backend_generic)
+func (d *backend_s3baby) get_factory() *backend_s3baby_factory {
+	var f, ok = (d.factory).(*backend_s3baby_factory)
+	if !ok {
+		slogger.Error("BE(s3baby): BAD-IMPL backend factory unknown",
+			"factory", d.factory)
+		panic(nil)
+	}
+	return f
+}
+
+func (d *backend_s3baby) get_delegate_generic_part() *delegate_generic {
+	return &d.delegate_generic
 }
 
 func (d *backend_s3baby) make_command_line(port int, directory string) backend_command {
+	var f = d.get_factory()
 	var ep1 = net.JoinHostPort("", strconv.Itoa(port))
 	var keypair = fmt.Sprintf("%s,%s", d.be.Root_access, d.be.Root_secret)
 	var argv = []string{
-		d.conf.Path, "serve", ep1, directory,
+		f.Path, "serve", ep1, directory,
 	}
 	if false {
 		argv = append(argv, "-log", "debug")
 		argv = append(argv, "-log-access")
 		argv = append(argv, "-prof", "6060")
 	}
-	argv = append(argv, d.conf.Command_options...)
+	argv = append(argv, f.Command_options...)
 	var envs = []string{
 		fmt.Sprintf("S3BBS_CRED=%s", keypair),
 	}
@@ -215,7 +230,6 @@ func (d *backend_s3baby) shutdown() error {
 
 // HEARTBEAT calls s3.Client.ListBuckets() and returns a status code.
 func (d *backend_s3baby) heartbeat(w *manager) int {
-	//var proc = d.get_super_part()
 	var be = d.be
 	if be == nil {
 		return http_404_not_found
@@ -305,6 +319,4 @@ func control_s3baby_server(d *backend_s3baby, command string) error {
 			rspn.StatusCode)
 		return err8
 	}
-
-	return nil
 }

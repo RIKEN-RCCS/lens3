@@ -73,46 +73,43 @@ type manager struct {
 
 // BACKEND_FACTORY is to make a backend instance.
 type backend_factory interface {
-	configure(conf *mux_conf)
+	get_factory_generic_part() *factory_generic
+	configure_factory(*mux_conf, *manager_conf)
 	make_delegate(string) backend_delegate
 	clean_at_exit()
 }
 
 // BACKEND_DELEGATE represents a backend instance.  Its concrete body
-// is defined for each backend type.  GET_SUPER_PART returns a generic
-// part or a superclass.  MAKE_COMMAND_LINE returns a command and
-// environment of a backend instance.  CHECK_STARTUP checks a start of
-// a backend.  It is called each time a backend outputs a line of a
-// message.  It looks for a specific message.  The first argument
-// indicates stdout or stderr by values on_stdout and on_stderr.  The
-// passed strings are accumulated all from the start.  ESTABLISH does
-// a server specific initialization at its start.  SHUTDOWN stops a
-// backend in its specific way.  HEARTBEAT pings a backend and returns
-// an http status.  It is an error but status=200.
+// is defined for each backend type.  GET_DELEGATE_GENERIC_PART()
+// returns a generic part or a superclass.  MAKE_COMMAND_LINE()
+// returns a command and environment of a backend instance.
+// CHECK_STARTUP() checks a start of a backend.  It is called each
+// time a backend outputs a line of a message.  It looks for a
+// specific message.  The first argument indicates stdout or stderr by
+// values on_stdout and on_stderr.  The passed strings are accumulated
+// all from the start.  ESTABLISH() does a server specific
+// initialization at its start.  SHUTDOWN() stops a backend in its
+// specific way.  HEARTBEAT() pings a backend and returns an http
+// status.  It is an error but status=200.
 type backend_delegate interface {
-	get_super_part() *backend_generic
-
+	get_delegate_generic_part() *delegate_generic
 	make_command_line(port int, directory string) backend_command
-
 	check_startup(stdio_stream_indicator, []string) *start_result
-
 	establish() error
-
 	shutdown() error
-
 	heartbeat(w *manager) int
 }
 
-// BACKEND_GENERIC is a generic part of a backend.  It is embedded in
-// an instance of backend_delegate and obtained by get_super_part().
-// ENVIRON is the shared one in the_manager.  The fields {CMD,
-// CH_STDIO, CH_QUIT_BACKEND, CH_QUIT_BACKEND_SEND} are set when
-// starting a backend.  MUTEX protects accesses to the
-// ch_quit_backend.  A configuration "manager_conf" is shared with the
-// manager.
-type backend_generic struct {
+// DELEGATE_GENERIC is a common part of backend instances.  It is
+// embedded in an instance of backend_delegate and it can be obtained
+// by get_delegate_generic_part().  ENVIRON is the shared one in
+// the_manager.  The fields {CMD, CH_STDIO, CH_QUIT_BACKEND,
+// CH_QUIT_BACKEND_SEND} are set when starting a backend.  MUTEX
+// protects accesses to the ch_quit_backend.
+type delegate_generic struct {
 	pool_record
-	be *backend_record
+	be      *backend_record
+	factory backend_factory
 
 	environ []string
 
@@ -124,22 +121,21 @@ type backend_generic struct {
 	heartbeat_misses int
 
 	mutex sync.Mutex
-
-	conf *factory_generic
 }
 
-// FACTORY_GENERIC is a common part of a backend-factory.  It is
-// embedded in a factory and shared by backend instances.
+// FACTORY_GENERIC is a common part of a backend-factory.  It holds
+// the configuration information which is shared by backend instances.
+// MANAGER_CONF shares the configuration of the manager.
 type factory_generic struct {
 	*manager_conf
-	backend_conf
+	backend_common_conf
 }
 
-// BACKEND_CONF is common parameters to all backends.  USE_N_PORTS is
-// the number of ports used per backend.  It is set by factory's
-// configure().  It is use_n_ports=1 usually, but use_n_ports=2 for
-// RCLONE as it uses a control port.
-type backend_conf struct {
+// BACKEND_COMMON_CONF is common parameters to all backends.
+// USE_N_PORTS is the number of ports used per backend.  It is set by
+// factory's configure().  It is use_n_ports=1 usually, but
+// use_n_ports=2 for RCLONE as it uses a control port.
+type backend_common_conf struct {
 	use_n_ports int
 }
 
@@ -216,12 +212,12 @@ func configure_manager(w *manager, m *multiplexer, t *keyval_table, q chan vacuo
 		panic(nil)
 	}
 
-	w.backend_factory.configure(c)
+	w.backend_factory.configure_factory(c, &w.manager_conf)
 }
 
-// INITIALIZE_BACKEND_GENERIC initializes the super part of a
+// INITIALIZE_DELEGATE_GENERIC initializes the common part of a
 // backend.  The ep and pid of a backend are set later.
-func initialize_backend_generic(w *manager, dx *backend_generic, pooldata *pool_record) {
+func initialize_delegate_generic(w *manager, dx *delegate_generic, pooldata *pool_record) {
 	dx.pool_record = *pooldata
 	dx.be = &backend_record{
 		Pool:        pooldata.Pool,
@@ -235,7 +231,6 @@ func initialize_backend_generic(w *manager, dx *backend_generic, pooldata *pool_
 		Timestamp:   0,
 	}
 	dx.environ = w.environ
-	dx.conf.manager_conf = &w.manager_conf
 }
 
 // STOP_RUNNING_BACKENDS stops all backends for quitting.  Note that
@@ -314,16 +309,17 @@ func start_backend_in_mutexed(w *manager, pool string) *backend_record {
 		return nil
 	}
 
+	var f = w.backend_factory.get_factory_generic_part()
 	var d = w.backend_factory.make_delegate(pool)
 
 	// Initialize the super part.  The following fields will be set in
 	// starting a backend: {dx.cmd, dx.ch_stdio,
 	// dx.ch_quit_backend}
 
-	var dx *backend_generic = d.get_super_part()
-	initialize_backend_generic(w, dx, pooldata)
+	var dx *delegate_generic = d.get_delegate_generic_part()
+	initialize_delegate_generic(w, dx, pooldata)
 
-	var available_ports = list_available_ports(w, dx.conf.use_n_ports)
+	var available_ports = list_available_ports(w, f.use_n_ports)
 
 	if trace_proc&tracing != 0 {
 		slogger.Debug(w.logprefix+"start_backend()", "ports", available_ports)
@@ -422,7 +418,7 @@ func start_backend_in_mutexed(w *manager, pool string) *backend_record {
 // success/failure.  Note that it changes a cancel function from
 // SIGKILL to SIGTERM to make it work with sudo.
 func try_start_backend(w *manager, d backend_delegate, port int) *start_result {
-	var dx *backend_generic = d.get_super_part()
+	var dx *delegate_generic = d.get_delegate_generic_part()
 	var pool = dx.Pool
 	var thishost, _, err1 = net.SplitHostPort(w.mux_ep)
 	if err1 != nil {
@@ -507,7 +503,8 @@ func try_start_backend(w *manager, d backend_delegate, port int) *start_result {
 // timeout.  It returns STARTED/RETRY/FAILURE.  It reads the stdio
 // channels as much as available.
 func wait_for_backend_come_up(w *manager, d backend_delegate) *start_result {
-	var dx *backend_generic = d.get_super_part()
+	var dx *delegate_generic = d.get_delegate_generic_part()
+	var f = dx.factory.get_factory_generic_part()
 	var pool = dx.Pool
 
 	var msg_stdout []string
@@ -520,7 +517,7 @@ func wait_for_backend_come_up(w *manager, d backend_delegate) *start_result {
 		drain_start_messages_to_log(w, pool, msg_stdout, msg_stderr)
 	}()
 
-	var timeout = (dx.conf.Backend_start_timeout_ms).time_duration()
+	var timeout = (f.Backend_start_timeout_ms).time_duration()
 	var ch_timeout = time.After(timeout)
 	for {
 		select {
@@ -629,17 +626,18 @@ func wait_for_backend_by_race(w *manager, pool string) *backend_record {
 // SUSPEND_POOL puts a pool in the suspended state.  It will block the
 // service for a certain period.
 func suspend_pool(w *manager, d backend_delegate, reason pool_reason) *backend_record {
-	var dx *backend_generic = d.get_super_part()
+	var dx *delegate_generic = d.get_delegate_generic_part()
+	var f = dx.factory.get_factory_generic_part()
 	var pool = dx.Pool
 
 	var duration time.Duration
 	switch reason {
 	case start_failure_server_busy:
-		duration = dx.conf.backend_busy_suspension
+		duration = f.backend_busy_suspension
 	case start_failure_start_timeout:
-		duration = (dx.conf.Backend_timeout_suspension).time_duration()
+		duration = (f.Backend_timeout_suspension).time_duration()
 	default:
-		duration = (dx.conf.Backend_timeout_suspension).time_duration()
+		duration = (f.Backend_timeout_suspension).time_duration()
 	}
 
 	var now int64 = time.Now().Unix()
@@ -685,7 +683,7 @@ func mark_pool_inoperable(w *manager, pooldata *pool_record, reason pool_reason)
 
 // ABORT_BACKEND tells the pinger thread to shutdown the backend.
 func abort_backend(w *manager, d backend_delegate) {
-	var dx *backend_generic = d.get_super_part()
+	var dx *delegate_generic = d.get_delegate_generic_part()
 	func() {
 		dx.mutex.Lock()
 		defer dx.mutex.Unlock()
@@ -708,11 +706,12 @@ func ping_backend(w *manager, d backend_delegate) {
 		}
 	}()
 
-	var dx *backend_generic = d.get_super_part()
+	var dx *delegate_generic = d.get_delegate_generic_part()
+	var f = dx.factory.get_factory_generic_part()
 	var pool = dx.Pool
 	var duration = (w.Backend_awake_duration).time_duration()
-	var interval = (dx.conf.Heartbeat_interval).time_duration()
-	var expiry = (3 * (dx.conf.Heartbeat_interval).time_duration())
+	var interval = (f.Heartbeat_interval).time_duration()
+	var expiry = (3 * (f.Heartbeat_interval).time_duration())
 	var ok1 = set_backend_expiry(w.table, pool, expiry)
 	if !ok1 {
 		slogger.Error(w.logprefix+"DB.Expire(backend) failed",
@@ -778,7 +777,7 @@ func ping_backend(w *manager, d backend_delegate) {
 // is going to be shutdown.  It waits for a short time to avoid the
 // race, assuming all requests are finished in the wait.
 func stop_backend(w *manager, d backend_delegate) {
-	var dx *backend_generic = d.get_super_part()
+	var dx *delegate_generic = d.get_delegate_generic_part()
 	var pool = dx.Pool
 	slogger.Info(w.logprefix+"Stop backend", "pool", pool)
 
@@ -812,7 +811,7 @@ func stop_backend(w *manager, d backend_delegate) {
 // immediately.  It drains one line at a time.  It will stop the
 // backend when both the stdout+stderr are closed.
 func start_disgorging_stdio(w *manager, d backend_delegate, ch_stdio chan<- stdio_message) {
-	var dx *backend_generic = d.get_super_part()
+	var dx *delegate_generic = d.get_delegate_generic_part()
 	var cmd *exec.Cmd = dx.cmd
 
 	var stdout1, err1 = cmd.StdoutPipe()
@@ -855,7 +854,7 @@ func start_disgorging_stdio(w *manager, d backend_delegate, ch_stdio chan<- stdi
 // DISGORGE_STDIO_TO_LOG dumps stdout+stderr messages to the logger.
 // It receives messages written by threads started in
 // start_disgorging_stdio().
-func disgorge_stdio_to_log(w *manager, dx *backend_generic) {
+func disgorge_stdio_to_log(w *manager, dx *delegate_generic) {
 	var pool = dx.Pool
 	for {
 		var x1, ok1 = <-dx.ch_stdio
@@ -866,9 +865,9 @@ func disgorge_stdio_to_log(w *manager, dx *backend_generic) {
 		//var m = strings.TrimSpace(x1.string)
 		var m = x1.string
 		if x1.stdio_stream_indicator == on_stdout {
-			slogger.Info(w.logprefix+"stdout message", "pool", pool, "stdout", m)
+			slogger.Info(w.logprefix+"backend-stdout", "pool", pool, "stdout", m)
 		} else {
-			slogger.Info(w.logprefix+"stderr message", "pool", pool, "stderr", m)
+			slogger.Info(w.logprefix+"backend-stderr", "pool", pool, "stderr", m)
 		}
 	}
 	if trace_proc&tracing != 0 {
@@ -946,7 +945,7 @@ func list_backends_under_manager(w *manager) []*backend_record {
 }
 
 func wait4_child_process(w *manager, d backend_delegate) {
-	var dx *backend_generic = d.get_super_part()
+	var dx *delegate_generic = d.get_delegate_generic_part()
 	var pid = dx.cmd.Process.Pid
 	//var pid = dx.be.Backend_pid
 	for {

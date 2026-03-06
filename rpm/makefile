@@ -3,7 +3,7 @@
 BUILD = ~/rpmbuild/BUILD
 
 all::
-	@echo "Run 'make cp' then 'make rpm'"
+	@echo "Run 'make cp', 'make lint' then 'make rpm'"
 	@echo "  - 'make cp' copies files to ~/rpmbuild/BUILD."
 	@echo "  - 'make rpm' runs rpmbuild -bb on lenticularis-s3.spec."
 

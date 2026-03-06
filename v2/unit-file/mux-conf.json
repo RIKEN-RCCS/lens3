@@ -33,7 +33,7 @@
     "mc": "/usr/local/bin/mc"
   },
   "rclone": {
-    "rclone": "/usr/local/bin/rclone",
+    "path": "/usr/local/bin/rclone",
     "command_options": []
   },
   "log": {

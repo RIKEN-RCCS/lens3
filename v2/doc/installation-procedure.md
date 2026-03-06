@@ -21,11 +21,13 @@ server, Valkey, runs at port=6378.  The Lens3 services, Multiplexer
 and Registrar, run at port=8003 and port=8004, respectively.  The
 proxy is set up to forward requests to Multiplexer and Registrar.
 
-New user (a pseudo user for the services)
+New user with sudo (a pseudo user for the services)
   - lenticularis:lenticularis (home at /var/lib/lenticularis)
+  - /usr/lib/sysusers.d/lenticularis-user.conf
+  - /etc/sudoers.d/lenticularis-sudoers
 
 Firewall: services and thier ports
-  - HTTP Proxy (port=433,80)
+  - HTTP Proxy (port=443,80)
   - Valkey (port=6378)
   - Multiplexer (port=8003)
   - Registrar (port=8004)
@@ -35,14 +37,16 @@ Selinux: changes on files and ports
   - TCP ports 8003, 8004, 6378
 
 Files and directories
+  - /usr/lib/sysusers.d/lenticularis-user.conf
+  - /etc/sudoers.d/lenticularis-sudoers
   - /usr/lib/systemd/system/lenticularis-mux.service
   - /usr/lib/systemd/system/lenticularis-valkey.service
   - /etc/lenticularis/lens3.conf
   - /etc/lenticularis/valkey.conf
-  - /var/lib/lenticularis
+  - /var/lib/lenticularis/
   - /var/log/lenticularis/
   - /var/log/lenticularis-valkey/
-  - /usr/local/bin
+  - /usr/local/bin/
   - /etc/httpd/
   - /run/lenticularis-valkey/ (temporary)
 
@@ -264,9 +268,10 @@ necessary to copy it.
 # chown lenticularis:lenticularis ~lenticularis/lens3.conf
 # chmod 660 ~lenticularis/lens3.conf
 # su - lenticularis
-lenticularis$ lenticularis-admin -c lens3.conf load-conf mux-conf.json
-lenticularis$ lenticularis-admin -c lens3.conf load-conf reg-conf.json
-lenticularis$ lenticularis-admin -c lens3.conf show-conf
+lenticularis$ cd ~
+lenticularis$ lenticularis-admin -c ./lens3.conf load-conf mux-conf.json
+lenticularis$ lenticularis-admin -c ./lens3.conf load-conf reg-conf.json
+lenticularis$ lenticularis-admin -c ./lens3.conf show-conf
 ```
 
 Check the syntax of json before loading the configuration.  It can be
@@ -290,9 +295,9 @@ is that the user "lenticularis" is only allowed to run
 "/usr/local/bin/s3-baby-server" via sudo.
 
 ```
-# cp $TOP/v2/unit-file/lenticularis-sudoers /etc/sudoers.d/
-# vi /etc/sudoers.d/lenticularis-sudoers
-# chmod 440 /etc/sudoers.d/lenticularis-sudoers
+cp $TOP/v2/unit-file/lenticularis-sudoers /etc/sudoers.d/
+vi /etc/sudoers.d/lenticularis-sudoers
+chmod 440 /etc/sudoers.d/lenticularis-sudoers
 ```
 
 ## Start Multiplexer and Registrar Services
@@ -303,14 +308,14 @@ systemd unit file for the service.  It is started with the user
 "lenticularis" (UID:GID=lenticularis:lenticularis).
 
 ```
-# cp $TOP/v2/unit-file/lenticularis-mux.service /usr/lib/systemd/system/
+cp $TOP/v2/unit-file/lenticularis-mux.service /usr/lib/systemd/system/
 ```
 
 ```
-# systemctl daemon-reload
-# systemctl enable lenticularis-mux
-# systemctl start lenticularis-mux
-# systemctl status lenticularis-mux
+systemctl daemon-reload
+systemctl enable lenticularis-mux
+systemctl start lenticularis-mux
+systemctl status lenticularis-mux
 ```
 
 ## Check the Status
@@ -335,7 +340,7 @@ Lenticularis status:
 # systemctl status lenticularis-mux
 # su - lenticularis
 lenticularis$ cd ~
-lenticularis$ lenticularis-admin -c lens3.conf show-mux
+lenticularis$ lenticularis-admin -c ./lens3.conf show-mux
 ```
 
 The admin command `show-mux` shows the endpoints of Multiplexers.
@@ -402,9 +407,10 @@ To use "mc" command, it is necessary to keep a MinIO instance running.
 Run `lenticularis-admin send-probe POOL-NAME`, repeatedly, to let it running.
 
 ```
-lenticularis$ lenticularis-admin -c lens3.conf show-pool
-lenticularis$ lenticularis-admin -c lens3.conf show-be
-lenticularis$ lenticularis-admin -c lens3.conf send-probe POOL-NAME
+lenticularis$ cd ~
+lenticularis$ lenticularis-admin -c ./lens3.conf show-pool
+lenticularis$ lenticularis-admin -c ./lens3.conf show-be
+lenticularis$ lenticularis-admin -c ./lens3.conf send-probe POOL-NAME
 ```
 
 For example, the sequence of commands below enables to dump tracing

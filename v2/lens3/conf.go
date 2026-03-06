@@ -113,12 +113,12 @@ type manager_conf struct {
 }
 
 type minio_conf struct {
-	Minio string `json:"minio"`
-	Mc    string `json:"mc"`
+	PathMinio string `json:"minio"`
+	PathMc    string `json:"mc"`
 }
 
 type rclone_conf struct {
-	Rclone          string   `json:"rclone"`
+	Path            string   `json:"path"`
 	Command_options []string `json:"command_options"`
 }
 
@@ -420,7 +420,7 @@ func check_manager_entry(e *manager_conf) {
 }
 
 func check_minio_entry(e *minio_conf) {
-	if e != nil && len(e.Minio) > 0 && len(e.Mc) > 0 {
+	if e != nil && len(e.PathMinio) > 0 && len(e.PathMc) > 0 {
 		// Okay.
 	} else {
 		slogger.Error("Bad backend entry (minio)", "entry", e)
@@ -429,7 +429,7 @@ func check_minio_entry(e *minio_conf) {
 }
 
 func check_rclone_entry(e *rclone_conf) {
-	if e != nil && len(e.Rclone) > 0 {
+	if e != nil && len(e.Path) > 0 {
 		// Okay.
 	} else {
 		slogger.Error("Bad backend entry (rclone)", "entry", e)

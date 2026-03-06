@@ -44,19 +44,21 @@ configuration.
 Note {"X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Server"} are
 automatically set by Apache-HTTPD.
 
-## Set up Proxy by Apache-HTTPD
+## Set up a Proxy by Apache-HTTPD
+
+### Common Setup
 
 Set up a configuration file with the needed authentication, and
 (re)start the service.
 
 Prepare a configuration file in "/etc/httpd/conf.d/".  Sample files
-can be found in $TOP/v2/apache/.  Copy one as
+can be found in $TOP/v2/proxy-apache/.  Copy one as
 "/etc/httpd/conf.d/lens3proxy.conf" and edit it.  Note running
 "restorecon" sets the "system_u"-user on the file (or, you may run
 "chcon -u system_u" on the file).
 
 ```
-# cp $TOP/v2/apache/lens3proxy-basic.conf /etc/httpd/conf.d/lens3proxy.conf
+# cp $TOP/v2/proxy-apache/lens3proxy-basic.conf /etc/httpd/conf.d/lens3proxy.conf
 # chown root:root /etc/httpd/conf.d/lens3proxy.conf
 # chmod 640 /etc/httpd/conf.d/lens3proxy.conf
 # vi /etc/httpd/conf.d/lens3proxy.conf
@@ -77,6 +79,8 @@ ProxyPass /lens3.sts/ http://localhost:8004/
 ProxyPassReverse /lens3.sts/ http://localhost:8004/
 ```
 
+### Choice: OIDC Authentication
+
 For OIDC (OpenID Connect) authentication, there is a good tutorial for
 setting Apache-HTTPD with Keyclock -- "3. Configure OnDemand to authenticate
 with Keycloak".  See below.
@@ -89,7 +93,9 @@ be increased by setting "LogLevel" to "debug" in the "<Location
 "lens3proxy-oidc.conf" may be redundant, and it generates a warning
 message.
 
-Or, prepare passwords for basic authentication.
+### Choice: Basic Authentication
+
+Prepare passwords for basic authentication.
 
 ```
 # mkdir /etc/httpd/passwd
@@ -99,8 +105,10 @@ Or, prepare passwords for basic authentication.
 # chown apache:apache /etc/httpd/passwd/passwords
 # chmod 660 /etc/httpd/passwd/passwords
 # htpasswd -b /etc/httpd/passwd/passwords user pass
-# ......
+......
 ```
+
+### Start or Restart httpd
 
 Start Apache-HTTPD.
 
@@ -121,8 +129,9 @@ file.  Change the lines of cert and key in
 # chown root:root /etc/pki/tls/private/lens3.key
 # chmod 600 /etc/pki/tls/private/lens3.key
 # vi /etc/httpd/conf.d/ssl.conf
-> SSLCertificateFile /etc/pki/tls/certs/lens3.crt
-> SSLCertificateKeyFile /etc/pki/tls/private/lens3.key
+
++SSLCertificateFile /etc/pki/tls/certs/lens3.crt
++SSLCertificateKeyFile /etc/pki/tls/private/lens3.key
 ```
 
 ## A Note about NGINX
@@ -154,6 +163,18 @@ See also for the AWS S3 CLI parameters:
 
 ## Store Lens3 Settings in Keyval-DB
 
+Most of the work in this part shall be performed by user
+"lenticularis".
+
+However, copying the "lens3.conf" file should be performed by the root
+beforehand.
+
+```
+# cp /etc/lenticularis/lens3.conf ~lenticularis/lens3.conf
+# chown lenticularis:lenticularis ~lenticularis/lens3.conf
+# chmod 660 ~lenticularis/lens3.conf
+```
+
 Multiplexer and Registrar load the configuration from the keyval-db
 (Valkey).  This section prepares it.  It is better to run
 `lenticularis-admin` on the same host running the keyval-db.  See the
@@ -161,30 +182,21 @@ following description of the fields of the configurations.
 
 - [configuration.md](configuration.md)
 
-Make the configurations in files to load them in the keyval-db.
+First, view the stored configurations.
 
 ```
-# su - lenticularis
-lenticularis$ cd ~
-lenticularis$ cp $TOP/v2/unit-file/mux-conf.json mux-conf.json
-lenticularis$ cp $TOP/v2/unit-file/reg-conf.json reg-conf.json
-lenticularis$ vi mux-conf.json
-lenticularis$ vi reg-conf.json
+lenticularis-admin -c lens3.conf show-conf
 ```
 
-Load the Lens3 configuration from the files.  Note
+Make the configurations in files and load them in the keyval-db.  Note
 `lenticularis-admin` needs "lens3.conf" containing connection
 information to the keyval-db.  Keep "lens3.conf" secure, when it is
 necessary to copy it.
 
 ```
-# cp /etc/lenticularis/lens3.conf ~lenticularis/lens3.conf
-# chown lenticularis:lenticularis ~lenticularis/lens3.conf
-# chmod 660 ~lenticularis/lens3.conf
-# su - lenticularis
-lenticularis$ lenticularis-admin -c lens3.conf load-conf mux-conf.json
-lenticularis$ lenticularis-admin -c lens3.conf load-conf reg-conf.json
-lenticularis$ lenticularis-admin -c lens3.conf show-conf
+cd /var/lib/lenticularis
+vi mux-conf.json
+vi reg-conf.json
 ```
 
 Check the syntax of json before loading the configuration.  It can be
@@ -195,23 +207,15 @@ lenticularis$ cat mux-conf.json | jq
 lenticularis$ cat reg-conf.json | jq
 ```
 
-We do not start the service, lenticularis-mux, yet.  But, in general,
-restarting the service is needed after changing the configuration.
+Load the configurations from the files.
+
+```
+lenticularis-admin -c ./lens3.conf load-conf mux-conf.json
+lenticularis-admin -c ./lens3.conf load-conf reg-conf.json
+```
+
+Restarting the service is needed after changing the configurations.
 Run `systemctl restart lenticularis-mux`.
-
-## Set up sudoers for Multiplexer
-
-Lens3 runs an S3 backend server as a non-root process, and it uses
-sudo for it.  Copy and edit an entry in
-"/etc/sudoers.d/lenticularis-sudoers".  The provided example setting
-is that the user "lenticularis" is only allowed to run
-"/usr/local/bin/s3-baby-server" via sudo.
-
-```
-# cp $TOP/v2/unit-file/lenticularis-sudoers /etc/sudoers.d/
-# vi /etc/sudoers.d/lenticularis-sudoers
-# chmod 440 /etc/sudoers.d/lenticularis-sudoers
-```
 
 ## (Optional) Set up Log Rotation
 
@@ -220,9 +224,9 @@ Logs from Multiplexer, Registrar, and Valkey are rotated with
 rule for Valkey is a modified copy of /etc/logrotate.d/redis.
 
 ```
-# cp $TOP/v2/unit-file/lenticularis-logrotate /etc/logrotate.d/lenticularis
-# vi /etc/logrotate.d/lenticularis
-# chmod 644 /etc/logrotate.d/lenticularis
+cp $TOP/v2/unit-file/lenticularis-logrotate /etc/logrotate.d/lenticularis
+vi /etc/logrotate.d/lenticularis
+chmod 644 /etc/logrotate.d/lenticularis
 ```
 
 ## (Optional) Set up System Logging
@@ -232,8 +236,9 @@ changed in the setting to keep logs across reboots.
 
 ```
 # vi /etc/systemd/journald.conf
-[Journal]
-Storage=persistent
+
++[Journal]
++Storage=persistent
 
 # systemctl restart systemd-journald
 ```
@@ -250,6 +255,7 @@ set in "mux-conf.json".
 # mosquitto_passwd -b /etc/mosquitto/password.txt lens3 password
 # chmod 440 /etc/mosquitto/password.txt
 # vi /etc/mosquitto/mosquitto.conf
+
 -#allow_anonymous true
 +allow_anonymous false
 -#password_file
@@ -266,29 +272,12 @@ It is necessary to reload "mux-conf.json" and to restart the service
 after changing the password.
 
 ```
-# su - lenticularis
-lenticularis$ vi mux-conf.json
-lenticularis$ lenticularis-admin -c lens3.conf load-conf mux-conf.json
-lenticularis$ exit
+vi mux-conf.json
+lenticularis-admin -c ./lens3.conf load-conf mux-conf.json
+```
+
+```
 # systemctl restart lenticularis-mux
-```
-
-## Start Multiplexer and Registrar Services
-
-Multiplexer and Registrar are two threads in a single binary.  They
-will be started as a system service as "lenticularis-mux".  Copy the
-systemd unit file for the service.  It is started with the user
-"lenticularis" (UID:GID=lenticularis:lenticularis).
-
-```
-# cp $TOP/v2/unit-file/lenticularis-mux.service /usr/lib/systemd/system/
-```
-
-```
-# systemctl daemon-reload
-# systemctl enable lenticularis-mux
-# systemctl start lenticularis-mux
-# systemctl status lenticularis-mux
 ```
 
 ## Check the Status
@@ -296,7 +285,7 @@ systemd unit file for the service.  It is started with the user
 Proxy status:
 
 ```
-# systemctl status http
+# systemctl status httpd
 Or,
 # systemctl status nginx
 ```
@@ -304,20 +293,23 @@ Or,
 Valkey status:
 
 ```
-# systemctl status lenticularis-valkey
+systemctl status lenticularis-valkey
 ```
 
 Lenticularis status:
 
 ```
-# systemctl status lenticularis-mux
-# su - lenticularis
-lenticularis$ cd ~
-lenticularis$ lenticularis-admin -c lens3.conf show-mux
+systemctl status lenticularis-mux
 ```
 
-The admin command `show-mux` shows the endpoints of Multiplexers.
-Something goes wrong if it were empty.
+The admin command `show-mux` shows the endpoints of Multiplexers
+(lenticularis-mux).  An MUX entry is updated periodically, and its
+existence of the entry means lenticularis-mux is working.  Something
+goes wrong if it were empty.
+
+```
+lenticularis-admin -c ./lens3.conf show-mux
+```
 
 ## Access Test
 
@@ -340,7 +332,8 @@ AWS CLI needs the created access/secret keys being stored in the
 "credentials" file.  Copy the keys in the file.
 
 ```
-lenticularis$ vi ~/.aws/credentials
+vi ~/.aws/credentials
+
 [default]
 aws_access_key_id = zHb9uscWUDgcJ9ZdYzr6
 aws_secret_access_key = uDUHMYKSmbqyqB1MGYN57CWMC8eXNHwUL4pcNwROu3xWgpsO
@@ -349,7 +342,8 @@ aws_secret_access_key = uDUHMYKSmbqyqB1MGYN57CWMC8eXNHwUL4pcNwROu3xWgpsO
 Optionally, set the signature version in the "config" file.
 
 ```
-lenticularis$ vi ~/.aws/config
+vi ~/.aws/config
+
 [default]
 s3 =
     signature_version = s3v4
@@ -358,9 +352,9 @@ s3 =
 Access the S3 bucket, here it is "bkt1".
 
 ```
-lenticularis$ aws --endpoint-url https://lens3.example.com/ s3 ls s3://bkt1
-lenticularis$ aws --endpoint-url https://lens3.example.com/ s3 cp somefile1 s3://bkt1/
-lenticularis$ aws --endpoint-url https://lens3.example.com/ s3 ls s3://bkt1
+aws --endpoint-url https://lens3.example.com/ s3 ls s3://bkt1
+aws --endpoint-url https://lens3.example.com/ s3 cp somefile1 s3://bkt1/
+aws --endpoint-url https://lens3.example.com/ s3 ls s3://bkt1
 ```
 
 Note that Lens3 does not support listing of buckets by `aws s3 ls`.
@@ -379,7 +373,8 @@ A claim string (3rd column) can be empty, which is a name from
 authentication (such as OIDC).  Prepare a list of users in a CSV-file.
 
 ```
-lenticularis$ vi CSV-FILE.csv
+vi CSV-FILE.csv
+
 ADD,user1,,group1a,group1b,group1c, ...
 ADD,user2,,group2a,group2b,group2c, ...
 ADD,user3,,group3a,group3b,group3c, ...
@@ -391,16 +386,17 @@ access.  An entry is a "ENABLE"/"DISABLE" prefix followed by a list of
 UID's.
 
 ```
-lenticularis$ vi CSV-FILE.csv
-ENABLE,user1,user2,user3, ...
-DISABLE,user4,user5,user6, ...
+vi CSV-FILE.csv
+
++ENABLE,user1,user2,user3, ...
++DISABLE,user4,user5,user6, ...
 ```
 
 Register users by `lenticularis-admin` command.
 
 ```
-lenticularis$ lenticularis-admin -c lens3.conf load-user CSV-FILE.csv
-lenticularis$ lenticularis-admin -c lens3.conf show-user
+lenticularis-admin -c ./lens3.conf load-user CSV-FILE.csv
+lenticularis-admin -c ./lens3.conf show-user
 ```
 
 ## Troubleshooting
@@ -411,9 +407,9 @@ Check the systemd logs, first.  Diagnosing errors before a start of
 logging is tricky.
 
 ```
-# systemctl status lenticularis-mux
+systemctl status lenticularis-mux
 Or,
-# journalctl
+journalctl
 ```
 
 ### More Verbose Logging
@@ -434,9 +430,9 @@ A major trouble is starting an S3 server.  Try to start S3 Baby-server
 by hand.
 
 ```
-lenticularis$ /usr/loca/bin/s3-baby-server serve :9000 SOME-PATH
+/usr/loca/bin/s3-baby-server serve :9000 SOME-PATH
 Or,
-lenticularis$ /usr/bin/sudo -n -u SOME-UID -g SOME-GID \
+/usr/bin/sudo -n -u SOME-UID -g SOME-GID \
     /usr/loca/bin/s3-baby-server serve :9000 SOME-PATH
 ```
 
@@ -445,11 +441,11 @@ lenticularis$ /usr/bin/sudo -n -u SOME-UID -g SOME-GID \
 Clear Valkey databases.
 
 ```
-lenticularis$ export REDISCLI_AUTH=password
-lenticularis$ valkey-cli -p 6378 FLUSHALL
-lenticularis$ valkey-cli -p 6378 -n 1 --scan --pattern '*'
-lenticularis$ valkey-cli -p 6378 -n 2 --scan --pattern '*'
-lenticularis$ valkey-cli -p 6378 -n 3 --scan --pattern '*'
+export REDISCLI_AUTH=password
+valkey-cli -p 6378 FLUSHALL
+valkey-cli -p 6378 -n 1 --scan --pattern '*'
+valkey-cli -p 6378 -n 2 --scan --pattern '*'
+valkey-cli -p 6378 -n 3 --scan --pattern '*'
 ```
 
 Use "-a password" instead of an environment variable.

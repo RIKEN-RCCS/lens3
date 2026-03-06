@@ -33,8 +33,7 @@ var (
 
 // BACKEND_MINIO is a delegate for MinIO.
 type backend_minio struct {
-	backend_generic
-	conf *backend_minio_factory
+	delegate_generic
 
 	mc_alias      string
 	mc_config_dir string
@@ -52,14 +51,19 @@ type backend_minio_factory struct {
 
 var the_backend_minio_factory = &backend_minio_factory{}
 
-func (f *backend_minio_factory) configure(conf *mux_conf) {
-	f.minio_conf = conf.Minio
+func (f *backend_minio_factory) get_factory_generic_part() *factory_generic {
+	return &f.factory_generic
+}
+
+func (f *backend_minio_factory) configure_factory(conf *mux_conf, wc *manager_conf) {
+	f.manager_conf = wc
 	f.use_n_ports = 1
+	f.minio_conf = conf.Minio
 }
 
 func (f *backend_minio_factory) make_delegate(pool string) backend_delegate {
 	var d = &backend_minio{}
-	d.conf = f
+	d.factory = f
 	runtime.SetFinalizer(d, finalize_backend_minio)
 	return d
 }
@@ -75,14 +79,25 @@ func finalize_backend_minio(d *backend_minio) {
 	}
 }
 
-func (d *backend_minio) get_super_part() *backend_generic {
-	return &(d.backend_generic)
+func (d *backend_minio) get_factory() *backend_minio_factory {
+	var f, ok = (d.factory).(*backend_minio_factory)
+	if !ok {
+		slogger.Error("BE(minio): BAD-IMPL backend factory unknown",
+			"factory", d.factory)
+		panic(nil)
+	}
+	return f
+}
+
+func (d *backend_minio) get_delegate_generic_part() *delegate_generic {
+	return &d.delegate_generic
 }
 
 func (d *backend_minio) make_command_line(port int, directory string) backend_command {
+	var f = d.get_factory()
 	var ep = net.JoinHostPort("", strconv.Itoa(port))
 	var argv = []string{
-		d.conf.Minio,
+		f.PathMinio,
 		"--json", "--anonymous", "server",
 		"--address", ep, directory}
 	var envs = []string{
@@ -172,8 +187,9 @@ func (d *backend_minio) shutdown() error {
 func (d *backend_minio) heartbeat(*manager) int {
 	//fmt.Println("minio.heartbeat()")
 
+	var f = d.get_factory()
 	if d.heartbeat_client == nil {
-		var timeout = (d.conf.Backend_timeout_ms).time_duration()
+		var timeout = (f.Backend_timeout_ms).time_duration()
 		d.heartbeat_client = &http.Client{
 			Timeout: timeout,
 		}
@@ -265,14 +281,15 @@ func simplify_minio_mc_message(s []byte) *minio_mc_result {
 // EXECUTE_MINIO_MC_CMD runs an MC-command and checks its output.
 func execute_minio_mc_cmd(d *backend_minio, synopsis string, command []string) *minio_mc_result {
 	assert_fatal(d.mc_alias != "" && d.mc_config_dir != "")
+	var f = d.get_factory()
 	var argv = []string{
-		d.conf.Mc,
+		f.PathMc,
 		"--json",
 		fmt.Sprintf("--config-dir=%s", d.mc_config_dir),
 	}
 	argv = append(argv, command...)
 
-	var timeout = (d.conf.Backend_start_timeout_ms).time_duration()
+	var timeout = (f.Backend_start_timeout_ms).time_duration()
 	var verbose = (trace_proc&tracing != 0)
 	var stdouts, stderrs, err1 = execute_command(synopsis, argv, d.environ,
 		timeout, "BE(minio)", verbose)

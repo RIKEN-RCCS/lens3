@@ -75,8 +75,7 @@ var (
 
 // BACKEND_RCLONE is a manager for rclone.
 type backend_rclone struct {
-	backend_generic
-	conf *backend_rclone_factory
+	delegate_generic
 
 	rc_port int
 	rc_user string
@@ -91,14 +90,19 @@ type backend_rclone_factory struct {
 
 var the_backend_rclone_factory = &backend_rclone_factory{}
 
-func (f *backend_rclone_factory) configure(conf *mux_conf) {
-	f.rclone_conf = conf.Rclone
+func (f *backend_rclone_factory) get_factory_generic_part() *factory_generic {
+	return &f.factory_generic
+}
+
+func (f *backend_rclone_factory) configure_factory(conf *mux_conf, wc *manager_conf) {
+	f.manager_conf = wc
 	f.use_n_ports = 2
+	f.rclone_conf = conf.Rclone
 }
 
 func (f *backend_rclone_factory) make_delegate(pool string) backend_delegate {
 	var d = &backend_rclone{}
-	d.conf = f
+	d.factory = f
 	d.rc_user = random_string(10)
 	d.rc_pass = random_string(20)
 	runtime.SetFinalizer(d, finalize_backend_rclone)
@@ -111,24 +115,35 @@ func (f *backend_rclone_factory) clean_at_exit() {
 func finalize_backend_rclone(d *backend_rclone) {
 }
 
-func (d *backend_rclone) get_super_part() *backend_generic {
-	return &(d.backend_generic)
+func (d *backend_rclone) get_factory() *backend_rclone_factory {
+	var f, ok = (d.factory).(*backend_rclone_factory)
+	if !ok {
+		slogger.Error("BE(rclone): BAD-IMPL backend factory unknown",
+			"factory", d.factory)
+		panic(nil)
+	}
+	return f
+}
+
+func (d *backend_rclone) get_delegate_generic_part() *delegate_generic {
+	return &d.delegate_generic
 }
 
 func (d *backend_rclone) make_command_line(port int, directory string) backend_command {
+	var f = d.get_factory()
 	d.rc_port = (port + 1)
 	var ep1 = net.JoinHostPort("", strconv.Itoa(port))
 	var ep2 = net.JoinHostPort("", strconv.Itoa(port+1))
 	var keypair = fmt.Sprintf("%s,%s", d.be.Root_access, d.be.Root_secret)
 	var argv = []string{
-		d.conf.Rclone, "serve", "s3",
+		f.Path, "serve", "s3",
 		directory,
 		"--config", "notfound",
 		"--addr", ep1, "--auth-key", keypair,
 		"--rc", "--rc-addr", ep2,
 		"--rc-user", d.rc_user, "--rc-pass", d.rc_pass,
 	}
-	argv = append(argv, d.conf.Command_options...)
+	argv = append(argv, f.Command_options...)
 	var envs = []string{}
 	return backend_command{argv, envs}
 }
@@ -217,8 +232,6 @@ func (d *backend_rclone) shutdown() error {
 
 // HEARTBEAT calls s3.Client.ListBuckets() and returns a status code.
 func (d *backend_rclone) heartbeat(w *manager) int {
-	//var proc = d.get_super_part()
-	//var be = get_backend(w.table, proc.Pool)
 	var be = d.be
 	if be == nil {
 		return http_404_not_found
@@ -266,16 +279,17 @@ func simplify_rclone_rc_message(s []byte) *rclone_rc_result {
 
 // EXECUTE_RCLONE_RC_CMD runs an RC-command and checks its output.
 func execute_rclone_rc_cmd(d *backend_rclone, synopsis string, command []string) *rclone_rc_result {
+	var f = d.get_factory()
 	var port = net.JoinHostPort("", strconv.Itoa(d.rc_port))
 	var argv = []string{
-		d.conf.Rclone, "rc",
+		f.Path, "rc",
 		"--url", port,
 		"--user", d.rc_user,
 		"--pass", d.rc_pass,
 	}
 	argv = append(argv, command...)
 
-	var timeout = (d.conf.Backend_start_timeout_ms).time_duration()
+	var timeout = (f.Backend_start_timeout_ms).time_duration()
 	var verbose = (trace_proc&tracing != 0)
 	var stdouts, stderrs, err1 = execute_command(synopsis, argv, d.environ,
 		timeout, "BE(rclone)", verbose)

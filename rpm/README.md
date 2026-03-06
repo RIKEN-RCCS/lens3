@@ -2,11 +2,17 @@
 
 ## Steps to Make a Release RPM
 
-Run the following after some prerequisite steps.  An RPM file will be
-created in the usual "~/rpmbuild/RPMS/x86_64/".
+Run the following steps after installing some prerequisites.  An RPM
+file will be created in the usual place "~/rpmbuild/RPMS/x86_64/".
 
   - Build lenticularis-s3 binaries
+  - Copy "s3-baby-server" binary
   - make cp; make rpm (in this directory)
+
+"s3-baby-server" is a small AWS-S3 server, which is a separate
+software and can be found in github.com:
+
+  https://github.com/RIKEN-RCCS/s3-baby-server
 
 ## Prerequisite
 
@@ -35,7 +41,7 @@ See setting-guide.md for the manual installation procedure.
 This RPM does what is on the setup procedure.
 
   - Install prerequisites
-  - Make a pseudo user
+  - Make a pseudo user ("lenticularis")
   - Install the binaries in /usr/local/bin
   - Prepare directories for logging
   - Enable HTTP Connections

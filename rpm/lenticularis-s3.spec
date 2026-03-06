@@ -103,6 +103,7 @@ systemctl start lenticularis-mux
 # %%attr(644, -, -) /usr/lib/systemd/system-preset/50-lenticularis.preset
 %attr(755, -, -) /usr/local/bin/lenticularis-admin
 %attr(755, -, -) /usr/local/bin/lenticularis-mux
+%attr(755, -, -) /usr/local/bin/s3-baby-server
 %dir %attr(770, -, -) /etc/lenticularis
 %config(noreplace) %attr(660, -, -) /etc/lenticularis/lens3.conf
 %config(noreplace) %attr(660, -, -) /etc/lenticularis/valkey.conf

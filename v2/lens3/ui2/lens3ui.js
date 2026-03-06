@@ -584,7 +584,7 @@ function make_pool_entry_for_printing(desc) {
     ... bkt_entries,
     /* ... key_entries, */
     {text: {label: "Pool-ID", value: desc["pool_name"]}},
-    {text: {label: "MinIO state",
+    {text: {label: "Backend state",
             value: (desc["minio_state"]
                     + " (reason: " + desc["minio_reason"] + ")")}},
     {text: {label: "Expiration date",
@@ -662,7 +662,7 @@ function show_message(data, s) {
 //** Returns an integer for date+time, but in a string.
 
 function parse_time_z(s) {
-  return "" + new Date(s).getTime() / 1000;
+  return "" + Math.floor(new Date(s).getTime() / 1000);
 }
 
 //** Returns a date+time string (without milliseconds).

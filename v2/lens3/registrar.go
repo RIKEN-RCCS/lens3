@@ -54,6 +54,7 @@ import (
 )
 
 // UI scripts are stored in Golang's embedded files.
+
 import "embed"
 
 //go:embed ui

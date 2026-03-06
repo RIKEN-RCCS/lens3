@@ -258,20 +258,13 @@ func control_s3baby_server(d *backend_s3baby, command string) error {
 		return errx
 	}
 
-	var cred = [2]string{be.Root_access, be.Root_secret}
+	var keypair = [2]string{be.Root_access, be.Root_secret}
 
 	var timeout = time.Duration(60000 * time.Millisecond)
 	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	var ep = be.Backend_ep
-	var host, _, err1 = net.SplitHostPort(ep)
-	if err1 != nil {
-		slogger.Error("BE(s3baby): net.SplitHostPort() on backend-ep failed",
-			"ep", ep, "error", err1)
-		return err1
-	}
-
 	var url1 = (ep + "/bbs.ctl/" + command)
 	var body io.Reader = nil
 
@@ -286,7 +279,7 @@ func control_s3baby_server(d *backend_s3baby, command string) error {
 	var hash = empty_payload_hash_sha256
 	r.Header.Set("X-Amz-Content-Sha256", hash)
 
-	var err5 = awss3aide.Sign_by_credential(r, host, cred)
+	var err5 = awss3aide.Sign_by_credential(r, ep, keypair)
 	if err5 != nil {
 		slogger.Warn("BE(s3baby): S3-Signing failed",
 			"error", err5)

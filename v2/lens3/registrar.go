@@ -1913,14 +1913,8 @@ func probe_access_mux(t *keyval_table, pool string) error {
 
 	var hash = empty_payload_hash_sha256
 	r.Header.Set("X-Amz-Content-Sha256", hash)
-	var host, _, err51 = net.SplitHostPort(ep)
-	if err51 != nil {
-		slogger.Error("Reg: Probe-access failed",
-			"pool", pool, "op", "net.SplitHostPort()", "ep", ep, "err", err51)
-		return err51
-	}
 	var keypair = [2]string{secret.Access_key, secret.Secret_key}
-	var err52 = awss3aide.Sign_by_credential(r, host, keypair)
+	var err52 = awss3aide.Sign_by_credential(r, ep, keypair)
 	if err52 != nil {
 		slogger.Error("Reg: Probe-access failed",
 			"pool", pool, "op", "signer/Signer.SignHTTP()", "err", err52)

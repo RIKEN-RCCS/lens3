@@ -409,22 +409,10 @@ func serve_anonymous_access(m *multiplexer, w http.ResponseWriter, r *http.Reque
 func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, be *backend_record, auth string, proxy http.Handler) {
 	// Replace an authorization header.
 
-	var host, _, err51 = net.SplitHostPort(be.Backend_ep)
-	if err51 != nil {
-		slogger.Error("Mux: Forward-access failed",
-			"op", "net.SplitHostPort()",
-			"ep", be.Backend_ep, "err", err51)
-		raise(&proxy_exc{
-			auth,
-			"",
-			http_500_internal_server_error,
-			message_500_sign_failed,
-			nil,
-		})
-	}
+	var ep = be.Backend_ep
 	//var err1 = sign_by_backend_credential(r, be)
 	var keypair = [2]string{be.Root_access, be.Root_secret}
-	var err1 = awss3aide.Sign_by_credential(r, host, keypair)
+	var err1 = awss3aide.Sign_by_credential(r, ep, keypair)
 	if err1 != nil {
 		slogger.Error(m.logprefix+"aws.signer/SignHTTP() errs", "err", err1)
 		raise(&proxy_exc{
@@ -439,7 +427,6 @@ func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, be *
 	// Tell the forwarding endpoint to httputil/ReverseProxy.
 
 	var pool = be.Pool
-	var ep = be.Backend_ep
 	var forwarding, err2 = url.Parse("http://" + ep)
 	if err2 != nil {
 		slogger.Error(m.logprefix+"Bad backend ep", "ep", ep, "err", err2)

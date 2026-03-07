@@ -26,7 +26,8 @@
   },
   "baby-server": {
     "path": "/usr/local/bin/s3-baby-server",
-    "command_options": []
+    "command_options": [],
+    "control": "bbs.ctl"
   },
   "minio": {
     "minio": "/usr/local/bin/minio",
@@ -48,7 +49,8 @@
     },
     "alert": {
       "queue": "mqtt",
-      "level": "WARNING"
+      "level": "WARNING",
+      "off": true
     },
     "syslog": {
       "facility": "LOCAL7"

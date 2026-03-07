@@ -62,7 +62,7 @@ func configure_logger(logconf *logging_conf, qch <-chan vacuous) {
 	var h2 slog.Handler = nil
 	var level2 slog.Level = slog.LevelWarn
 	var queue string = ""
-	if logconf.Alert != nil {
+	if logconf.Alert != nil && !logconf.Alert.Disable {
 		queue = logconf.Alert.Queue
 		level2 = map_level_name(logconf.Alert.Level)
 	}
@@ -101,7 +101,7 @@ func configure_logger(logconf *logging_conf, qch <-chan vacuous) {
 			Level:       level2,
 			ReplaceAttr: nil,
 		})
-	} else if logconf.Alert != nil {
+	} else if logconf.Alert != nil && !logconf.Alert.Disable {
 		slog.Error("Bad alert logging configuration", "queue", queue)
 		panic(nil)
 	}

@@ -260,12 +260,15 @@ func control_s3baby_server(d *backend_s3baby, command string) error {
 
 	var keypair = [2]string{be.Root_access, be.Root_secret}
 
+	var f = d.get_factory()
+	var control = f.Control
+
 	var timeout = time.Duration(60000 * time.Millisecond)
 	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	var ep = be.Backend_ep
-	var url1 = (ep + "/bbs.ctl/" + command)
+	var url1 = ("http://" + ep + "/" + control + "/" + command)
 	var body io.Reader = nil
 
 	var r, err4 = http.NewRequestWithContext(ctx, http.MethodPost, url1, body)

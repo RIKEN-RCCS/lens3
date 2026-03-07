@@ -126,6 +126,7 @@ type rclone_conf struct {
 type s3baby_conf struct {
 	Path            string   `json:"path"`
 	Command_options []string `json:"command_options"`
+	Control         string   `json:"control"`
 }
 
 type UI_conf struct {
@@ -161,7 +162,7 @@ type stats_conf struct {
 type alert_conf struct {
 	Queue   string `json:"queue"`
 	Level   string `json:"level"`
-	Disable string `json:"off"`
+	Disable bool   `json:"off"`
 }
 
 type syslog_conf struct {
@@ -450,12 +451,11 @@ func check_rclone_entry(e *rclone_conf) {
 }
 
 func check_s3baby_entry(e *s3baby_conf) {
-	if e != nil && len(e.Path) > 0 {
-		// Okay.
-	} else {
+	if !(e != nil && len(e.Path) > 0 && len(e.Control) > 0) {
 		slogger.Error("Bad backend entry (baby-server)", "entry", e)
 		panic(nil)
 	}
+	// Okay.
 }
 
 func check_ui_entry(e *UI_conf) {

@@ -37,6 +37,8 @@ import (
 )
 
 const lens3_version string = "v2.2.1"
+const registrar_api_version = "v1.2"
+const configuration_file_version string = "v2.2"
 
 var ch_quit_service chan<- vacuous = nil
 

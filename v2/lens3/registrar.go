@@ -63,8 +63,6 @@ var efs1 embed.FS
 //go:embed ui2
 var efs2 embed.FS
 
-const reg_api_version = "v1.2"
-
 // REGISTRAR is a record of Registrar.  EP_PORT is a listening port of
 // Registrar (":port").  CH_QUIT_SERVICE is a receiver of a quit
 // notification.
@@ -1601,7 +1599,7 @@ func convert_claim_to_uid(z *registrar, x_remote_user string) string {
 
 func copy_user_record_to_ui(z *registrar, u *user_record, groups []string) *user_info_ui {
 	var v = &user_info_ui{
-		Api_version:   reg_api_version,
+		Api_version:   registrar_api_version,
 		Uid:           u.Uid,
 		Groups:        groups,
 		Lens3_version: lens3_version,

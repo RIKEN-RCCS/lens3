@@ -3,10 +3,11 @@
 
 // Conf File Reader
 
-// Configuration Files.  The configurations are stored in the
-// keyval-db.  Configuration files are read and checked against
-// definitions.  It accepts extra fields.  Reading configuration files
-// are by the admin tool, and the errors are fatal.
+// Configurations are stored in the keyval-db.  The administrator tool
+// reads configuration files and stores configurations in the
+// keyval-db.  The configuration reader accepts extra fields (it is
+// the behavior of Golang's stdlib).  Errors in reading time are
+// fatal.  Configurations are lightly checked for consistency.
 
 package lens3
 
@@ -158,8 +159,9 @@ type stats_conf struct {
 }
 
 type alert_conf struct {
-	Queue string `json:"queue"`
-	Level string `json:"level"`
+	Queue   string `json:"queue"`
+	Level   string `json:"level"`
+	Disable string `json:"off"`
 }
 
 type syslog_conf struct {
@@ -301,6 +303,11 @@ func read_conf(filename string) lens3_conf {
 }
 
 func check_mux_conf(conf *mux_conf) {
+	if conf.Version != configuration_file_version {
+		slogger.Error("Bad configuration file version",
+			"version", conf.Version, "wanted", configuration_file_version)
+		panic(nil)
+	}
 	check_multiplexer_entry(&conf.Multiplexer)
 	check_manager_entry(&conf.Manager)
 	switch conf.Multiplexer.Backend {
@@ -315,6 +322,11 @@ func check_mux_conf(conf *mux_conf) {
 }
 
 func check_reg_conf(conf *reg_conf) {
+	if conf.Version != configuration_file_version {
+		slogger.Error("Bad configuration file version",
+			"version", conf.Version, "wanted", configuration_file_version)
+		panic(nil)
+	}
 	check_registrar_entry(&conf.Registrar)
 	check_ui_entry(&conf.UI)
 	check_access_log_entry(&conf.Log)

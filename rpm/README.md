@@ -26,7 +26,8 @@ Setup.  It creates ~/rpmbuild and subdirectories in it.
 rpmdev-setuptree
 ```
 
-(Unnecessary) A SPEC skeleton file is created with the following.
+(Unnecessary) A SPEC skeleton file "lenticularis-s3.spec" is created
+with the following.
 
 ```
 rpmdev-newspec lenticularis-s3
@@ -34,9 +35,9 @@ rpmdev-newspec lenticularis-s3
 
 ## What This RPM Does
 
-See setting-guide.md for the manual installation procedure.
+See "installation-procedure.md" for manual installation.
 
-  - https://github.com/RIKEN-RCCS/lens3/blob/main/v2/doc/setting-guide.md
+  - https://github.com/RIKEN-RCCS/lens3/blob/main/v2/doc/installation-procedure.md
 
 This RPM does what is on the setup procedure.
 

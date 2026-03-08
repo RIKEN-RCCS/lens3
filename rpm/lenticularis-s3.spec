@@ -13,7 +13,6 @@ ExclusiveArch:  x86_64
 
 Requires:       httpd mod_ssl mod_proxy_html mod_auth_openidc
 Requires:       valkey
-Requires:       mosquitto
 Requires:       logrotate
 
 Requires(post): policycoreutils-python-utils openssl
@@ -119,5 +118,5 @@ systemctl start lenticularis-mux
 # %%doc add-docs-here
 
 %changelog
-* Mon Mar 02 2026 zzmatu <zzmatu@users.noreply.github.com>
-- RPM package provided.
+* Fri Mar 06 2026 zzmatu <zzmatu@users.noreply.github.com>
+- RPM package provided for v2.2.1.

@@ -50,9 +50,13 @@ This RPM does what is on the setup procedure.
   - Store Lens3 settings in the keyval-db
   - Set up sudoers for Lens3's Multiplexer
   - Set up log rotation
-  - Start Lens3's services: Multiplexer and Registrar
+  - Start services: Valkey and Lens3 Multiplexer
 
-But, this procedure skips some of the optional steps.
+This procedure requires some setups manually.
+
+  - Leave HTTPD service not started
+
+This procedure skips some of the optional steps.
 
   - Set up system logging (to persistent storage)
   - Set up MQTT (Mosquitto)
@@ -110,7 +114,6 @@ specify versions at all.
 
   - httpd 2.4
   - Valkey 8
-  - Mosquitto 2
   - logrotate 3
 
 Note that version comparison in RPM Spec is very poor.  Specifying
@@ -153,3 +156,7 @@ RPM Spec Examples (httpd and valkey):
 RPM Macro Source:
 
   - https://github.com/systemd/systemd/blob/main/src/rpm/macros.systemd.in
+
+## MEMO: Timestamps
+
+File timestamps are the date of "%changelog".

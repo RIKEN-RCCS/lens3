@@ -53,16 +53,6 @@ cp:: s3-baby-server
 	mkdir -p $(BUILD)/etc/logrotate.d
 	cp ../v2/unit-file/lenticularis-logrotate $(BUILD)/etc/logrotate.d/
 
-dump::
-	rpm --eval '_arch=%{_arch}' \
-	--eval 'dist=%{?dist}' \
-	--eval 'buildroot=%{buildroot}' \
-	--eval '_sysconfdir=%{_sysconfdir}' \
-	--eval '_sysusersdir=%{_sysusersdir}' \
-	--eval 'S:4=%{S:4}'
-
-	# rpm --showrc
-
 lint::
 	rpmlint lenticularis-s3.spec
 
@@ -83,11 +73,31 @@ test-install::
 test-upgrade::
 	rpm -Uvvh --test $(RPM)
 
+show-dependency::
+	rpm -q --requires $(RPM)
+
 show-scripts::
 	rpm -q --scripts $(RPM)
 
-show-user::
+show-users::
 	rpm -q --qf='[%{SYSUSERS}\n]' $(RPM)
 
 show-files::
 	rpm -q --list $(RPM)
+
+show-buildtime::
+	rpm -q --qf='%{BUILDTIME:date}\n' $(RPM)
+
+show-compressor::
+	rpm -q --qf '%{PAYLOADCOMPRESSOR}\n' $(RPM)
+
+show-macro-values::
+	rpm --eval '_arch=%{_arch}' \
+	--eval 'dist=%{?dist}' \
+	--eval 'buildroot=%{buildroot}' \
+	--eval '_sysconfdir=%{_sysconfdir}' \
+	--eval '_sysusersdir=%{_sysusersdir}' \
+	--eval 'S:4=%{S:4}'
+
+show-macros::
+	rpm --showrc

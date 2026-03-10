@@ -83,7 +83,7 @@ show-users::
 	rpm -q --qf='[%{SYSUSERS}\n]' $(RPM)
 
 show-files::
-	rpm -q --list $(RPM)
+	rpm -q --list -v $(RPM)
 
 show-buildtime::
 	rpm -q --qf='%{BUILDTIME:date}\n' $(RPM)

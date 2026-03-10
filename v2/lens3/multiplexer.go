@@ -590,7 +590,7 @@ func handle_exc(x any, w http.ResponseWriter, rqst *http.Request, delay_ms time_
 func check_authenticated(m *multiplexer, r *http.Request) (*secret_record, *proxy_exc) {
 	var header = r.Header.Get("Authorization")
 	var cred *awss3aide.Authorization_s3v4 = awss3aide.Scan_aws_authorization(header)
-	if cred.Signature == "" {
+	if cred == nil {
 		return nil, nil
 	}
 	var auth string = cred.Credential[0]

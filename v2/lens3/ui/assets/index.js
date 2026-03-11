@@ -12418,7 +12418,7 @@ const VCard = genericComponent()({
     return {};
   }
 });
-const _hoisted_1$4 = /* @__PURE__ */ createBaseVNode("p", null, " Lens3 is an S3 service using 3rd-party server program MinIO. Lens3 runs multiple MinIO instances at a single access point, and forwards S3 requests with regard to the registered buckets. ", -1);
+const _hoisted_1$4 = /* @__PURE__ */ createBaseVNode("p", null, " Lens3 is an AWS-S3 service using a third-party server. Lens3 runs multiple server instances at a single access point, and forwards S3 requests to a server instance with regard to the bucket registeration. ", -1);
 const _hoisted_2$2 = /* @__PURE__ */ createBaseVNode("p", null, [
   /* @__PURE__ */ createTextVNode(" For the usage, see the Lens3 user-guide.md in: "),
   /* @__PURE__ */ createBaseVNode("a", { href: "https://github.com/RIKEN-RCCS/lens3/blob/main/v1/doc/user-guide.md" }, "github.com")
@@ -19557,7 +19557,7 @@ function _sfc_render$4(_ctx, _cache, $props, $setup, $data, $options) {
         default: withCtx(() => [
           createVNode(VCardText, null, {
             default: withCtx(() => [
-              createTextVNode(" A pool is a directory where S3 buckets are created. Each pool is associated to a MinIO instance. A MinIO instance will run in the specified directory and accesses/modifies the contents. The first thing to do is to create a new pool. ")
+              createTextVNode(" A pool is a directory where S3 buckets are created. Each pool is associated to a backend server instance. A server instance will run in the pool directory and shares files there. The first thing to do is to create a new pool. ")
             ]),
             _: 1
           })

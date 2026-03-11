@@ -32,7 +32,7 @@ The entries of "client.json" are:
 - __auth__: One of "basic", "oidc", or "x-remote-user".
 - __cred__: A credential, a list of strings depending on "auth".
 - __ssl_verify__: A flag to use https.
-- __pools_count__: Number of MinIO instances.
+- __pools_count__: Number of backend server instances.
 - __backend_awake_duration__: Wait time, use the value in Lens3 configuration.
 
 __auth__ and __cred__ specify a credential used in the tests.

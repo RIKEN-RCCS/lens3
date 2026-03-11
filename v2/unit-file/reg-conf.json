@@ -1,6 +1,6 @@
 {
   "subject": "reg",
-  "version": "v2.1",
+  "version": "v2.2",
   "aws_signature": "AWS4-HMAC-SHA256",
   "registrar": {
     "port": 8004,

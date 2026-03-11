@@ -1,49 +1,49 @@
 # Lenticularis-S3 Administration Guide
 
-## Administration Command (lens3-admin)
+## Administration Command (lenticularis-admin)
 
-The "lens3-admin" command is used to modify keyval-db entries.  It is
-installed in "~lens3/go/bin".  The command should typically be run on
-the same host of Lens3 services.  Note that it does not mutex accesses
-with Registrar, and moreover, modifications can make the contents in
-the keyval-db inconsistent.
+The "lenticularis-admin" command is used to modify keyval-db entries.
+It is installed in "/usr/local/bin".  The command should typically be
+run on the same host of Lens3 services.  Note that it does not mutex
+accesses with Registrar, and moreover, modifications can make the
+contents in the keyval-db inconsistent.
 
 It will print the list of sub-commands by running
-"lens3-admin -c conf.json".
+"lenticularis-admin -c lens3.conf".
 
 ```
-lens3$ lens3-admin -c conf.json
+lens3$ lenticularis-admin -c lens3.conf
 Or,
-lens3$ lens3-admin -c conf.json help
+lens3$ lenticularis-admin -c lens3.conf help
 ```
 
 ### User and Pool Mangement
 
-"lens3-admin" is used to list users or pools.
+"lenticularis-admin" is used to list users or pools.
 
 ```
-lens3$ lens3-admin -c conf.json show-user
-lens3$ lens3-admin -c conf.json show-pool
+lens3$ lenticularis-admin -c lens3.conf show-user
+lens3$ lenticularis-admin -c lens3.conf show-pool
 ```
 
 It can disable users or pools.
 
 ```
-lens3$ lens3-admin -c conf.json stop-user true UID
-lens3$ lens3-admin -c conf.json stop-pool true POOL-NAME
+lens3$ lenticularis-admin -c lens3.conf stop-user true UID
+lens3$ lenticularis-admin -c lens3.conf stop-pool true POOL-NAME
 ```
 
 ### User Registration
 
-"lens3-admin" is used to register users.  Registering users is
+"lenticularis-admin" is used to register users.  Registering users is
 necessary when the configuration is "user_approval=block".
 
 The user list can be modified by loading a CSV-file.  Loading a
 CSV-file is incremental, that is, it does not reset the whole data.
 
 ```
-lens3$ lens3-admin -c conf.json load-user USER-LIST.csv
-lens3$ lens3-admin -c conf.json dump-user > USER-LIST.csv
+lens3$ lenticularis-admin -c lens3.conf load-user USER-LIST.csv
+lens3$ lenticularis-admin -c lens3.conf dump-user > USER-LIST.csv
 ```
 
 A CSV-file consists of lines of {ADD, MODIFY, DELETE, ENABLE,
@@ -85,13 +85,13 @@ interval about 15 minutes.  Log-rotating of snapshots is recommended.
 
 ### Keyval-DB Backup
 
-Backup of the keyval-db is done by "lens3-admin" with dump-db and
+Backup of the keyval-db is done by "lenticularis-admin" with dump-db and
 fill-db commands.  A dump is a text file with keys and values.  A key
 part is a string, and a value part is a record in json and it is
 indented by four spaces.
 
 ```
-lens3$ lens3-admin -c conf.json dump-db > DUMP.txt
-lens3$ lens3-admin -c conf.json wipe-out-db everything
-lens3$ lens3-admin -c conf.json fill-db DUMP.txt
+lens3$ lenticularis-admin -c lens3.conf dump-db > DUMP.txt
+lens3$ lenticularis-admin -c lens3.conf wipe-out-db everything
+lens3$ lenticularis-admin -c lens3.conf fill-db DUMP.txt
 ```

@@ -1,11 +1,11 @@
 # Configuration Entries
 
-## conf.json
+## lens3.conf
 
-"conf.json" contains the connection information to the keyval-db
+"lens3.conf" contains the connection information to the keyval-db
 (Valkey).  Only this file is directly read from programs.  Other
 configurations are stored in the keyval-db.  It is passed to the
-service as "lenticularis-mux -c /etc/lenticularis/conf.json".
+service as "lenticularis-mux -c /etc/lenticularis/lens3.conf".
 
 - **ep**: is "localhost:6378".  It is an endpoint to the keyval-db.
 - **password**: is a password string that should match with

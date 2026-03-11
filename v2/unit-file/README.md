@@ -7,13 +7,13 @@ See: [v2/doc/setting-guide.md](../doc/setting-guide.md)
 [lenticularis-mux.service](lenticularis-mux.service) is a systemd
 service file.  It should be copied in "/lib/systemd/system/".
 
-[conf.json](conf.json) stores connection information to Valkey.  Copy
+[lens3.conf](lens3.conf) stores connection information to Valkey.  Copy
 it in "/etc/lenticularis".  KEEP IT SECURE.  Set "password" with
 Valkey's password.
 
 [mux-conf.json](mux-conf.json) and [reg-conf.json](reg-conf.json) are
 Lenticularis settings.  It is loaded in keyval-db (Valkey) with
-"lens3-admin" command.
+"lenticularis-admin" command.
 
 ## Valkey Service
 

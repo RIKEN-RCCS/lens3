@@ -5,7 +5,7 @@ This describes design notes of Lenticularis-S3.
 ## Components of Lens3
 
 - Multiplexer + Registrar
-- S3 backend server (MinIO)
+- S3 backend server (s3-baby-server)
 - Keyval-db (Valkey)
 
 ## Brief Description of Keyval-DB Entries
@@ -241,17 +241,17 @@ NOT become inoperable.
 Disabling a user or deleting a user is done by the administrator tool.
 
 ```
-$ lens3-admin -c conf.json stop-user true _uid_
-$ lens3-admin -c conf.json kill-user _uid_
+$ lenticularis-admin -c lens3.conf stop-user true _uid_
+$ lenticularis-admin -c lens3.conf kill-user _uid_
 ```
 
 Changing expiration time is done similarly.
 
 ```
-$ lens3-admin -c conf.json time-expiration user _uid_ _date_
-$ lens3-admin -c conf.json time-expiration pool _pool-name_ _date_
-$ lens3-admin -c conf.json time-expiration bucket _bucket-name_ _date_
-$ lens3-admin -c conf.json time-expiration secret _access-key_ _date_
+$ lenticularis-admin -c lens3.conf time-expiration user _uid_ _date_
+$ lenticularis-admin -c lens3.conf time-expiration pool _pool-name_ _date_
+$ lenticularis-admin -c lens3.conf time-expiration bucket _bucket-name_ _date_
+$ lenticularis-admin -c lens3.conf time-expiration secret _access-key_ _date_
 ```
 
 A date string is like `2024-08-20T00:00:00` or `2024-09-20`, missing
@@ -263,7 +263,7 @@ A timeout in starting a backend make the pool suspended.  It happens,
 for example, when the remote filesystem blocks its operations.  In
 particular, MinIO doesn't even output the servicing URL in such cases.
 
-To test such a condition, replace /usr/local/bin/minio with a dummy
+To test such a condition, replace the S3 backend server with a dummy
 command such as "sleep 3600".  It should cause a timeout.  Check the
 pool should become suspended.
 
@@ -315,7 +315,7 @@ retries to start MinIO in that case.  The patterns of messages will
 change by MinIO and MC versions.
 
 The samples of messages from MinIO can be found in
-[msg_minio.txt](../lens3/lens3/msg_minio.txt).
+[msg-minio.txt](../lens3/msg-minio.txt).
 
 Lens3 looks for a message starting with "S3-API:" as a successful
 start.
@@ -356,7 +356,7 @@ maybe extremely slow on large objects.
 - Make Multiplexer reply messages in XML instead of json on an access
   rejection.  It only returned an http status code in v1.x.
 
-- Make it not an error when MinIO returns the
+- Make it not an error when an S3 backend server returns the
   "BucketAlreadyOwnedByYou" error.  It can be ignored safely.
 
 - Make access key generation of Registrar like STS.
@@ -373,10 +373,20 @@ maybe extremely slow on large objects.
   balance the loads.  (It currently lacks the support for multiple
   hosts at all).
 
-- Possible options
+- Possible configuration options
   - confirmation of terms-of-use at the first use.
-  - disable public buckets.
-  - description field to keys (just a memo).
+  - disabling use of public buckets.
+  - memo field to key-pairs (for just a memo).
+
+- Add a "motd"-like message field in UI.  It may be stored in a
+  separated field in the configuration.
+
+- (Document consistent ordering in adding database fields).
+
+- Prepare an RPM release.
+
+- Check the status of Google's "Material Web".  It is in pause in
+  2024.
 
 ## Random MEMO
 
@@ -419,18 +429,17 @@ because checkes on keys are done in Lens3).
 and performs authentications.  It expects to receive a user identity
 in an http header X-REMOTE-USER.
 
-- Lens3 assumes a running environment isolated from users.  MinIO runs
-as a user process and thus a user can kill/stop the process.  It is
-not a problem because another MinIO process will be started and the
-operation will continue.  However, stopping the MinIO processes will
-leave zombies (due to the behavior of sudo).
+- Lens3 assumes a running environment isolated from users.  An S3
+backend server runs as a user process and thus a user can kill/stop
+the process.  It is not a problem because another server process will
+be started and the operation will continue.  However, stopping the
+server processes will leave zombies (due to the behavior of sudo).
 
 - Heartbeating may not be useful, because the configuration
 "backend_awake_duration" is usually short.  The backend may be stopped
 before heartbeating failure reaches a preset count.
 
-- sudo and SIGSTOP (???): A sudo shows a peculiar behavior at a stop
-signal: It stops itself when a subprocess got stopped.  A sudo process
-(which runs as a root) can be stopped by a user, because the MinIO
-runs as a usual user under sudo.  This results in the MinIO process is
-never waited for.
+- sudo and SIGSTOP: A sudo shows a peculiar behavior at a stop signal:
+It stops itself when a subprocess got stopped.  This means a sudo
+process (running as a root) can be stopped by a user.  This results in
+the backend server process is never waited for.

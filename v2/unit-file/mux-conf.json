@@ -1,6 +1,6 @@
 {
   "subject": "mux",
-  "version": "v2.1",
+  "version": "v2.2",
   "aws_signature": "AWS4-HMAC-SHA256",
   "multiplexer": {
     "port": 8003,
@@ -8,7 +8,7 @@
       "localhost"
     ],
     "mux_node_name": "localhost",
-    "backend": "minio",
+    "backend": "baby-server",
     "mux_ep_update_interval": 307,
     "error_response_delay_ms": 1000
   },
@@ -24,12 +24,17 @@
     "heartbeat_interval": 61,
     "heartbeat_miss_tolerance": 4
   },
+  "baby-server": {
+    "path": "/usr/local/bin/s3-baby-server",
+    "command_options": [],
+    "control": "bbs.ctl"
+  },
   "minio": {
     "minio": "/usr/local/bin/minio",
     "mc": "/usr/local/bin/mc"
   },
   "rclone": {
-    "rclone": "/usr/local/bin/rclone",
+    "path": "/usr/local/bin/rclone",
     "command_options": []
   },
   "log": {
@@ -44,7 +49,8 @@
     },
     "alert": {
       "queue": "mqtt",
-      "level": "WARNING"
+      "level": "WARNING",
+      "off": true
     },
     "syslog": {
       "facility": "LOCAL7"

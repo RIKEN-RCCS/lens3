@@ -12418,10 +12418,10 @@ const VCard = genericComponent()({
     return {};
   }
 });
-const _hoisted_1$4 = /* @__PURE__ */ createBaseVNode("p", null, " Lens3 is an AWS-S3 service using a third-party server. Lens3 runs multiple server instances at a single access point, and forwards S3 requests to a server instance with regard to the bucket registeration. ", -1);
+const _hoisted_1$4 = /* @__PURE__ */ createBaseVNode("p", null, " Lens3 is an AWS-S3 service by running multiple server instances. It forwards S3 requests to a server instance with regard to the bucket registeration. ", -1);
 const _hoisted_2$2 = /* @__PURE__ */ createBaseVNode("p", null, [
   /* @__PURE__ */ createTextVNode(" For the usage, see the Lens3 user-guide.md in: "),
-  /* @__PURE__ */ createBaseVNode("a", { href: "https://github.com/RIKEN-RCCS/lens3/blob/main/v1/doc/user-guide.md" }, "github.com")
+  /* @__PURE__ */ createBaseVNode("a", { href: "https://github.com/RIKEN-RCCS/lens3/blob/main/v2/doc/user-guide.md" }, "github.com")
 ], -1);
 const _hoisted_3$2 = /* @__PURE__ */ createBaseVNode("p", null, ' A simpler UI is available at "ui2/index.html". ', -1);
 function _sfc_render$6(_ctx, _cache, $props, $setup, $data, $options) {
@@ -21115,7 +21115,7 @@ function _sfc_render$2(_ctx, _cache, $props, $setup, $data, $options) {
         default: withCtx(() => [
           createVNode(VCardText, null, {
             default: withCtx(() => [
-              createTextVNode(" You can also add/delete access keys. An expiration of an access key is limited by the date in the future set by a site manager. ")
+              createTextVNode(" You can also add/delete access keys. An expiration date of an access key has a limit set by the site manager. ")
             ]),
             _: 1
           })

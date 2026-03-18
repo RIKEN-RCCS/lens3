@@ -12,15 +12,15 @@ rpm::
 	rpmbuild -v -bb ~/rpmbuild/SPECS/lenticularis-s3.spec
 
 s3-baby-server:
-	$(error RPM needs the s3-baby-server binary. Copy and place it here.)
+	$(error RPM needs the s3-baby-server binary. Copy and place it here)
 
 cp:: s3-baby-server
 	mkdir -p $(BUILD)/usr/share/licenses/lenticularis
 	cp ../LICENSE $(BUILD)/usr/share/licenses/lenticularis/
 	##
 	mkdir -p $(BUILD)/usr/local/bin
-	cp ../v2/cmd/lenticularis-mux/lenticularis-mux $(BUILD)/usr/local/bin/
-	cp ../v2/cmd/lenticularis-admin/lenticularis-admin $(BUILD)/usr/local/bin/
+	cp ../v2/lenticularis-mux $(BUILD)/usr/local/bin/
+	cp ../v2/lenticularis-admin $(BUILD)/usr/local/bin/
 	cp ./s3-baby-server $(BUILD)/usr/local/bin/
 	##
 	mkdir -p $(BUILD)/usr/lib/sysusers.d

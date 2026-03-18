@@ -6,7 +6,7 @@ instances at a single access point.
 ## Overview
 
 Lenticularis-S3 (Lens3) provides an AWS-S3 service at a single access
-point while using an existing S3 server.  An S3 service is usually
+point by running multiple server instances.  An S3 service is usually
 owned by a single user (unix root), but it may not be acceptable by
 site's security policy.  Lens3 starts multiple S3 servers (backend
 server instances) one for each user, which confines operations by
@@ -26,8 +26,8 @@ each server instance.  A Web-UI is used to register S3 buckets to a
 pool.  This service, called "Lenticularis-Reg", is integrated as a
 thread to Lenticularis-Mux.
 
-Lens3 uses S3-Baby-server as a backend S3 server.  Baby-server is a
-small subset server for S3 designed to share files in usual
+Lens3 uses S3 Baby-server as a backend S3 server.  Baby-server is a
+small subset server for AWS-S3 designed to share files in usual
 filesystems.  It is available in github.com:
 [https://github.com/RIKEN-RCCS/s3-baby-server]([https://github.com/RIKEN-RCCS/s3-baby-server).
 

@@ -86,7 +86,7 @@ systemctl start lenticularis-valkey
 
 /usr/local/bin/lenticularis-admin -c /etc/lenticularis/lens3.conf load-conf /var/lib/lenticularis/mux-conf.json
 /usr/local/bin/lenticularis-admin -c /etc/lenticularis/lens3.conf load-conf /var/lib/lenticularis/reg-conf.json
-/usr/local/bin/lenticularis-admin -c /etc/lenticularis/lens3.conf show-conf
+# /usr/local/bin/lenticularis-admin -c /etc/lenticularis/lens3.conf show-conf
 
 # %%systemd_post lenticularis-mux.service
 

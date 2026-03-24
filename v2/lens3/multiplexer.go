@@ -5,19 +5,19 @@
 
 // Multiplexer is a proxy to backend S3 servers.
 
-// NOTE: Do not call panic(http/ErrAbortHandler) to abort processing
-// in httputil/ReverseProxy.ErrorHandler.  Aborting does not send a
+// NOTE: Do not call panic(http.ErrAbortHandler) to abort processing
+// in httputil.ReverseProxy.ErrorHandler.  Aborting does not send a
 // response but closes a connection.
 
-// MEMO: A request can be obtained from the http/Response argument (as
-// .Request) to a function httputil/ReverseProxy.ModifyResponse,
+// MEMO: A request can be obtained from the http.Response argument (as
+// .Request) to a function httputil.ReverseProxy.ModifyResponse,
 // although it is a server-side response and the document says: "This
 // is only populated for Client requests."
 
-// MEMO: http/HandlerFunc is a function type.  It is
+// MEMO: http.HandlerFunc is a function type.  It is
 // (ResponseWriter,Request)→unit
 
-// MEMO: httputil/ReverseProxy <: Handler as it implements
+// MEMO: httputil.ReverseProxy <: Handler as it implements
 // ServeHTTP().
 
 package lens3
@@ -32,6 +32,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"maps"
 	"os"
 	"os/user"
 	"runtime"
@@ -74,6 +75,9 @@ type multiplexer struct {
 // THE_MULTIPLEXER is the single Multiplexer instance.
 var the_multiplexer = &multiplexer{}
 
+const ctx_key_backend = "lens3-backend"
+const ctx_key_pool_auth = "lens3-pool-auth"
+
 func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, qch <-chan vacuous, c *mux_conf) {
 	m.table = t
 	m.manager = w
@@ -89,7 +93,7 @@ func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, qch <-ch
 	} else {
 		var h, err1 = os.Hostname()
 		if err1 != nil {
-			slogger.Error(m.logprefix+"os/Hostname() errs", "err", err1)
+			slogger.Error(m.logprefix+"os.Hostname() errs", "err", err1)
 			panic(nil)
 		}
 		host = h
@@ -129,7 +133,7 @@ func start_multiplexer(m *multiplexer, wg *sync.WaitGroup) {
 	var loglogger = slog.NewLogLogger(slogger.Handler(), slog.LevelDebug)
 	var proxy1 = httputil.ReverseProxy{
 		Rewrite:        proxy_request_rewriter(m),
-		ModifyResponse: proxy_access_addenda(m),
+		ModifyResponse: proxy_response_modifier(m),
 		ErrorLog:       loglogger,
 		ErrorHandler:   proxy_error_handler(m),
 	}
@@ -151,7 +155,7 @@ func start_multiplexer(m *multiplexer, wg *sync.WaitGroup) {
 
 	slogger.Info(m.logprefix+"Start Multiplexer", "ep", m.mux_ep)
 	var err1 = m.server.ListenAndServe()
-	slogger.Error(m.logprefix+"http/Server.ListenAndServe() EXITS",
+	slogger.Error(m.logprefix+"http.Server.ListenAndServe() EXITS",
 		"ep", m.mux_ep, "err", err1)
 }
 
@@ -198,16 +202,52 @@ func mux_periodic_work(m *multiplexer) {
 }
 
 // PROXY_REQUEST_REWRITER makes a function for ReverseProxy.Rewriter.
-// It receives a forwarding url via the context value "lens3-be".
+// It receives a backend record via the context value.
 func proxy_request_rewriter(m *multiplexer) func(*httputil.ProxyRequest) {
 	return func(r *httputil.ProxyRequest) {
 		var ctx = r.In.Context()
-		var x1 = ctx.Value("lens3-be")
-		var forwarding, ok = x1.(*url.URL)
-		assert_fatal(ok)
+		var x1 = ctx.Value(ctx_key_backend)
+		var be, ok1 = x1.(*backend_record)
+		assert_fatal(ok1)
+		var x2 = ctx.Value(ctx_key_pool_auth)
+		var poolauth, ok2 = x2.([]string)
+		assert_fatal(ok2)
+		var auth = poolauth[1]
+
+		// Set the forwarding endpoint to httputil.ReverseProxy.
+
+		var ep = be.Backend_ep
+		var forwarding, err2 = url.Parse("http://" + ep)
+		if err2 != nil {
+			slogger.Error(m.logprefix+"Bad backend ep", "ep", ep, "err", err2)
+			raise(&proxy_exc{
+				auth,
+				"",
+				http_500_internal_server_error,
+				message_50x_internal_error,
+				nil,
+			})
+		}
+
 		r.SetURL(forwarding)
-		if false {
-			r.SetXForwarded()
+		r.Out.Header.Set("Lens3-User", auth)
+		r.Out.Header["X-Forwarded-For"] = r.In.Header["X-Forwarded-For"]
+		r.SetXForwarded()
+
+		// Sign with an authorization header.
+
+		var keypair = [2]string{be.Root_access, be.Root_secret}
+		var err1 = awss3aide.Sign_by_credential(r.Out, ep, keypair)
+		if err1 != nil {
+			slogger.Error(m.logprefix+"aws.signer.SignHTTP() errs",
+				"err", err1)
+			raise(&proxy_exc{
+				auth,
+				"",
+				http_500_internal_server_error,
+				message_500_sign_failed,
+				nil,
+			})
 		}
 
 		if trace_proxy&tracing != 0 {
@@ -217,17 +257,20 @@ func proxy_request_rewriter(m *multiplexer) func(*httputil.ProxyRequest) {
 	}
 }
 
-// PROXY_ACCESS_ADDENDA makes a callback that is called at returning a
-// response by httputil/ReverseProxy.  It is to generate an access
-// log.
-func proxy_access_addenda(m *multiplexer) func(*http.Response) error {
+// PROXY_RESPONSE_MODIFIER makes a callback that is called at
+// returning a response from httputil.ReverseProxy.  It generates an
+// access log.
+func proxy_response_modifier(m *multiplexer) func(*http.Response) error {
 	return func(rspn *http.Response) error {
-		if rspn.StatusCode != 200 {
-			delay_sleep(m.conf.Multiplexer.Error_response_delay_ms)
+		if false {
+			// No need to delay, as an error by a backend is usual.
+			if rspn.StatusCode != 200 {
+				delay_sleep(m.conf.Multiplexer.Error_response_delay_ms)
+			}
 		}
 		var ctx = rspn.Request.Context()
-		var x = ctx.Value("lens3-pool-auth")
-		var poolauth, ok = x.([]string)
+		var x2 = ctx.Value(ctx_key_pool_auth)
+		var poolauth, ok = x2.([]string)
 		var auth = ""
 		if ok {
 			auth = poolauth[1]
@@ -238,21 +281,21 @@ func proxy_access_addenda(m *multiplexer) func(*http.Response) error {
 }
 
 // PROXY_ERROR_HANDLER makes an "ErrorHandler" for
-// httputil/ReverseProxy that returns a response.  Errors in proxying
+// httputil.ReverseProxy that returns a response.  Errors in proxying
 // are considered temporary and it returns HTTP status 503.  It is
 // because backends refuse connections when they are busy.
 func proxy_error_handler(m *multiplexer) func(http.ResponseWriter, *http.Request, error) {
 	return func(w http.ResponseWriter, rqst *http.Request, err error) {
 		var ctx = rqst.Context()
-		var x = ctx.Value("lens3-pool-auth")
-		var poolauth, ok = x.([]string)
+		var x2 = ctx.Value(ctx_key_pool_auth)
+		var poolauth, ok = x2.([]string)
 		var pool = ""
 		var auth = ""
 		if ok {
 			pool = poolauth[0]
 			auth = poolauth[1]
 		}
-		slogger.Error((m.logprefix + "httputil/ReverseProxy() failed"),
+		slogger.Error((m.logprefix + "httputil.ReverseProxy() failed"),
 			"pool", pool, "key", auth, "err", err, "requst", rqst)
 
 		var err1 = &proxy_exc{
@@ -278,8 +321,22 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 				"method", r.Method, "resource", r.RequestURI)
 		}
 
-		//fmt.Printf("*** r.Remote_Addr=%#v\n", r.Header.Get("Remote_Addr"))
-		//fmt.Printf("*** r.RemoteAddr=%#v\n", r.RemoteAddr)
+		//slogger.Debug(m.logprefix+"HEADERS",
+		//	"r.Remote_Addr", r.Header.Get("Remote_Addr"),
+		//	"r.RemoteAddr", r.RemoteAddr)
+
+		if false {
+			var h = maps.Clone(r.Header)
+			var contentlength = strconv.FormatInt(r.ContentLength, 10)
+			h["Content-Length"] = []string{contentlength}
+			h["Transfer-Encoding"] = r.TransferEncoding
+			var tailers []string
+			for k, _ := range r.Trailer {
+				tailers = append(tailers, k)
+			}
+			h["Trailer"] = tailers
+			slogger.Debug(m.logprefix+"HEADERS", "r.Header", h)
+		}
 
 		if !ensure_frontend_proxy_trusted(m, w, r) {
 			return
@@ -402,57 +459,27 @@ func serve_anonymous_access(m *multiplexer, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	forward_access(m, w, r, be, "", proxy)
+	forward_access(m, w, r, be, "-public-", proxy)
 }
 
 // FORWARD_ACCESS forwards a granted access to a backend.
 func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, be *backend_record, auth string, proxy http.Handler) {
-	// Replace an authorization header.
-
-	var ep = be.Backend_ep
-	//var err1 = sign_by_backend_credential(r, be)
-	var keypair = [2]string{be.Root_access, be.Root_secret}
-	var err1 = awss3aide.Sign_by_credential(r, ep, keypair)
-	if err1 != nil {
-		slogger.Error(m.logprefix+"aws.signer/SignHTTP() errs", "err", err1)
-		raise(&proxy_exc{
-			auth,
-			"",
-			http_500_internal_server_error,
-			message_500_sign_failed,
-			nil,
-		})
-	}
-
-	// Tell the forwarding endpoint to httputil/ReverseProxy.
-
 	var pool = be.Pool
-	var forwarding, err2 = url.Parse("http://" + ep)
-	if err2 != nil {
-		slogger.Error(m.logprefix+"Bad backend ep", "ep", ep, "err", err2)
-		raise(&proxy_exc{
-			auth,
-			"",
-			http_500_internal_server_error,
-			message_50x_internal_error,
-			nil,
-		})
-	}
 	var ctx1 = r.Context()
-	var ctx2 = context.WithValue(ctx1, "lens3-be", forwarding)
-	var ctx3 = context.WithValue(ctx2, "lens3-pool-auth", []string{pool, auth})
-	var r2 = r.WithContext(ctx3)
+	var ctx2 = context.WithValue(ctx1, ctx_key_backend, be)
+	var ctx3 = context.WithValue(ctx2, ctx_key_pool_auth, []string{pool, auth})
+	var r3 = r.WithContext(ctx3)
 
 	slogger.Info(m.logprefix+"Forward request",
 		"pool", pool, "key", auth,
-		"method", r2.Method, "resource", r2.RequestURI)
+		"method", r3.Method, "resource", r3.RequestURI)
 	if trace_proxy&tracing != 0 {
 		slogger.Debug(m.logprefix+"Forward request",
 			"pool", pool, "key", auth,
-			"request", r2)
+			"request", r3)
 	}
 
-	proxy.ServeHTTP(w, r2)
+	proxy.ServeHTTP(w, r3)
 }
 
 // SERVE_PROBE_ACCESS handles requests by probe_access_mux() from
@@ -1045,7 +1072,7 @@ func check_user_is_active(t *keyval_table, uid string) (bool, string) {
 		switch err1.(type) {
 		case user.UnknownUserError:
 		default:
-			slogger.Error("user/Lookup() errs", "user", uid, "err", err1)
+			slogger.Error("os/user.Lookup() errs", "user", uid, "err", err1)
 		}
 		slogger.Warn("Bad user", "user", uid, "reason", "no account")
 		return false, message_403_no_user_account

@@ -2,11 +2,13 @@
 
 This describes design notes of Lenticularis-S3.
 
+
 ## Components of Lens3
 
-- Multiplexer + Registrar
-- S3 backend server (s3-baby-server)
-- Keyval-db (Valkey)
+  - Multiplexer + Registrar
+  - S3 backend server (s3-baby-server)
+  - Keyval-db (Valkey)
+
 
 ## Brief Description of Keyval-DB Entries
 
@@ -134,6 +136,7 @@ __bd:directory__, __bx:bucket__, and __sx:secret__.
 A user record __uu:uid__ owns its claim __um:claim__.  They are kept
 one-to-one if a user information contains a claim.
 
+
 ## Pool State Transition
 
 A bucket pool will be in one of the states: __INITIAL__, __READY__,
@@ -163,6 +166,7 @@ records.  Manager calculates the condition.
 Creating buckets and secrets during suspension will be rejected until
 a backend resumes.
 
+
 ## Implementation Specifics
 
 ### Keyval-DB Operations
@@ -191,6 +195,12 @@ AWS S3 Documents:
 
 [How Amazon S3 authorizes a request](https://docs.aws.amazon.com/AmazonS3/latest/userguide/how-s3-evaluates-access-control.html)
 
+### An Extra Header to the Backend
+
+Lens3 adds a header "Lens3-User:access-key" to the request.  It
+enables the backend to generate a log entry with a hint about the
+user.  Access-key is "-public-" for public accesses.
+
 ### Security
 
 Security mainly depends on the setting of the frontend proxy.  Please
@@ -208,11 +218,13 @@ review those functions intensively.
 All states of the service are stored in keyval-db.  It is safe to
 stop/start systemd service.
 
+
 ## Building UI
 
 Lens3 UI is created by vuejs+vuetify.  Lens3-v2.1 uses the same UI
 code as v1.3.  The code for Vuetify is in the "v1/ui" directory.  See
 [v1/ui/README.md](../../v1/ui/README.md) for building UI.
+
 
 ## Testing the Service
 
@@ -303,6 +315,7 @@ Stop or kill  the Lens3 service.
 Test programs will create garbage as bucket names
 "lenticularis-oddity-XXX".
 
+
 ## Notes on Backends
 
 ### MinIO Start Messages
@@ -341,12 +354,14 @@ It does not support multipart transfer.  Uploads fail but downloads
 work.  Note that the default of multipart threshold is 8MB.  It is
 maybe extremely slow on large objects.
 
+
 ## Glossary
 
 - __Probe-key__: It is an access key used by Registrar to access
   Multiplexer.  This key has no corresponding secret.  It is used to
   to make absent buckets in the backend.  It makes bucket records
   consistent in Lens3 and in the backend.
+
 
 ## Short-Term TODO, or Deficiency
 
@@ -387,6 +402,7 @@ maybe extremely slow on large objects.
 
 - Check the status of Google's "Material Web".  It is in pause in
   2024.
+
 
 ## Random MEMO
 

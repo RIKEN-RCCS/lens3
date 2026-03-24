@@ -27,9 +27,37 @@ pool.  This service, called "Lenticularis-Reg", is integrated as a
 thread to Lenticularis-Mux.
 
 Lens3 uses S3 Baby-server as a backend S3 server.  Baby-server is a
-small subset server for AWS-S3 designed to share files in usual
+small subset server for AWS-S3 designed to share files stored in usual
 filesystems.  It is available in github.com:
 [https://github.com/RIKEN-RCCS/s3-baby-server]([https://github.com/RIKEN-RCCS/s3-baby-server).
+
+## Installation
+
+Usually, installation can be done by an RPM binary package.  The RPM
+package includes the "s3-baby-server" binary in addition to the
+binaries for Lens3 (i.e., "lenticularis-mux" and
+"lenticularis-admin"), and the installer installs them in
+"/usr/local/bin".  Package details are described in
+[rpm/README.md](./rpm/README.md).
+
+## Building Binaries
+
+When the RPM binary package is not available, build binaries manually.
+
+Running make in "v2" directory builds binaries "lenticularis-mux" and
+"lenticularis-admin".  See
+[installation-procedure.md](./doc/installation-procedure.md) for more
+details.
+
+```
+cd v2
+make get
+make
+```
+
+Lens3 needs a backend S3 server, such as S3 Baby-server.  Baby-server
+is a separate software which is available in github.com, and you
+should build and install it, too.
 
 ## Guides
 
@@ -41,11 +69,6 @@ filesystems.  It is available in github.com:
   - [installation-procedure.md](./v2/doc/installation-procedure.md)
     also for site managers to change server configuration.
   - [design-notes.md](./v2/doc/design-notes.md) for programmers to debug.
-
-## README
-
-- [README v2](./v2/README.md)
-- [README v1](./v1/README.md)
 
 ## ACKNOWLEDGMENT
 

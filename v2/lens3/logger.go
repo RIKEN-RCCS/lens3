@@ -288,7 +288,7 @@ func log_access(src string, rqst *http.Request, code int, length int64, uid stri
 	} else {
 		user = "-"
 	}
-	var msg1 = httpaide.Log_access(rqst, code, length, user)
+	var msg1 = (httpaide.Log_access(rqst, code, length, user) + "\n")
 	switch src {
 	case "mux":
 		var f *os.File = mux_access_log_file

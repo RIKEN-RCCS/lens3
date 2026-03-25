@@ -85,15 +85,15 @@ random.
 
 ### Process Entries (DB-NUMBER=3)
 
-| Key               | Record (struct)      | Notes |
-| ----              | ----                 | ---- |
-| mu:_mux-endpoint_ | mux_record           | (\*e) Multiplexer endpoint |
-| de:_pool-name_    | backend_record       | (\*e) |
-| dx:_pool-name_    | backend_mutex_record | (\*1 \*e) |
-| tn:_uid_          | csrf_token_record    | Tokens for CSRF countermeasure |
-| ps:_pool-name_    | blurred_state_record | Approximate state of a pool |
-| pt:_pool-name_    | int64                | Timestamp of last access |
-| ut:_uid_          | int64                | Timestamp of last access |
+| Key               | Record (struct)          | Notes |
+| ----              | ----                     | ---- |
+| mu:_mux-endpoint_ | mux_record               | (\*e) Multiplexer endpoint |
+| de:_pool-name_    | backend_record           | (\*e) |
+| dx:_pool-name_    | backend_mutex_record     | (\*1 \*e) |
+| tn:_uid_          | csrf_token_record        | CSRF countermeasure tokens  |
+| ps:_pool-name_    | approximate_state_record | Approximate state of a pool |
+| pt:_pool-name_    | int64                    | Timestamp of last access |
+| ut:_uid_          | int64                    | Timestamp of last access |
 
 These are dynamic information and updated frequently.
 

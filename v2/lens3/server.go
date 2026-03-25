@@ -43,11 +43,15 @@ const configuration_file_version string = "v2.2"
 var ch_quit_service chan<- vacuous = nil
 
 func Run_lenticularis_mux() {
-	var flag_version = flag.Bool("v", false, "Lens3 version.")
+	//var logger_0 = slog.Default()
+	slog.SetLogLoggerLevel(slog.LevelDebug)
+
+	var flag_version = flag.Bool("v", false, "Print Lens3 version.")
 	var flag_help = flag.Bool("h", false, "Print help.")
 	var flag_conf = flag.String("c", "",
 		"A file containing keyval-db connection information (REQUIRED).")
-	var flag_pprof = flag.Int("pprof", 0, "A pprof port.")
+	var flag_pprof = flag.Int("pprof", 0,
+		"A pprof port. It starts a pprof server.")
 	flag.Parse()
 	var args = flag.Args()
 
@@ -58,12 +62,16 @@ func Run_lenticularis_mux() {
 		print_usage_and_exit()
 	}
 	if *flag_version {
-		fmt.Println("Lens3", lens3_version)
+		fmt.Fprintf(os.Stdout, "Lens3 %s %s\n",
+			lens3_version, runtime.Version())
 		os.Exit(0)
 	}
+
+	// Start pprof server.  Failure to start the server is fatal.
+
 	if *flag_pprof != 0 {
 		var port int = *flag_pprof
-		go service_profiler(slogger, port)
+		go service_profiler(port, logger_0)
 	}
 
 	var services = [2]string{"", ""}
@@ -104,17 +112,27 @@ func Run_lenticularis_mux() {
 func start_lenticularis_service(confpath string, services [2]string) {
 	tracing = 0xff
 
-	var dbconf = read_db_conf(confpath)
+	var dbconf = read_db_conf(confpath, logger_0)
 	if dbconf == nil {
 		fmt.Fprintf(os.Stderr, "Reading db conf filed: %q\n", confpath)
 		os.Exit(1)
 	}
-	var t = make_keyval_table(dbconf, false)
+
+	// Note table's logger is temporarily set to the "early"-logger.
+
+	var t = make_keyval_table(dbconf, false, logger_0)
+
+	var chquit = make(chan vacuous)
+	ch_quit_service = chquit
 
 	var count int = 0
 	var muxconf *mux_conf = nil
 	var regconf *reg_conf = nil
-	var logconf *logging_conf = nil
+	var muxlogger *slog.Logger = nil
+	var reglogger *slog.Logger = nil
+
+	// Value of "tracing" is prefered one from Reg than Mux.
+
 	if services[0] != "" {
 		var svc1 = services[0]
 		count++
@@ -123,7 +141,8 @@ func start_lenticularis_service(confpath string, services [2]string) {
 			fmt.Fprintf(os.Stderr, "No conf for %s found\n", svc1)
 			os.Exit(1)
 		}
-		logconf = muxconf.Logging
+		muxlogger = configure_logger(&muxconf.Logging, chquit)
+		tracing = muxconf.Logging.Logger.Tracing
 	}
 	if services[1] != "" {
 		var svc2 = services[1]
@@ -133,24 +152,35 @@ func start_lenticularis_service(confpath string, services [2]string) {
 			fmt.Fprintf(os.Stderr, "No conf for %s found\n", svc2)
 			os.Exit(1)
 		}
-		if logconf == nil {
-			logconf = regconf.Logging
-		}
+		reglogger = configure_logger(&regconf.Logging, chquit)
+		tracing = regconf.Logging.Logger.Tracing
 	}
 
-	if logconf == nil {
-		fmt.Fprintf(os.Stderr, "No conf for logging\n")
+	// General logs are preferably to the registrar than the multiplexer.
+
+	var mainlogger *slog.Logger
+	if reglogger != nil {
+		mainlogger = reglogger
+	} else if muxlogger != nil {
+		mainlogger = muxlogger
+	} else {
+		fmt.Fprintf(os.Stderr, "BAD-IMPL: No logger\n")
 		os.Exit(1)
 	}
-	tracing = logconf.Logger.Tracing
 
-	var chquit = make(chan vacuous)
-	ch_quit_service = chquit
-	configure_logger(logconf, chquit)
-	handle_unix_signals(t)
+	t.logger = mainlogger
 
-	slogger.Info("Lenticularis-S3", "version", lens3_version,
-		"golang.version", runtime.Version())
+	/*configure_logger(muxlogconf, chquit)*/
+	handle_unix_signals(t, mainlogger)
+
+	if reglogger != nil {
+		reglogger.Info("Lenticularis-S3", "version", lens3_version,
+			"golang.version", runtime.Version())
+	}
+	if muxlogger != nil {
+		muxlogger.Info("Lenticularis-S3", "version", lens3_version,
+			"golang.version", runtime.Version())
+	}
 
 	var wg sync.WaitGroup
 	wg.Add(count)
@@ -158,43 +188,63 @@ func start_lenticularis_service(confpath string, services [2]string) {
 	// Start Multiplexer.
 
 	if services[0] != "" {
+		assert_fatal(muxlogger != nil)
 		var m = the_multiplexer
+		m.logger = muxlogger
 		var w = the_manager
 		configure_multiplexer(m, w, t, chquit, muxconf)
 		configure_manager(w, m, t, chquit, muxconf)
-		defer w.backend_factory.clean_at_exit()
+		defer w.backend_factory.clean_at_exit(m.logger)
 		go start_multiplexer(m, &wg)
 	}
 
 	// Start Registrar.
 
 	if services[1] != "" {
+		assert_fatal(reglogger != nil)
 		var z = the_registrar
+		z.logger = reglogger
 		configure_registrar(z, t, chquit, regconf)
 		go start_registrar(z, &wg)
 	}
 
-	if logconf.Stats.Sample_period > 0 {
-		var period = logconf.Stats.Sample_period.time_duration()
-		go dump_statistics_periodically(period)
+	// Start memory stat dumper.
+
+	var muxstats = muxconf.Logging.Stats
+	var regstats = regconf.Logging.Stats
+
+	var period time.Duration = 0
+	if muxstats != nil && muxstats.Sample_period > 0 {
+		period = muxstats.Sample_period.time_duration()
+	} else if regstats != nil && regstats.Sample_period > 0 {
+		period = regstats.Sample_period.time_duration()
+	}
+	if period != 0 {
+		go dump_statistics_periodically(period, mainlogger)
 	}
 
 	wg.Wait()
-	slogger.Info("Lenticularis-S3 service stop")
+
+	if reglogger != nil {
+		reglogger.Info("Lenticularis-S3 service stops")
+	}
+	if muxlogger != nil {
+		muxlogger.Info("Lenticularis-S3 service stops")
+	}
 }
 
 func print_usage_and_exit() {
-	var usage = `lenticularis-mux -c conf [mux/reg/mux+reg]
-  where the mux part can be mux:xxx to specify a different
-  configuration.  No arguments mean mux+reg.`
+	var usage = `lenticularis-mux -c conf [mux/reg/mux+reg] [options]
+  No arguments mean mux+reg. The mux part can be suffixed as mux:xxx
+  to specify a different configuration.`
 
-	fmt.Fprintf(os.Stderr, "Usage: %s", usage)
+	fmt.Fprintf(os.Stderr, "Usage: %s\n", usage)
 	flag.PrintDefaults()
 	os.Exit(1)
 }
 
-func handle_unix_signals(t *keyval_table) {
-	//slogger.Debug("Set signal receivers", "pid", pid, "pgid", pgid)
+func handle_unix_signals(t *keyval_table, logger *slog.Logger) {
+	//logger.Debug("Set signal receivers", "pid", pid, "pgid", pgid)
 
 	var ch_signal = make(chan os.Signal, 1)
 	signal.Notify(ch_signal, unix.SIGINT, unix.SIGTERM, unix.SIGHUP)
@@ -204,18 +254,18 @@ func handle_unix_signals(t *keyval_table) {
 		for signal := range ch_signal {
 			switch signal {
 			case unix.SIGHUP, unix.SIGINT, unix.SIGTERM:
-				slogger.Error("Got signal; Stopping service", "signal", signal)
+				logger.Error("Got signal; Stopping service", "signal", signal)
 				break watchloop
 			}
 		}
-		force_quit_service()
+		force_quit_service(logger)
 	}()
 }
 
 // FORCE_QUIT_SERVICE tells services to quit via the ch_quit_service
 // channel.  It lets the main thread exit, and thus, the remaining
 // part of this function may not run to completion.
-func force_quit_service() {
+func force_quit_service(logger *slog.Logger) {
 	var once sync.Once
 	once.Do(func() {
 		if ch_quit_service == nil {
@@ -236,13 +286,13 @@ func force_quit_service() {
 			pgid = pid
 		}
 		time.Sleep(100 * time.Millisecond)
-		slogger.Debug("Killing by killpg", "pgid", pgid)
+		logger.Debug("Killing by killpg", "pgid", pgid)
 		unix.Kill(-pgid, unix.SIGTERM)
 
 		// When the main thread fails to exit, force to call os.Exit().
 
 		time.Sleep(5000 * time.Millisecond)
-		slogger.Error("Force exit as the main thread not exits")
+		logger.Error("Force exit as the main thread not exits")
 		os.Exit(1)
 	})
 
@@ -252,11 +302,12 @@ func force_quit_service() {
 
 // SERVICE_PROFILER starts the http server for "go tool pprof".  Note
 // importing "net/http/pprof" initializes profiler in DefaultServeMux.
-func service_profiler(logger *slog.Logger, port int) {
+// The logger is the "early"-logger which logs to stdout.
+func service_profiler(port int, logger *slog.Logger) {
 	var ep = net.JoinHostPort("", strconv.Itoa(port))
 	var router = http.DefaultServeMux
-	logger.Info("Enabling pprof", "port", port)
+	logger.Info("Enabling PPROF", "port", port)
 	var err1 = http.ListenAndServe(ep, router)
-	logger.Error("Enabling pprof failed", "error", err1)
+	logger.Error("http.ListenAndServe for PPROF failed", "error", err1)
 	print_usage_and_exit()
 }

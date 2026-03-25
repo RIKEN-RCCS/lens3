@@ -35,6 +35,7 @@ package lens3
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net"
 	"regexp"
 	"runtime"
@@ -109,7 +110,7 @@ func (f *backend_rclone_factory) make_delegate(pool string) backend_delegate {
 	return d
 }
 
-func (f *backend_rclone_factory) clean_at_exit() {
+func (f *backend_rclone_factory) clean_at_exit(logger *slog.Logger) {
 }
 
 func finalize_backend_rclone(d *backend_rclone) {
@@ -118,7 +119,7 @@ func finalize_backend_rclone(d *backend_rclone) {
 func (d *backend_rclone) get_factory() *backend_rclone_factory {
 	var f, ok = (d.factory).(*backend_rclone_factory)
 	if !ok {
-		slogger.Error("BE(rclone): BAD-IMPL backend factory unknown",
+		logger_0.Error("BE(rclone): BAD-IMPL backend factory unknown",
 			"factory", d.factory)
 		panic(nil)
 	}
@@ -150,7 +151,7 @@ func (d *backend_rclone) make_command_line(port int, directory string) backend_c
 
 // CHECK_STARTUP decides the server state.  All rclone's messages at a
 // start are on stderr.
-func (d *backend_rclone) check_startup(stream stdio_stream_indicator, mm []string) *start_result {
+func (d *backend_rclone) check_startup(stream stdio_stream_indicator, mm []string, logger *slog.Logger) *start_result {
 	if stream == on_stdout {
 		return &start_result{
 			start_state: start_ongoing,
@@ -183,11 +184,11 @@ func (d *backend_rclone) check_startup(stream stdio_stream_indicator, mm []strin
 		var got_control = rclone_response_control_url_re.MatchString
 		var control_found, _ = find_one(mm, got_control)
 		if !control_found {
-			slogger.Warn("BE(rclone): Got an expected message" +
+			logger.Warn("BE(rclone): Got an expected message" +
 				" but no control messages")
 		}
 		if trace_proc&tracing != 0 {
-			slogger.Debug("BE(rclone): Got an expected message", "output", m3)
+			logger.Debug("BE(rclone): Got an expected message", "output", m3)
 		}
 		return &start_result{
 			start_state: start_started,
@@ -218,25 +219,25 @@ func check_rclone_port_in_use(m string, re *regexp.Regexp) *start_result {
 	}
 }
 
-func (d *backend_rclone) establish() error {
+func (d *backend_rclone) establish(logger *slog.Logger) error {
 	return nil
 }
 
 // SHUTDOWN stops a server using RC core/quit.
-func (d *backend_rclone) shutdown() error {
-	slogger.Debug("BE(rclone): Stopping rclone",
+func (d *backend_rclone) shutdown(logger *slog.Logger) error {
+	logger.Debug("BE(rclone): Stopping rclone",
 		"pool", d.Pool, "pid", d.cmd.Process.Pid)
-	var v1 = rclone_rc_core_quit(d)
+	var v1 = rclone_rc_core_quit(d, logger)
 	return v1.err
 }
 
 // HEARTBEAT calls s3.Client.ListBuckets() and returns a status code.
-func (d *backend_rclone) heartbeat(w *manager) int {
+func (d *backend_rclone) heartbeat(w *manager, logger *slog.Logger) int {
 	var be = d.be
 	if be == nil {
 		return http_404_not_found
 	}
-	var code = heartbeat_backend(w, be)
+	var code = heartbeat_backend(w, be, logger)
 	return code
 }
 
@@ -251,14 +252,14 @@ type rclone_rc_result struct {
 // success, or {nil,err} on failure or decoding error.  An empty
 // output "{}" is a proper success.  A failure output looks like
 // {"error":message,...}.
-func simplify_rclone_rc_message(s []byte) *rclone_rc_result {
+func simplify_rclone_rc_message(s []byte, logger *slog.Logger) *rclone_rc_result {
 	var s2 = string(s)
 	var r = strings.NewReader(s2)
 	var dec = json.NewDecoder(r)
 	var m map[string]any
 	var err1 = dec.Decode(&m)
 	if err1 != nil {
-		slogger.Error("BE(rclone): Bad message from rclone-rc",
+		logger.Error("BE(rclone): Bad message from rclone-rc",
 			"output", s2, "err", err1)
 		return &rclone_rc_result{nil, err1}
 	}
@@ -270,7 +271,7 @@ func simplify_rclone_rc_message(s []byte) *rclone_rc_result {
 		return &rclone_rc_result{nil, err2}
 	default:
 		var err3 = fmt.Errorf("Non-string error message: %q", m)
-		slogger.Error("BE(rclone): Bad message from rclone-rc",
+		logger.Error("BE(rclone): Bad message from rclone-rc",
 			"err", err3)
 		return &rclone_rc_result{nil, err3}
 	}
@@ -278,7 +279,7 @@ func simplify_rclone_rc_message(s []byte) *rclone_rc_result {
 }
 
 // EXECUTE_RCLONE_RC_CMD runs an RC-command and checks its output.
-func execute_rclone_rc_cmd(d *backend_rclone, synopsis string, command []string) *rclone_rc_result {
+func execute_rclone_rc_cmd(d *backend_rclone, synopsis string, command []string, logger *slog.Logger) *rclone_rc_result {
 	var f = d.get_factory()
 	var port = net.JoinHostPort("", strconv.Itoa(d.rc_port))
 	var argv = []string{
@@ -292,30 +293,30 @@ func execute_rclone_rc_cmd(d *backend_rclone, synopsis string, command []string)
 	var timeout = (f.Backend_start_timeout_ms).time_duration()
 	var verbose = (trace_proc&tracing != 0)
 	var stdouts, stderrs, err1 = execute_command(synopsis, argv, d.environ,
-		timeout, "BE(rclone)", verbose)
+		timeout, "BE(rclone)", verbose, logger)
 	if err1 != nil {
 		return &rclone_rc_result{nil, err1}
 	}
 
-	var v1 = simplify_rclone_rc_message([]byte(stdouts))
+	var v1 = simplify_rclone_rc_message([]byte(stdouts), logger)
 	if v1.err == nil {
 		if trace_proc&tracing != 0 {
-			slogger.Debug("BE(rclone): RC-command Okay",
+			logger.Debug("BE(rclone): RC-command Okay",
 				"cmd", command)
 		} else {
-			slogger.Debug("BE(rclone): RC-command Okay",
+			logger.Debug("BE(rclone): RC-command Okay",
 				"cmd", synopsis)
 		}
 	} else {
-		slogger.Error("BE(rclone): RC-command failed",
+		logger.Error("BE(rclone): RC-command failed",
 			"cmd", argv, "err", v1.err,
 			"stdout", stdouts, "stderr", stderrs)
 	}
 	return v1
 }
 
-func rclone_rc_core_quit(d *backend_rclone) *rclone_rc_result {
+func rclone_rc_core_quit(d *backend_rclone, logger *slog.Logger) *rclone_rc_result {
 	var v1 = execute_rclone_rc_cmd(d, "core/quit",
-		[]string{"core/quit"})
+		[]string{"core/quit"}, logger)
 	return v1
 }

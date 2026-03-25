@@ -17,9 +17,9 @@ import (
 	"github.com/riken-rccs/s3-baby-server/pkg/httpaide"
 )
 
-// SLOGGER is a logger.  It uses a default one first, but it will be
-// replaced by one created in configure_logger().
-var slogger = slog.Default()
+// LOGGER_0 is an unconfigured "early"-logger.  It is used until a
+// proper logger is configured, and in case of fatal errors.
+var logger_0 = slog.Default()
 
 // TRACING is a flag for low-level tracing.  Trace outputs go
 // debug-level logging.  They are usually not interesting.
@@ -41,9 +41,9 @@ const (
 // CONFIGURE_LOGGER makes a logger which is a pair of a file logger
 // and an alert logger.  An alert logger is optional and either syslog
 // or MQTT.  It removes the "time" field for syslog.  See "Example
-// (Wrapping)" in the "slog" document.
-func configure_logger(logconf *logging_conf, qch <-chan vacuous) {
-	slog.SetLogLoggerLevel(slog.LevelDebug)
+// (Wrapping)" in Golang's "slog" document.  It logs erros to the
+// "early"-logger.
+func configure_logger(logconf *logging_conf, qch <-chan vacuous) *slog.Logger {
 
 	// Make a file logger (mandatory).
 
@@ -51,11 +51,6 @@ func configure_logger(logconf *logging_conf, qch <-chan vacuous) {
 	var level1 slog.Level = map_level_name(logconf.Logger.Level)
 	var source1 bool = logconf.Logger.Source_line
 	var h1 slog.Handler = make_file_logger(file1, level1, source1)
-
-	// Set the file logger temporarily.  It is used until the end of
-	// this function.
-
-	slogger = slog.New(h1)
 
 	// Make an alert logger (syslog or MQTT).
 
@@ -68,7 +63,7 @@ func configure_logger(logconf *logging_conf, qch <-chan vacuous) {
 	}
 	if strings.EqualFold(queue, "syslog") {
 		if logconf.Syslog == nil {
-			slog.Error("No syslog configuration")
+			logger_0.Error("No syslog configuration")
 			panic(nil)
 		}
 		var sev = log_severity_map[logconf.Alert.Level]
@@ -76,7 +71,7 @@ func configure_logger(logconf *logging_conf, qch <-chan vacuous) {
 		var p syslog.Priority = (sev | fac)
 		var w2, err2 = syslog.New(p, "lenticularis")
 		if err2 != nil {
-			slog.Error("Opening syslog failed", "err", err2)
+			logger_0.Error("Opening syslog failed", "err", err2)
 			panic(nil)
 		}
 		var replacer2 = func(groups []string, a slog.Attr) slog.Attr {
@@ -92,17 +87,17 @@ func configure_logger(logconf *logging_conf, qch <-chan vacuous) {
 		})
 	} else if strings.EqualFold(queue, "mqtt") {
 		if logconf.Mqtt == nil {
-			slog.Error("No mqtt configuration")
+			logger_0.Error("No mqtt configuration")
 			panic(nil)
 		}
-		var mqtt *mqtt_client = configure_mqtt(logconf.Mqtt, qch)
+		var mqtt *mqtt_client = configure_mqtt(logconf.Mqtt, qch, logger_0)
 		h2 = slog.NewTextHandler(mqtt, &slog.HandlerOptions{
 			AddSource:   false,
 			Level:       level2,
 			ReplaceAttr: nil,
 		})
 	} else if logconf.Alert != nil && !logconf.Alert.Disable {
-		slog.Error("Bad alert logging configuration", "queue", queue)
+		logger_0.Error("Bad alert logging configuration", "queue", queue)
 		panic(nil)
 	}
 
@@ -113,9 +108,9 @@ func configure_logger(logconf *logging_conf, qch <-chan vacuous) {
 		level2: level2,
 	}
 
-	// Set the logger.
+	// Return a configured logger.
 
-	slogger = slog.New(hx)
+	return slog.New(hx)
 }
 
 func make_file_logger(file string, level slog.Level, source bool) slog.Handler {
@@ -235,19 +230,19 @@ func (x *slog_fork_handler) WithGroup(name string) slog.Handler {
 var mux_access_log_file *os.File
 var reg_access_log_file *os.File
 
-func open_log_for_mux(f string) {
+func open_log_for_mux(m *multiplexer, f string) {
 	var s, err1 = os.OpenFile(f, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
 	if err1 != nil {
-		slogger.Error("Opening a log file failed", "err", err1)
+		m.logger.Error("Opening a log file failed", "err", err1)
 		panic(nil)
 	}
 	mux_access_log_file = s
 }
 
-func open_log_for_reg(f string) {
+func open_log_for_reg(z *registrar, f string) {
 	var s, err1 = os.OpenFile(f, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
 	if err1 != nil {
-		slogger.Error("Opening a log file failed", "err", err1)
+		z.logger.Error("Opening a log file failed", "err", err1)
 		panic(nil)
 	}
 	reg_access_log_file = s
@@ -264,22 +259,22 @@ func open_log_for_reg(f string) {
 //   200 333 "-" "aws-cli/1.18.156 Python/3.6.8
 //   Linux/4.18.0-513.18.1.el8_9.x86_64 botocore/1.18.15"
 
-func log_mux_access_by_response(rspn *http.Response, auth string) {
+func log_mux_access_by_response(rspn *http.Response, auth string, logger *slog.Logger) {
 	var rqst = rspn.Request
-	log_access("mux", rqst, rspn.StatusCode, rspn.ContentLength, "", auth)
+	log_access("mux", rqst, rspn.StatusCode, rspn.ContentLength, "", auth, logger)
 }
 
-func log_mux_access_by_request(rqst *http.Request, code int, length int64, uid string, auth string) {
-	log_access("mux", rqst, code, length, uid, auth)
+func log_mux_access_by_request(rqst *http.Request, code int, length int64, uid string, auth string, logger *slog.Logger) {
+	log_access("mux", rqst, code, length, uid, auth, logger)
 }
 
-func log_reg_access_by_request(rqst *http.Request, code int, length int64, uid string, auth string) {
-	log_access("reg", rqst, code, length, uid, auth)
+func log_reg_access_by_request(rqst *http.Request, code int, length int64, uid string, auth string, logger *slog.Logger) {
+	log_access("reg", rqst, code, length, uid, auth, logger)
 }
 
 // LOG_ACCESS logs accesses for both Multiplexer and Registrar.  The
 // AUTH is an access-key, and it is always "-" for Registrar.
-func log_access(src string, rqst *http.Request, code int, length int64, uid string, auth string) {
+func log_access(src string, rqst *http.Request, code int, length int64, uid string, auth string, logger *slog.Logger) {
 	var user string
 	if !(auth == "" || auth == "-") {
 		user = auth
@@ -294,14 +289,14 @@ func log_access(src string, rqst *http.Request, code int, length int64, uid stri
 		var f *os.File = mux_access_log_file
 		var _, err1 = f.WriteString(msg1)
 		if err1 != nil {
-			slogger.Error("Mux() Wrinting access log failed",
+			logger.Error("Mux() Wrinting access log failed",
 				"err", err1)
 		}
 	case "reg":
 		var f *os.File = reg_access_log_file
 		var _, err2 = f.WriteString(msg1)
 		if err2 != nil {
-			slogger.Error("Reg() Wrinting access log failed",
+			logger.Error("Reg() Wrinting access log failed",
 				"err", err2)
 		}
 	default:

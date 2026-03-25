@@ -27,12 +27,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"maps"
 	"math/rand/v2"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"maps"
 	"os"
 	"os/user"
 	"runtime"
@@ -69,7 +69,8 @@ type multiplexer struct {
 
 	server *http.Server
 
-	conf *mux_conf
+	conf   *mux_conf
+	logger *slog.Logger
 }
 
 // THE_MULTIPLEXER is the single Multiplexer instance.
@@ -85,7 +86,7 @@ func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, qch <-ch
 	m.ch_quit_service = qch
 
 	var conf = &m.conf.Multiplexer
-	open_log_for_mux(c.Log.Access_log_file)
+	open_log_for_mux(m, c.Access_log.Access_log_file)
 
 	var host string
 	if conf.Mux_node_name != "" {
@@ -93,7 +94,7 @@ func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, qch <-ch
 	} else {
 		var h, err1 = os.Hostname()
 		if err1 != nil {
-			slogger.Error(m.logprefix+"os.Hostname() errs", "err", err1)
+			m.logger.Error(m.logprefix+"os.Hostname() errs", "err", err1)
 			panic(nil)
 		}
 		host = h
@@ -104,10 +105,10 @@ func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, qch <-ch
 	m.mux_pid = os.Getpid()
 	m.logprefix = ITE(false, fmt.Sprintf("Mux(%s): ", m.mux_ep), "Mux: ")
 
-	var addrs []net.IP = convert_hosts_to_addrs(conf.Trusted_proxy_list)
-	slogger.Debug(m.logprefix+"Trusted proxies", "ip", addrs)
+	var addrs []net.IP = convert_hosts_to_addrs(conf.Trusted_proxy_list, m.logger)
+	m.logger.Debug(m.logprefix+"Trusted proxies", "ip", addrs)
 	if len(addrs) == 0 {
-		slogger.Error(m.logprefix + "No trusted proxies")
+		m.logger.Error(m.logprefix + "No trusted proxies")
 		panic(nil)
 	}
 	m.trusted_proxies = addrs
@@ -117,20 +118,20 @@ func start_multiplexer(m *multiplexer, wg *sync.WaitGroup) {
 	defer func() {
 		var x = recover()
 		if x != nil {
-			slogger.Error("Mux: Multiplexer main errs", "err", x,
+			m.logger.Error("Mux: Multiplexer main errs", "err", x,
 				"stack", string(debug.Stack()))
 		}
 	}()
 	defer wg.Done()
-	defer force_quit_service()
+	defer force_quit_service(m.logger)
 
 	if trace_task&tracing != 0 {
-		slogger.Debug(m.logprefix + "start_multiplexer()")
+		m.logger.Debug(m.logprefix + "start_multiplexer()")
 	}
 
 	go mux_periodic_work(m)
 
-	var loglogger = slog.NewLogLogger(slogger.Handler(), slog.LevelDebug)
+	var loglogger = slog.NewLogLogger(m.logger.Handler(), slog.LevelDebug)
 	var proxy1 = httputil.ReverseProxy{
 		Rewrite:        proxy_request_rewriter(m),
 		ModifyResponse: proxy_response_modifier(m),
@@ -153,9 +154,9 @@ func start_multiplexer(m *multiplexer, wg *sync.WaitGroup) {
 		}
 	}()
 
-	slogger.Info(m.logprefix+"Start Multiplexer", "ep", m.mux_ep)
+	m.logger.Info(m.logprefix+"Start Multiplexer", "ep", m.mux_ep)
 	var err1 = m.server.ListenAndServe()
-	slogger.Error(m.logprefix+"http.Server.ListenAndServe() EXITS",
+	m.logger.Error(m.logprefix+"http.Server.ListenAndServe() EXITS",
 		"ep", m.mux_ep, "err", err1)
 }
 
@@ -165,14 +166,14 @@ func mux_periodic_work(m *multiplexer) {
 	defer func() {
 		var x = recover()
 		if x != nil {
-			slogger.Error(m.logprefix+"Mux periodic work errs", "err", x,
+			m.logger.Error(m.logprefix+"Mux periodic work errs", "err", x,
 				"stack", string(debug.Stack()))
 		}
 	}()
 
 	var conf = &m.conf.Multiplexer
 	if trace_task&tracing != 0 {
-		slogger.Debug(m.logprefix + "Mux periodic work started")
+		m.logger.Debug(m.logprefix + "Mux periodic work started")
 	}
 	var now int64 = time.Now().Unix()
 	var mux = &mux_record{
@@ -186,14 +187,14 @@ func mux_periodic_work(m *multiplexer) {
 	assert_fatal(interval >= (10 * time.Second))
 	for {
 		if trace_task&tracing != 0 {
-			slogger.Debug(m.logprefix + "Update Mux-ep")
+			m.logger.Debug(m.logprefix + "Update Mux-ep")
 		}
 		mux.Timestamp = time.Now().Unix()
 		set_mux_ep(m.table, m.mux_ep, mux)
 		var ok = set_mux_ep_expiry(m.table, m.mux_ep, expiry)
 		if !ok {
 			// Ignore an error.
-			slogger.Error(m.logprefix+"DB.Expire(mux-ep) failed",
+			m.logger.Error(m.logprefix+"DB.Expire(mux-ep) failed",
 				"mux-ep", m.mux_ep)
 		}
 		var jitter = time.Duration(rand.Int64N(int64(interval) / 10))
@@ -219,7 +220,7 @@ func proxy_request_rewriter(m *multiplexer) func(*httputil.ProxyRequest) {
 		var ep = be.Backend_ep
 		var forwarding, err2 = url.Parse("http://" + ep)
 		if err2 != nil {
-			slogger.Error(m.logprefix+"Bad backend ep", "ep", ep, "err", err2)
+			m.logger.Error(m.logprefix+"Bad backend ep", "ep", ep, "err", err2)
 			raise(&proxy_exc{
 				auth,
 				"",
@@ -239,7 +240,7 @@ func proxy_request_rewriter(m *multiplexer) func(*httputil.ProxyRequest) {
 		var keypair = [2]string{be.Root_access, be.Root_secret}
 		var err1 = awss3aide.Sign_by_credential(r.Out, ep, keypair)
 		if err1 != nil {
-			slogger.Error(m.logprefix+"aws.signer.SignHTTP() errs",
+			m.logger.Error(m.logprefix+"aws.signer.SignHTTP() errs",
 				"err", err1)
 			raise(&proxy_exc{
 				auth,
@@ -251,7 +252,7 @@ func proxy_request_rewriter(m *multiplexer) func(*httputil.ProxyRequest) {
 		}
 
 		if trace_proxy&tracing != 0 {
-			slogger.Debug(m.logprefix+"Forward request",
+			m.logger.Debug(m.logprefix+"Forward request",
 				"url", forwarding)
 		}
 	}
@@ -275,7 +276,7 @@ func proxy_response_modifier(m *multiplexer) func(*http.Response) error {
 		if ok {
 			auth = poolauth[1]
 		}
-		log_mux_access_by_response(rspn, auth)
+		log_mux_access_by_response(rspn, auth, m.logger)
 		return nil
 	}
 }
@@ -295,7 +296,7 @@ func proxy_error_handler(m *multiplexer) func(http.ResponseWriter, *http.Request
 			pool = poolauth[0]
 			auth = poolauth[1]
 		}
-		slogger.Error((m.logprefix + "httputil.ReverseProxy() failed"),
+		m.logger.Error((m.logprefix + "httputil.ReverseProxy() failed"),
 			"pool", pool, "key", auth, "err", err, "requst", rqst)
 
 		var err1 = &proxy_exc{
@@ -317,11 +318,11 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer handle_multiplexer_exc(m, w, r)
 		if trace_proxy&tracing != 0 {
-			slogger.Debug(m.logprefix+"Check request",
+			m.logger.Debug(m.logprefix+"Check request",
 				"method", r.Method, "resource", r.RequestURI)
 		}
 
-		//slogger.Debug(m.logprefix+"HEADERS",
+		//m.logger.Debug(m.logprefix+"HEADERS",
 		//	"r.Remote_Addr", r.Header.Get("Remote_Addr"),
 		//	"r.RemoteAddr", r.RemoteAddr)
 
@@ -335,7 +336,7 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 				tailers = append(tailers, k)
 			}
 			h["Trailer"] = tailers
-			slogger.Debug(m.logprefix+"HEADERS", "r.Header", h)
+			m.logger.Debug(m.logprefix+"HEADERS", "r.Header", h)
 		}
 
 		if !ensure_frontend_proxy_trusted(m, w, r) {
@@ -368,7 +369,7 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 			return
 		case bucket == nil && authenticated == nil:
 			// Lens3 disallows bucket listing.
-			slogger.Info(m.logprefix+"Bad bucket naming", "bucket", "/")
+			m.logger.Info(m.logprefix+"Bad bucket naming", "bucket", "/")
 			var err4 = &proxy_exc{
 				auth,
 				"",
@@ -379,7 +380,7 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 			return_mux_error_response(m, w, r, err4)
 			return
 		case bucket == nil && authenticated != nil:
-			slogger.Debug(m.logprefix+"Reject access at the top",
+			m.logger.Debug(m.logprefix+"Reject access at the top",
 				"key", auth)
 			var err5 = &proxy_exc{
 				auth,
@@ -470,11 +471,11 @@ func forward_access(m *multiplexer, w http.ResponseWriter, r *http.Request, be *
 	var ctx3 = context.WithValue(ctx2, ctx_key_pool_auth, []string{pool, auth})
 	var r3 = r.WithContext(ctx3)
 
-	slogger.Info(m.logprefix+"Forward request",
+	m.logger.Info(m.logprefix+"Forward request",
 		"pool", pool, "key", auth,
 		"method", r3.Method, "resource", r3.RequestURI)
 	if trace_proxy&tracing != 0 {
-		slogger.Debug(m.logprefix+"Forward request",
+		m.logger.Debug(m.logprefix+"Forward request",
 			"pool", pool, "key", auth,
 			"request", r3)
 	}
@@ -493,11 +494,11 @@ func serve_probe_access(m *multiplexer, w http.ResponseWriter, r *http.Request, 
 	assert_fatal(secret != nil)
 	var auth = secret.Access_key
 	var pool = secret.Pool
-	slogger.Debug(m.logprefix+"Serve probe-access", "pool", pool)
+	m.logger.Debug(m.logprefix+"Serve probe-access", "pool", pool)
 
 	var peer = r.Header.Get("Remote_Addr")
 	if peer != "" {
-		slogger.Error(m.logprefix+"Probe-access from outside",
+		m.logger.Error(m.logprefix+"Probe-access from outside",
 			"remote", peer)
 		var err1 = &proxy_exc{
 			auth,
@@ -523,7 +524,7 @@ func serve_probe_access(m *multiplexer, w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	var err2 = make_absent_buckets_in_backend(m.manager, be)
+	var err2 = make_absent_buckets_in_backend(m.manager, be, m.logger)
 	if err2 != nil {
 		// (An error is already logged).
 		var message = prettify_error_message(err2.Error())
@@ -564,16 +565,19 @@ func handle_multiplexer_exc(m *multiplexer, w http.ResponseWriter, rqst *http.Re
 	var x = recover()
 	var delay_ms = m.conf.Multiplexer.Error_response_delay_ms
 	var logprefix = m.logprefix
-	var logfn = log_mux_access_by_request
-	handle_exc(x, w, rqst, delay_ms, logprefix, logfn)
+	//var logfn = log_mux_access_by_request
+	var logfn = func(rqst *http.Request, code int, length int64, uid string, auth string) {
+		log_mux_access_by_request(rqst, code, length, uid, auth, m.logger)
+	}
+	handle_exc(x, w, rqst, delay_ms, logprefix, logfn, m.logger)
 }
 
-func handle_exc(x any, w http.ResponseWriter, rqst *http.Request, delay_ms time_in_ms, logprefix string, logfn access_logger) {
+func handle_exc(x any, w http.ResponseWriter, rqst *http.Request, delay_ms time_in_ms, logprefix string, logfn access_logger, logger *slog.Logger) {
 	switch err1 := x.(type) {
 	case nil:
 		// Okay.
 	case *runtime.PanicNilError:
-		slogger.Error(logprefix+"FATAL ERROR", "err", err1,
+		logger.Error(logprefix+"FATAL ERROR", "err", err1,
 			"stack", string(debug.Stack()))
 
 		var err2 = &proxy_exc{
@@ -590,14 +594,14 @@ func handle_exc(x any, w http.ResponseWriter, rqst *http.Request, delay_ms time_
 
 		if true {
 			time.Sleep(1000 * time.Millisecond)
-			force_quit_service()
+			force_quit_service(logger)
 		}
 	case *proxy_exc:
-		slogger.Error(logprefix+"Handler error", "err", err1)
+		logger.Error(logprefix+"Handler error", "err", err1)
 
 		return_error_response(w, rqst, err1, delay_ms, logprefix, logfn)
 	default:
-		slogger.Error(logprefix+"Runtime panic", "err", err1,
+		logger.Error(logprefix+"Runtime panic", "err", err1,
 			"stack", string(debug.Stack()))
 
 		var err3 = &proxy_exc{
@@ -623,7 +627,7 @@ func check_authenticated(m *multiplexer, r *http.Request) (*secret_record, *prox
 	var auth string = cred.Credential[0]
 	var secret *secret_record = get_secret(m.table, auth)
 	if secret == nil {
-		slogger.Info(m.logprefix+"Bad credential", "key", auth,
+		m.logger.Info(m.logprefix+"Bad credential", "key", auth,
 			"reason", "unknown")
 		var err1 = &proxy_exc{
 			"",
@@ -639,7 +643,7 @@ func check_authenticated(m *multiplexer, r *http.Request) (*secret_record, *prox
 	//var ok, reason1 = check_credential_is_good(r, keypair)
 	var reason1, err1 = awss3aide.Check_credential(r, keypair, 60*time.Second)
 	if err1 != nil {
-		slogger.Info(m.logprefix+"Bad credential", "key", auth,
+		m.logger.Info(m.logprefix+"Bad credential", "key", auth,
 			"reason", reason1)
 		var err2 = &proxy_exc{
 			"",
@@ -652,7 +656,7 @@ func check_authenticated(m *multiplexer, r *http.Request) (*secret_record, *prox
 	}
 	var expiration = time.Unix(secret.Expiration_time, 0)
 	if !time.Now().Before(expiration) {
-		slogger.Info(m.logprefix+"Bad credential", "key", auth,
+		m.logger.Info(m.logprefix+"Bad credential", "key", auth,
 			"reason", "expired")
 		var err3 = &proxy_exc{
 			"",
@@ -681,8 +685,8 @@ func ensure_backend_running(m *multiplexer, w http.ResponseWriter, r *http.Reque
 
 	var be1 = get_backend(m.table, pool)
 	if be1 == nil {
-		//slogger.Info(m.logprefix+"Start backend", "pool", pool)
-		var be2 = start_backend(m.manager, pool)
+		//m.logger.Info(m.logprefix+"Start backend", "pool", pool)
+		var be2 = start_backend(m.manager, pool, m.logger)
 		if be2 == nil {
 			// (An error is already logged).
 			var err1 = &proxy_exc{
@@ -704,7 +708,7 @@ func ensure_backend_running(m *multiplexer, w http.ResponseWriter, r *http.Reque
 	case pool_state_DISABLED:
 		panic(nil)
 	case pool_state_SUSPENDED:
-		slogger.Debug(m.logprefix+"Reject access to pool",
+		m.logger.Debug(m.logprefix+"Reject access to pool",
 			"pool", pool, "reason", "suspended")
 		var err2 = &proxy_exc{
 			auth,
@@ -729,7 +733,7 @@ func ensure_backend_running(m *multiplexer, w http.ResponseWriter, r *http.Reque
 func ensure_pool_existence(m *multiplexer, w http.ResponseWriter, r *http.Request, pool string, auth string) *pool_record {
 	var pooldata *pool_record = get_pool(m.table, pool)
 	if pooldata == nil {
-		slogger.Error("Inconsistency in keyval-db: bucket exists but no pool",
+		m.logger.Error("Inconsistency in keyval-db: bucket exists but no pool",
 			"pool", pool)
 		var err1 = &proxy_exc{
 			auth,
@@ -750,8 +754,8 @@ func ensure_pool_existence(m *multiplexer, w http.ResponseWriter, r *http.Reques
 func ensure_frontend_proxy_trusted(m *multiplexer, w http.ResponseWriter, r *http.Request) bool {
 	//var peer = r.Header.Get("Remote_Addr")
 	var peer = r.RemoteAddr
-	if !check_frontend_proxy_trusted(m.trusted_proxies, peer) {
-		slogger.Error(m.logprefix+"Untrusted frontend proxy", "ep", peer)
+	if !check_frontend_proxy_trusted(m.trusted_proxies, peer, m.logger) {
+		m.logger.Error(m.logprefix+"Untrusted frontend proxy", "ep", peer)
 		var err1 = &proxy_exc{
 			"",
 			"",
@@ -779,7 +783,7 @@ func check_bucket_in_path(m *multiplexer, w http.ResponseWriter, r *http.Request
 	// assert_fatal(name != "")
 	var bucket = get_bucket(m.table, name)
 	if bucket == nil {
-		slogger.Info(m.logprefix+"Bad bucket", "bucket", name,
+		m.logger.Info(m.logprefix+"Bad bucket", "bucket", name,
 			"reason", "not found")
 		var err2 = &proxy_exc{
 			auth,
@@ -796,7 +800,7 @@ func check_bucket_in_path(m *multiplexer, w http.ResponseWriter, r *http.Request
 func ensure_bucket_not_expired(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record, auth string) bool {
 	var expiration = time.Unix(bucket.Expiration_time, 0)
 	if !time.Now().Before(expiration) {
-		slogger.Info(m.logprefix+"Bad bucket", "bucket", bucket.Bucket,
+		m.logger.Info(m.logprefix+"Bad bucket", "bucket", bucket.Bucket,
 			"reason", "expired")
 		var err1 = &proxy_exc{
 			auth,
@@ -813,7 +817,7 @@ func ensure_bucket_not_expired(m *multiplexer, w http.ResponseWriter, r *http.Re
 
 func ensure_bucket_owner(m *multiplexer, w http.ResponseWriter, r *http.Request, bucket *bucket_record, secret *secret_record, auth string) bool {
 	if bucket.Pool != secret.Pool {
-		slogger.Info(m.logprefix+"Bad bucket", "bucket", bucket.Bucket,
+		m.logger.Info(m.logprefix+"Bad bucket", "bucket", bucket.Bucket,
 			"reason", "not owner")
 		var err1 = &proxy_exc{
 			auth,
@@ -838,7 +842,7 @@ func ensure_pool_state(m *multiplexer, w http.ResponseWriter, r *http.Request, p
 	case pool_state_READY:
 		// Okay.
 	case pool_state_DISABLED:
-		slogger.Debug(m.logprefix+"Reject access to bad pool",
+		m.logger.Debug(m.logprefix+"Reject access to bad pool",
 			"pool", pool, "reason", "disabled")
 		var err2 = &proxy_exc{
 			auth,
@@ -852,7 +856,7 @@ func ensure_pool_state(m *multiplexer, w http.ResponseWriter, r *http.Request, p
 	case pool_state_SUSPENDED:
 		panic(nil)
 	case pool_state_INOPERABLE:
-		slogger.Debug(m.logprefix+"Reject access to bad pool",
+		m.logger.Debug(m.logprefix+"Reject access to bad pool",
 			"pool", pool, "reason", "inoperable")
 		var err3 = &proxy_exc{
 			auth,
@@ -888,12 +892,12 @@ func ensure_permission_by_secret(m *multiplexer, w http.ResponseWriter, r *http.
 	case "DELETE":
 		set = []secret_policy{secret_policy_RW, secret_policy_WO}
 	default:
-		slogger.Warn(m.logprefix+"http unknown method", "method", method)
+		m.logger.Warn(m.logprefix+"http unknown method", "method", method)
 		set = []secret_policy{}
 	}
 	var ok = slices.Contains(set, policy)
 	if !ok {
-		slogger.Info(m.logprefix+"Bad secret", "key", secret.Access_key,
+		m.logger.Info(m.logprefix+"Bad secret", "key", secret.Access_key,
 			"reason", "no permission", "pool", secret.Pool, "method", method)
 		var err1 = &proxy_exc{
 			auth,
@@ -924,12 +928,12 @@ func ensure_permission_by_bucket(m *multiplexer, w http.ResponseWriter, r *http.
 	case "DELETE":
 		set = []bucket_policy{bucket_policy_RW, bucket_policy_WO}
 	default:
-		slogger.Warn(m.logprefix+"http unknown method", "method", method)
+		m.logger.Warn(m.logprefix+"http unknown method", "method", method)
 		set = []bucket_policy{}
 	}
 	var ok = slices.Contains(set, policy)
 	if !ok {
-		slogger.Info(m.logprefix+"Bad bucket", "bucket", bucket.Bucket,
+		m.logger.Info(m.logprefix+"Bad bucket", "bucket", bucket.Bucket,
 			"reason", "no permission", "pool", bucket.Pool, "method", method)
 		var err1 = &proxy_exc{
 			auth,
@@ -957,7 +961,7 @@ func pick_bucket_in_path(m *multiplexer, r *http.Request, auth string) (string, 
 		return "", nil
 	}
 	if !check_bucket_naming(bucket) {
-		slogger.Info(m.logprefix+"Bad bucket naming", "bucket", bucket)
+		m.logger.Info(m.logprefix+"Bad bucket naming", "bucket", bucket)
 		var err1 = &proxy_exc{
 			auth,
 			"",
@@ -1012,7 +1016,7 @@ func check_pool_is_usable(t *keyval_table, pooldata *pool_record) (pool_state, p
 // for reporting to users.  It returns in the subset {READY,
 // SUSPENDED}.  It returns READY when the pool state is not recorded.
 func check_pool_is_suspened(t *keyval_table, pool string) (pool_state, pool_reason) {
-	var state *blurred_state_record = get_blurred_state(t, pool)
+	var state *approximate_state_record = get_approximate_state(t, pool)
 	if state == nil {
 		return pool_state_READY, pool_reason_NORMAL
 	}
@@ -1058,12 +1062,12 @@ func combine_pool_state(state1 pool_state, reason1 pool_reason, state2 pool_stat
 func check_user_is_active(t *keyval_table, uid string) (bool, string) {
 	var ui = get_user(t, uid)
 	if ui == nil {
-		slogger.Info("Bad user", "user", uid, "reason", "not registered")
+		t.logger.Info("Bad user", "user", uid, "reason", "not registered")
 		return false, message_403_user_not_registered
 	}
 	var expiration = time.Unix(ui.Expiration_time, 0)
 	if !ui.Enabled || !time.Now().Before(expiration) {
-		slogger.Info("Bad user", "user", uid, "reason", "disabled")
+		t.logger.Info("Bad user", "user", uid, "reason", "disabled")
 		return false, message_403_user_disabled
 	}
 
@@ -1072,9 +1076,9 @@ func check_user_is_active(t *keyval_table, uid string) (bool, string) {
 		switch err1.(type) {
 		case user.UnknownUserError:
 		default:
-			slogger.Error("os/user.Lookup() errs", "user", uid, "err", err1)
+			t.logger.Error("os.user.Lookup() errs", "user", uid, "err", err1)
 		}
-		slogger.Warn("Bad user", "user", uid, "reason", "no account")
+		t.logger.Warn("Bad user", "user", uid, "reason", "no account")
 		return false, message_403_no_user_account
 	}
 
@@ -1096,20 +1100,27 @@ func return_success_response_for_probe(m *multiplexer, w http.ResponseWriter, r 
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(code)
 	fmt.Fprintln(w, json1)
-	log_mux_access_by_request(r, code, int64(len(json1)), "", auth)
+	log_mux_access_by_request(r, code, int64(len(json1)), "", auth, m.logger)
 }
 
 func return_mux_error_response(m *multiplexer, w http.ResponseWriter, r *http.Request, err *proxy_exc) {
 	var delay_ms = m.conf.Multiplexer.Error_response_delay_ms
 	var logprefix = m.logprefix
-	var logfn = log_mux_access_by_request
+	//var logfn = log_mux_access_by_request
+	var logfn = func(rqst *http.Request, code int, length int64, uid string, auth string) {
+		log_mux_access_by_request(rqst, code, length, uid, auth, m.logger)
+	}
+
 	return_error_response(w, r, err, delay_ms, logprefix, logfn)
 }
 
 func return_mux_error_response_no_delay(m *multiplexer, w http.ResponseWriter, r *http.Request, err *proxy_exc) {
 	var delay_ms = time_in_ms(0)
 	var logprefix = m.logprefix
-	var logfn = log_mux_access_by_request
+	//var logfn = log_mux_access_by_request
+	var logfn = func(rqst *http.Request, code int, length int64, uid string, auth string) {
+		log_mux_access_by_request(rqst, code, length, uid, auth, m.logger)
+	}
 	return_error_response(w, r, err, delay_ms, logprefix, logfn)
 }
 
@@ -1143,7 +1154,7 @@ func return_error_response(w http.ResponseWriter, r *http.Request, err1 *proxy_e
 	logfn(r, code1, int64(len(json1)), "", err1.auth)
 }
 
-// HTTP_ERROR_IN_JSON is http/Error() but content-type in json.
+// HTTP_ERROR_IN_JSON is http.Error() but content-type in json.
 func http_error_in_json(w http.ResponseWriter, error string, code int) {
 	//w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")

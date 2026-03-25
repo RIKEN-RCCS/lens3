@@ -15,6 +15,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"reflect"
 	"slices"
@@ -43,17 +44,17 @@ type mux_conf struct {
 	Minio       *minio_conf      `json:"minio"`
 	Rclone      *rclone_conf     `json:"rclone"`
 	S3baby      *s3baby_conf     `json:"baby-server"`
-	Log         access_log_conf  `json:"log"`
-	Logging     *logging_conf    `json:"logging"`
+	Access_log  access_log_conf  `json:"access_log"`
+	Logging     logging_conf     `json:"logging"`
 }
 
 // REG_CONF is a configuration of Registrar.
 type reg_conf struct {
 	Conf_header
-	Registrar registrar_conf  `json:"registrar"`
-	UI        UI_conf         `json:"ui"`
-	Log       access_log_conf `json:"log"`
-	Logging   *logging_conf   `json:"logging"`
+	Registrar  registrar_conf  `json:"registrar"`
+	UI         UI_conf         `json:"ui"`
+	Access_log access_log_conf `json:"access_log"`
+	Logging    logging_conf    `json:"logging"`
 }
 
 type Conf_header struct {
@@ -142,7 +143,7 @@ type access_log_conf struct {
 // Registrar, and prefers one in Multiplexer.
 type logging_conf struct {
 	Logger logger_conf  `json:"logger"`
-	Stats  stats_conf   `json:"stats"`
+	Stats  *stats_conf  `json:"stats"`
 	Alert  *alert_conf  `json:"alert"`
 	Syslog *syslog_conf `json:"syslog"`
 	Mqtt   *mqtt_conf   `json:"mqtt"`
@@ -233,11 +234,12 @@ var backend_list = []backend_name{
 
 const bad_message = "Bad json conf file."
 
-// READ_DB_CONF reads a conf file for the keyval-db.
-func read_db_conf(filepath string) *db_conf {
+// READ_DB_CONF reads a conf file to access the keyval-db.  The logger
+// is the "early"-logger which logs to stdout.
+func read_db_conf(filepath string, logger *slog.Logger) *db_conf {
 	var b1, err1 = os.ReadFile(filepath)
 	if err1 != nil {
-		slogger.Error("Reading a db conf file failed",
+		logger.Error("Reading a db conf file failed",
 			"file", filepath, "err", err1)
 		return nil
 	}
@@ -247,30 +249,30 @@ func read_db_conf(filepath string) *db_conf {
 	var conf db_conf
 	var err2 = d.Decode(&conf)
 	if err2 != nil {
-		slogger.Error("Reading a db conf file failed",
+		logger.Error("Reading a db conf file failed",
 			"file", filepath, "err", err2)
 		return nil
 	}
 	if conf.Ep == "" || conf.Password == "" {
-		slogger.Error("Reading a db conf file failed",
+		logger.Error("Reading a db conf file failed",
 			"file", filepath, "err", fmt.Errorf("empty entries"))
 		return nil
 	}
 	return &conf
 }
 
-// READ_CONF reads a configuration file and checks a structure is
-// properly filled.
-func read_conf(filename string) lens3_conf {
+// READ_CONF_FROM_FILE reads a configuration file and checks the
+// structure is properly filled.
+func read_conf_from_file(filename string, logger *slog.Logger) lens3_conf {
 	var json1, err1 = os.ReadFile(filename)
 	if err1 != nil {
-		slogger.Error("os.ReadFile() failed", "file", filename)
+		logger.Error("os.ReadFile() failed", "file", filename)
 		return nil
 	}
 	var conf1 = make(map[string]any)
 	var err2 = json.Unmarshal(json1, &conf1)
 	if err2 != nil {
-		slogger.Error("Bad json format", "file", filename, "err", err2)
+		logger.Error("Bad json format", "file", filename, "err", err2)
 		return nil
 	}
 
@@ -280,63 +282,61 @@ func read_conf(filename string) lens3_conf {
 		var muxconf mux_conf
 		var err3 = json.Unmarshal(json1, &muxconf)
 		if err3 != nil {
-			slogger.Error("Bad json format", "file", filename, "err", err3)
+			logger.Error("Bad json format", "file", filename, "err", err3)
 			return nil
 		}
 		//fmt.Println("MUX CONF is", muxconf)
-		check_mux_conf(&muxconf)
+		check_mux_conf(&muxconf, logger)
 		return &muxconf
 	case "reg":
 		var regconf reg_conf
 		var err4 = json.Unmarshal(json1, &regconf)
 		if err4 != nil {
-			slogger.Error("Bad json format", "file", filename, "err", err4)
+			logger.Error("Bad json format", "file", filename, "err", err4)
 			return nil
 		}
 		//fmt.Println("REG CONF is", regconf)
-		check_reg_conf(&regconf)
+		check_reg_conf(&regconf, logger)
 		return &regconf
 	default:
-		slogger.Error("Bad conf file, bad subject",
+		logger.Error("Bad conf file, bad subject",
 			"file", filename, "subject", sub)
 		return nil
 	}
 }
 
-func check_mux_conf(conf *mux_conf) {
+func check_mux_conf(conf *mux_conf, logger *slog.Logger) {
 	if conf.Version != configuration_file_version {
-		slogger.Error("Bad configuration file version",
+		logger.Error("Bad configuration file version",
 			"version", conf.Version, "wanted", configuration_file_version)
 		panic(nil)
 	}
-	check_multiplexer_entry(&conf.Multiplexer)
-	check_manager_entry(&conf.Manager)
+	check_multiplexer_entry(&conf.Multiplexer, logger)
+	check_manager_entry(&conf.Manager, logger)
 	switch conf.Multiplexer.Backend {
 	case backend_name_minio:
-		check_minio_entry(conf.Minio)
+		check_minio_entry(conf.Minio, logger)
 	case backend_name_rclone:
-		check_rclone_entry(conf.Rclone)
+		check_rclone_entry(conf.Rclone, logger)
 	case backend_name_s3baby:
-		check_s3baby_entry(conf.S3baby)
+		check_s3baby_entry(conf.S3baby, logger)
 	}
-	check_access_log_entry(&conf.Log)
+	check_access_log_entry(&conf.Access_log, logger)
 }
 
-func check_reg_conf(conf *reg_conf) {
+func check_reg_conf(conf *reg_conf, logger *slog.Logger) {
 	if conf.Version != configuration_file_version {
-		slogger.Error("Bad configuration file version",
+		logger.Error("Bad configuration file version",
 			"version", conf.Version, "wanted", configuration_file_version)
 		panic(nil)
 	}
-	check_registrar_entry(&conf.Registrar)
-	check_ui_entry(&conf.UI)
-	check_access_log_entry(&conf.Log)
-	if conf.Logging != nil {
-		check_logging_entry(conf.Logging)
-	}
+	check_registrar_entry(&conf.Registrar, logger)
+	check_ui_entry(&conf.UI, logger)
+	check_access_log_entry(&conf.Access_log, logger)
+	check_logging_entry(&conf.Logging, logger)
 }
 
-func check_field_required_and_positive(t any, slot string, conf_name string) {
+func check_field_required_and_positive(t any, slot string, conf_name string, logger *slog.Logger) {
 	var t1 = reflect.ValueOf(t)
 	var s = t1.FieldByName(slot)
 	//fmt.Printf("s=%T %v\n", s, s)
@@ -357,19 +357,19 @@ func check_field_required_and_positive(t any, slot string, conf_name string) {
 	case reflect.Int64:
 		var x1 = s.Int()
 		if !(!s.IsZero() && x1 > 0) {
-			slogger.Error(fmt.Sprintf("field %s is required in %T", slot, t))
+			logger.Error(fmt.Sprintf("field %s is required in %T", slot, t))
 			panic(nil)
 		}
 	case reflect.String:
 		if s.IsZero() {
-			slogger.Error(fmt.Sprintf("field %s is required in %T", slot, t))
+			logger.Error(fmt.Sprintf("field %s is required in %T", slot, t))
 			panic(nil)
 		}
 	}
 }
 
-func check_multiplexer_entry(e *multiplexer_conf) {
-	for _, slot := range []string{
+func check_multiplexer_entry(e *multiplexer_conf, logger *slog.Logger) {
+	var entries = []string{
 		"Port",
 		//"Front_host",
 		//"Trusted_proxy_list",
@@ -377,17 +377,18 @@ func check_multiplexer_entry(e *multiplexer_conf) {
 		"Backend",
 		"Mux_ep_update_interval",
 		"Error_response_delay_ms",
-	} {
-		check_field_required_and_positive(*e, slot, "multiplexer")
+	}
+	for _, slot := range entries {
+		check_field_required_and_positive(*e, slot, "multiplexer", logger)
 	}
 	if !slices.Contains(backend_list, e.Backend) {
-		slogger.Error("Bad backend name", "name", e.Backend)
+		logger.Error("Bad backend name", "name", e.Backend)
 		panic(nil)
 	}
 }
 
-func check_registrar_entry(e *registrar_conf) {
-	for _, slot := range []string{
+func check_registrar_entry(e *registrar_conf, logger *slog.Logger) {
+	var entries = []string{
 		//"Backend",
 		"Port",
 		"Server_ep",
@@ -406,17 +407,18 @@ func check_registrar_entry(e *registrar_conf) {
 		"Error_response_delay_ms",
 		"Ui_session_duration",
 		//"Postpone_probe_access",
-	} {
-		check_field_required_and_positive(*e, slot, "registrar")
+	}
+	for _, slot := range entries {
+		check_field_required_and_positive(*e, slot, "registrar", logger)
 	}
 	if !slices.Contains(claim_conversions, e.Claim_uid_map) {
-		slogger.Error("Bad claim mapping", "name", e.Claim_uid_map)
+		logger.Error("Bad claim mapping", "name", e.Claim_uid_map)
 		panic(nil)
 	}
 }
 
-func check_manager_entry(e *manager_conf) {
-	for _, slot := range []string{
+func check_manager_entry(e *manager_conf, logger *slog.Logger) {
+	var entries = []string{
 		"Sudo",
 		"Port_min",
 		"Port_max",
@@ -427,100 +429,102 @@ func check_manager_entry(e *manager_conf) {
 		"Backend_region",
 		"Heartbeat_interval",
 		"Heartbeat_miss_tolerance",
-	} {
-		check_field_required_and_positive(*e, slot, "manager")
+	}
+	for _, slot := range entries {
+		check_field_required_and_positive(*e, slot, "manager", logger)
 	}
 }
 
-func check_minio_entry(e *minio_conf) {
+func check_minio_entry(e *minio_conf, logger *slog.Logger) {
 	if e != nil && len(e.PathMinio) > 0 && len(e.PathMc) > 0 {
 		// Okay.
 	} else {
-		slogger.Error("Bad backend entry (minio)", "entry", e)
+		logger.Error("Bad backend entry (minio)", "entry", e)
 		panic(nil)
 	}
 }
 
-func check_rclone_entry(e *rclone_conf) {
+func check_rclone_entry(e *rclone_conf, logger *slog.Logger) {
 	if e != nil && len(e.Path) > 0 {
 		// Okay.
 	} else {
-		slogger.Error("Bad backend entry (rclone)", "entry", e)
+		logger.Error("Bad backend entry (rclone)", "entry", e)
 		panic(nil)
 	}
 }
 
-func check_s3baby_entry(e *s3baby_conf) {
+func check_s3baby_entry(e *s3baby_conf, logger *slog.Logger) {
 	if !(e != nil && len(e.Path) > 0 && len(e.Control) > 0) {
-		slogger.Error("Bad backend entry (baby-server)", "entry", e)
+		logger.Error("Bad backend entry (baby-server)", "entry", e)
 		panic(nil)
 	}
 	// Okay.
 }
 
-func check_ui_entry(e *UI_conf) {
+func check_ui_entry(e *UI_conf, logger *slog.Logger) {
 	if len(e.S3_url) > 0 &&
 		len(e.Footer_banner) > 0 {
 		// Okay.
 	} else {
-		slogger.Error("Bad S3 endpoint", "entry", e)
+		logger.Error("Bad S3 endpoint", "entry", e)
 		panic(nil)
 	}
 }
 
-func check_access_log_entry(e *access_log_conf) {
-	for _, slot := range []string{
+func check_access_log_entry(e *access_log_conf, logger *slog.Logger) {
+	var entries = []string{
 		"Access_log_file",
-	} {
-		check_field_required_and_positive(*e, slot, "log")
+	}
+	for _, slot := range entries {
+		check_field_required_and_positive(*e, slot, "log", logger)
 	}
 }
 
-func check_logging_entry(e *logging_conf) {
-	check_logger_entry(&e.Logger)
+func check_logging_entry(e *logging_conf, logger *slog.Logger) {
+	check_logger_entry(&e.Logger, logger)
 	if e.Alert != nil {
-		check_alert_entry(e.Alert)
+		check_alert_entry(e.Alert, logger)
 	}
 	if e.Syslog != nil {
-		check_syslog_entry(e.Syslog)
+		check_syslog_entry(e.Syslog, logger)
 	}
 	if e.Mqtt != nil {
-		check_mqtt_entry(e.Mqtt)
+		check_mqtt_entry(e.Mqtt, logger)
 	}
 }
 
-func check_logger_entry(e *logger_conf) {
+func check_logger_entry(e *logger_conf, logger *slog.Logger) {
 	if len(e.Log_file) > 0 && len(e.Level) > 0 {
 		// Okay.
 	} else {
-		slogger.Error("Bad logger entry", "entry", e)
+		logger.Error("Bad logger entry", "entry", e)
 		panic(nil)
 	}
 }
 
-func check_alert_entry(e *alert_conf) {
+func check_alert_entry(e *alert_conf, logger *slog.Logger) {
 	if len(e.Level) > 0 {
 		// Okay.
 	} else {
-		slogger.Error("Bad alert entry", "entry", e)
+		logger.Error("Bad alert entry", "entry", e)
 		panic(nil)
 	}
 }
 
-func check_syslog_entry(e *syslog_conf) {
+func check_syslog_entry(e *syslog_conf, logger *slog.Logger) {
 	if len(e.Facility) > 0 {
 		// Okay.
 	} else {
-		slogger.Error("Bad Syslog entry", "entry", e)
+		logger.Error("Bad Syslog entry", "entry", e)
 		panic(nil)
 	}
 }
 
-func check_mqtt_entry(e *mqtt_conf) {
+func check_mqtt_entry(e *mqtt_conf, logger *slog.Logger) {
 	if len(e.Ep) > 0 {
 		// Okay.
 	} else {
-		slogger.Error("Bad MQTT entry", "entry", e)
+		logger.Error("Bad MQTT entry", "entry", e)
 		panic(nil)
 	}
 }

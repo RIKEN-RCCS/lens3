@@ -1,4 +1,4 @@
-/var/log/lenticularis/lens3-log /var/log/lenticularis/lens3-mux-access-log /var/log/lenticularis/lens3-reg-access-log {
+/var/log/lenticularis/lens3-mux-log /var/log/lenticularis/lens3-reg-log /var/log/lenticularis/lens3-mux-access-log /var/log/lenticularis/lens3-reg-access-log {
     weekly 1
     rotate 60
     copytruncate

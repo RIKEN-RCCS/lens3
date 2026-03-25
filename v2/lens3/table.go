@@ -38,10 +38,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/valkey-io/valkey-go"
+	"log/slog"
 	"slices"
 	"syscall"
 	"time"
+
+	"github.com/valkey-io/valkey-go"
 )
 
 type keyval_table struct {
@@ -51,6 +53,7 @@ type keyval_table struct {
 	timeout       time.Duration
 	prefix_to_db  map[string]valkey.Client
 	db_name_to_db map[string]valkey.Client
+	logger        *slog.Logger
 }
 
 const keyval_db_timeout = time.Duration(10000 * time.Millisecond)
@@ -70,13 +73,13 @@ const (
 	db_bucket_prefix    = "bk:"
 	db_secret_prefix    = "sx:"
 
-	db_mux_ep_prefix         = "mu:"
-	db_backend_data_prefix   = "de:"
-	db_backend_mutex_prefix  = "dx:"
-	db_csrf_token_prefix     = "tn:"
-	db_blurred_state_prefix  = "ps:"
-	db_pool_timestamp_prefix = "pt:"
-	db_user_timestamp_prefix = "ut:"
+	db_mux_ep_prefix            = "mu:"
+	db_backend_data_prefix      = "de:"
+	db_backend_mutex_prefix     = "dx:"
+	db_csrf_token_prefix        = "tn:"
+	db_approximate_state_prefix = "ps:"
+	db_pool_timestamp_prefix    = "pt:"
+	db_user_timestamp_prefix    = "ut:"
 	//db_backend_ep_prefix     = "ep:"
 )
 
@@ -98,13 +101,13 @@ var prefix_to_db_number_assignment = map[string]int{
 	db_secret_prefix:    storage_db,
 	db_bucket_prefix:    storage_db,
 
-	db_mux_ep_prefix:         process_db,
-	db_backend_mutex_prefix:  process_db,
-	db_backend_data_prefix:   process_db,
-	db_csrf_token_prefix:     process_db,
-	db_blurred_state_prefix:  process_db,
-	db_pool_timestamp_prefix: process_db,
-	db_user_timestamp_prefix: process_db,
+	db_mux_ep_prefix:            process_db,
+	db_backend_mutex_prefix:     process_db,
+	db_backend_data_prefix:      process_db,
+	db_csrf_token_prefix:        process_db,
+	db_approximate_state_prefix: process_db,
+	db_pool_timestamp_prefix:    process_db,
+	db_user_timestamp_prefix:    process_db,
 }
 
 // Record's constraints displays properties of an entry.  Some records
@@ -166,12 +169,12 @@ type pool_record struct {
 	Timestamp        int64       `json:"timestamp"`
 }
 
-// "ps:"+pool-name Entry (db_blurred_state_prefix).  A pool-state is an
-// approximate dynamic state of a pool.  It ranges in the subset
+// "ps:"+pool-name Entry (db_approximate_state_prefix).  A pool-state
+// is an approximate dynamic state of a pool.  It ranges in the subset
 // {READY, SUSPENDED}.  It is imprecise and only used for Web-UI to
 // inform users the suspended state.  Constraint:
-// (key≡blurred_state_record.Pool), (ps:_∈po:Pool).
-type blurred_state_record struct {
+// (key≡approximate_state_record.Pool), (ps:_∈po:Pool).
+type approximate_state_record struct {
 	Pool      string      `json:"pool"`
 	State     pool_state  `json:"state"`
 	Reason    pool_reason `json:"reason"`
@@ -324,8 +327,9 @@ func make_failure_reason(s string) pool_reason {
 // MAKE_KEYVAL_TABLE makes a set of keyval-db clients.  It retries a
 // connection to the keyval-db up to 60 seconds (unless fail_at_once).
 // It assumes a failure is by "connection refused", and other errors
-// are fatal.  The error is of type (err1 : *net.OpError{...}).
-func make_keyval_table(conf *db_conf, fail_at_once bool) *keyval_table {
+// are fatal.  MEMO: The error is of type (err1 : *net.OpError{...}).
+// The logger is the "early"-logger which logs to stdout.
+func make_keyval_table(conf *db_conf, fail_at_once bool, logger *slog.Logger) *keyval_table {
 	const buggy_behavior_at_client_creation = true
 
 	var ep = conf.Ep
@@ -346,7 +350,7 @@ func make_keyval_table(conf *db_conf, fail_at_once bool) *keyval_table {
 				break
 			}
 			if !errors.Is(err1, syscall.ECONNREFUSED) {
-				slogger.Error("keyval-db valkey/NewClient(DB=1) errs",
+				logger.Error("keyval-db valkey/NewClient(DB=1) errs",
 					"err", err1, "type", descriptive_string(err1))
 				panic(nil)
 			}
@@ -354,12 +358,12 @@ func make_keyval_table(conf *db_conf, fail_at_once bool) *keyval_table {
 				break
 			}
 			if trace_db_set&tracing != 0 {
-				slogger.Debug("Connect to keyval-db failed (sleeping)")
+				logger.Debug("Connect to keyval-db failed (sleeping)")
 			}
 			time.Sleep(10 * time.Second)
 		}
 		if err1 != nil {
-			slogger.Error("keyval-db valkey/NewClient(DB=1) errs",
+			logger.Error("keyval-db valkey/NewClient(DB=1) errs",
 				"err", err1, "type", descriptive_string(err1))
 			panic(nil)
 		}
@@ -370,7 +374,7 @@ func make_keyval_table(conf *db_conf, fail_at_once bool) *keyval_table {
 			SelectDB:    setting_db,
 		})
 		if err1 != nil {
-			slogger.Error("keyval-db valkey/NewClient(DB=1) errs",
+			logger.Error("keyval-db valkey/NewClient(DB=1) errs",
 				"err", err1, "type", descriptive_string(err1))
 			panic(nil)
 		}
@@ -382,7 +386,7 @@ func make_keyval_table(conf *db_conf, fail_at_once bool) *keyval_table {
 		SelectDB:    storage_db,
 	})
 	if err2 != nil {
-		slogger.Error("keyval-db valkey/NewClient(DB=2) errs",
+		logger.Error("keyval-db valkey/NewClient(DB=2) errs",
 			"err", err2, "type", descriptive_string(err2))
 		panic(nil)
 	}
@@ -393,7 +397,7 @@ func make_keyval_table(conf *db_conf, fail_at_once bool) *keyval_table {
 		SelectDB:    process_db,
 	})
 	if err3 != nil {
-		slogger.Error("keyval-db valkey/NewClient(DB=3) errs",
+		logger.Error("keyval-db valkey/NewClient(DB=3) errs",
 			"err", err3, "type", descriptive_string(err3))
 		panic(nil)
 	}
@@ -433,28 +437,29 @@ func make_keyval_table(conf *db_conf, fail_at_once bool) *keyval_table {
 			var w = db.Do(ctx1, db.B().Ping().Build())
 			err4 = w.Error()
 			if err4 == nil {
-				slogger.Debug("Connected to keyval-db", "ep", ep)
+				logger.Debug("Connected to keyval-db", "ep", ep)
 				break
 			} else {
 				if trace_db_set&tracing != 0 {
-					slogger.Debug("Connect to keyval-db failed (sleeping)")
+					logger.Debug("Connect to keyval-db failed (sleeping)")
 				}
 				time.Sleep(10 * time.Second)
 			}
 		}
 		if err4 != nil {
-			slogger.Error("keyval-db Ping(DB=1) timeout",
+			logger.Error("keyval-db Ping(DB=1) timeout",
 				"err", err4, "type", descriptive_string(err4))
 			panic(nil)
 		}
 	}
 
+	t.logger = logger
 	return t
 }
 
-func raise_on_marshaling_error(err error) {
+func raise_on_marshaling_error(t *keyval_table, err error) {
 	if err != nil {
-		slogger.Error("json/Marshal() on keyval-db entry errs", "err", err)
+		t.logger.Error("json/Marshal() on keyval-db entry errs", "err", err)
 		raise(&proxy_exc{
 			"",
 			"",
@@ -465,10 +470,10 @@ func raise_on_marshaling_error(err error) {
 	}
 }
 
-func raise_on_set_error(w *valkey.ValkeyResult) {
+func raise_on_set_error(t *keyval_table, w *valkey.ValkeyResult) {
 	var err = w.Error()
 	if err != nil {
-		slogger.Error("keyval-db set() errs",
+		t.logger.Error("keyval-db set() errs",
 			"err", err, "type", descriptive_string(err))
 		raise(&proxy_exc{
 			"",
@@ -480,10 +485,10 @@ func raise_on_set_error(w *valkey.ValkeyResult) {
 	}
 }
 
-func raise_on_setnx_error(w *valkey.ValkeyResult) {
+func raise_on_setnx_error(t *keyval_table, w *valkey.ValkeyResult) {
 	var err = w.Error()
 	if err != nil {
-		slogger.Error("keyval-db setnx() errs",
+		t.logger.Error("keyval-db setnx() errs",
 			"err", err, "type", descriptive_string(err))
 		raise(&proxy_exc{
 			"",
@@ -497,10 +502,10 @@ func raise_on_setnx_error(w *valkey.ValkeyResult) {
 
 // RAISE_ON_GET_ERROR raises on an error except for a non-existing
 // case.  Existence of an entry is double checked in unmarshaling.
-func raise_on_get_error(w *valkey.ValkeyResult) {
+func raise_on_get_error(t *keyval_table, w *valkey.ValkeyResult) {
 	var err = w.Error()
 	if err != nil && !valkey.IsValkeyNil(err) {
-		slogger.Error("keyval-db get() errs",
+		t.logger.Error("keyval-db get() errs",
 			"err", err, "type", descriptive_string(err))
 		raise(&proxy_exc{
 			"",
@@ -512,10 +517,10 @@ func raise_on_get_error(w *valkey.ValkeyResult) {
 	}
 }
 
-func check_on_del_failure(w *valkey.ValkeyResult) bool {
+func check_on_del_failure(t *keyval_table, w *valkey.ValkeyResult) bool {
 	var n, err = w.AsInt64()
 	if err != nil {
-		slogger.Error("keyval-db del() errs",
+		t.logger.Error("keyval-db del() errs",
 			"err", err, "type", descriptive_string(err))
 		raise(&proxy_exc{
 			"",
@@ -528,10 +533,10 @@ func check_on_del_failure(w *valkey.ValkeyResult) bool {
 	return n == 1
 }
 
-func raise_on_del_failure(w *valkey.ValkeyResult) {
+func raise_on_del_failure(t *keyval_table, w *valkey.ValkeyResult) {
 	var n, err = w.AsInt64()
 	if err != nil {
-		slogger.Error("keyval-db del() errs",
+		t.logger.Error("keyval-db del() errs",
 			"err", err, "type", descriptive_string(err))
 		raise(&proxy_exc{
 			"",
@@ -542,7 +547,7 @@ func raise_on_del_failure(w *valkey.ValkeyResult) {
 		})
 	}
 	if n != 1 {
-		slogger.Error("db-del() no entry")
+		t.logger.Error("db-del() no entry")
 		raise(&proxy_exc{
 			"",
 			"",
@@ -555,10 +560,10 @@ func raise_on_del_failure(w *valkey.ValkeyResult) {
 
 // CHECK_ON_EXPIRE_FAILURE raises on an error except for a
 // non-existing case.  It returns NG when a key does not exist.
-func check_on_expire_failure(w *valkey.ValkeyResult) bool {
+func check_on_expire_failure(t *keyval_table, w *valkey.ValkeyResult) bool {
 	var ok, err = w.AsBool()
 	if err != nil {
-		slogger.Error("keyval-db expire() errs",
+		t.logger.Error("keyval-db expire() errs",
 			"err", err, "type", descriptive_string(err))
 		raise(&proxy_exc{
 			"",
@@ -578,7 +583,7 @@ func set_conf(t *keyval_table, conf lens3_conf) {
 	case *mux_conf:
 		var sub = conf1.Subject
 		if !(sub == "mux" || (len(sub) >= 5 && sub[:4] == "mux:")) {
-			slogger.Error("Bad conf; subject≠mux")
+			t.logger.Error("Bad conf; subject≠mux")
 			panic(nil)
 		}
 		//fmt.Println("set mux-conf")
@@ -586,13 +591,13 @@ func set_conf(t *keyval_table, conf lens3_conf) {
 	case *reg_conf:
 		var sub = conf1.Subject
 		if !(sub == "reg") {
-			slogger.Error("Bad conf; subject≠reg")
+			t.logger.Error("Bad conf; subject≠reg")
 			panic(nil)
 		}
 		//fmt.Println("set reg-conf")
 		db_set_with_prefix(t, db_conf_prefix, sub, conf1)
 	default:
-		slogger.Error("Bad conf; type≠mux_conf nor type≠reg_conf",
+		t.logger.Error("Bad conf; type≠mux_conf nor type≠reg_conf",
 			"type", fmt.Sprintf("%T", conf))
 		panic(nil)
 	}
@@ -617,7 +622,7 @@ func list_confs(t *keyval_table) []*lens3_conf {
 		case sub == "reg":
 			v = get_reg_conf(t, sub)
 		default:
-			slogger.Error("Bad subject name", "name", sub)
+			t.logger.Error("Bad subject name", "name", sub)
 			panic(nil)
 		}
 		if v != nil {
@@ -627,22 +632,26 @@ func list_confs(t *keyval_table) []*lens3_conf {
 	return confs
 }
 
+// GET_MUX_CONF returns a configuration for MUX.  The logger is the
+// "early"-logger which logs to stdout.
 func get_mux_conf(t *keyval_table, sub string) *mux_conf {
 	assert_fatal(sub == "mux" || (len(sub) >= 5 && sub[:4] == "mux:"))
 	var data mux_conf
 	var ok = db_get_with_prefix(t, db_conf_prefix, sub, &data)
 	if ok {
-		check_mux_conf(&data)
+		check_mux_conf(&data, t.logger)
 	}
 	return ITE(ok, &data, nil)
 }
 
+// GET_REG_CONF returns a configuration for REG.  The logger is the
+// "early"-logger which logs to stdout.
 func get_reg_conf(t *keyval_table, sub string) *reg_conf {
 	assert_fatal(sub == "reg")
 	var data reg_conf
 	var ok = db_get_with_prefix(t, db_conf_prefix, sub, &data)
 	if ok {
-		check_reg_conf(&data)
+		check_reg_conf(&data, t.logger)
 	}
 	return ITE(ok, &data, nil)
 }
@@ -659,7 +668,7 @@ func add_user(t *keyval_table, u *user_record) {
 	if claim != "" {
 		var claiminguser = get_user_claim(t, claim)
 		if claiminguser != nil && claiminguser.Uid != uid {
-			slogger.Error("Bad conflicting uid claims",
+			t.logger.Error("Bad conflicting uid claims",
 				"claim", claim, "uid1", uid, "uid2", claiminguser.Uid)
 			raise(&proxy_exc{
 				"",
@@ -749,13 +758,13 @@ func clear_user_claim(t *keyval_table, uid string) {
 			continue
 		}
 		if trace_db_set&tracing != 0 {
-			slogger.Debug("DB: del", "key", k)
+			t.logger.Debug("DB: del", "key", k)
 		}
 		var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
 		defer cancel()
 		//var w = db.Del(ctx1, k)
 		var w = db.Do(ctx1, db.B().Del().Key(k).Build())
-		raise_on_del_failure(&w)
+		raise_on_del_failure(t, &w)
 	}
 }
 
@@ -853,30 +862,19 @@ func list_bucket_directories(t *keyval_table) []*bucket_directory_record {
 	return dirs
 }
 
-func set_blurred_state__(t *keyval_table, pool string, state pool_state, reason pool_reason) {
-	var now int64 = time.Now().Unix()
-	var data = &blurred_state_record{
-		Pool:      pool,
-		State:     state,
-		Reason:    reason,
-		Timestamp: now,
-	}
-	set_blurred_state(t, pool, data)
-}
-
-func set_blurred_state(t *keyval_table, pool string, data *blurred_state_record) {
+func set_approximate_state(t *keyval_table, pool string, data *approximate_state_record) {
 	assert_fatal(data.Pool == pool)
-	db_set_with_prefix(t, db_blurred_state_prefix, pool, data)
+	db_set_with_prefix(t, db_approximate_state_prefix, pool, data)
 }
 
-func get_blurred_state(t *keyval_table, pool string) *blurred_state_record {
-	var data blurred_state_record
-	var ok = db_get_with_prefix(t, db_blurred_state_prefix, pool, &data)
+func get_approximate_state(t *keyval_table, pool string) *approximate_state_record {
+	var data approximate_state_record
+	var ok = db_get_with_prefix(t, db_approximate_state_prefix, pool, &data)
 	return ITE(ok, &data, nil)
 }
 
-func delete_blurred_state(t *keyval_table, pool string) {
-	db_del_with_prefix(t, db_blurred_state_prefix, pool)
+func delete_approximate_state(t *keyval_table, pool string) {
+	db_del_with_prefix(t, db_approximate_state_prefix, pool)
 }
 
 // SET_EX_BACKEND_MUTEX makes an exclusion entry for a backend.  It
@@ -1058,7 +1056,7 @@ func list_pool_timestamps(t *keyval_table) []*name_timestamp_pair {
 	for _, pool := range poollist {
 		var ts = get_pool_timestamp(t, pool)
 		if ts == 0 {
-			slogger.Debug("intenal: list_pool_timestamps failed",
+			t.logger.Debug("intenal: list_pool_timestamps failed",
 				"pool", pool)
 			continue
 		}
@@ -1074,7 +1072,7 @@ func clean_pool_timestamps(t *keyval_table) {
 	for _, k := range ee {
 		var pool = k[len(prefix):]
 		if !slices.Contains(poollist, pool) {
-			slogger.Warn("Removing junk timestamp entry in keyval-db",
+			t.logger.Warn("Removing junk timestamp entry in keyval-db",
 				"pool", pool)
 			delete_pool_timestamp(t, pool)
 		}
@@ -1104,7 +1102,7 @@ func list_user_timestamps(t *keyval_table) []*name_timestamp_pair {
 	for _, uid := range userlist {
 		var ts = get_user_timestamp(t, uid)
 		if ts == 0 {
-			slogger.Debug("intenal: list_user_timestamps failed",
+			t.logger.Debug("intenal: list_user_timestamps failed",
 				"user", uid)
 			continue
 		}
@@ -1120,7 +1118,7 @@ func clean_user_timestamps(t *keyval_table) {
 	for _, k := range ee {
 		var uid = k[len(prefix):]
 		if !slices.Contains(userlist, uid) {
-			slogger.Warn("Removing junk timestamp entry in keyval-db",
+			t.logger.Warn("Removing junk timestamp entry in keyval-db",
 				"user", uid)
 			delete_user_timestamp(t, uid)
 		}
@@ -1155,16 +1153,16 @@ func set_with_unique_id_loop(t *keyval_table, prefix string, data any, generator
 	for {
 		var id = generator()
 		if trace_db_set&tracing != 0 {
-			slogger.Debug("DB: setnx", "key", (prefix + id))
+			t.logger.Debug("DB: setnx", "key", (prefix + id))
 		}
 		var v, err = json.Marshal(data)
-		raise_on_marshaling_error(err)
+		raise_on_marshaling_error(t, err)
 		var k = (prefix + id)
 		var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
 		defer cancel()
 		//var w = db.SetNX(ctx1, k, v, db_no_expiration)
 		var w = db.Do(ctx1, db.B().Setnx().Key(k).Value(string(v)).Build())
-		raise_on_setnx_error(&w)
+		raise_on_setnx_error(t, &w)
 		var ok, _ = w.AsBool()
 		if ok {
 			return id
@@ -1172,7 +1170,7 @@ func set_with_unique_id_loop(t *keyval_table, prefix string, data any, generator
 		// Retry.
 		counter += 1
 		if !(counter < limit_of_id_generation_loop) {
-			slogger.Error("Unique key generation failed (fatal)")
+			t.logger.Error("Unique key generation failed (fatal)")
 			panic(nil)
 		}
 	}
@@ -1226,7 +1224,7 @@ func delete_secret_key__(t *keyval_table, key string) {
 	defer cancel()
 	//var w = db.Del(ctx1, k)
 	var w = db.Do(ctx1, db.B().Del().Key(k).Build())
-	raise_on_del_failure(&w)
+	raise_on_del_failure(t, &w)
 }
 
 // LIST_SECRETS_OF_POOL lists secrets (access keys) of a pool.  It
@@ -1269,39 +1267,39 @@ func get_csrf_token(t *keyval_table, uid string) *csrf_token_record {
 
 func db_set_with_prefix(t *keyval_table, prefix string, key string, val any) {
 	if trace_db_set&tracing != 0 {
-		slogger.Debug("DB: set", "key", (prefix + key))
+		t.logger.Debug("DB: set", "key", (prefix + key))
 	}
 	var db = t.prefix_to_db[prefix]
 	var k = (prefix + key)
 	var v, err = json.Marshal(val)
-	raise_on_marshaling_error(err)
+	raise_on_marshaling_error(t, err)
 	var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
 	defer cancel()
 	//var w = db.Set(ctx1, k, v, db_no_expiration)
 	var w = db.Do(ctx1, db.B().Set().Key(k).Value(string(v)).Build())
-	raise_on_set_error(&w)
+	raise_on_set_error(t, &w)
 }
 
 func db_setnx_with_prefix(t *keyval_table, prefix string, key string, val any) bool {
 	if trace_db_set&tracing != 0 {
-		slogger.Debug("DB: setnx", "key", (prefix + key))
+		t.logger.Debug("DB: setnx", "key", (prefix + key))
 	}
 	var db = t.prefix_to_db[prefix]
 	var k = (prefix + key)
 	var v, err = json.Marshal(val)
-	raise_on_marshaling_error(err)
+	raise_on_marshaling_error(t, err)
 	var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
 	defer cancel()
 	//var w = db.SetNX(ctx1, k, v, db_no_expiration)
 	var w = db.Do(ctx1, db.B().Setnx().Key(k).Value(string(v)).Build())
-	raise_on_setnx_error(&w)
+	raise_on_setnx_error(t, &w)
 	var ok, _ = w.AsBool()
 	return ok
 }
 
 func db_get_with_prefix(t *keyval_table, prefix string, key string, val any) bool {
 	if trace_db_get&tracing != 0 {
-		slogger.Debug("DB: get", "key", (prefix + key))
+		t.logger.Debug("DB: get", "key", (prefix + key))
 	}
 	var db = t.prefix_to_db[prefix]
 	var k = (prefix + key)
@@ -1309,14 +1307,14 @@ func db_get_with_prefix(t *keyval_table, prefix string, key string, val any) boo
 	defer cancel()
 	//var w = db.Get(ctx1, k)
 	var w = db.Do(ctx1, db.B().Get().Key(k).Build())
-	raise_on_get_error(&w)
-	var ok = load_db_data(&w, val)
+	raise_on_get_error(t, &w)
+	var ok = load_db_data(t, &w, val)
 	return ok
 }
 
 func db_expire_with_prefix(t *keyval_table, prefix string, key string, sec int64) bool {
 	if trace_db_set&tracing != 0 {
-		slogger.Debug("DB: expire", "key", (prefix + key), "sec", sec)
+		t.logger.Debug("DB: expire", "key", (prefix + key), "sec", sec)
 	}
 	var db = t.prefix_to_db[prefix]
 	var k = (prefix + key)
@@ -1324,14 +1322,14 @@ func db_expire_with_prefix(t *keyval_table, prefix string, key string, sec int64
 	defer cancel()
 	//var w = db.Expire(ctx1, k, sec)
 	var w = db.Do(ctx1, db.B().Expire().Key(k).Seconds(sec).Build())
-	var ok = check_on_expire_failure(&w)
+	var ok = check_on_expire_failure(t, &w)
 	return ok
 }
 
 // DB_DEL_WITH_PREFIX returns OK/NG, but usually, failure is ignored.
 func db_del_with_prefix(t *keyval_table, prefix string, key string) bool {
 	if trace_db_set&tracing != 0 {
-		slogger.Debug("DB: del", "key", (prefix + key))
+		t.logger.Debug("DB: del", "key", (prefix + key))
 	}
 	var db = t.prefix_to_db[prefix]
 	var k = (prefix + key)
@@ -1339,7 +1337,7 @@ func db_del_with_prefix(t *keyval_table, prefix string, key string) bool {
 	defer cancel()
 	//var w = db.Del(ctx1, k)
 	var w = db.Do(ctx1, db.B().Del().Key(k).Build())
-	var ok = check_on_del_failure(&w)
+	var ok = check_on_del_failure(t, &w)
 	return ok
 }
 
@@ -1351,21 +1349,21 @@ func db_del_with_prefix_raise__(t *keyval_table, prefix string, key string) {
 	defer cancel()
 	//var w = db.Del(ctx1, k)
 	var w = db.Do(ctx1, db.B().Del().Key(k).Build())
-	raise_on_del_failure(&w)
+	raise_on_del_failure(t, &w)
 }
 
 // LOAD_DATA fills a structure by json data in the keyval-db.  It
 // returns true or false about an entry is found.  Note that a get
 // with valkey.IsValkeyNil(err) means a non-exising entry.  An error
 // for the keyval-db is already checked by raise_on_get_error().
-func load_db_data(w *valkey.ValkeyResult, data any) bool {
+func load_db_data(t *keyval_table, w *valkey.ValkeyResult, data any) bool {
 	var b, err1 = w.AsBytes()
 	if err1 != nil {
 		if valkey.IsValkeyNil(err1) {
 			return false
 		} else {
 			// (NEVER).
-			slogger.Error("Bad value in keyval-db",
+			t.logger.Error("Bad value in keyval-db",
 				"err", err1, "type", descriptive_string(err1))
 			raise(&proxy_exc{
 				"",
@@ -1390,7 +1388,7 @@ func load_db_data(w *valkey.ValkeyResult, data any) bool {
 	d.DisallowUnknownFields()
 	var err2 = d.Decode(data)
 	if err2 != nil {
-		slogger.Error("json/Decoder.Decode() on keyval-db entry errs",
+		t.logger.Error("json/Decoder.Decode() on keyval-db entry errs",
 			"err", err2)
 		raise(&proxy_exc{
 			"",
@@ -1410,7 +1408,7 @@ func load_db_data(w *valkey.ValkeyResult, data any) bool {
 // getting values.
 func scan_table(t *keyval_table, prefix string, target string) []string {
 	if trace_db_get&tracing != 0 {
-		slogger.Debug("DB: scan", "key", (prefix + target))
+		t.logger.Debug("DB: scan", "key", (prefix + target))
 	}
 	var db = t.prefix_to_db[prefix]
 	var pattern = prefix + target
@@ -1424,7 +1422,7 @@ func scan_table(t *keyval_table, prefix string, target string) []string {
 		var w = db.Do(ctx1, db.B().Scan().Cursor(cur).Match(pattern).Build())
 		var e, err = w.AsScanEntry()
 		if err != nil {
-			slogger.Error("keyval-db scan() errs",
+			t.logger.Error("keyval-db scan() errs",
 				"err", err, "type", descriptive_string(err))
 			panic(nil)
 		}
@@ -1461,7 +1459,7 @@ func clear_db(t *keyval_table, db valkey.Client, prefix string) {
 		var w1 = db.Do(ctx1, db.B().Scan().Cursor(cur).Match(pattern).Build())
 		var e, err1 = w1.AsScanEntry()
 		if err1 != nil {
-			slogger.Error("keyval-db scan() errs (ignored)",
+			t.logger.Error("keyval-db scan() errs (ignored)",
 				"err", err1, "type", descriptive_string(err1))
 			return
 		}
@@ -1471,7 +1469,7 @@ func clear_db(t *keyval_table, db valkey.Client, prefix string) {
 			var w2 = db.Do(ctx2, db.B().Del().Key(k).Build())
 			var err2 = w2.Error()
 			if err2 != nil {
-				slogger.Error("keyval-db del() errs (ignored)",
+				t.logger.Error("keyval-db del() errs (ignored)",
 					"err", err2, "type", descriptive_string(err2))
 			}
 			//raise_when_db_fail(w.Err())
@@ -1488,7 +1486,7 @@ func clear_db(t *keyval_table, db valkey.Client, prefix string) {
 func db_raw_table(t *keyval_table, name string) valkey.Client {
 	var db, ok = t.db_name_to_db[name]
 	if !ok {
-		slogger.Error("Bad keyval-db name", "name", name)
+		t.logger.Error("Bad keyval-db name", "name", name)
 		return nil
 	}
 	return db
@@ -1497,25 +1495,25 @@ func db_raw_table(t *keyval_table, name string) valkey.Client {
 // SET_DB_RAW sets key-value in the keyval-db intact.
 func set_db_raw(t *keyval_table, kv [2]string) {
 	if kv[0] == "" || kv[1] == "" {
-		slogger.Error("Empty keyval to keyval-db", "kv", kv)
+		t.logger.Error("Empty keyval to keyval-db", "kv", kv)
 		panic(nil)
 	}
 	var prefix = kv[0][:3]
 	var db = t.prefix_to_db[prefix]
 	if db == nil {
-		slogger.Error("Bad prefix to keyval-db", "prefix", prefix)
+		t.logger.Error("Bad prefix to keyval-db", "prefix", prefix)
 		panic(nil)
 	}
 	var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
 	defer cancel()
 	//var w = db.Set(ctx1, kv[0], kv[1], db_no_expiration)
 	var w = db.Do(ctx1, db.B().Set().Key(kv[0]).Value(kv[1]).Build())
-	raise_on_set_error(&w)
+	raise_on_set_error(t, &w)
 }
 
 func delete_db_raw_by_adm(t *keyval_table, key string) {
 	if key == "" {
-		slogger.Error("Empty key to keyval-db")
+		t.logger.Error("Empty key to keyval-db")
 		panic(nil)
 	}
 	for name, db := range t.db_name_to_db {
@@ -1546,7 +1544,7 @@ func scan_db_raw(t *keyval_table, dbname string) []map[string]string {
 		var w = db.Do(ctx1, db.B().Scan().Cursor(cur).Match("*").Build())
 		var e, err = w.AsScanEntry()
 		if err != nil {
-			slogger.Error("keyval-db scan() errs (ignored)",
+			t.logger.Error("keyval-db scan() errs (ignored)",
 				"err", err, "type", descriptive_string(err))
 			return []map[string]string{}
 		}
@@ -1575,7 +1573,7 @@ func make_key_value_pairs(t *keyval_table, db valkey.Client, ee []string) []map[
 			if valkey.IsValkeyNil(err1) {
 				continue
 			} else {
-				slogger.Error("keyval-db get() errs",
+				t.logger.Error("keyval-db get() errs",
 					"err", err1, "type", descriptive_string(err1))
 				panic(nil)
 			}

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -68,8 +69,8 @@ func (f *backend_minio_factory) make_delegate(pool string) backend_delegate {
 	return d
 }
 
-func (f *backend_minio_factory) clean_at_exit() {
-	clean_minio_tmp()
+func (f *backend_minio_factory) clean_at_exit(logger *slog.Logger) {
+	clean_minio_tmp(logger)
 }
 
 func finalize_backend_minio(d *backend_minio) {
@@ -82,7 +83,7 @@ func finalize_backend_minio(d *backend_minio) {
 func (d *backend_minio) get_factory() *backend_minio_factory {
 	var f, ok = (d.factory).(*backend_minio_factory)
 	if !ok {
-		slogger.Error("BE(minio): BAD-IMPL backend factory unknown",
+		logger_0.Error("BE(minio): BAD-IMPL backend factory unknown",
 			"factory", d.factory)
 		panic(nil)
 	}
@@ -113,7 +114,7 @@ func (d *backend_minio) make_command_line(port int, directory string) backend_co
 // of an error with messages "level=FATAL", it diagnoses the cause of
 // the error by the first fatal message.  It returns a retry response
 // only on the port-in-use error.
-func (d *backend_minio) check_startup(stream stdio_stream_indicator, ss []string) *start_result {
+func (d *backend_minio) check_startup(stream stdio_stream_indicator, ss []string, logger *slog.Logger) *start_result {
 	//fmt.Println("minio.check_startup(%v)", ss)
 	if stream == on_stderr {
 		return &start_result{
@@ -153,7 +154,7 @@ func (d *backend_minio) check_startup(stream stdio_stream_indicator, ss []string
 		assert_fatal(m2 != nil)
 		var m3 = get_string(m2, "message")
 		if trace_proc&tracing != 0 {
-			slogger.Debug("BE(minio): Got an expected message", "output", m3)
+			logger.Debug("BE(minio): Got an expected message", "output", m3)
 		}
 		return &start_result{
 			start_state: start_started,
@@ -166,25 +167,25 @@ func (d *backend_minio) check_startup(stream stdio_stream_indicator, ss []string
 	}
 }
 
-func (d *backend_minio) establish() error {
+func (d *backend_minio) establish(logger *slog.Logger) error {
 	//fmt.Println("minio.establish()")
-	var v1 = minio_mc_alias_set(d)
+	var v1 = minio_mc_alias_set(d, logger)
 	return v1.err
 }
 
 // SHUTDOWN stops a server using MC admin-service-stop.
-func (d *backend_minio) shutdown() error {
+func (d *backend_minio) shutdown(logger *slog.Logger) error {
 	//fmt.Println("minio.shutdown()")
-	slogger.Debug("BE(minio): Stopping MinIO",
+	logger.Debug("BE(minio): Stopping MinIO",
 		"pool", d.Pool, "pid", d.cmd.Process.Pid)
 	//assert_fatal(d.mc_alias != nil)
-	var v1 = minio_mc_admin_service_stop(d)
+	var v1 = minio_mc_admin_service_stop(d, logger)
 	return v1.err
 }
 
 // HEARTBEAT http-gets the path "/minio/health/live" and returns an
 // http status code.  It returns 500 on a connection failure.
-func (d *backend_minio) heartbeat(*manager) int {
+func (d *backend_minio) heartbeat(w *manager, logger *slog.Logger) int {
 	//fmt.Println("minio.heartbeat()")
 
 	var f = d.get_factory()
@@ -200,14 +201,14 @@ func (d *backend_minio) heartbeat(*manager) int {
 	var c = d.heartbeat_client
 	var rspn, err1 = c.Get(d.heartbeat_url)
 	if err1 != nil {
-		slogger.Info("BE(minio): Heartbeat failed in http/Client.Get()",
+		logger.Info("BE(minio): Heartbeat failed in http.Client.Get()",
 			"pool", d.Pool, "err", err1)
 		return http_500_internal_server_error
 	}
 	defer rspn.Body.Close()
 	var _, err2 = io.ReadAll(rspn.Body)
 	if err2 != nil {
-		slogger.Info("BE(minio): Heartbeat failed in io/ReadAll()",
+		logger.Info("BE(minio): Heartbeat failed in io.ReadAll()",
 			"pool", d.Pool, "err", err2)
 		return http_500_internal_server_error
 	}
@@ -244,10 +245,10 @@ type minio_mc_result struct {
 // "error/cause/error/Code" slot will be a keyword of useful
 // information if it exists.  A returned 2-tuple may have a whole
 // message instead of a cause-code if the slot is missing.
-func simplify_minio_mc_message(s []byte) *minio_mc_result {
+func simplify_minio_mc_message(s []byte, logger *slog.Logger) *minio_mc_result {
 	var mm, ok = decode_json([]string{string(s)})
 	if !ok {
-		slogger.Error("BE(minio): json decode failed")
+		logger.Error("BE(minio): json decode failed")
 		var err1 = fmt.Errorf("MC-command returned a bad json: %q", s)
 		return &minio_mc_result{nil, err1}
 	}
@@ -258,7 +259,7 @@ func simplify_minio_mc_message(s []byte) *minio_mc_result {
 			// Skip.
 		case "error":
 			if len(mm) != 1 {
-				slogger.Warn("BE(minio): MC-command with multiple errors",
+				logger.Warn("BE(minio): MC-command with multiple errors",
 					"stdout", mm)
 			}
 			var m1 = get_string(m, "error", "cause", "error", "Code")
@@ -279,7 +280,7 @@ func simplify_minio_mc_message(s []byte) *minio_mc_result {
 }
 
 // EXECUTE_MINIO_MC_CMD runs an MC-command and checks its output.
-func execute_minio_mc_cmd(d *backend_minio, synopsis string, command []string) *minio_mc_result {
+func execute_minio_mc_cmd(d *backend_minio, synopsis string, command []string, logger *slog.Logger) *minio_mc_result {
 	assert_fatal(d.mc_alias != "" && d.mc_config_dir != "")
 	var f = d.get_factory()
 	var argv = []string{
@@ -292,33 +293,33 @@ func execute_minio_mc_cmd(d *backend_minio, synopsis string, command []string) *
 	var timeout = (f.Backend_start_timeout_ms).time_duration()
 	var verbose = (trace_proc&tracing != 0)
 	var stdouts, stderrs, err1 = execute_command(synopsis, argv, d.environ,
-		timeout, "BE(minio)", verbose)
+		timeout, "BE(minio)", verbose, logger)
 	if err1 != nil {
 		return &minio_mc_result{nil, err1}
 	}
 
-	var v1 = simplify_minio_mc_message([]byte(stdouts))
+	var v1 = simplify_minio_mc_message([]byte(stdouts), logger)
 	if v1.err == nil {
 		if trace_proc&tracing != 0 {
-			slogger.Debug("BE(minio): MC-command Okay", "cmd", command)
+			logger.Debug("BE(minio): MC-command Okay", "cmd", command)
 		} else {
-			slogger.Debug("BE(minio): MC-command Okay", "cmd", synopsis)
+			logger.Debug("BE(minio): MC-command Okay", "cmd", synopsis)
 		}
 	} else {
-		slogger.Error("BE(minio): MC-command failed",
+		logger.Error("BE(minio): MC-command failed",
 			"cmd", argv, "err", v1.err,
 			"stdout", stdouts, "stderr", stderrs)
 	}
 	return v1
 }
 
-func minio_mc_alias_set(d *backend_minio) *minio_mc_result {
+func minio_mc_alias_set(d *backend_minio, logger *slog.Logger) *minio_mc_result {
 	assert_fatal(d.mc_alias == "" && d.mc_config_dir == "")
 	var rnd = strings.ToLower(random_string(12))
 	var url = fmt.Sprintf("http://%s", d.be.Backend_ep)
 	var dir, err1 = os.MkdirTemp("", "lens3-mc-")
 	if err1 != nil {
-		slogger.Error("BE(minio): os/MkdirTemp() failed", "err", err1)
+		logger.Error("BE(minio): os.MkdirTemp() failed", "err", err1)
 		return &minio_mc_result{nil, err1}
 	}
 	d.mc_alias = fmt.Sprintf("pool-%s-%s", d.Pool, rnd)
@@ -326,7 +327,7 @@ func minio_mc_alias_set(d *backend_minio) *minio_mc_result {
 	var v1 = execute_minio_mc_cmd(d, "alias_set",
 		[]string{"alias", "set", d.mc_alias, url,
 			d.be.Root_access, d.be.Root_secret,
-			"--api", "S3v4"})
+			"--api", "S3v4"}, logger)
 	if v1.err != nil {
 		d.mc_alias = ""
 		d.mc_config_dir = ""
@@ -334,10 +335,10 @@ func minio_mc_alias_set(d *backend_minio) *minio_mc_result {
 	return v1
 }
 
-func minio_mc_alias_remove(d *backend_minio) *minio_mc_result {
+func minio_mc_alias_remove(d *backend_minio, logger *slog.Logger) *minio_mc_result {
 	assert_fatal(d.mc_alias != "" && d.mc_config_dir != "")
 	var v1 = execute_minio_mc_cmd(d, "alias_remove",
-		[]string{"alias", "remove", d.mc_alias})
+		[]string{"alias", "remove", d.mc_alias}, logger)
 	if v1.err == nil {
 		d.mc_alias = ""
 		d.mc_config_dir = ""
@@ -345,28 +346,28 @@ func minio_mc_alias_remove(d *backend_minio) *minio_mc_result {
 	return v1
 }
 
-func minio_mc_admin_service_stop(d *backend_minio) *minio_mc_result {
+func minio_mc_admin_service_stop(d *backend_minio, logger *slog.Logger) *minio_mc_result {
 	var v1 = execute_minio_mc_cmd(d, "admin_service_stop",
-		[]string{"admin", "service", "stop", d.mc_alias})
+		[]string{"admin", "service", "stop", d.mc_alias}, logger)
 	return v1
 }
 
-func clean_minio_tmp() {
+func clean_minio_tmp(logger *slog.Logger) {
 	var d = os.TempDir()
 	var pattern = fmt.Sprintf("%s/lens3-mc-*", d)
 	var matches, err1 = filepath.Glob(pattern)
 	if err1 != nil {
 		// (err1 : filepath.ErrBadPattern).
-		slogger.Error("BE(minio): filepath/Glob() failed",
+		logger.Error("BE(minio): filepath.Glob() failed",
 			"pattern", pattern, "err", err1)
 		return
 	}
 	for _, p := range matches {
-		slogger.Debug("BE(minio): Clean by os/RemoveAll()", "path", p)
+		logger.Debug("BE(minio): Clean by os.RemoveAll()", "path", p)
 		var err2 = os.RemoveAll(p)
 		if err2 != nil {
 			// (err2 : *os.PathError).
-			slogger.Error("BE(minio): os/RemoveAll() failed",
+			logger.Error("BE(minio): os.RemoveAll() failed",
 				"path", p, "err", err2)
 		}
 	}

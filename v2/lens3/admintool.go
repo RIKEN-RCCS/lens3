@@ -20,15 +20,10 @@ import (
 	"time"
 )
 
-func Run_lenticularis_admin() {
-	slog.SetLogLoggerLevel(slog.LevelDebug)
-	make_adm_command_table()
-	adm_toplevel()
-}
-
 type adm struct {
 	dbconf *db_conf
 	table  *keyval_table
+	logger *slog.Logger
 }
 
 type cmd struct {
@@ -45,13 +40,12 @@ type dump_data struct {
 
 var cmd_table = map[string]*cmd{}
 
-func make_adm_command_table() {
-	for _, cmd := range cmd_list {
-		var p = strings.Index(cmd.synopsis, " ")
-		var i = ITE(p != -1, p, len(cmd.synopsis))
-		var name = cmd.synopsis[:i]
-		cmd_table[name] = cmd
-	}
+func Run_lenticularis_admin() {
+	logger_0 = slog.Default()
+	slog.SetLogLoggerLevel(slog.LevelDebug)
+	logger_0.Debug("Admintool", "version", lens3_version)
+	make_adm_command_table()
+	adm_toplevel()
 }
 
 func adm_toplevel() {
@@ -71,7 +65,7 @@ func adm_toplevel() {
 	}
 
 	assert_fatal(flag_conf != nil)
-	var dbconf = read_db_conf(*flag_conf)
+	var dbconf = read_db_conf(*flag_conf, logger_0)
 	if dbconf == nil {
 		return
 	}
@@ -79,10 +73,11 @@ func adm_toplevel() {
 	if flag_conf != nil {
 		tracing = 0xff
 	}
-	var t = make_keyval_table(dbconf, true)
+	var t = make_keyval_table(dbconf, true, logger_0)
 	var adm = &adm{
 		dbconf: dbconf,
 		table:  t,
+		logger: logger_0,
 	}
 
 	if strings.EqualFold(args[0], "help") {
@@ -108,6 +103,15 @@ func adm_toplevel() {
 		return
 	}
 	c2.run(adm, args)
+}
+
+func make_adm_command_table() {
+	for _, cmd := range cmd_list {
+		var p = strings.Index(cmd.synopsis, " ")
+		var i = ITE(p != -1, p, len(cmd.synopsis))
+		var name = cmd.synopsis[:i]
+		cmd_table[name] = cmd
+	}
 }
 
 func adm_dump_user(t *keyval_table, filename string) {
@@ -543,7 +547,7 @@ var cmd_list = []*cmd{
 	is needed to make the changes effective.`,
 
 		run: func(adm *adm, args []string) {
-			var conf = read_conf(args[1])
+			var conf = read_conf_from_file(args[1], adm.logger)
 			if conf == nil {
 				panic(nil)
 			}

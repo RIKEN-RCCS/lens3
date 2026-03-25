@@ -37,12 +37,12 @@
     "path": "/usr/local/bin/rclone",
     "command_options": []
   },
-  "log": {
+  "access_log": {
     "access_log_file": "/var/log/lenticularis/lens3-mux-access-log"
   },
   "logging": {
     "logger": {
-      "log_file": "/var/log/lenticularis/lens3-log",
+      "log_file": "/var/log/lenticularis/lens3-mux-log",
       "level": "DEBUG",
       "tracing": 0,
       "source_line": false

@@ -18,11 +18,11 @@ import (
 // POOL_PROP is a description of a pool, a merge of the properties in
 // the keyval-db to fully present it.
 type pool_prop struct {
-	pool_record          `json:"pool_record"`
-	blurred_state_record `json:"blurred_state_record"`
-	user_record          `json:"user_record"`
-	Buckets              []*bucket_record `json:"buckets"`
-	Secrets              []*secret_record `json:"secrets"`
+	pool_record              `json:"pool_record"`
+	approximate_state_record `json:"approximate_state_record"`
+	user_record              `json:"user_record"`
+	Buckets                  []*bucket_record `json:"buckets"`
+	Secrets                  []*secret_record `json:"secrets"`
 }
 
 // GATHER_POOL_PROP reconstructs properties of a pool to display the
@@ -34,7 +34,7 @@ func gather_pool_prop(t *keyval_table, pool string) *pool_prop {
 	var poolprop = pool_prop{}
 	var pooldata = get_pool(t, pool)
 	if pooldata == nil {
-		slogger.Error("Inconsistency in keyval-db: no requested pool",
+		t.logger.Error("Inconsistency in keyval-db: no requested pool",
 			"pool", pool)
 		return nil
 	}
@@ -45,7 +45,7 @@ func gather_pool_prop(t *keyval_table, pool string) *pool_prop {
 
 	var bd = find_bucket_directory_of_pool(t, pool)
 	if !(pooldata.Bucket_directory == bd) {
-		slogger.Error("Inconsistency in keyval-db: bad bucket-directory",
+		t.logger.Error("Inconsistency in keyval-db: bad bucket-directory",
 			"pool", pool, "bd", bd, "need", pooldata.Bucket_directory)
 		inconsistent_db_entires = true
 	}
@@ -65,7 +65,7 @@ func gather_pool_prop(t *keyval_table, pool string) *pool_prop {
 	var uid = poolprop.Owner_uid
 	var u = get_user(t, uid)
 	if u == nil {
-		slogger.Error("Inconsistency in keyval-db: pool without an owner",
+		t.logger.Error("Inconsistency in keyval-db: pool without an owner",
 			"pool", pool, "old-owner", uid)
 		inconsistent_db_entires = true
 	}
@@ -77,7 +77,7 @@ func gather_pool_prop(t *keyval_table, pool string) *pool_prop {
 	var state2, reason2 = check_pool_is_suspened(t, pool)
 	var state, reason = combine_pool_state(state1, reason1, state2, reason2)
 
-	poolprop.blurred_state_record = blurred_state_record{
+	poolprop.approximate_state_record = approximate_state_record{
 		Pool:      pool,
 		State:     state,
 		Reason:    reason,

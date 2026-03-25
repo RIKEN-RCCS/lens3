@@ -26,7 +26,30 @@
     "s3_url": "https://lens3.exmaple.com",
     "footer_banner": "This site is operated by exmaple.com"
   },
-  "log": {
+  "access_log": {
     "access_log_file": "/var/log/lenticularis/lens3-reg-access-log"
+  },
+  "logging": {
+    "logger": {
+      "log_file": "/var/log/lenticularis/lens3-reg-log",
+      "level": "DEBUG",
+      "tracing": 0,
+      "source_line": false
+    },
+    "alert": {
+      "queue": "mqtt",
+      "level": "WARNING",
+      "off": true
+    },
+    "syslog": {
+      "facility": "LOCAL7"
+    },
+    "mqtt": {
+      "ep": "localhost:1883",
+      "client": "lens3-logger",
+      "topic": "Lens3 Alert",
+      "username": "lens3",
+      "password": "lEXw0tR6cB5ueTRkSFLZLsjMEPgQ9ah8QeKwdKUZ"
+    }
   }
 }

@@ -29,6 +29,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"regexp"
@@ -79,7 +80,7 @@ func (f *backend_s3baby_factory) make_delegate(pool string) backend_delegate {
 	return d
 }
 
-func (f *backend_s3baby_factory) clean_at_exit() {
+func (f *backend_s3baby_factory) clean_at_exit(logger *slog.Logger) {
 }
 
 func finalize_backend_s3baby(d *backend_s3baby) {
@@ -88,7 +89,7 @@ func finalize_backend_s3baby(d *backend_s3baby) {
 func (d *backend_s3baby) get_factory() *backend_s3baby_factory {
 	var f, ok = (d.factory).(*backend_s3baby_factory)
 	if !ok {
-		slogger.Error("BE(s3baby): BAD-IMPL backend factory unknown",
+		logger_0.Error("BE(s3baby): BAD-IMPL backend factory unknown",
 			"factory", d.factory)
 		panic(nil)
 	}
@@ -120,7 +121,7 @@ func (d *backend_s3baby) make_command_line(port int, directory string) backend_c
 
 // CHECK_STARTUP decides the server state.  It ignores messages on
 // stderr.
-func (d *backend_s3baby) check_startup(stream stdio_stream_indicator, mm []string) *start_result {
+func (d *backend_s3baby) check_startup(stream stdio_stream_indicator, mm []string, logger *slog.Logger) *start_result {
 	if stream == on_stderr {
 		return &start_result{
 			start_state: start_ongoing,
@@ -145,7 +146,7 @@ func (d *backend_s3baby) check_startup(stream stdio_stream_indicator, mm []strin
 	var expected_found, m3 = find_one(msgs, got_s3baby_expected)
 	if expected_found {
 		if trace_proc&tracing != 0 {
-			slogger.Debug("BE(s3baby): Got an expected message", "output", m3)
+			logger.Debug("BE(s3baby): Got an expected message", "output", m3)
 		}
 		return &start_result{
 			start_state: start_started,
@@ -216,25 +217,25 @@ func got_s3baby_port_in_use(kv map[string]string) *start_result {
 	}
 }
 
-func (d *backend_s3baby) establish() error {
+func (d *backend_s3baby) establish(logger *slog.Logger) error {
 	return nil
 }
 
 // SHUTDOWN stops the server.
-func (d *backend_s3baby) shutdown() error {
-	slogger.Debug("BE(s3baby): Stopping s3baby",
+func (d *backend_s3baby) shutdown(logger *slog.Logger) error {
+	logger.Debug("BE(s3baby): Stopping s3baby",
 		"pool", d.Pool, "pid", d.cmd.Process.Pid)
-	var v1 = control_s3baby_server(d, "quit")
+	var v1 = control_s3baby_server(d, "quit", logger)
 	return v1
 }
 
 // HEARTBEAT calls s3.Client.ListBuckets() and returns a status code.
-func (d *backend_s3baby) heartbeat(w *manager) int {
+func (d *backend_s3baby) heartbeat(w *manager, logger *slog.Logger) int {
 	var be = d.be
 	if be == nil {
 		return http_404_not_found
 	}
-	var code = heartbeat_backend(w, be)
+	var code = heartbeat_backend(w, be, logger)
 	return code
 }
 
@@ -242,9 +243,9 @@ func (d *backend_s3baby) heartbeat(w *manager) int {
 // "test/control/control-client.go" in
 // https://github.com/riken-rccs/s3-baby-server
 
-func control_s3baby_server(d *backend_s3baby, command string) error {
+func control_s3baby_server(d *backend_s3baby, command string, logger *slog.Logger) error {
 	if !(command == "quit" || command == "stat") {
-		slogger.Error("BE(s3baby): Bad control command",
+		logger.Error("BE(s3baby): Bad control command",
 			"command", command)
 		var errx = fmt.Errorf("BE(s3baby): Bad control command: %s", command)
 		return errx
@@ -252,7 +253,7 @@ func control_s3baby_server(d *backend_s3baby, command string) error {
 
 	var be = d.be
 	if be == nil {
-		slogger.Error("BE(s3baby): No backend record")
+		logger.Error("BE(s3baby): No backend record")
 		var errx = fmt.Errorf("BE(s3baby): No backend record: pool=%s",
 			d.Pool)
 		return errx
@@ -273,7 +274,7 @@ func control_s3baby_server(d *backend_s3baby, command string) error {
 
 	var r, err4 = http.NewRequestWithContext(ctx, http.MethodPost, url1, body)
 	if err4 != nil {
-		slogger.Debug("BE(s3baby): http.NewRequestWithContext() failed",
+		logger.Debug("BE(s3baby): http.NewRequestWithContext() failed",
 			"url", url1, "error", err4)
 		return err4
 	}
@@ -284,7 +285,7 @@ func control_s3baby_server(d *backend_s3baby, command string) error {
 
 	var err5 = awss3aide.Sign_by_credential(r, ep, keypair)
 	if err5 != nil {
-		slogger.Warn("BE(s3baby): S3-Signing failed",
+		logger.Warn("BE(s3baby): S3-Signing failed",
 			"error", err5)
 		return err5
 	}
@@ -300,7 +301,7 @@ func control_s3baby_server(d *backend_s3baby, command string) error {
 	}
 	var rspn, err6 = c.Do(r)
 	if err6 != nil {
-		slogger.Warn("BE(s3baby): http.Client.Do() failed",
+		logger.Warn("BE(s3baby): http.Client.Do() failed",
 			"error", err6)
 		return err6
 	}
@@ -309,7 +310,7 @@ func control_s3baby_server(d *backend_s3baby, command string) error {
 	if rspn.StatusCode == http.StatusOK {
 		return nil
 	} else {
-		slogger.Warn("BE(s3baby): http.Client.Do() returns not OK",
+		logger.Warn("BE(s3baby): http.Client.Do() returns not OK",
 			"status", rspn.StatusCode)
 		var err8 = fmt.Errorf("BE(s3baby): http.Client.Do() returns=%d",
 			rspn.StatusCode)

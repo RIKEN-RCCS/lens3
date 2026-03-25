@@ -1,20 +1,20 @@
-# Lenticularis-S3 Administration Guide
+# Administration Guide
 
 ## Administration Command (lenticularis-admin)
 
 The "lenticularis-admin" command is used to modify keyval-db entries.
 It is installed in "/usr/local/bin".  The command should typically be
 run on the same host of Lens3 services.  Note that it does not mutex
-accesses with Registrar, and moreover, modifications can make the
+accesses with Registrar.  Moreover, modifications can make the
 contents in the keyval-db inconsistent.
 
 It will print the list of sub-commands by running
 "lenticularis-admin -c lens3.conf".
 
 ```
-lens3$ lenticularis-admin -c lens3.conf
+lenticularis-admin -c lens3.conf
 Or,
-lens3$ lenticularis-admin -c lens3.conf help
+lenticularis-admin -c lens3.conf help
 ```
 
 ### User and Pool Mangement
@@ -22,15 +22,48 @@ lens3$ lenticularis-admin -c lens3.conf help
 "lenticularis-admin" is used to list users or pools.
 
 ```
-lens3$ lenticularis-admin -c lens3.conf show-user
-lens3$ lenticularis-admin -c lens3.conf show-pool
+lenticularis-admin -c lens3.conf show-user
+lenticularis-admin -c lens3.conf show-pool
 ```
 
 It can disable users or pools.
 
 ```
-lens3$ lenticularis-admin -c lens3.conf stop-user true UID
-lens3$ lenticularis-admin -c lens3.conf stop-pool true POOL-NAME
+lenticularis-admin -c lens3.conf stop-user true UID
+lenticularis-admin -c lens3.conf stop-pool true POOL-NAME
+```
+
+### Load the configurations from files
+
+First, view the stored configurations by "lenticularis-admin" command.
+
+```
+lenticularis-admin -c ./lens3.conf show-conf
+```
+
+Loading the configuration to the keyba-db is done via json files.
+Edit the files.
+
+```
+cd /var/lib/lenticularis
+vi mux-conf.json
+vi reg-conf.json
+```
+
+"lenticularis-admin" is used to load the configuration.
+
+```
+lenticularis-admin -c ./lens3.conf load-conf mux-conf.json
+lenticularis-admin -c ./lens3.conf load-conf reg-conf.json
+```
+
+It is better check the syntax of json before loading the
+configuration.  It can be checked by tools such as "jq".  "jq" is a
+popular command-line JSON processor.
+
+```
+lenticularis$ cat mux-conf.json | jq
+lenticularis$ cat reg-conf.json | jq
 ```
 
 ### User Registration
@@ -42,8 +75,8 @@ The user list can be modified by loading a CSV-file.  Loading a
 CSV-file is incremental, that is, it does not reset the whole data.
 
 ```
-lens3$ lenticularis-admin -c lens3.conf load-user USER-LIST.csv
-lens3$ lenticularis-admin -c lens3.conf dump-user > USER-LIST.csv
+lenticularis-admin -c lens3.conf load-user USER-LIST.csv
+lenticularis-admin -c lens3.conf dump-user > USER-LIST.csv
 ```
 
 A CSV-file consists of lines of {ADD, MODIFY, DELETE, ENABLE,

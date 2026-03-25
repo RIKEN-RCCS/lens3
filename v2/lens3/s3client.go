@@ -30,17 +30,18 @@ package lens3
 import (
 	"context"
 	"errors"
+	"log/slog"
+	"time"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go"
 	"github.com/aws/smithy-go/logging"
-	"log/slog"
-	"time"
 )
 
-func list_buckets_in_backend(w *manager, be *backend_record) ([]string, error) {
+func list_buckets_in_backend(w *manager, be *backend_record, logger *slog.Logger) ([]string, error) {
 	var pool = be.Pool
 
 	var session = ""
@@ -53,20 +54,20 @@ func list_buckets_in_backend(w *manager, be *backend_record) ([]string, error) {
 		Credentials:  provider,
 		Region:       region,
 		UsePathStyle: true,
-		Logger:       make_aws_logger(slogger),
+		Logger:       make_aws_logger(logger),
 	}
 	var client *s3.Client = s3.New(options)
 
 	var timeout = (w.Backend_timeout_ms).time_duration()
 	if timeout < time.Duration(3*time.Second) {
-		slogger.Warn("Backend timeout may be too small", "timeout", timeout)
+		logger.Warn("Backend timeout may be too small", "timeout", timeout)
 	}
 	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	var v, err1 = client.ListBuckets(ctx, &s3.ListBucketsInput{})
 	if err1 != nil {
-		var err2 = unwrap_operation_error(err1)
-		slogger.Error("s3/Client.ListBuckets in backend errs",
+		var err2 = unwrap_operation_error(err1, logger)
+		logger.Error("s3.Client.ListBuckets in backend errs",
 			"pool", pool, "err", err2)
 		return nil, err2
 	}
@@ -80,7 +81,7 @@ func list_buckets_in_backend(w *manager, be *backend_record) ([]string, error) {
 	return bkts, nil
 }
 
-func make_bucket_in_backend(w *manager, be *backend_record, bucket *bucket_record) error {
+func make_bucket_in_backend(w *manager, be *backend_record, bucket *bucket_record, logger *slog.Logger) error {
 	var pool = be.Pool
 	var name = bucket.Bucket
 
@@ -94,13 +95,13 @@ func make_bucket_in_backend(w *manager, be *backend_record, bucket *bucket_recor
 		Credentials:  provider,
 		Region:       region,
 		UsePathStyle: true,
-		Logger:       make_aws_logger(slogger),
+		Logger:       make_aws_logger(logger),
 	}
 	var client *s3.Client = s3.New(options)
 
 	var timeout = (w.Backend_timeout_ms).time_duration()
 	if timeout < time.Duration(3*time.Second) {
-		slogger.Warn("Backend timeout may be too small", "timeout", timeout)
+		logger.Warn("Backend timeout may be too small", "timeout", timeout)
 	}
 	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -109,8 +110,8 @@ func make_bucket_in_backend(w *manager, be *backend_record, bucket *bucket_recor
 			Bucket: aws.String(name),
 		})
 	if err1 != nil {
-		var err2 = unwrap_operation_error(err1)
-		slogger.Error("s3/Client.CreateBucket in backend errs",
+		var err2 = unwrap_operation_error(err1, logger)
+		logger.Error("s3.Client.CreateBucket in backend errs",
 			"pool", pool, "bucket", name, "err", err2)
 		return err2
 	}
@@ -121,7 +122,7 @@ func make_bucket_in_backend(w *manager, be *backend_record, bucket *bucket_recor
 // HEARTBEAT_BACKEND calls list buckets in the backend.  An error is
 // an canceled error, because it sets small timeout 1~sec (thus,
 // err1.Err : *aws/RequestCanceledError).
-func heartbeat_backend(w *manager, be *backend_record) int {
+func heartbeat_backend(w *manager, be *backend_record, logger *slog.Logger) int {
 	var session = ""
 	var url1 = ("http://" + be.Backend_ep)
 	var provider = credentials.NewStaticCredentialsProvider(
@@ -132,7 +133,7 @@ func heartbeat_backend(w *manager, be *backend_record) int {
 		Credentials:  provider,
 		Region:       region,
 		UsePathStyle: true,
-		Logger:       make_aws_logger(slogger),
+		Logger:       make_aws_logger(logger),
 	}
 	var client *s3.Client = s3.New(options)
 
@@ -145,12 +146,12 @@ func heartbeat_backend(w *manager, be *backend_record) int {
 		if ok1 {
 			var err3, ok2 = (err2.Err).(*aws.RequestCanceledError)
 			if ok2 {
-				slogger.Warn("Heartbeat failed", "err", err3.Err)
+				logger.Warn("Heartbeat failed", "err", err3.Err)
 			} else {
-				slogger.Warn("Heartbeat failed", "err", err2.Err)
+				logger.Warn("Heartbeat failed", "err", err2.Err)
 			}
 		} else {
-			slogger.Warn("Heartbeat failed", "err", err1)
+			logger.Warn("Heartbeat failed", "err", err1)
 		}
 		return http_400_bad_request
 	}
@@ -189,11 +190,11 @@ func (w *slog_writer) Write(buf []byte) (int, error) {
 // checks smithy/APIError or awshttp/ResponseError.  Note that
 // APIError is more specific than ResponseError as ResponseError
 // includes smithy/CanceledError, but APIError does not.
-func unwrap_operation_error(e1 error) error {
+func unwrap_operation_error(e1 error, logger *slog.Logger) error {
 	var e2 smithy.APIError
 	if errors.As(e1, &e2) {
 		if trace_task&tracing != 0 {
-			slogger.Debug("Unwrap nested error", "APIError", e2)
+			logger.Debug("Unwrap nested error", "APIError", e2)
 		}
 		return e2
 	}
@@ -202,12 +203,12 @@ func unwrap_operation_error(e1 error) error {
 		var e4 = e3.Unwrap()
 		//var body, _ = io.ReadAll(e3.Response.Body)
 		if trace_task&tracing != 0 {
-			slogger.Debug("Unwrap nested error", "ResponseError", e4)
+			logger.Debug("Unwrap nested error", "ResponseError", e4)
 		}
 		return e4
 	}
 	if trace_task&tracing != 0 {
-		slogger.Debug("Unwrap nested error", "OperationError", e1)
+		logger.Debug("Unwrap nested error", "OperationError", e1)
 	}
 	return e1
 }

@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/rand/v2"
 	"net"
 	"os"
@@ -129,7 +130,7 @@ func generate_random_key() string {
 //
 //	var n = get_function_name(cmd.Cancel)
 //	fmt.Println("cmd.Cancel=", n)
-//	"cmd.Cancel= os/exec.CommandContext.func1"
+//	"cmd.Cancel= os.exec.CommandContext.func1"
 func get_function_name(f any) string {
 	return runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name()
 }
@@ -142,7 +143,7 @@ func dump_threads() {
 }
 
 // STRINGS_READER is strings/Reader but for multiple strings.  It
-// skips empty strings.  It implements an io/Reader interface.
+// skips empty strings.  It implements an io.Reader interface.
 type strings_reader struct {
 	ss       []string
 	pos, ind int
@@ -250,12 +251,12 @@ func minimal_environ() []string {
 	return filtered
 }
 
-func convert_hosts_to_addrs(hosts []string) []net.IP {
+func convert_hosts_to_addrs(hosts []string, logger *slog.Logger) []net.IP {
 	var addrs []net.IP
 	for _, h := range hosts {
 		var ips, err1 = net.LookupIP(h)
 		if err1 != nil {
-			slogger.Warn("net/LookupIP() fails", "host", h, "err", err1)
+			logger.Warn("net.LookupIP() fails", "host", h, "err", err1)
 			continue
 		}
 		addrs = append(addrs, ips...)
@@ -320,7 +321,7 @@ func check_claim_naming(s string) bool {
 // returns a message from stdout+stderr and an error.  Note that a
 // timeout kills the process by SIGKILL.  MEMO: Timeout of context
 // returns "context.deadlineExceededError".
-func execute_command(synopsis string, argv []string, environ []string, timeout time.Duration, prefix string, verbose bool) (string, string, error) {
+func execute_command(synopsis string, argv []string, environ []string, timeout time.Duration, prefix string, verbose bool, logger *slog.Logger) (string, string, error) {
 	//var timeout = (time.Duration(timeout_ms) * time.Millisecond)
 	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -339,26 +340,26 @@ func execute_command(synopsis string, argv []string, environ []string, timeout t
 	case nil:
 		// Okay.
 		if verbose {
-			slogger.Debug(prefix+": Command done",
+			logger.Debug(prefix+": Command done",
 				"cmd", argv, "exit", wstatus,
 				"stdout", stdouts, "stderr", stderrs)
 		}
 	case *exec.ExitError:
 		// Not successful.
 		if wstatus == -1 {
-			slogger.Error(prefix+": Command signaled/unfinished",
+			logger.Error(prefix+": Command signaled/unfinished",
 				"cmd", argv, "err", err2,
 				"stdout", stdouts, "stderr", stderrs)
 			return "", "", err2
 		} else {
-			slogger.Error(prefix+": Command failed",
+			logger.Error(prefix+": Command failed",
 				"cmd", argv, "err", err2,
 				"stdout", stdouts, "stderr", stderrs)
 			return "", "", err2
 		}
 	default:
 		// Error.
-		slogger.Error(prefix+": Command failed to run",
+		logger.Error(prefix+": Command failed to run",
 			"cmd", argv, "err", err1,
 			"stdout", stdouts, "stderr", stderrs)
 		return "", "", err1
@@ -439,19 +440,19 @@ func check_stream_eof(is io.Reader, accept_json_empty bool) error {
 	return err2
 }
 
-func check_frontend_proxy_trusted(trusted []net.IP, peer string) bool {
+func check_frontend_proxy_trusted(trusted []net.IP, peer string, logger *slog.Logger) bool {
 	if peer == "" {
-		slogger.Warn("Bad frontend proxy", "peer", peer)
+		logger.Warn("Bad frontend proxy", "peer", peer)
 		return false
 	}
 	var host, _, err1 = net.SplitHostPort(peer)
 	if err1 != nil {
-		slogger.Warn("Bad frontend proxy", "peer", peer, "err", err1)
+		logger.Warn("Bad frontend proxy", "peer", peer, "err", err1)
 		return false
 	}
 	var ips, err2 = net.LookupIP(host)
 	if err2 != nil {
-		slogger.Warn("net/LookupIP() failed", "peer", host, "err", err2)
+		logger.Warn("net.LookupIP() failed", "peer", host, "err", err2)
 		return false
 	}
 	for _, ip := range ips {
@@ -490,13 +491,13 @@ func duration_in_ms__(d time.Duration) int64 {
 	return ms
 }
 
-func dump_statistics_periodically(period time.Duration) {
+func dump_statistics_periodically(period time.Duration, logger *slog.Logger) {
 	var ch = make(chan time.Time)
 	go tick_periodically(ch, period)
 	for {
 		select {
 		case <-ch:
-			dump_statistics(false)
+			dump_statistics(false, logger)
 		}
 	}
 }
@@ -514,7 +515,7 @@ func tick_periodically(ch chan<- time.Time, period time.Duration) {
 	}
 }
 
-func dump_statistics(verbose bool) {
+func dump_statistics(verbose bool, logger *slog.Logger) {
 	//runtime.MemProfile()
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
@@ -537,14 +538,14 @@ func dump_statistics(verbose bool) {
 		NumGC:       m.NumGC,
 		NumForcedGC: m.NumForcedGC,
 	}
-	slogger.Info("MemStats", "Summary", ms)
+	logger.Info("MemStats", "Summary", ms)
 	if verbose {
-		slogger.Info("MemStats", "MemStats", m)
+		logger.Info("MemStats", "MemStats", m)
 	}
 	if verbose {
 		var g debug.GCStats
 		debug.ReadGCStats(&g)
-		slogger.Info("GCStats", "GCStats", g)
+		logger.Info("GCStats", "GCStats", g)
 	}
 }
 

@@ -31,15 +31,17 @@ package lens3
 import (
 	"context"
 	"fmt"
-	"github.com/eclipse/paho.golang/autopaho"
-	"github.com/eclipse/paho.golang/autopaho/queue/memory"
-	"github.com/eclipse/paho.golang/paho"
+	"log/slog"
 	"net/url"
 	"sync"
 	"time"
+
+	"github.com/eclipse/paho.golang/autopaho"
+	"github.com/eclipse/paho.golang/autopaho/queue/memory"
+	"github.com/eclipse/paho.golang/paho"
 )
 
-// MQTT_CLIENT  implements io/Writer.
+// MQTT_CLIENT implements io.Writer.
 type mqtt_client struct {
 	mutex           sync.Mutex
 	cm              *autopaho.ConnectionManager
@@ -48,16 +50,18 @@ type mqtt_client struct {
 	connected       bool
 	config          autopaho.ClientConfig
 	conf            *mqtt_conf
+	logger          *slog.Logger
 }
 
-func configure_mqtt(c *mqtt_conf, qch <-chan vacuous) *mqtt_client {
+func configure_mqtt(c *mqtt_conf, qch <-chan vacuous, logger *slog.Logger) *mqtt_client {
 	var q = &mqtt_client{}
 	q.conf = c
 	q.ch_quit_service = qch
+	q.logger = logger
 	var ep = "mqtt://" + q.conf.Ep
 	var mqtturl, err1 = url.Parse(ep)
 	if err1 != nil {
-		slogger.Error("MQTT: Bad endpoint",
+		logger.Error("MQTT: Bad endpoint",
 			"ep", ep, "err", err1, "alert", true)
 		return nil
 	}
@@ -76,7 +80,7 @@ func configure_mqtt(c *mqtt_conf, qch <-chan vacuous) *mqtt_client {
 		ConnectRetryDelay: (60 * time.Second),
 
 		OnConnectionUp: func(cm *autopaho.ConnectionManager, ack *paho.Connack) {
-			slogger.Debug("MQTT: Connection up",
+			logger.Debug("MQTT: Connection up",
 				"callback", "OnConnectionUp",
 				"ack", ack.ReasonCode, "alert", true)
 			func() {
@@ -87,7 +91,7 @@ func configure_mqtt(c *mqtt_conf, qch <-chan vacuous) *mqtt_client {
 		},
 
 		OnConnectError: func(err error) {
-			slogger.Debug("MQTT: Connection failed",
+			logger.Debug("MQTT: Connection failed",
 				"callback", "OnConnectError",
 				"err", err, "alert", true)
 		},
@@ -104,19 +108,19 @@ func configure_mqtt(c *mqtt_conf, qch <-chan vacuous) *mqtt_client {
 			OnPublishReceived: []func(paho.PublishReceived) (bool, error){},
 
 			OnClientError: func(err error) {
-				slogger.Warn("MQTT: Client error",
+				logger.Warn("MQTT: Client error",
 					"callback", "OnClientError",
 					"err", err, "alert", true)
 			},
 
 			OnServerDisconnect: func(d *paho.Disconnect) {
 				if d.Properties != nil {
-					slogger.Debug("MQTT: Server disconnect",
+					logger.Debug("MQTT: Server disconnect",
 						"callback", "OnServerDisconnect",
 						"reason", d.Properties.ReasonString,
 						"alert", true)
 				} else {
-					slogger.Debug("MQTT: Server disconnect",
+					logger.Debug("MQTT: Server disconnect",
 						"callback", "OnServerDisconnect",
 						"code", d.ReasonCode,
 						"alert", true)
@@ -129,20 +133,20 @@ func configure_mqtt(c *mqtt_conf, qch <-chan vacuous) *mqtt_client {
 				go func() {
 					var d = time.Duration(60 * time.Second)
 					var _ = time.AfterFunc(d, func() {
-						reconnect_mqtt_client(q)
+						reconnect_mqtt_client(q, logger)
 					})
 				}()
 			},
 		},
 	}
 
-	reconnect_mqtt_client(q)
+	reconnect_mqtt_client(q, logger)
 
 	if false {
 		var ctx = context.Background()
 		var cm, err2 = autopaho.NewConnection(ctx, q.config)
 		if err2 != nil {
-			slogger.Error("MQTT: paho/NewConnection() errs",
+			logger.Error("MQTT: paho.NewConnection() errs",
 				"err", err2, "alert", true)
 			return nil
 		}
@@ -153,7 +157,7 @@ func configure_mqtt(c *mqtt_conf, qch <-chan vacuous) *mqtt_client {
 		var ctx = context.Background()
 		var err3 = q.cm.AwaitConnection(ctx)
 		if err3 != nil {
-			slogger.Error("MQTT: paho/AwaitConnection() errs",
+			logger.Error("MQTT: paho.AwaitConnection() errs",
 				"err", err3, "alert", true)
 			return nil
 		}
@@ -166,7 +170,7 @@ func configure_mqtt(c *mqtt_conf, qch <-chan vacuous) *mqtt_client {
 
 // RECONNECT_MQTT_CLIENT starts connecting client to MQTT.  It
 // indefinitely tries to connect to MQTT.
-func reconnect_mqtt_client(q *mqtt_client) {
+func reconnect_mqtt_client(q *mqtt_client, logger *slog.Logger) {
 	var connected bool
 	func() {
 		q.mutex.Lock()
@@ -180,7 +184,7 @@ func reconnect_mqtt_client(q *mqtt_client) {
 	var ctx = context.Background()
 	var cm, err2 = autopaho.NewConnection(ctx, q.config)
 	if err2 != nil {
-		slogger.Error("MQTT: paho/NewConnection() errs",
+		q.logger.Error("MQTT: paho.NewConnection() errs",
 			"err", err2, "alert", true)
 		return
 	}
@@ -211,7 +215,7 @@ func publish_mqtt_message(q *mqtt_client, m string) error {
 	})
 	if err1 != nil {
 		if ctx.Err() == nil {
-			slogger.Error("MQTT: paho/Publish() failed", "err", err1,
+			q.logger.Error("MQTT: paho.Publish() failed", "err", err1,
 				"alert", true)
 		}
 	}

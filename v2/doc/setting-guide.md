@@ -414,7 +414,8 @@ journalctl
 
 ### More Verbose Logging
 
-Logs of Lens3 are dumped in "/var/log/lenticularis/lens3-log".
+Logs of Lens3 are dumped in "/var/log/lenticularis/lens3-mux-log" and
+"/var/log/lenticularis/lens3-reg-log".
 
 The configuration "logging.logger.tracing=255" can increase logging
 verbosity.  It is bit flags, and 255 is all bits on.

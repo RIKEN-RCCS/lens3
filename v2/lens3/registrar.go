@@ -400,12 +400,12 @@ func start_registrar(z *registrar, wg *sync.WaitGroup) {
 func handle_registrar_exc(z *registrar, w http.ResponseWriter, rqst *http.Request) {
 	var x = recover()
 	var delay_ms = z.conf.Registrar.Error_response_delay_ms
-	var logprefix = "Reg: "
+	//var logprefix = "Reg: "
 	//var logfn = log_reg_access_by_request
 	var logfn = func(rqst *http.Request, code int, length int64, uid string, auth string) {
 		log_reg_access_by_request(rqst, code, length, uid, auth, z.logger)
 	}
-	handle_exc(x, w, rqst, delay_ms, logprefix, logfn, z.logger)
+	handle_exc(x, w, rqst, delay_ms, logfn, z.logger)
 }
 
 func return_file(z *registrar, w http.ResponseWriter, rqst *http.Request, path string, modify_script bool, efs *embed.FS) *[]byte {
@@ -1865,12 +1865,12 @@ func return_success_repsonse(z *registrar, w http.ResponseWriter, rqst *http.Req
 
 func return_reg_error_response(z *registrar, w http.ResponseWriter, rqst *http.Request, err *proxy_exc) {
 	var delay_ms = z.conf.Registrar.Error_response_delay_ms
-	var logprefix = "Reg: "
+	//var logprefix = "Reg: "
 	//var logfn = log_reg_access_by_request
 	var logfn = func(rqst *http.Request, code int, length int64, uid string, auth string) {
 		log_reg_access_by_request(rqst, code, length, uid, auth, z.logger)
 	}
-	return_error_response(w, rqst, err, delay_ms, logprefix, logfn)
+	return_error_response(w, rqst, err, delay_ms, logfn)
 }
 
 // PROBE_ACCESS_MUX accesses a Multiplexer using a probe-key from

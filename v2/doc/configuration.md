@@ -72,9 +72,9 @@ stored in the keyval-db.
 - **rclone**: is "/usr/local/bin/rclone".
 - **command_options**: is a list of options passed to rclone command.
 
-### "log" configuration
+### "access_log" configuration
 
-"log" section defines the access log file.
+"access_log" section defines the access log file.
 
 - **access_log_file**: is "/var/log/lenticularis/lens3-mux-access-log".
 
@@ -82,7 +82,7 @@ stored in the keyval-db.
 
 "logging" section defines logging operation.
 
-- **logger.log_file**: is "/var/log/lenticularis/lens3-log".
+- **logger.log_file**: is "/var/log/lenticularis/lens3-mux-log".
 - **logger.level**: is one of {"ERR", "WARNING", "INFO", "DEBUG"}.
   Set "DEBUG" for usefulness.
 - **logger.tracing**: is bit flags to make logging verbose.  Set 0 or
@@ -165,13 +165,14 @@ stored in the keyval-db.
 - **ui.s3_url**: is something like "https⦂//lens3․example․com".
 - **ui.footer_banner**: is "This site is operated by example.com".
 
-### "log" configuration
+### "access_log" configuration
 
-"log" section defines the access log file.
+"access_log" section defines the access log file.
 
 - **log.access_log_file**: is "/var/log/lenticularis/lens3-reg-access-log".
 
 ### "logging" configuration
 
-"logging" section is optional and the same as mux-conf.  The one in
-mux-conf has precedence if both reg-conf and mux-conf define one.
+"logging" section is optional and the same as mux-conf.
+
+- **logger.log_file**: is "/var/log/lenticularis/lens3-reg-log".

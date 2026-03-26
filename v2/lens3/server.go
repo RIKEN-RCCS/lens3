@@ -192,6 +192,7 @@ func start_lenticularis_service(confpath string, services [2]string) {
 		var m = the_multiplexer
 		m.logger = muxlogger
 		var w = the_manager
+		w.logger = muxlogger
 		configure_multiplexer(m, w, t, chquit, muxconf)
 		configure_manager(w, m, t, chquit, muxconf)
 		defer w.backend_factory.clean_at_exit(m.logger)

@@ -63,13 +63,13 @@ type manager struct {
 
 	environ []string
 
-	logprefix string
-
 	ch_quit_service <-chan vacuous
 
 	mutex sync.Mutex
 
 	conf *mux_conf
+	logger *slog.Logger
+
 	manager_conf
 }
 
@@ -191,8 +191,6 @@ func configure_manager(w *manager, m *multiplexer, t *keyval_table, q chan vacuo
 
 	w.mux_ep = m.mux_ep
 
-	w.logprefix = m.logprefix
-
 	var awake = (w.Backend_awake_duration).time_duration()
 	w.backend_busy_suspension = (awake / 3)
 	w.backend_stabilize_time = (10 * time.Millisecond)
@@ -209,7 +207,7 @@ func configure_manager(w *manager, m *multiplexer, t *keyval_table, q chan vacuo
 	case backend_name_s3baby:
 		w.backend_factory = the_backend_s3baby_factory
 	default:
-		m.logger.Error(w.logprefix+"Configuration error, unknown backend",
+		m.logger.Error("Configuration error, unknown backend",
 			"backend", c.Multiplexer.Backend)
 		panic(nil)
 	}
@@ -255,7 +253,7 @@ func stop_running_backends(w *manager) {
 // START_BACKEND mutexes among all threads in all distributed
 // processes of multiplexers, for choosing one who takes the control
 // of starting a backend.  Returning nil is a fatal error.
-func start_backend(w *manager, pool string, logger *slog.Logger) *backend_record {
+func start_backend(w *manager, pool string) *backend_record {
 	var begin = time.Now()
 	var ep = &backend_mutex_record{
 		Mux_ep:    w.mux_ep,
@@ -263,30 +261,30 @@ func start_backend(w *manager, pool string, logger *slog.Logger) *backend_record
 	}
 	var ok1, _ = set_ex_backend_mutex(w.table, pool, ep)
 	if !ok1 {
-		logger.Info(w.logprefix+"Wait for backend by race", "pool", pool)
-		var be1 = wait_for_backend_by_race(w, pool, logger)
+		w.logger.Info("Wait for backend by race", "pool", pool)
+		var be1 = wait_for_backend_by_race(w, pool)
 		if be1 == nil {
 			// (An error is already logged).
 			return nil
 		}
 		return be1
 	} else {
-		logger.Info(w.logprefix+"Start backend", "pool", pool)
+		w.logger.Info("Start backend", "pool", pool)
 		var expiry = (2 * (w.Backend_start_timeout_ms).time_duration())
 		var ok2 = set_backend_mutex_expiry(w.table, pool, expiry)
 		if !ok2 {
 			// Ignore an error.
-			logger.Error(w.logprefix+"DB.Expire(backend-mutex) failed",
+			w.logger.Error("DB.Expire(backend-mutex) failed",
 				"pool", pool)
 		}
-		var be2 = start_backend_in_mutexed(w, pool, logger)
+		var be2 = start_backend_in_mutexed(w, pool)
 		if be2 == nil {
 			// (An error is already logged).
 			return nil
 		}
 
 		var elapse = time.Now().Sub(begin)
-		logger.Debug(w.logprefix+"Time to start backend",
+		w.logger.Debug("Time to start backend",
 			"pool", pool, "elapse", elapse)
 
 		//var be2 = get_backend(w.table, pool)
@@ -299,14 +297,14 @@ func start_backend(w *manager, pool string, logger *slog.Logger) *backend_record
 // case, a dummy record (with State=pool_state_SUSPENDED) is inserted
 // in the keyval-db, which will block a further backend from starting
 // for a while.  Returning nil is a fatal error.
-func start_backend_in_mutexed(w *manager, pool string, logger *slog.Logger) *backend_record {
+func start_backend_in_mutexed(w *manager, pool string) *backend_record {
 	//fmt.Println("start_backend()")
 	//delete_backend(w.table, pool)
 	defer delete_backend_mutex(w.table, pool)
 
 	var pooldata = get_pool(w.table, pool)
 	if pooldata == nil {
-		logger.Warn(w.logprefix+"start_backend() pool is missing",
+		w.logger.Warn("start_backend() pool is missing",
 			"pool", pool)
 		return nil
 	}
@@ -321,18 +319,18 @@ func start_backend_in_mutexed(w *manager, pool string, logger *slog.Logger) *bac
 	var dx *delegate_generic = d.get_delegate_generic_part()
 	initialize_delegate_generic(w, dx, pooldata)
 
-	var available_ports = list_available_ports(w, f.use_n_ports, logger)
+	var available_ports = list_available_ports(w, f.use_n_ports)
 
 	if trace_proc&tracing != 0 {
-		logger.Debug(w.logprefix+"start_backend()", "ports", available_ports)
+		w.logger.Debug("start_backend()", "ports", available_ports)
 	}
 
 	for _, port := range available_ports {
-		var r1 = try_start_backend(w, d, port, logger)
+		var r1 = try_start_backend(w, d, port)
 		switch r1.start_state {
 		case start_ongoing:
 			// (NEVER).
-			logger.Error(w.logprefix+"Starting backend badly failed",
+			w.logger.Error("BAD-IMPL: Starting backend fatally failed",
 				"pool", pool)
 			panic(nil)
 		case start_started:
@@ -341,7 +339,7 @@ func start_backend_in_mutexed(w *manager, pool string, logger *slog.Logger) *bac
 			continue
 		case start_transient_failure:
 			// (An error is already logged).
-			var suspension = suspend_pool(w, d, r1.reason, logger)
+			var suspension = suspend_pool(w, d, r1.reason)
 			return suspension
 		case start_persistent_failure:
 			// (An error is already logged).
@@ -364,21 +362,21 @@ func start_backend_in_mutexed(w *manager, pool string, logger *slog.Logger) *bac
 			}
 		}()
 		if !ok1 {
-			logger.Warn(w.logprefix+"Starting backend aborted",
+			w.logger.Warn("Starting backend aborted",
 				"pool", pool, "reason", "manager is in shutdown")
 			abort_backend(w, d)
 			return nil
 		}
 
-		go disgorge_stdio_to_log(w, dx, logger)
+		go disgorge_stdio_to_log(w, dx)
 
 		// Sleep shortly for a backend to be stable.
 
 		time.Sleep(w.backend_stabilize_time)
 
-		d.establish(logger)
+		d.establish(w.logger)
 
-		var err1 = make_absent_buckets_in_backend(w, dx.be, logger)
+		var err1 = make_absent_buckets_in_backend(w, dx.be)
 		if err1 != nil {
 			// (An error is already logged).
 			// LET A BACKEND CONTINUE TO WORK.
@@ -394,7 +392,7 @@ func start_backend_in_mutexed(w *manager, pool string, logger *slog.Logger) *bac
 		// Backend has started.  Expiration of the backend record is
 		// set in ping_backend().
 
-		go ping_backend(w, d, logger)
+		go ping_backend(w, d)
 
 		var state1 = &approximate_state_record{
 			Pool:      pool,
@@ -409,9 +407,9 @@ func start_backend_in_mutexed(w *manager, pool string, logger *slog.Logger) *bac
 
 	// All ports are tried and failed.
 
-	logger.Warn(w.logprefix+"Backend SUSPENDED (no ports)", "pool", pool)
+	w.logger.Warn("Backend SUSPENDED (no ports)", "pool", pool)
 
-	var suspension = suspend_pool(w, d, start_failure_server_busy, logger)
+	var suspension = suspend_pool(w, d, start_failure_server_busy)
 	return suspension
 }
 
@@ -419,17 +417,17 @@ func start_backend_in_mutexed(w *manager, pool string, logger *slog.Logger) *bac
 // timeout.  A message from the backend is one that indicates a
 // success/failure.  Note that it changes a cancel function from
 // SIGKILL to SIGTERM to make it work with sudo.
-func try_start_backend(w *manager, d backend_delegate, port int, logger *slog.Logger) *start_result {
+func try_start_backend(w *manager, d backend_delegate, port int) *start_result {
 	var dx *delegate_generic = d.get_delegate_generic_part()
 	var pool = dx.Pool
 	var thishost, _, err1 = net.SplitHostPort(w.mux_ep)
 	if err1 != nil {
-		logger.Error(w.logprefix+"Bad endpoint of Mux", "ep", w.mux_ep)
+		w.logger.Error("Bad endpoint of Mux", "ep", w.mux_ep)
 		panic(nil)
 	}
 	dx.be.Backend_ep = net.JoinHostPort(thishost, strconv.Itoa(port))
 	if trace_proc&tracing != 0 {
-		logger.Debug(w.logprefix+"try_start_backend()",
+		w.logger.Debug("try_start_backend()",
 			"ep", dx.be.Backend_ep)
 	}
 
@@ -445,12 +443,12 @@ func try_start_backend(w *manager, d backend_delegate, port int, logger *slog.Lo
 	var argv = append(sudo_argv, command.argv...)
 	var envs = append(w.environ, command.envs...)
 
-	logger.Debug(w.logprefix+"Run backend", "pool", pool, "argv", argv)
+	w.logger.Debug("Run backend", "pool", pool, "argv", argv)
 
 	var ctx = context.Background()
 	var cmd = exec.CommandContext(ctx, argv[0], argv[1:]...)
 	if cmd == nil {
-		logger.Error(w.logprefix + "exec.Command() returned nil")
+		w.logger.Error("exec.Command() returned nil")
 		panic(nil)
 	}
 	assert_fatal(cmd.SysProcAttr == nil)
@@ -479,7 +477,7 @@ func try_start_backend(w *manager, d backend_delegate, port int, logger *slog.Lo
 
 	var err3 = cmd.Start()
 	if err3 != nil {
-		logger.Error("exec.Command.Start() errs", "err", err3)
+		w.logger.Error("exec.Command.Start() errs", "err", err3)
 		return &start_result{
 			start_state: start_persistent_failure,
 			reason:      start_failure_exec_failed,
@@ -487,10 +485,10 @@ func try_start_backend(w *manager, d backend_delegate, port int, logger *slog.Lo
 	}
 
 	dx.be.Backend_pid = cmd.Process.Pid
-	var r1 = wait_for_backend_come_up(w, d, logger)
+	var r1 = wait_for_backend_come_up(w, d)
 
 	if trace_proc&tracing != 0 {
-		logger.Debug(w.logprefix+"Starting backend finished (succeed/fail)",
+		w.logger.Debug("Starting backend finished (succeed/fail)",
 			"pool", pool, "state", r1.start_state, "reason", r1.reason)
 	}
 
@@ -504,7 +502,7 @@ func try_start_backend(w *manager, d backend_delegate, port int, logger *slog.Lo
 // many messages, (4) closes both stdout+stderr, (5) reaches a
 // timeout.  It returns STARTED/RETRY/FAILURE.  It reads the stdio
 // channels as much as available.
-func wait_for_backend_come_up(w *manager, d backend_delegate, logger *slog.Logger) *start_result {
+func wait_for_backend_come_up(w *manager, d backend_delegate) *start_result {
 	var dx *delegate_generic = d.get_delegate_generic_part()
 	var f = dx.factory.get_factory_generic_part()
 	var pool = dx.Pool
@@ -516,7 +514,7 @@ func wait_for_backend_come_up(w *manager, d backend_delegate, logger *slog.Logge
 	// that to refer to finally collected msg_stdout and msg_stderr.
 
 	defer func() {
-		drain_start_messages_to_log(w, pool, msg_stdout, msg_stderr, logger)
+		drain_start_messages_to_log(w, pool, msg_stdout, msg_stderr)
 	}()
 
 	var timeout = (f.Backend_start_timeout_ms).time_duration()
@@ -525,7 +523,7 @@ func wait_for_backend_come_up(w *manager, d backend_delegate, logger *slog.Logge
 		select {
 		case msg1, ok1 := <-dx.ch_stdio:
 			if !ok1 {
-				logger.Warn(w.logprefix+"Starting backend failed",
+				w.logger.Warn("Starting backend failed",
 					"pool", pool, "reason", start_failure_pipe_closed)
 				return &start_result{
 					start_state: start_persistent_failure,
@@ -565,12 +563,12 @@ func wait_for_backend_come_up(w *manager, d backend_delegate, logger *slog.Logge
 				break
 			}
 			if some_messages_on_stdout {
-				var st1 = d.check_startup(on_stdout, msg_stdout, logger)
+				var st1 = d.check_startup(on_stdout, msg_stdout, w.logger)
 				switch st1.start_state {
 				case start_ongoing:
 					// Skip.
 				case start_transient_failure, start_persistent_failure:
-					logger.Warn(w.logprefix+"Starting backend failed",
+					w.logger.Warn("Starting backend failed",
 						"pool", pool, "reason", st1.reason)
 					return st1
 				default:
@@ -578,7 +576,7 @@ func wait_for_backend_come_up(w *manager, d backend_delegate, logger *slog.Logge
 				}
 			}
 			if some_messages_on_stderr {
-				var st1 = d.check_startup(on_stderr, msg_stderr, logger)
+				var st1 = d.check_startup(on_stderr, msg_stderr, w.logger)
 				switch st1.start_state {
 				case start_ongoing:
 					// Skip.
@@ -587,7 +585,7 @@ func wait_for_backend_come_up(w *manager, d backend_delegate, logger *slog.Logge
 				}
 			}
 			if !(len(msg_stdout) < 500 && len(msg_stderr) < 500) {
-				logger.Warn(w.logprefix+"Starting backend failed",
+				w.logger.Warn("Starting backend failed",
 					"pool", pool, "reason", start_failure_stdio_flooding)
 				return &start_result{
 					start_state: start_persistent_failure,
@@ -596,7 +594,7 @@ func wait_for_backend_come_up(w *manager, d backend_delegate, logger *slog.Logge
 			}
 			continue
 		case <-ch_timeout:
-			logger.Warn(w.logprefix+"Starting backend failed",
+			w.logger.Warn("Starting backend failed",
 				"pool", pool, "reason", start_failure_start_timeout)
 			return &start_result{
 				start_state: start_transient_failure,
@@ -609,7 +607,7 @@ func wait_for_backend_come_up(w *manager, d backend_delegate, logger *slog.Logge
 // WAIT_FOR_BACKEND_BY_RACE waits until a start of a backend that is
 // started by another thread.  It uses polling.  Its sleep time
 // increases each time: 1ms, 3^1ms, 3^2ms, ... until maximum 1s.
-func wait_for_backend_by_race(w *manager, pool string, logger *slog.Logger) *backend_record {
+func wait_for_backend_by_race(w *manager, pool string) *backend_record {
 	var limit = time.Now().Add((w.Backend_start_timeout_ms).time_duration())
 	var sleep int64 = 1
 	for time.Now().Before(limit) {
@@ -620,14 +618,14 @@ func wait_for_backend_by_race(w *manager, pool string, logger *slog.Logger) *bac
 		time.Sleep(time.Duration(sleep) * time.Millisecond)
 		sleep = min(sleep*3, 1000)
 	}
-	logger.Error(w.logprefix+"Wait for backend by race failed by timeout",
+	w.logger.Error("Wait for backend by race failed by timeout",
 		"pool", pool)
 	return nil
 }
 
 // SUSPEND_POOL puts a pool in the suspended state.  It will block the
 // service for a certain period.
-func suspend_pool(w *manager, d backend_delegate, reason pool_reason, logger *slog.Logger) *backend_record {
+func suspend_pool(w *manager, d backend_delegate, reason pool_reason) *backend_record {
 	var dx *delegate_generic = d.get_delegate_generic_part()
 	var f = dx.factory.get_factory_generic_part()
 	var pool = dx.Pool
@@ -657,7 +655,7 @@ func suspend_pool(w *manager, d backend_delegate, reason pool_reason, logger *sl
 	set_backend(w.table, pool, suspension)
 	var ok3 = set_backend_expiry(w.table, pool, duration)
 	if !ok3 {
-		logger.Error(w.logprefix+"DB.Expire(dummy-backend) failed",
+		w.logger.Error("DB.Expire(dummy-backend) failed",
 			"pool", pool)
 	}
 
@@ -699,11 +697,11 @@ func abort_backend(w *manager, d backend_delegate) {
 // PING_BACKEND performs heartbeating in its thread.  It will shutdown
 // the backend, either when heartbeating fails or it is instructed to
 // stop the backend.
-func ping_backend(w *manager, d backend_delegate, logger *slog.Logger) {
+func ping_backend(w *manager, d backend_delegate) {
 	defer func() {
 		var x = recover()
 		if x != nil {
-			logger.Error(w.logprefix+"Pinger errs", "err", x,
+			w.logger.Error("Pinger errs", "err", x,
 				"stack", string(debug.Stack()))
 		}
 	}()
@@ -716,7 +714,7 @@ func ping_backend(w *manager, d backend_delegate, logger *slog.Logger) {
 	var expiry = (3 * (f.Heartbeat_interval).time_duration())
 	var ok1 = set_backend_expiry(w.table, pool, expiry)
 	if !ok1 {
-		logger.Error(w.logprefix+"DB.Expire(backend) failed",
+		w.logger.Error("DB.Expire(backend) failed",
 			"pool", pool, "action", "(ignored)")
 	}
 
@@ -733,17 +731,17 @@ func ping_backend(w *manager, d backend_delegate, logger *slog.Logger) {
 
 		// Do heatbeat.
 
-		var status = d.heartbeat(w, logger)
+		var status = d.heartbeat(w, w.logger)
 		if status == 200 {
 			dx.heartbeat_misses = 0
 		} else {
 			dx.heartbeat_misses += 1
 		}
 		if dx.heartbeat_misses > 0 {
-			logger.Error(w.logprefix+"Heartbeat failed",
+			w.logger.Error("Heartbeat failed",
 				"pool", pool, "misses", dx.heartbeat_misses)
 		} else if trace_proc&tracing != 0 {
-			logger.Debug(w.logprefix+"Heartbeat", "pool", pool,
+			w.logger.Debug("Heartbeat", "pool", pool,
 				"status", status, "misses", dx.heartbeat_misses)
 		}
 		if dx.heartbeat_misses > w.Heartbeat_miss_tolerance {
@@ -756,7 +754,7 @@ func ping_backend(w *manager, d backend_delegate, logger *slog.Logger) {
 		var ts = get_pool_timestamp(w.table, pool)
 		var lifetime = time.Unix(ts, 0).Add(duration)
 		if !time.Now().Before(lifetime) {
-			logger.Debug(w.logprefix+"Awake time elapsed", "pool", pool)
+			w.logger.Debug("Awake time elapsed", "pool", pool)
 			break
 		}
 
@@ -764,13 +762,13 @@ func ping_backend(w *manager, d backend_delegate, logger *slog.Logger) {
 
 		var ok3 = set_backend_expiry(w.table, pool, expiry)
 		if !ok3 {
-			logger.Error(w.logprefix+"DB.Expire(backend) failed",
+			w.logger.Error("DB.Expire(backend) failed",
 				"pool", pool, "action", "quit backend")
 			break
 		}
 	}
-	stop_backend(w, d, logger)
-	wait4_child_process(w, d, logger)
+	stop_backend(w, d)
+	wait4_child_process(w, d)
 }
 
 // STOP_BACKEND calls backend's shutdown().  Note that there is a race
@@ -778,10 +776,10 @@ func ping_backend(w *manager, d backend_delegate, logger *slog.Logger) {
 // it would be possible some requests are sent to a backend while it
 // is going to be shutdown.  It waits for a short time to avoid the
 // race, assuming all requests are finished in the wait.
-func stop_backend(w *manager, d backend_delegate, logger *slog.Logger) {
+func stop_backend(w *manager, d backend_delegate) {
 	var dx *delegate_generic = d.get_delegate_generic_part()
 	var pool = dx.Pool
-	logger.Info(w.logprefix+"Stop backend", "pool", pool)
+	w.logger.Info("Stop backend", "pool", pool)
 
 	func() {
 		w.mutex.Lock()
@@ -793,9 +791,9 @@ func stop_backend(w *manager, d backend_delegate, logger *slog.Logger) {
 
 	time.Sleep(w.backend_linger_time)
 
-	var err1 = d.shutdown(logger)
+	var err1 = d.shutdown(w.logger)
 	if err1 != nil {
-		logger.Error(w.logprefix+"Backend shutdown() failed",
+		w.logger.Error("Backend shutdown() failed",
 			"pool", pool, "err", err1)
 	}
 	if err1 == nil {
@@ -803,7 +801,7 @@ func stop_backend(w *manager, d backend_delegate, logger *slog.Logger) {
 	}
 	var err2 = dx.cmd.Cancel()
 	if err2 != nil {
-		logger.Error(w.logprefix+"exec.Command.Cancel() on backend failed",
+		w.logger.Error("exec.Command.Cancel() on backend failed",
 			"pool", pool, "err", err2)
 	}
 }
@@ -856,7 +854,7 @@ func start_disgorging_stdio(w *manager, d backend_delegate, ch_stdio chan<- stdi
 // DISGORGE_STDIO_TO_LOG dumps stdout+stderr messages to the logger.
 // It receives messages written by threads started in
 // start_disgorging_stdio().
-func disgorge_stdio_to_log(w *manager, dx *delegate_generic, logger *slog.Logger) {
+func disgorge_stdio_to_log(w *manager, dx *delegate_generic) {
 	var pool = dx.Pool
 	for {
 		var x1, ok1 = <-dx.ch_stdio
@@ -867,26 +865,26 @@ func disgorge_stdio_to_log(w *manager, dx *delegate_generic, logger *slog.Logger
 		//var m = strings.TrimSpace(x1.string)
 		var m = x1.string
 		if x1.stdio_stream_indicator == on_stdout {
-			logger.Info(w.logprefix+"backend-stdout", "pool", pool, "stdout", m)
+			w.logger.Info("backend-stdout", "pool", pool, "stdout", m)
 		} else {
-			logger.Info(w.logprefix+"backend-stderr", "pool", pool, "stderr", m)
+			w.logger.Info("backend-stderr", "pool", pool, "stderr", m)
 		}
 	}
 	if trace_proc&tracing != 0 {
-		logger.Debug(w.logprefix+"stdio dumper done", "pool", pool)
+		w.logger.Debug("stdio dumper done", "pool", pool)
 	}
 }
 
 // DRAIN_START_MESSAGES_TO_LOG outputs messages to a log, that are
 // stored for checking a proper start of a backend.
-func drain_start_messages_to_log(w *manager, pool string, stdouts []string, stderrs []string, logger *slog.Logger) {
+func drain_start_messages_to_log(w *manager, pool string, stdouts []string, stderrs []string) {
 	// fmt.Println("drain_start_messages_to_log()")
 	var s string
 	for _, s = range stdouts {
-		logger.Info(w.logprefix+"stdout message", "pool", pool, "stdout", s)
+		w.logger.Info("backend-stdout", "pool", pool, "stdout", s)
 	}
 	for _, s = range stderrs {
-		logger.Info(w.logprefix+"stderr message", "pool", pool, "stderr", s)
+		w.logger.Info("backend-stderr", "pool", pool, "stderr", s)
 	}
 }
 
@@ -894,7 +892,7 @@ func drain_start_messages_to_log(w *manager, pool string, stdouts []string, stde
 // used by backends running under this Multiplexer locally.  It uses
 // each integer skipping by use_n_ports.  It randomizes the order of
 // the list.
-func list_available_ports(w *manager, use_n_ports int, logger *slog.Logger) []int {
+func list_available_ports(w *manager, use_n_ports int) []int {
 	assert_fatal(use_n_ports == 1 || use_n_ports == 2)
 
 	var belist = list_backends_under_manager(w)
@@ -903,13 +901,13 @@ func list_available_ports(w *manager, use_n_ports int, logger *slog.Logger) []in
 		assert_fatal(be.Mux_ep == w.mux_ep)
 		var _, ps, err1 = net.SplitHostPort(be.Backend_ep)
 		if err1 != nil {
-			logger.Error(w.logprefix+"Bad endpoint",
+			w.logger.Error("Bad endpoint",
 				"ep", be.Backend_ep, "err", err1)
 			panic(nil)
 		}
 		var port, err2 = strconv.Atoi(ps)
 		if err2 != nil {
-			logger.Error(w.logprefix+"Bad endpoint",
+			w.logger.Error("Bad endpoint",
 				"ep", be.Backend_ep, "err", err2)
 			panic(nil)
 		}
@@ -946,7 +944,7 @@ func list_backends_under_manager(w *manager) []*backend_record {
 	return list
 }
 
-func wait4_child_process(w *manager, d backend_delegate, logger *slog.Logger) {
+func wait4_child_process(w *manager, d backend_delegate) {
 	var dx *delegate_generic = d.get_delegate_generic_part()
 	var pid = dx.cmd.Process.Pid
 	//var pid = dx.be.Backend_pid
@@ -959,7 +957,7 @@ func wait4_child_process(w *manager, d backend_delegate, logger *slog.Logger) {
 		if err1 != nil {
 			var err2, ok1 = err1.(unix.Errno)
 			assert_fatal(ok1)
-			logger.Warn(w.logprefix+"wait4() errs",
+			w.logger.Warn("wait4() errs",
 				"errno", unix.ErrnoName(err2))
 			if err2 == unix.EINVAL || err2 == unix.ECHILD {
 				break
@@ -968,15 +966,15 @@ func wait4_child_process(w *manager, d backend_delegate, logger *slog.Logger) {
 			}
 		}
 		if wpid == 0 {
-			logger.Warn(w.logprefix+"wait4() failed",
+			w.logger.Warn("wait4() failed",
 				"errno", unix.ErrnoName(unix.ECHILD))
 			continue
 		}
 		if trace_proc&tracing != 0 {
-			logger.Debug(w.logprefix+"wait4() returns",
+			w.logger.Debug("wait4() returns",
 				"pid", wpid, "status", wstatus, "rusage", rusage)
 		} else {
-			logger.Debug(w.logprefix+"wait4() returns",
+			w.logger.Debug("wait4() returns",
 				"pid", wpid, "status", wstatus)
 		}
 		break
@@ -989,17 +987,17 @@ func wait4_child_process(w *manager, d backend_delegate, logger *slog.Logger) {
 // errors from the backend but returns the first one.  Calling
 // get_backend() won't work yet, because the record has not been set
 // in the keyval-db.
-func make_absent_buckets_in_backend(w *manager, be *backend_record, logger *slog.Logger) error {
+func make_absent_buckets_in_backend(w *manager, be *backend_record) error {
 	var pool = be.Pool
 
 	var buckets_needed = gather_buckets(w.table, pool)
-	var buckets_exsting, err1 = list_buckets_in_backend(w, be, logger)
+	var buckets_exsting, err1 = list_buckets_in_backend(w, be, w.logger)
 	if err1 != nil {
 		// (An error is already logged).
 		return err1
 	}
 
-	logger.Debug(w.logprefix+"Check existing buckets in backend",
+	w.logger.Debug("Check existing buckets in backend",
 		"pool", pool, "buckets", buckets_exsting)
 
 	var errx error = nil
@@ -1014,10 +1012,10 @@ func make_absent_buckets_in_backend(w *manager, be *backend_record, logger *slog
 			continue
 		}
 
-		logger.Debug(w.logprefix+"Make a bucket in backend",
+		w.logger.Debug("Make a bucket in backend",
 			"pool", pool, "bucket", b.Bucket)
 
-		var err2 = make_bucket_in_backend(w, be, b, logger)
+		var err2 = make_bucket_in_backend(w, be, b, w.logger)
 		if err2 != nil && errx == nil {
 			// (An error is already logged).
 			errx = err2

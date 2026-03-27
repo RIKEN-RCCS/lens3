@@ -94,7 +94,7 @@ func (d *backend_minio) get_delegate_generic_part() *delegate_generic {
 	return &d.delegate_generic
 }
 
-func (d *backend_minio) make_command_line(port int, directory string) backend_command {
+func (d *backend_minio) make_command_line(w *manager, port int, directory string) backend_command {
 	var f = d.get_factory()
 	var ep = net.JoinHostPort("", strconv.Itoa(port))
 	var argv = []string{
@@ -114,7 +114,7 @@ func (d *backend_minio) make_command_line(port int, directory string) backend_co
 // of an error with messages "level=FATAL", it diagnoses the cause of
 // the error by the first fatal message.  It returns a retry response
 // only on the port-in-use error.
-func (d *backend_minio) check_startup(stream stdio_stream_indicator, ss []string, logger *slog.Logger) *start_result {
+func (d *backend_minio) check_startup(w *manager, stream stdio_stream_indicator, ss []string) *start_result {
 	//fmt.Println("minio.check_startup(%v)", ss)
 	if stream == on_stderr {
 		return &start_result{
@@ -154,7 +154,7 @@ func (d *backend_minio) check_startup(stream stdio_stream_indicator, ss []string
 		assert_fatal(m2 != nil)
 		var m3 = get_string(m2, "message")
 		if trace_proc&tracing != 0 {
-			logger.Debug("BE(minio): Got an expected message", "output", m3)
+			w.logger.Debug("BE(minio): Got an expected message", "output", m3)
 		}
 		return &start_result{
 			start_state: start_started,
@@ -167,25 +167,25 @@ func (d *backend_minio) check_startup(stream stdio_stream_indicator, ss []string
 	}
 }
 
-func (d *backend_minio) establish(logger *slog.Logger) error {
+func (d *backend_minio) establish(w *manager) error {
 	//fmt.Println("minio.establish()")
-	var v1 = minio_mc_alias_set(d, logger)
+	var v1 = minio_mc_alias_set(d, w.logger)
 	return v1.err
 }
 
 // SHUTDOWN stops a server using MC admin-service-stop.
-func (d *backend_minio) shutdown(logger *slog.Logger) error {
+func (d *backend_minio) shutdown(w *manager) error {
 	//fmt.Println("minio.shutdown()")
-	logger.Debug("BE(minio): Stopping MinIO",
+	w.logger.Debug("BE(minio): Stopping MinIO",
 		"pool", d.Pool, "pid", d.cmd.Process.Pid)
 	//assert_fatal(d.mc_alias != nil)
-	var v1 = minio_mc_admin_service_stop(d, logger)
+	var v1 = minio_mc_admin_service_stop(d, w.logger)
 	return v1.err
 }
 
 // HEARTBEAT http-gets the path "/minio/health/live" and returns an
 // http status code.  It returns 500 on a connection failure.
-func (d *backend_minio) heartbeat(w *manager, logger *slog.Logger) int {
+func (d *backend_minio) heartbeat(w *manager) int {
 	//fmt.Println("minio.heartbeat()")
 
 	var f = d.get_factory()
@@ -201,14 +201,14 @@ func (d *backend_minio) heartbeat(w *manager, logger *slog.Logger) int {
 	var c = d.heartbeat_client
 	var rspn, err1 = c.Get(d.heartbeat_url)
 	if err1 != nil {
-		logger.Info("BE(minio): Heartbeat failed in http.Client.Get()",
+		w.logger.Info("BE(minio): Heartbeat failed in http.Client.Get()",
 			"pool", d.Pool, "err", err1)
 		return http_500_internal_server_error
 	}
 	defer rspn.Body.Close()
 	var _, err2 = io.ReadAll(rspn.Body)
 	if err2 != nil {
-		logger.Info("BE(minio): Heartbeat failed in io.ReadAll()",
+		w.logger.Info("BE(minio): Heartbeat failed in io.ReadAll()",
 			"pool", d.Pool, "err", err2)
 		return http_500_internal_server_error
 	}

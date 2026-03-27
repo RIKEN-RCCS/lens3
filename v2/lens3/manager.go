@@ -67,7 +67,7 @@ type manager struct {
 
 	mutex sync.Mutex
 
-	conf *mux_conf
+	conf   *mux_conf
 	logger *slog.Logger
 
 	manager_conf
@@ -95,11 +95,11 @@ type backend_factory interface {
 // status.  It is an error but status=200.
 type backend_delegate interface {
 	get_delegate_generic_part() *delegate_generic
-	make_command_line(port int, directory string) backend_command
-	check_startup(stdio_stream_indicator, []string, *slog.Logger) *start_result
-	establish(*slog.Logger) error
-	shutdown(*slog.Logger) error
-	heartbeat(*manager, *slog.Logger) int
+	make_command_line(w *manager, port int, directory string) backend_command
+	check_startup(*manager, stdio_stream_indicator, []string) *start_result
+	establish(*manager) error
+	shutdown(*manager) error
+	heartbeat(*manager) int
 }
 
 // DELEGATE_GENERIC is a common part of backend instances.  It is
@@ -374,7 +374,7 @@ func start_backend_in_mutexed(w *manager, pool string) *backend_record {
 
 		time.Sleep(w.backend_stabilize_time)
 
-		d.establish(w.logger)
+		d.establish(w)
 
 		var err1 = make_absent_buckets_in_backend(w, dx.be)
 		if err1 != nil {
@@ -434,7 +434,7 @@ func try_start_backend(w *manager, d backend_delegate, port int) *start_result {
 	var user = dx.Owner_uid
 	var group = dx.Owner_gid
 	var directory = dx.Bucket_directory
-	var command = d.make_command_line(port, directory)
+	var command = d.make_command_line(w, port, directory)
 	var sudo_argv = []string{
 		w.Sudo,
 		"-n",
@@ -563,7 +563,7 @@ func wait_for_backend_come_up(w *manager, d backend_delegate) *start_result {
 				break
 			}
 			if some_messages_on_stdout {
-				var st1 = d.check_startup(on_stdout, msg_stdout, w.logger)
+				var st1 = d.check_startup(w, on_stdout, msg_stdout)
 				switch st1.start_state {
 				case start_ongoing:
 					// Skip.
@@ -576,7 +576,7 @@ func wait_for_backend_come_up(w *manager, d backend_delegate) *start_result {
 				}
 			}
 			if some_messages_on_stderr {
-				var st1 = d.check_startup(on_stderr, msg_stderr, w.logger)
+				var st1 = d.check_startup(w, on_stderr, msg_stderr)
 				switch st1.start_state {
 				case start_ongoing:
 					// Skip.
@@ -731,8 +731,8 @@ func ping_backend(w *manager, d backend_delegate) {
 
 		// Do heatbeat.
 
-		var status = d.heartbeat(w, w.logger)
-		if status == 200 {
+		var status = d.heartbeat(w)
+		if status == http_200_OK {
 			dx.heartbeat_misses = 0
 		} else {
 			dx.heartbeat_misses += 1
@@ -791,7 +791,7 @@ func stop_backend(w *manager, d backend_delegate) {
 
 	time.Sleep(w.backend_linger_time)
 
-	var err1 = d.shutdown(w.logger)
+	var err1 = d.shutdown(w)
 	if err1 != nil {
 		w.logger.Error("Backend shutdown() failed",
 			"pool", pool, "err", err1)

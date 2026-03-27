@@ -77,6 +77,8 @@ var the_multiplexer = &multiplexer{}
 const ctx_key_backend = "lens3-backend"
 const ctx_key_pool_auth = "lens3-pool-auth"
 
+const amz_date_layout = "20060102T150405Z"
+
 func configure_multiplexer(m *multiplexer, w *manager, t *keyval_table, qch <-chan vacuous, c *mux_conf) {
 	m.table = t
 	m.manager = w
@@ -213,9 +215,55 @@ func proxy_request_rewriter(m *multiplexer) func(*httputil.ProxyRequest) {
 		assert_fatal(ok2)
 		var auth = poolauth[1]
 
-		// Set the forwarding endpoint to httputil.ReverseProxy.
+		// MinIO and RCLONE require none, but S3 Baby-server requires
+		// headers: "Host", "X-Amz-Content-Sha256", and "X-Amz-Date".
+		// It's Okay by dummy values.
+
+		if m.conf.Multiplexer.Backend == backend_name_s3baby {
+			//var host = r.In.Header.Get("Host")
+			//r.Out.Header.Set("Host", host)
+			var host = r.In.Host
+			if host == "" {
+				host = "localhost"
+			}
+			r.Out.Host = host
+			var csha = r.In.Header.Get("X-Amz-Content-Sha256")
+			if csha == "" {
+				csha = "UNSIGNED-PAYLOAD"
+			}
+			r.Out.Header.Set("X-Amz-Content-Sha256", csha)
+
+			var date = r.In.Header.Get("X-Amz-Date")
+			if date == "" {
+				date = time.Now().Format(amz_date_layout)
+			}
+			r.Out.Header.Set("X-Amz-Date", date)
+		}
+
+		if false {
+			dump_request_header(r.Out, m.logger)
+		}
+
+		// Sign with an authorization header.
 
 		var ep = be.Backend_ep
+
+		var keypair = [2]string{be.Root_access, be.Root_secret}
+		var err1 = awss3aide.Sign_by_credential(r.Out, ep, keypair)
+		if err1 != nil {
+			m.logger.Error("aws.signer.SignHTTP() errs",
+				"err", err1)
+			raise(&proxy_exc{
+				auth,
+				"",
+				http_500_internal_server_error,
+				message_500_sign_failed,
+				nil,
+			})
+		}
+
+		// Set the forwarding endpoint to httputil.ReverseProxy.
+
 		var forwarding, err2 = url.Parse("http://" + ep)
 		if err2 != nil {
 			m.logger.Error("Bad backend ep", "ep", ep, "err", err2)
@@ -233,22 +281,6 @@ func proxy_request_rewriter(m *multiplexer) func(*httputil.ProxyRequest) {
 		r.Out.Header["X-Forwarded-For"] = r.In.Header["X-Forwarded-For"]
 		r.SetXForwarded()
 
-		// Sign with an authorization header.
-
-		var keypair = [2]string{be.Root_access, be.Root_secret}
-		var err1 = awss3aide.Sign_by_credential(r.Out, ep, keypair)
-		if err1 != nil {
-			m.logger.Error("aws.signer.SignHTTP() errs",
-				"err", err1)
-			raise(&proxy_exc{
-				auth,
-				"",
-				http_500_internal_server_error,
-				message_500_sign_failed,
-				nil,
-			})
-		}
-
 		if trace_proxy&tracing != 0 {
 			m.logger.Debug("Forward request",
 				"url", forwarding)
@@ -263,7 +295,7 @@ func proxy_response_modifier(m *multiplexer) func(*http.Response) error {
 	return func(rspn *http.Response) error {
 		if false {
 			// No need to delay, as an error by a backend is usual.
-			if rspn.StatusCode != 200 {
+			if rspn.StatusCode != http_200_OK {
 				delay_sleep(m.conf.Multiplexer.Error_response_delay_ms)
 			}
 		}
@@ -325,16 +357,7 @@ func make_checker_proxy(m *multiplexer, proxy http.Handler) http.Handler {
 		//	"r.RemoteAddr", r.RemoteAddr)
 
 		if false {
-			var h = maps.Clone(r.Header)
-			var contentlength = strconv.FormatInt(r.ContentLength, 10)
-			h["Content-Length"] = []string{contentlength}
-			h["Transfer-Encoding"] = r.TransferEncoding
-			var tailers []string
-			for k, _ := range r.Trailer {
-				tailers = append(tailers, k)
-			}
-			h["Trailer"] = tailers
-			m.logger.Debug("HEADERS", "r.Header", h)
+			dump_request_header(r, m.logger)
 		}
 
 		if !ensure_frontend_proxy_trusted(m, w, r) {
@@ -460,7 +483,7 @@ func serve_anonymous_access(m *multiplexer, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	forward_access(m, w, r, be, "-public-", proxy)
+	forward_access(m, w, r, be, "--", proxy)
 }
 
 // FORWARD_ACCESS forwards a granted access to a backend.
@@ -628,7 +651,7 @@ func check_authenticated(m *multiplexer, r *http.Request) (*secret_record, *prox
 	var secret *secret_record = get_secret(m.table, auth)
 	if secret == nil {
 		m.logger.Info("Bad credential", "key", auth,
-			"reason", "unknown")
+			"reason", "unknown-key")
 		var err1 = &proxy_exc{
 			"",
 			"",
@@ -641,10 +664,10 @@ func check_authenticated(m *multiplexer, r *http.Request) (*secret_record, *prox
 	assert_fatal(secret.Access_key == auth)
 	var keypair = [2]string{secret.Access_key, secret.Secret_key}
 	//var ok, reason1 = check_credential_is_good(r, keypair)
-	var reason1, err1 = awss3aide.Check_credential(r, keypair, 60*time.Second)
+	var _, err1 = awss3aide.Check_credential(r, keypair, 60*time.Second)
 	if err1 != nil {
 		m.logger.Info("Bad credential", "key", auth,
-			"reason", reason1)
+			"reason", err1)
 		var err2 = &proxy_exc{
 			"",
 			"",
@@ -1161,4 +1184,18 @@ func http_error_in_json(w http.ResponseWriter, error string, code int) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(code)
 	fmt.Fprintln(w, error)
+}
+
+func dump_request_header(rqst *http.Request, logger *slog.Logger) {
+	var h = maps.Clone(rqst.Header)
+	h["Host"] = []string{rqst.Host}
+	var contentlength = strconv.FormatInt(rqst.ContentLength, 10)
+	h["Content-Length"] = []string{contentlength}
+	h["Transfer-Encoding"] = rqst.TransferEncoding
+	var tailers []string
+	for k, _ := range rqst.Trailer {
+		tailers = append(tailers, k)
+	}
+	h["Trailer"] = tailers
+	logger.Debug("HEADERS", "r.Header", h)
 }

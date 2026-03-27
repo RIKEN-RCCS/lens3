@@ -28,7 +28,9 @@ The entries of "client.json" are:
 - __s3_ep__: S3 endpoint, "https://lens3.example.com".
 - __reg_ep__: Registrar endpoint, "https://lens3.example.com/lens3.sts".
 - __gid__: A unix group of a user.
-- __home__: A directory of a pool (anywhere writable).
+- __pool__: A pool directory (one that is not registered yet).
+- __pool2__: A second pool directory (one that is not registered yet).
+- __home__: A directory of pools (directories "00nnn" should be prepared)
 - __auth__: One of "basic", "oidc", or "x-remote-user".
 - __cred__: A credential, a list of strings depending on "auth".
 - __ssl_verify__: A flag to use https.
@@ -56,6 +58,17 @@ from the host that runs Lens3 services.
 
 __pools_count__ and __backend_awake_duration__ are used in the test
 "busy-server".
+
+__ssl_verify__ is currently ignored, and SSL is always used without
+certificate verification.
+
+```
+context = ssl.create_default_context()
+context.check_hostname = False
+context.verify_mode = ssl.CERT_NONE
+
+c = boto3.client(... verify=False, ...)
+```
 
 ## Python Setting
 

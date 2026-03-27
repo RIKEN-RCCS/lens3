@@ -130,7 +130,7 @@ func (d *backend_rclone) get_delegate_generic_part() *delegate_generic {
 	return &d.delegate_generic
 }
 
-func (d *backend_rclone) make_command_line(port int, directory string) backend_command {
+func (d *backend_rclone) make_command_line(w *manager, port int, directory string) backend_command {
 	var f = d.get_factory()
 	d.rc_port = (port + 1)
 	var ep1 = net.JoinHostPort("", strconv.Itoa(port))
@@ -151,7 +151,7 @@ func (d *backend_rclone) make_command_line(port int, directory string) backend_c
 
 // CHECK_STARTUP decides the server state.  All rclone's messages at a
 // start are on stderr.
-func (d *backend_rclone) check_startup(stream stdio_stream_indicator, mm []string, logger *slog.Logger) *start_result {
+func (d *backend_rclone) check_startup(w *manager, stream stdio_stream_indicator, mm []string) *start_result {
 	if stream == on_stdout {
 		return &start_result{
 			start_state: start_ongoing,
@@ -184,11 +184,11 @@ func (d *backend_rclone) check_startup(stream stdio_stream_indicator, mm []strin
 		var got_control = rclone_response_control_url_re.MatchString
 		var control_found, _ = find_one(mm, got_control)
 		if !control_found {
-			logger.Warn("BE(rclone): Got an expected message" +
+			w.logger.Warn("BE(rclone): Got an expected message" +
 				" but no control messages")
 		}
 		if trace_proc&tracing != 0 {
-			logger.Debug("BE(rclone): Got an expected message", "output", m3)
+			w.logger.Debug("BE(rclone): Got an expected message", "output", m3)
 		}
 		return &start_result{
 			start_state: start_started,
@@ -219,25 +219,25 @@ func check_rclone_port_in_use(m string, re *regexp.Regexp) *start_result {
 	}
 }
 
-func (d *backend_rclone) establish(logger *slog.Logger) error {
+func (d *backend_rclone) establish(w *manager) error {
 	return nil
 }
 
 // SHUTDOWN stops a server using RC core/quit.
-func (d *backend_rclone) shutdown(logger *slog.Logger) error {
-	logger.Debug("BE(rclone): Stopping rclone",
+func (d *backend_rclone) shutdown(w *manager) error {
+	w.logger.Debug("BE(rclone): Stopping rclone",
 		"pool", d.Pool, "pid", d.cmd.Process.Pid)
-	var v1 = rclone_rc_core_quit(d, logger)
+	var v1 = rclone_rc_core_quit(d, w.logger)
 	return v1.err
 }
 
 // HEARTBEAT calls s3.Client.ListBuckets() and returns a status code.
-func (d *backend_rclone) heartbeat(w *manager, logger *slog.Logger) int {
+func (d *backend_rclone) heartbeat(w *manager) int {
 	var be = d.be
 	if be == nil {
 		return http_404_not_found
 	}
-	var code = heartbeat_backend(w, be, logger)
+	var code = heartbeat_backend(w, be)
 	return code
 }
 

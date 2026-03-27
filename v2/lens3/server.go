@@ -40,7 +40,7 @@ const lens3_version string = "v2.2.1"
 const registrar_api_version = "v1.2"
 const configuration_file_version string = "v2.2"
 
-var ch_quit_service chan<- vacuous = nil
+var ch_quit_service_notify chan<- vacuous = nil
 
 func Run_lenticularis_mux() {
 	//var logger_0 = slog.Default()
@@ -123,7 +123,7 @@ func start_lenticularis_service(confpath string, services [2]string) {
 	var t = make_keyval_table(dbconf, false, logger_0)
 
 	var chquit = make(chan vacuous)
-	ch_quit_service = chquit
+	ch_quit_service_notify = chquit
 
 	var count int = 0
 	var muxconf *mux_conf = nil
@@ -269,14 +269,13 @@ func handle_unix_signals(t *keyval_table, logger *slog.Logger) {
 func force_quit_service(logger *slog.Logger) {
 	var once sync.Once
 	once.Do(func() {
-		if ch_quit_service == nil {
-			return
-		}
-
 		// Gracefully shutdown.
 
-		close(ch_quit_service)
-		ch_quit_service = nil
+		if ch_quit_service_notify == nil {
+			return
+		}
+		close(ch_quit_service_notify)
+		ch_quit_service_notify = nil
 
 		// Backends had to be stopped, but force to kill them all.
 

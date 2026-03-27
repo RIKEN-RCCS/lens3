@@ -100,7 +100,7 @@ func (d *backend_s3baby) get_delegate_generic_part() *delegate_generic {
 	return &d.delegate_generic
 }
 
-func (d *backend_s3baby) make_command_line(port int, directory string) backend_command {
+func (d *backend_s3baby) make_command_line(w *manager, port int, directory string) backend_command {
 	var f = d.get_factory()
 	var ep1 = net.JoinHostPort("", strconv.Itoa(port))
 	var keypair = fmt.Sprintf("%s,%s", d.be.Root_access, d.be.Root_secret)
@@ -121,7 +121,7 @@ func (d *backend_s3baby) make_command_line(port int, directory string) backend_c
 
 // CHECK_STARTUP decides the server state.  It ignores messages on
 // stderr.
-func (d *backend_s3baby) check_startup(stream stdio_stream_indicator, mm []string, logger *slog.Logger) *start_result {
+func (d *backend_s3baby) check_startup(w *manager, stream stdio_stream_indicator, mm []string) *start_result {
 	if stream == on_stderr {
 		return &start_result{
 			start_state: start_ongoing,
@@ -146,7 +146,7 @@ func (d *backend_s3baby) check_startup(stream stdio_stream_indicator, mm []strin
 	var expected_found, m3 = find_one(msgs, got_s3baby_expected)
 	if expected_found {
 		if trace_proc&tracing != 0 {
-			logger.Debug("BE(s3baby): Got an expected message", "output", m3)
+			w.logger.Debug("BE(s3baby): Got an expected message", "output", m3)
 		}
 		return &start_result{
 			start_state: start_started,
@@ -217,38 +217,46 @@ func got_s3baby_port_in_use(kv map[string]string) *start_result {
 	}
 }
 
-func (d *backend_s3baby) establish(logger *slog.Logger) error {
+func (d *backend_s3baby) establish(w *manager) error {
 	return nil
 }
 
 // SHUTDOWN stops the server.
-func (d *backend_s3baby) shutdown(logger *slog.Logger) error {
-	logger.Debug("BE(s3baby): Stopping s3baby",
+func (d *backend_s3baby) shutdown(w *manager) error {
+	w.logger.Debug("BE(s3baby): Stopping s3baby",
 		"pool", d.Pool, "pid", d.cmd.Process.Pid)
-	var v1 = control_s3baby_server(d, "quit", logger)
-	return v1
+	var _, err1 = control_s3baby_server(d, "quit", w.logger)
+	return err1
 }
 
-// HEARTBEAT calls s3.Client.ListBuckets() and returns a status code.
-func (d *backend_s3baby) heartbeat(w *manager, logger *slog.Logger) int {
+// HEARTBEAT posts an http request to "/bbs.ctl/ping". It returns a
+// returned status code, or http_502_bad_gateway (for a client side
+// error).
+func (d *backend_s3baby) heartbeat(w *manager) int {
 	var be = d.be
 	if be == nil {
 		return http_404_not_found
 	}
-	var code = heartbeat_backend(w, be, logger)
+	if false {
+		var _ = heartbeat_backend(w, be)
+	}
+	var code, _ = control_s3baby_server(d, "ping", w.logger)
 	return code
 }
 
-// A way to send control messages to Baby-server can be found in
+// CONTROL_S3BABY_SERVER posts an http request on the control url
+// (usually "/bbs.ctl").  It returns a status-code and an error.  It
+// returns http_502_bad_gateway, when an error occurs before
+// accessing the server.  The commands are: "quit", "stat", or "ping".
+// The way to send control messages to Baby-server can be found in
 // "test/control/control-client.go" in
 // https://github.com/riken-rccs/s3-baby-server
-
-func control_s3baby_server(d *backend_s3baby, command string, logger *slog.Logger) error {
-	if !(command == "quit" || command == "stat") {
+func control_s3baby_server(d *backend_s3baby, command string, logger *slog.Logger) (int, error) {
+	if !(command == "quit" || command == "stat" || command == "ping") {
 		logger.Error("BE(s3baby): Bad control command",
 			"command", command)
 		var errx = fmt.Errorf("BE(s3baby): Bad control command: %s", command)
-		return errx
+		return http_502_bad_gateway, errx
 	}
 
 	var be = d.be
@@ -256,7 +264,7 @@ func control_s3baby_server(d *backend_s3baby, command string, logger *slog.Logge
 		logger.Error("BE(s3baby): No backend record")
 		var errx = fmt.Errorf("BE(s3baby): No backend record: pool=%s",
 			d.Pool)
-		return errx
+		return http_502_bad_gateway, errx
 	}
 
 	var keypair = [2]string{be.Root_access, be.Root_secret}
@@ -276,7 +284,7 @@ func control_s3baby_server(d *backend_s3baby, command string, logger *slog.Logge
 	if err4 != nil {
 		logger.Debug("BE(s3baby): http.NewRequestWithContext() failed",
 			"url", url1, "error", err4)
-		return err4
+		return http_502_bad_gateway, err4
 	}
 
 	//r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -287,7 +295,7 @@ func control_s3baby_server(d *backend_s3baby, command string, logger *slog.Logge
 	if err5 != nil {
 		logger.Warn("BE(s3baby): S3-Signing failed",
 			"error", err5)
-		return err5
+		return http_502_bad_gateway, err5
 	}
 
 	// Set to skip https server certificate verification.
@@ -303,17 +311,17 @@ func control_s3baby_server(d *backend_s3baby, command string, logger *slog.Logge
 	if err6 != nil {
 		logger.Warn("BE(s3baby): http.Client.Do() failed",
 			"error", err6)
-		return err6
+		return http_502_bad_gateway, err6
 	}
 	defer rspn.Body.Close()
 
-	if rspn.StatusCode == http.StatusOK {
-		return nil
+	if rspn.StatusCode == http_200_OK {
+		return http_200_OK, nil
 	} else {
 		logger.Warn("BE(s3baby): http.Client.Do() returns not OK",
 			"status", rspn.StatusCode)
 		var err8 = fmt.Errorf("BE(s3baby): http.Client.Do() returns=%d",
 			rspn.StatusCode)
-		return err8
+		return rspn.StatusCode, err8
 	}
 }

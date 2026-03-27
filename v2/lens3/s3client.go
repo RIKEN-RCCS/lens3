@@ -122,7 +122,7 @@ func make_bucket_in_backend(w *manager, be *backend_record, bucket *bucket_recor
 // HEARTBEAT_BACKEND calls list buckets in the backend.  An error is
 // an canceled error, because it sets small timeout 1~sec (thus,
 // err1.Err : *aws/RequestCanceledError).
-func heartbeat_backend(w *manager, be *backend_record, logger *slog.Logger) int {
+func heartbeat_backend(w *manager, be *backend_record) int {
 	var session = ""
 	var url1 = ("http://" + be.Backend_ep)
 	var provider = credentials.NewStaticCredentialsProvider(
@@ -133,7 +133,7 @@ func heartbeat_backend(w *manager, be *backend_record, logger *slog.Logger) int 
 		Credentials:  provider,
 		Region:       region,
 		UsePathStyle: true,
-		Logger:       make_aws_logger(logger),
+		Logger:       make_aws_logger(w.logger),
 	}
 	var client *s3.Client = s3.New(options)
 
@@ -146,12 +146,12 @@ func heartbeat_backend(w *manager, be *backend_record, logger *slog.Logger) int 
 		if ok1 {
 			var err3, ok2 = (err2.Err).(*aws.RequestCanceledError)
 			if ok2 {
-				logger.Warn("Heartbeat failed", "err", err3.Err)
+				w.logger.Warn("Heartbeat failed", "err", err3.Err)
 			} else {
-				logger.Warn("Heartbeat failed", "err", err2.Err)
+				w.logger.Warn("Heartbeat failed", "err", err2.Err)
 			}
 		} else {
-			logger.Warn("Heartbeat failed", "err", err1)
+			w.logger.Warn("Heartbeat failed", "err", err1)
 		}
 		return http_400_bad_request
 	}

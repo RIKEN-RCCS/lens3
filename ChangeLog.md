@@ -4,11 +4,14 @@ The list is sketchy.
 
 ## v2.2.1 2026-03
 
-  - Change the backend server form "MinIO" to "s3-baby-server"
+  - Change the backend server form "MinIO" to "S3-Baby-server"
   - Provide RPM package
   - Patch UI to replace the name "MinIO" to non-specific "backend"
   - Correct signing method to accept unicode file names
   - Update Golang libraries
+
+It is tested only with S3-Baby-server.  Other backends, MinIO and
+RCLONE, are not tested any more.
 
 The RPM package includes the "s3-baby-server" binary to ease
 installation.

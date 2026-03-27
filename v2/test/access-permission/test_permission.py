@@ -3,6 +3,9 @@
 # Copyright 2022-2024 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
 
+# Importing "urllib3" is only to suppress warnings.  Note that "boto3"
+# uses "urllib3".
+
 # Boto3 API reference is
 # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html
 
@@ -13,12 +16,14 @@ import json
 import subprocess
 import botocore
 import boto3
+import urllib3
 
 sys.path.append("../lib/")
 
 from lens3_client import Lens3_Registrar
 from lens3_client import random_string
 
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 _verbose = True
 
@@ -183,7 +188,7 @@ class Access_Test():
     """
 
     def __init__(self, client):
-        self.client = client
+        self.registrar = client
         self.working_directory = ""
         self.working_pool = ""
         # super().__init__(client)
@@ -194,23 +199,18 @@ class Access_Test():
         pass
 
     def make_working_pool(self):
-        """Makes a pool in a directory with a random name."""
+        """Makes a pool with a given name."""
         assert self.working_directory == ""
-        self.working_directory = (self.client.home + "/00"
-                                  + random_string(6))
-        desc = self.client.make_pool(self.working_directory)
+        self.working_directory = self.registrar.pool
+        desc = self.registrar.make_pool(self.working_directory)
         self.working_pool = desc["pool_name"]
         return desc
 
 
     def make_another_pool(self):
-        while True:
-            directory = (self.client.home + "/00" + random_string(6))
-            if directory != self.working_directory:
-                break
-            pass
-        assert directory != self.working_directory
-        desc = self.client.make_pool(directory)
+        self.another_directory = self.registrar.pool2
+        assert self.another_directory != self.working_directory
+        desc = self.registrar.make_pool(self.another_directory)
         self.another_pool = desc["pool_name"]
         return
 
@@ -233,26 +233,26 @@ class Access_Test():
     def make_buckets(self):
         """Makes buckets one for each policy."""
         print(f"Making buckets...")
-        desc1 = self.client.find_pool(self.working_directory)
+        desc1 = self.registrar.find_pool(self.working_directory)
         pid = desc1["pool_name"]
-        for policy in self.client.bkt_policy_set:
+        for policy in self.registrar.bkt_policy_set:
             bucket = ("lenticularis-oddity-" + random_string(6))
             while bucket in self.working_buckets:
                 bucket = ("lenticularis-oddity-" + random_string(6))
                 pass
             assert bucket not in self.working_buckets
             print(f";; Bucket with policy={policy} bucket={bucket}")
-            self.client.make_bucket(self.working_pool, bucket, policy)
+            self.registrar.make_bucket(self.working_pool, bucket, policy)
             self.working_buckets.add(bucket)
             pass
-        desc2 = self.client.find_pool(self.working_directory)
+        desc2 = self.registrar.find_pool(self.working_directory)
         bktslist = desc2["buckets"]
         for b in bktslist:
             # _verbose_print(f";; b={b}")
             policy = b["bkt_policy"]
             self.buckets[policy] = b["name"]
             pass
-        assert self.buckets.keys() == self.client.bkt_policy_set
+        assert self.buckets.keys() == self.registrar.bkt_policy_set
         pass
 
     def make_s3_clients(self, expired):
@@ -273,14 +273,14 @@ class Access_Test():
         #
 
         print(f"Making access keys...")
-        for policy in self.client.key_policy_set:
+        for policy in self.registrar.key_policy_set:
             print(f";; Access-key with policy={policy} expired={expired}")
-            self.client.make_secret(self.working_pool, policy, expiration)
+            self.registrar.make_secret(self.working_pool, policy, expiration)
             pass
-        desc2 = self.client.get_pool(self.working_pool)
+        desc2 = self.registrar.get_pool(self.working_pool)
         keyslist2 = [k for k in desc2["secrets"]
                      if k["expiration_time"] == expiration]
-        assert len(keyslist2) == len(self.client.key_policy_set)
+        assert len(keyslist2) == len(self.registrar.key_policy_set)
         print(f"Making S3 cleints...")
         for k in keyslist2:
             access2 = k["access_key"]
@@ -289,14 +289,15 @@ class Access_Test():
             client1 = boto3.client(
                 service_name="s3",
                 region_name=region,
-                endpoint_url=self.client.s3_ep,
+                endpoint_url=self.registrar.s3_ep,
                 aws_access_key_id=access2,
                 aws_secret_access_key=secret2,
+                verify=False,
                 config=botocore.config.Config(signature_version="s3v4"))
             _verbose_print(f";; s3-client {policy2}; {access2}, {secret2}")
             self.s3_clients[expired][policy2] = client1
             pass
-        assert self.s3_clients[expired].keys() == self.client.key_policy_set
+        assert self.s3_clients[expired].keys() == self.registrar.key_policy_set
 
         #
         # (2) Make an S3 client without a key (for public access).
@@ -305,7 +306,8 @@ class Access_Test():
         c = boto3.client(
             service_name="s3",
             region_name=region,
-            endpoint_url=self.client.s3_ep,
+            endpoint_url=self.registrar.s3_ep,
+            verify=False,
             config=botocore.config.Config(signature_version=botocore.UNSIGNED))
         self.s3_clients[expired]["nokey"] = c
 
@@ -314,8 +316,8 @@ class Access_Test():
         #
 
         policy3 = "readwrite"
-        assert policy3 in self.client.key_policy_set
-        desc3 = self.client.make_secret(self.another_pool, policy3, expiration)
+        assert policy3 in self.registrar.key_policy_set
+        desc3 = self.registrar.make_secret(self.another_pool, policy3, expiration)
         keyslist3 = [k for k in desc3["secrets"]
                      if k["expiration_time"] == expiration]
         # _verbose_print(f";; keyslist3={keyslist3}")
@@ -326,16 +328,17 @@ class Access_Test():
         client3 = boto3.client(
             service_name="s3",
             region_name=region,
-            endpoint_url=self.client.s3_ep,
+            endpoint_url=self.registrar.s3_ep,
             aws_access_key_id=access3,
             aws_secret_access_key=secret3,
+            verify=False,
             config=botocore.config.Config(signature_version="s3v4"))
         self.s3_clients[expired]["badkey"] = client3
         #print(f"s3clients[expired={expired}]={client3}")
         pass
 
     def put_file_in_buckets(self):
-        print("Storing a file in each bucket with the readwrite key...")
+        print("Storing a file in each bucket (using the readwrite key)...")
         subprocess.run(["rm", "-f", "gomi-file0.txt"])
         subprocess.run(["touch", "gomi-file0.txt"])
         subprocess.run(["shred", "-n", "1", "-s", "64K", "gomi-file0.txt"])
@@ -419,8 +422,8 @@ class Access_Test():
                 result = Respn.OK
                 pass
             flag = "" if expired == 0 else "/expired"
-            print(f"Accessing {bkt}-bucket with {key}-key{flag}"
-                  f" by {op}: {result}")
+            print(f"Access op={op} policy={bkt} key={key}{flag};"
+                  f" Receive result={result}")
             if not result == expectation:
                 print(f"result={result}; expectation={expectation}")
                 pass
@@ -563,9 +566,9 @@ def main():
         clean_working_pools = True
         if clean_working_pools:
             print(f";; Deleting a working pool={testcase.working_pool}")
-            testcase.client.delete_pool(testcase.working_pool)
+            testcase.registrar.delete_pool(testcase.working_pool)
             print(f";; Deleting a working pool={testcase.another_pool}")
-            testcase.client.delete_pool(testcase.another_pool)
+            testcase.registrar.delete_pool(testcase.another_pool)
         else:
             print(f";; Leave a working pool={testcase.working_pool}")
             print(f";; Leave a working pool={testcase.another_pool}")

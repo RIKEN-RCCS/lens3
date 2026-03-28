@@ -2,14 +2,180 @@
 
 ## Outline
 
-This document describes setting for Lenticularis-S3 (Lens3).
+This document describes setting for Lenticularis-S3.
 
 | ![lens3-overview](lens3-overview.svg) |
 |:--:|
 | **Fig. Lens3 overview.** |
 
 Installation procedure is described in a separate page
-[installation-procedure.md](installation-procedure.md).
+[installation.md](installation.md).
+
+## Lens3 Configuration (Settings Stored in Keyval-DB)
+
+### Access Information to Keyval-DB (Valkey)
+
+Make the configurations in files and load them in the keyval-db.  Note
+"lenticularis-admin" needs "lens3.conf" containing connection
+information to the keyval-db.  Keep "lens3.conf" secure, when it is
+necessary to copy it.
+
+Most of the work in this part shall be performed by user
+"lenticularis".  However, copying the "lens3.conf" file should be
+performed by the root beforehand.
+
+```
+cp /etc/lenticularis/lens3.conf ~lenticularis/lens3.conf
+chown lenticularis:lenticularis ~lenticularis/lens3.conf
+chmod 660 ~lenticularis/lens3.conf
+```
+
+### Multiplexer/Registrar Configuration
+
+Multiplexer and Registrar load the configuration from the keyval-db
+(Valkey).  This section prepares it.  It is better to run
+`lenticularis-admin` on the same host running the keyval-db.
+
+See the description of the fields of the configurations:
+[configuration.md](configuration.md).
+
+First, view the stored configurations.
+
+```
+lenticularis-admin -c lens3.conf show-conf
+```
+
+Then, copy the default configurations to new files and edit them.
+Note that the existence of files named "mux*.conf" and "reg*.conf" in
+the directory will prevent reloading the configurations during RPM
+updates.
+
+```
+cd /var/lib/lenticularis
+cp mux-default.conf mux.conf
+cp reg-default.conf reg.conf
+vi mux.conf
+vi reg.conf
+```
+
+Check the syntax of json before loading the configuration.  It can be
+checked by tools such as "jq".  "jq" is a command-line JSON processor.
+
+```
+cat mux.conf | jq
+cat reg.conf | jq
+```
+
+Load the configurations from the files.
+
+```
+lenticularis-admin -c lens3.conf load-conf mux.conf
+lenticularis-admin -c lens3.conf load-conf reg.conf
+```
+
+Restarting the service is needed after changing the configurations.
+Run:
+
+```
+systemctl restart lenticularis-mux
+```
+
+## (Optional) Set up Log Rotation
+
+Logs from Multiplexer, Registrar, and Valkey are rotated with
+"copytruncate".  Note the "copytruncate" method has a minor race.  The
+rule for Valkey is a modified copy of /etc/logrotate.d/redis.
+
+```
+cp $TOP/v2/unit-file/lenticularis-logrotate /etc/logrotate.d/lenticularis
+vi /etc/logrotate.d/lenticularis
+chmod 644 /etc/logrotate.d/lenticularis
+```
+
+## (Optional) Set up System Logging
+
+Logging in Rocky is in memory by default.  It needs to be
+changed in the setting to keep logs across reboots.
+
+```
+vi /etc/systemd/journald.conf
+
++[Journal]
++Storage=persistent
+
+systemctl restart systemd-journald
+```
+
+## (Optional) Set up a Message Queue (MQTT)
+
+Lens3 can duplicate alert logs to a message queue.  It assumes MQTT v5
+and "mosquitto" for the server.  The assigned MQTT password should be
+set in "mux.conf".
+
+```
+dnf install mosquitto
+mosquitto_passwd -c /etc/mosquitto/password.txt lens3
+mosquitto_passwd -b /etc/mosquitto/password.txt lens3 password
+chmod 440 /etc/mosquitto/password.txt
+vi /etc/mosquitto/mosquitto.conf
+
+-#allow_anonymous true
++allow_anonymous false
+-#password_file
++password_file /etc/mosquitto/password.txt
+```
+
+```
+systemctl enable mosquitto
+systemctl start mosquitto
+systemctl status mosquitto
+```
+
+It is necessary to reload "mux.conf" and to restart the service
+after changing the password.
+
+```
+vi mux.conf
+lenticularis-admin -c lens3.conf load-conf mux.conf
+```
+
+```
+systemctl restart lenticularis-mux
+```
+
+## Check the Status
+
+Proxy status:
+
+```
+systemctl status httpd
+
+Or,
+
+systemctl status nginx
+```
+
+Valkey status:
+
+```
+systemctl status lenticularis-valkey
+```
+
+Lenticularis status:
+
+```
+systemctl status lenticularis-mux
+```
+
+The admin command `show-mux` shows the endpoints of Multiplexers
+(lenticularis-mux).  An MUX entry is updated periodically, and its
+existence of the entry means lenticularis-mux is working.  Something
+goes wrong if it were empty.
+
+```
+lenticularis-admin -c lens3.conf show-mux
+```
+
 
 ## Notes on an HTTP Proxy
 
@@ -58,12 +224,12 @@ can be found in $TOP/v2/proxy-apache/.  Copy one as
 "chcon -u system_u" on the file).
 
 ```
-# cp $TOP/v2/proxy-apache/lens3proxy-basic.conf /etc/httpd/conf.d/lens3proxy.conf
-# chown root:root /etc/httpd/conf.d/lens3proxy.conf
-# chmod 640 /etc/httpd/conf.d/lens3proxy.conf
-# vi /etc/httpd/conf.d/lens3proxy.conf
-# restorecon -v /etc/httpd/conf.d/lens3proxy.conf
-# ls -lZ /etc/httpd/conf.d/lens3proxy.conf
+cp $TOP/v2/proxy-apache/lens3proxy-basic.conf /etc/httpd/conf.d/lens3proxy.conf
+chown root:root /etc/httpd/conf.d/lens3proxy.conf
+chmod 640 /etc/httpd/conf.d/lens3proxy.conf
+vi /etc/httpd/conf.d/lens3proxy.conf
+restorecon -v /etc/httpd/conf.d/lens3proxy.conf
+ls -lZ /etc/httpd/conf.d/lens3proxy.conf
 (* Check the context is with system_u on it. *)
 ```
 
@@ -98,13 +264,13 @@ message.
 Prepare passwords for basic authentication.
 
 ```
-# mkdir /etc/httpd/passwd
-# chown apache:apache /etc/httpd/passwd
-# chmod 770 /etc/httpd/passwd
-# touch /etc/httpd/passwd/passwords
-# chown apache:apache /etc/httpd/passwd/passwords
-# chmod 660 /etc/httpd/passwd/passwords
-# htpasswd -b /etc/httpd/passwd/passwords user pass
+mkdir /etc/httpd/passwd
+chown apache:apache /etc/httpd/passwd
+chmod 770 /etc/httpd/passwd
+touch /etc/httpd/passwd/passwords
+chown apache:apache /etc/httpd/passwd/passwords
+chmod 660 /etc/httpd/passwd/passwords
+htpasswd -b /etc/httpd/passwd/passwords user pass
 ......
 ```
 
@@ -113,8 +279,8 @@ Prepare passwords for basic authentication.
 Start Apache-HTTPD.
 
 ```
-# systemctl enable httpd
-# systemctl start httpd
+systemctl enable httpd
+systemctl start httpd
 ```
 
 ### Other Settings for Apache-HTTPD (Tips)
@@ -124,11 +290,11 @@ file.  Change the lines of cert and key in
 "/etc/httpd/conf.d/ssl.conf".
 
 ```
-# cp lens3.crt /etc/pki/tls/certs/lens3.crt
-# cp lens3.key /etc/pki/tls/private/lens3.key
-# chown root:root /etc/pki/tls/private/lens3.key
-# chmod 600 /etc/pki/tls/private/lens3.key
-# vi /etc/httpd/conf.d/ssl.conf
+cp lens3.crt /etc/pki/tls/certs/lens3.crt
+cp lens3.key /etc/pki/tls/private/lens3.key
+chown root:root /etc/pki/tls/private/lens3.key
+chmod 600 /etc/pki/tls/private/lens3.key
+vi /etc/httpd/conf.d/ssl.conf
 
 +SSLCertificateFile /etc/pki/tls/certs/lens3.crt
 +SSLCertificateKeyFile /etc/pki/tls/private/lens3.key
@@ -161,155 +327,6 @@ parameters:
 See also for the AWS S3 CLI parameters:
 [https://docs.aws.amazon.com/cli/latest/topic/s3-config.html](https://docs.aws.amazon.com/cli/latest/topic/s3-config.html).
 
-## Store Lens3 Settings in Keyval-DB
-
-Most of the work in this part shall be performed by user
-"lenticularis".
-
-However, copying the "lens3.conf" file should be performed by the root
-beforehand.
-
-```
-# cp /etc/lenticularis/lens3.conf ~lenticularis/lens3.conf
-# chown lenticularis:lenticularis ~lenticularis/lens3.conf
-# chmod 660 ~lenticularis/lens3.conf
-```
-
-Multiplexer and Registrar load the configuration from the keyval-db
-(Valkey).  This section prepares it.  It is better to run
-`lenticularis-admin` on the same host running the keyval-db.  See the
-following description of the fields of the configurations.
-
-- [configuration.md](configuration.md)
-
-First, view the stored configurations.
-
-```
-lenticularis-admin -c lens3.conf show-conf
-```
-
-Make the configurations in files and load them in the keyval-db.  Note
-`lenticularis-admin` needs "lens3.conf" containing connection
-information to the keyval-db.  Keep "lens3.conf" secure, when it is
-necessary to copy it.
-
-```
-cd /var/lib/lenticularis
-vi mux-conf.json
-vi reg-conf.json
-```
-
-Check the syntax of json before loading the configuration.  It can be
-checked by tools such as "jq".  "jq" is a command-line JSON processor.
-
-```
-lenticularis$ cat mux-conf.json | jq
-lenticularis$ cat reg-conf.json | jq
-```
-
-Load the configurations from the files.
-
-```
-lenticularis-admin -c ./lens3.conf load-conf mux-conf.json
-lenticularis-admin -c ./lens3.conf load-conf reg-conf.json
-```
-
-Restarting the service is needed after changing the configurations.
-Run `systemctl restart lenticularis-mux`.
-
-## (Optional) Set up Log Rotation
-
-Logs from Multiplexer, Registrar, and Valkey are rotated with
-"copytruncate".  Note the "copytruncate" method has a minor race.  The
-rule for Valkey is a modified copy of /etc/logrotate.d/redis.
-
-```
-cp $TOP/v2/unit-file/lenticularis-logrotate /etc/logrotate.d/lenticularis
-vi /etc/logrotate.d/lenticularis
-chmod 644 /etc/logrotate.d/lenticularis
-```
-
-## (Optional) Set up System Logging
-
-Logging in Rocky is in memory by default.  It needs to be
-changed in the setting to keep logs across reboots.
-
-```
-# vi /etc/systemd/journald.conf
-
-+[Journal]
-+Storage=persistent
-
-# systemctl restart systemd-journald
-```
-
-## (Optional) Set up a Message Queue (MQTT)
-
-Lens3 can duplicate alert logs to a message queue.  It assumes MQTT v5
-and "mosquitto" for the server.  The assigned MQTT password should be
-set in "mux-conf.json".
-
-```
-# dnf install mosquitto
-# mosquitto_passwd -c /etc/mosquitto/password.txt lens3
-# mosquitto_passwd -b /etc/mosquitto/password.txt lens3 password
-# chmod 440 /etc/mosquitto/password.txt
-# vi /etc/mosquitto/mosquitto.conf
-
--#allow_anonymous true
-+allow_anonymous false
--#password_file
-+password_file /etc/mosquitto/password.txt
-```
-
-```
-# systemctl enable mosquitto
-# systemctl start mosquitto
-# systemctl status mosquitto
-```
-
-It is necessary to reload "mux-conf.json" and to restart the service
-after changing the password.
-
-```
-vi mux-conf.json
-lenticularis-admin -c ./lens3.conf load-conf mux-conf.json
-```
-
-```
-# systemctl restart lenticularis-mux
-```
-
-## Check the Status
-
-Proxy status:
-
-```
-# systemctl status httpd
-Or,
-# systemctl status nginx
-```
-
-Valkey status:
-
-```
-systemctl status lenticularis-valkey
-```
-
-Lenticularis status:
-
-```
-systemctl status lenticularis-mux
-```
-
-The admin command `show-mux` shows the endpoints of Multiplexers
-(lenticularis-mux).  An MUX entry is updated periodically, and its
-existence of the entry means lenticularis-mux is working.  Something
-goes wrong if it were empty.
-
-```
-lenticularis-admin -c ./lens3.conf show-mux
-```
 
 ## Access Test
 
@@ -395,8 +412,8 @@ vi CSV-FILE.csv
 Register users by `lenticularis-admin` command.
 
 ```
-lenticularis-admin -c ./lens3.conf load-user CSV-FILE.csv
-lenticularis-admin -c ./lens3.conf show-user
+lenticularis-admin -c lens3.conf load-user CSV-FILE.csv
+lenticularis-admin -c lens3.conf show-user
 ```
 
 ## Troubleshooting
@@ -408,7 +425,9 @@ logging is tricky.
 
 ```
 systemctl status lenticularis-mux
+
 Or,
+
 journalctl
 ```
 
@@ -421,20 +440,21 @@ The configuration "logging.logger.tracing=255" can increase logging
 verbosity.  It is bit flags, and 255 is all bits on.
 
 The setting of "logging.logger.tracing" is in the configuration
-"mux-conf.json".  Reloading the configuration by "lenticularis-admin"
+"mux.conf".  Reloading the configuration by "lenticularis-admin"
 and restarting the service by "systemctl" are needed to make changes
 effective.
 
 ### Running an S3 Server by Hand
 
 A major trouble is starting an S3 server.  Try to start S3 Baby-server
-by hand.
+by hand.  The Baby-server is usually installed in "/usr/loca/bin".
 
 ```
 /usr/loca/bin/s3-baby-server serve :9000 SOME-PATH
+
 Or,
-/usr/bin/sudo -n -u SOME-UID -g SOME-GID \
-    /usr/loca/bin/s3-baby-server serve :9000 SOME-PATH
+
+/usr/bin/sudo -n -u SOME-UID -g SOME-GID /usr/loca/bin/s3-baby-server serve :9000 SOME-PATH
 ```
 
 ### Clean Start for Messy Troubles
@@ -461,8 +481,8 @@ It would happen in an https only site.  It may be fixed by modifying a
 ## CAVEAT
 
 - __backend_timeout_ms__ in a configuration should be larger than
-  1 sec, and recomended 5 sec.  Error responses from a backend could
-  be delayed which cause all errors to be reported as timeouts.
+  1sec, and recomended 5sec.  Error responses from a backend could be
+  delayed which cause all errors to be reported as timeouts.
 
 - Current version does not support of multiple hosts.  It requires all
   the frontend proxy, Valkey, Multiplexer, and Registrar run on a

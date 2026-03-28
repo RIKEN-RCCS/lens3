@@ -1,4 +1,4 @@
-"""Access Permission Test.  It accesses the store using boto3."""
+"""Access Permission Test"""
 
 # Copyright 2022-2024 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause

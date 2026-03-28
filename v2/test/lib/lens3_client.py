@@ -248,9 +248,9 @@ class Lens3_Registrar(_Lens3_Client):
         self.api_version = "v1.2"
         self._verbose = False
         self.gid = self.conf.get("gid")
-        self.home = self.conf.get("home")
         self.pool = self.conf.get("pool")
         self.pool2 = self.conf.get("pool2")
+        self.poolpool = self.conf.get("poolpool")
         pass
 
     # Lens3-Registrar Oprations.

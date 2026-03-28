@@ -159,19 +159,19 @@ class Registrar_Test(Test_Base):
 
 def main():
     print(f"REGISTRAR TEST...")
-    global registrar, test1
+    global registrar, testcase
     registrar = Lens3_Registrar("client.json")
     print(f";; client: ep={registrar.reg_ep}, auth={registrar.headers}")
     registrar.get_user_info()
 
-    test1 = Registrar_Test(registrar)
+    testcase = Registrar_Test(registrar)
     print(f"Making a working pool for test...")
-    test1.make_working_pool()
+    testcase.make_working_pool()
     try:
-        test1.run()
+        testcase.run()
     finally:
-        print(f";; Deleting a working pool={test1.working_pool}")
-        test1.registrar.delete_pool(test1.working_pool)
+        print(f";; Deleting a working pool={testcase.working_pool}")
+        testcase.registrar.delete_pool(testcase.working_pool)
         pass
     print("Done")
     pass

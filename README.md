@@ -66,8 +66,10 @@ should build and install it, too.
     maintain lens3 services.
   - [setting-guide.md](./v2/doc/setting-guide.md) for site managers to
     install lens3 services.
-  - [installation-procedure.md](./v2/doc/installation-procedure.md)
-    also for site managers to change server configuration.
+  - [installation.md](./v2/doc/installation.md) also for site managers
+    to install lens3 services step-by-step.
+  - [configuration.md](./v2/doc/configuration.md) for site managers
+    to change server configuration.
   - [design-notes.md](./v2/doc/design-notes.md) for programmers to debug.
 
 ## ACKNOWLEDGMENT

@@ -2,20 +2,20 @@
 
 ## Tests
 
-- [basic-copy](basic-copy) tests uploading/downloading by AWS CLI.  It
-  is the simplest test.
+  - [basic-copy](basic-copy) tests uploading/downloading by AWS CLI.  It
+    is the simplest test.
 
-- [registrar-access](registrar-access) tests some of the Registrar
-  operations.
+  - [registrar-access](registrar-access) tests some of the Registrar
+    operations.
 
-- [access-permission](access-permission) tests accesses with various
-  key policies.  It checks accesses are properly granted/blocked.  It
-  should be tested before each software release.
+  - [access-permission](access-permission) tests accesses with various
+    key policies.  It checks accesses are properly granted/blocked.
+    It should be tested before each software release.
 
-- [busy-server](busy-server) tests running many backend servers.
+  - [busy-server](busy-server) tests running many backend servers.
 
-- [sporadic-access](sporadic-access) tests starting/stopping backend
-  servers.
+  - [sporadic-access](sporadic-access) tests starting/stopping backend
+    servers.
 
 ## Client Setting
 
@@ -25,17 +25,17 @@ endpoints for S3 and Lens3 Registrar.  Copy "client-example.json" as
 
 The entries of "client.json" are:
 
-- __s3_ep__: S3 endpoint, "https://lens3.example.com".
-- __reg_ep__: Registrar endpoint, "https://lens3.example.com/lens3.sts".
-- __gid__: A unix group of a user.
-- __pool__: A pool directory (one that is not registered yet).
-- __pool2__: A second pool directory (one that is not registered yet).
-- __home__: A directory of pools (directories "00nnn" should be prepared)
-- __auth__: One of "basic", "oidc", or "x-remote-user".
-- __cred__: A credential, a list of strings depending on "auth".
-- __ssl_verify__: A flag to use https.
-- __pools_count__: Number of backend server instances.
-- __backend_awake_duration__: Wait time, use the value in Lens3 configuration.
+  - __s3_ep__: S3 endpoint, "https://lens3.example.com".
+  - __reg_ep__: Registrar endpoint, "https://lens3.example.com/lens3.sts".
+  - __gid__: A unix group of a user.
+  - __pool__: A pool directory (one that is not registered yet).
+  - __pool2__: A second pool directory (one that is not registered yet).
+  - __poolpool__: A directory, many directories are prepared for pools.
+  - __auth__: One of "basic", "oidc", or "x-remote-user".
+  - __cred__: A credential, a list of strings depending on "auth".
+  - __ssl_verify__: A flag to use https.
+  - __pools_count__: Number of backend server instances.
+  - __backend_awake_duration__: Wait time, use the value in Lens3 configuration.
 
 __auth__ and __cred__ specify a credential used in the tests.
 __auth__ has three choices: {"basic", "oidc", "x-remote-user"}, where
@@ -76,11 +76,13 @@ Tests uses "boto3".  Installing "boto3" is system dependent, ie, by
 pip3 or dnf/apt, etc.
 
 By pip3, do
+
 ```
 $ pip3 install --user -r requirements.txt
 ```
 
 Or, on Ubuntu, do
+
 ```
 $ apt install python3-boto3
 ```
@@ -94,5 +96,5 @@ installing AWS CLI can be found at:
 ## Info on AWS CLI
 
 For S3 CLI, refer to the links:
-- [S3 CLI commands](https://awscli.amazonaws.com/v2/documentation/api/latest/reference/s3/index.html)
-- [S3 CLI API commands](https://awscli.amazonaws.com/v2/documentation/api/latest/reference/s3api/index.html)
+  - [S3 CLI commands](https://awscli.amazonaws.com/v2/documentation/api/latest/reference/s3/index.html)
+  - [S3 CLI API commands](https://awscli.amazonaws.com/v2/documentation/api/latest/reference/s3api/index.html)

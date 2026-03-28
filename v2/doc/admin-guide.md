@@ -46,15 +46,17 @@ Edit the files.
 
 ```
 cd /var/lib/lenticularis
-vi mux-conf.json
-vi reg-conf.json
+cp mux-default.conf mux.conf
+cp reg-default.conf reg.conf
+vi mux.conf
+vi reg.conf
 ```
 
 "lenticularis-admin" is used to load the configuration.
 
 ```
-lenticularis-admin -c ./lens3.conf load-conf mux-conf.json
-lenticularis-admin -c ./lens3.conf load-conf reg-conf.json
+lenticularis-admin -c lens3.conf load-conf mux.conf
+lenticularis-admin -c lens3.conf load-conf reg.conf
 ```
 
 It is better check the syntax of json before loading the
@@ -62,8 +64,8 @@ configuration.  It can be checked by tools such as "jq".  "jq" is a
 popular command-line JSON processor.
 
 ```
-lenticularis$ cat mux-conf.json | jq
-lenticularis$ cat reg-conf.json | jq
+cat mux.conf | jq
+cat reg.conf | jq
 ```
 
 ### User Registration
@@ -124,7 +126,7 @@ part is a string, and a value part is a record in json and it is
 indented by four spaces.
 
 ```
-lens3$ lenticularis-admin -c lens3.conf dump-db > DUMP.txt
-lens3$ lenticularis-admin -c lens3.conf wipe-out-db everything
-lens3$ lenticularis-admin -c lens3.conf fill-db DUMP.txt
+lenticularis-admin -c lens3.conf dump-db > DUMP.txt
+lenticularis-admin -c lens3.conf wipe-out-db everything
+lenticularis-admin -c lens3.conf fill-db DUMP.txt
 ```

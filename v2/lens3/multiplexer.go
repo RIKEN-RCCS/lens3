@@ -276,6 +276,8 @@ func proxy_request_rewriter(m *multiplexer) func(*httputil.ProxyRequest) {
 			})
 		}
 
+		// Note http.Header.Set replaces (not append) the entry.
+
 		r.SetURL(forwarding)
 		r.Out.Header.Set("Lens3-User", auth)
 		r.Out.Header["X-Forwarded-For"] = r.In.Header["X-Forwarded-For"]

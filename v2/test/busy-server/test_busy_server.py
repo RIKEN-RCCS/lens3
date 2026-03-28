@@ -1,7 +1,10 @@
-"""Busy Server Test."""
+"""Busy Server Test"""
 
 # Copyright 2022-2024 RIKEN R-CCS
 # SPDX-License-Identifier: BSD-2-Clause
+
+# Importing "urllib3" is only to suppress warnings.  Note that "boto3"
+# uses "urllib3".
 
 import re
 import sys
@@ -11,6 +14,7 @@ import urllib.error
 import subprocess
 import botocore
 import boto3
+import urllib3
 
 sys.path.append("../lib/")
 
@@ -18,18 +22,23 @@ from lens3_client import Lens3_Registrar
 from lens3_client import check_lens3_message
 from lens3_client import random_string
 
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+pool_name_prefix = "pool"
+pool_name_matcher = r"^pool([0-9][0-9][0-9])$"
 
 def _pool_for_this_test_p(pool):
     path = pool["buckets_directory"]
     last = path.rsplit("/", 1)[-1]
-    m = re.match(r"^00xxx[0-9][0-9][0-9]$", last)
+    m = re.match(pool_name_matcher, last)
     return m is not None
 
 
 def _index_of_test_pool(pool):
     path = pool["buckets_directory"]
     last = path.rsplit("/", 1)[-1]
-    m = re.match(r"^00xxx([0-9][0-9][0-9])$", last)
+    m = re.match(pool_name_matcher, last)
     assert m is not None
     return int(m.group(1))
 
@@ -50,7 +59,7 @@ class Busy_Test():
     #
 
     def make_many_pools(self):
-        print(f"Making many pools for test, n_pools={self.n_pools}...")
+        print(f"Making many pools for test, n_pools={self.n_pools} ...")
         for i in range(self.n_pools):
             self.make_pool(i)
             pass
@@ -62,14 +71,18 @@ class Busy_Test():
         assert len(self.pools) == self.n_pools
         pass
 
+    def get_pool_name(self, i):
+        name = (self.registrar.poolpool + "/" + pool_name_prefix + f"{i:03d}")
+        return name
+
     def make_pool(self, i):
-        name = (self.registrar.home + "/00xxx" + f"{i:03d}")
+        name = self.get_pool_name(i)
         pools = self.registrar.list_pools()
         pool = next((p for p in pools if p["buckets_directory"] == name), None)
         got400 = 0
         if pool is None:
             while True:
-                print(f"Making pool={name}...")
+                print(f"Making a pool pool={name}...")
                 try:
                     pool = self.registrar.make_pool(name)
                     break
@@ -160,7 +173,7 @@ class Busy_Test():
         pools = self.registrar.list_pools()
         self.pools = [None] * self.n_pools
         for i in range(self.n_pools):
-            name = (self.registrar.home + "/00xxx" + f"{i:03d}")
+            name = self.get_pool_name(i)
             pool = next((p for p in pools if p["buckets_directory"] == name),
                         None)
             if pool == None:
@@ -185,6 +198,7 @@ class Busy_Test():
                 endpoint_url=self.registrar.s3_ep,
                 aws_access_key_id=secret["access_key"],
                 aws_secret_access_key=secret["secret_key"],
+                verify=False,
                 config=botocore.config.Config(signature_version="s3v4"))
             self.buckets[i] = bucket
             self.clients[i] = c

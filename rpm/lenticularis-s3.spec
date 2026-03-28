@@ -45,8 +45,8 @@ chown lenticularis:lenticularis /etc/lenticularis
 chown lenticularis:lenticularis /etc/lenticularis/lens3.conf
 chown lenticularis:lenticularis /etc/lenticularis/valkey.conf
 chown lenticularis:lenticularis /var/lib/lenticularis
-chown lenticularis:lenticularis /var/lib/lenticularis/mux-conf.json
-chown lenticularis:lenticularis /var/lib/lenticularis/reg-conf.json
+chown lenticularis:lenticularis /var/lib/lenticularis/mux-default.conf
+chown lenticularis:lenticularis /var/lib/lenticularis/reg-default.conf
 chown lenticularis:lenticularis /var/log/lenticularis
 chown lenticularis:lenticularis /var/log/lenticularis-valkey
 
@@ -84,9 +84,16 @@ systemctl daemon-reload
 systemctl enable lenticularis-valkey
 systemctl start lenticularis-valkey
 
-/usr/local/bin/lenticularis-admin -c /etc/lenticularis/lens3.conf load-conf /var/lib/lenticularis/mux-conf.json
-/usr/local/bin/lenticularis-admin -c /etc/lenticularis/lens3.conf load-conf /var/lib/lenticularis/reg-conf.json
-# /usr/local/bin/lenticularis-admin -c /etc/lenticularis/lens3.conf show-conf
+# It skips loading configurations when non-default exist.
+
+v=(/var/lib/lenticularis/mux*.conf)
+if [ 1 == ${#v[@]} ] ; then
+    /usr/local/bin/lenticularis-admin -c /etc/lenticularis/lens3.conf load-conf /var/lib/lenticularis/mux-default.conf
+fi
+v=(/var/lib/lenticularis/reg*.conf)
+if [ 1 == ${#v[@]} ] ; then
+    /usr/local/bin/lenticularis-admin -c /etc/lenticularis/lens3.conf load-conf /var/lib/lenticularis/reg-default.conf
+fi
 
 # %%systemd_post lenticularis-mux.service
 
@@ -107,8 +114,8 @@ systemctl start lenticularis-mux
 %config(noreplace) %attr(660, -, -) /etc/lenticularis/lens3.conf
 %config(noreplace) %attr(660, -, -) /etc/lenticularis/valkey.conf
 %dir %attr(770, -, -) /var/lib/lenticularis
-%config(noreplace) %attr(660, -, -) /var/lib/lenticularis/mux-conf.json
-%config(noreplace) %attr(660, -, -) /var/lib/lenticularis/reg-conf.json
+%config(noreplace) %attr(660, -, -) /var/lib/lenticularis/mux-default.conf
+%config(noreplace) %attr(660, -, -) /var/lib/lenticularis/reg-default.conf
 %config(noreplace) %attr(660, -, -) /etc/httpd/conf.d/lens3proxy.conf
 %config(noreplace) %attr(644, -, -) /etc/logrotate.d/lenticularis-logrotate
 %dir %attr(770, -, -) /var/log/lenticularis

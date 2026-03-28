@@ -3,14 +3,9 @@
 Lens3 uses the following software.  It may lack software transitively
 used.  Please inform us, if some software is missing.
 
-## AWS S3 Servers
-
-- minio
-- rclone
-
 ## Keyval-DB
 
-- valkey
+- Valkey
 
 ## Golang Modules
 
@@ -28,8 +23,14 @@ used.  Please inform us, if some software is missing.
 
 ## Development Tools
 
-- git
-- golang
+- Git
+- Golang
 - nodejs
-- python
-- typescript
+- Python
+- Typescript
+
+## Other System Software
+
+- Apache httpd
+- Nginx
+- mosquitto

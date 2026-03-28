@@ -83,13 +83,13 @@ pip3 or dnf/apt, etc.
 By pip3, do
 
 ```
-$ pip3 install --user -r requirements.txt
+pip3 install --user -r requirements.txt
 ```
 
 Or, on Ubuntu, do
 
 ```
-$ apt install python3-boto3
+apt install python3-boto3
 ```
 
 ## Install AWS CLI

@@ -201,6 +201,6 @@ stored in the keyval-db.
 
 ### "logging" configuration
 
-"logging" section is optional and the same as mux.conf.
+"logging" section is the same as mux.conf.
 
   - __logger.log_file__: is "/var/log/lenticularis/lens3-reg-log".

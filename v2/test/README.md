@@ -5,17 +5,22 @@
   - [basic-copy](basic-copy) tests uploading/downloading by AWS CLI.  It
     is the simplest test.
 
-  - [registrar-access](registrar-access) tests some of the Registrar
-    operations.
-
   - [access-permission](access-permission) tests accesses with various
-    key policies.  It checks accesses are properly granted/blocked.
+    key policies.  It checks accesses are properly granted or blocked.
     It should be tested before each software release.
 
+  - [registrar-access](registrar-access) tests operations of
+    Registrar.  It tests bucket and access-key creatations.  It
+    accesses Registrar by mimicking Web-UI operations.
+
   - [busy-server](busy-server) tests running many backend servers.
+    Accesses will be blocked when many backend servers are going to
+    work simultaneously.  This tests such situation.  It takes a long
+    time by several hours.
 
   - [sporadic-access](sporadic-access) tests starting/stopping backend
-    servers.
+    servers.  This test is to detect race-condition bugs, and it
+    should be run for a long time.
 
 ## Client Setting
 

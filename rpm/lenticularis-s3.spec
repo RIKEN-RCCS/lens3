@@ -119,5 +119,5 @@ systemctl restart lenticularis-mux
 # %%doc add-docs-here
 
 %changelog
-* Fri Mar 06 2026 zzmatu <zzmatu@users.noreply.github.com>
+* Fri Apr 03 2026 zzmatu <zzmatu@users.noreply.github.com>
 - RPM package provided for v2.2.1.

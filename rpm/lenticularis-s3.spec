@@ -82,7 +82,7 @@ fi
 
 systemctl daemon-reload
 systemctl enable lenticularis-valkey
-systemctl start lenticularis-valkey
+systemctl restart lenticularis-valkey
 
 # It skips loading configurations when one exists.
 
@@ -93,7 +93,7 @@ systemctl start lenticularis-valkey
 
 systemctl daemon-reload
 systemctl enable lenticularis-mux
-systemctl start lenticularis-mux
+systemctl restart lenticularis-mux
 
 %files
 %attr(440, -, -) /etc/sudoers.d/lenticularis-sudoers

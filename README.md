@@ -40,6 +40,9 @@ binaries for Lens3 (i.e., "lenticularis-mux" and
 "/usr/local/bin".  Package details are described in
 [rpm/README.md](./rpm/README.md).
 
+Uninstalling the package does not stop the serverces.  Please manually
+stop the services "lenticularis-mux" and "lenticularis-valkey".
+
 ## Building Binaries
 
 When the RPM binary package is not available, build binaries manually.

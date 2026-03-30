@@ -41,9 +41,9 @@ type mux_conf struct {
 	Conf_header
 	Multiplexer multiplexer_conf `json:"multiplexer"`
 	Manager     manager_conf     `json:"manager"`
+	S3baby      *s3baby_conf     `json:"baby-server"`
 	Minio       *minio_conf      `json:"minio"`
 	Rclone      *rclone_conf     `json:"rclone"`
-	S3baby      *s3baby_conf     `json:"baby-server"`
 	Access_log  access_log_conf  `json:"access_log"`
 	Logging     logging_conf     `json:"logging"`
 }
@@ -133,6 +133,7 @@ type s3baby_conf struct {
 type UI_conf struct {
 	S3_url        string `json:"s3_url"`
 	Footer_banner string `json:"footer_banner"`
+	About_message string `json:"about_message"`
 }
 
 type access_log_conf struct {

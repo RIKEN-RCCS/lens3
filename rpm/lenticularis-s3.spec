@@ -84,16 +84,10 @@ systemctl daemon-reload
 systemctl enable lenticularis-valkey
 systemctl start lenticularis-valkey
 
-# It skips loading configurations when non-default exist.
+# It skips loading configurations when one exists.
 
-v=(/var/lib/lenticularis/mux*.conf)
-if [ 1 == ${#v[@]} ] ; then
-    /usr/local/bin/lenticularis-admin -c /etc/lenticularis/lens3.conf load-conf /var/lib/lenticularis/mux-default.conf
-fi
-v=(/var/lib/lenticularis/reg*.conf)
-if [ 1 == ${#v[@]} ] ; then
-    /usr/local/bin/lenticularis-admin -c /etc/lenticularis/lens3.conf load-conf /var/lib/lenticularis/reg-default.conf
-fi
+/usr/local/bin/lenticularis-admin -c /etc/lenticularis/lens3.conf load-conf-no-overwrite /var/lib/lenticularis/mux-default.conf
+/usr/local/bin/lenticularis-admin -c /etc/lenticularis/lens3.conf load-conf-no-overwrite /var/lib/lenticularis/reg-default.conf
 
 # %%systemd_post lenticularis-mux.service
 

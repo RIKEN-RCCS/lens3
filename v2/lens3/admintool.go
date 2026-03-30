@@ -863,6 +863,55 @@ var cmd_list = []*cmd{
 	},
 
 	&cmd{
+		synopsis: "load-conf-no-overwrite file-name.json",
+
+		doc: `Loads a configuration from a file, but only when one
+	does not exist already.`,
+
+		run: func(adm *adm, args []string) {
+			var t = adm.table
+			var conf = read_conf_from_file(args[1], adm.logger)
+			if conf == nil {
+				panic(nil)
+			}
+			var conftype string
+			switch conf.(type) {
+			case *mux_conf:
+				conftype = "mux"
+			case *reg_conf:
+				conftype = "reg"
+			default:
+				t.logger.Error("Bad conf; type≠mux_conf nor type≠reg_conf",
+					"type", fmt.Sprintf("%T", conf))
+				panic(nil)
+			}
+			var configured bool = false
+			var conflist = list_confs(t)
+			for _, e := range conflist {
+				switch (*e).(type) {
+				case *mux_conf:
+					if conftype == "mux" {
+						configured = true
+					}
+				case *reg_conf:
+					if conftype == "reg" {
+						configured = true
+					}
+				default:
+					t.logger.Error("Bad conf; type≠mux_conf nor type≠reg_conf",
+						"type", fmt.Sprintf("%T", conf))
+					panic(nil)
+				}
+			}
+			if configured {
+				t.logger.Info("Already configured")
+			} else {
+				set_conf(adm.table, conf)
+			}
+		},
+	},
+
+	&cmd{
 		synopsis: "dump-db",
 
 		doc: `Dumps all key-value pairs in the keyval-db.  It is a

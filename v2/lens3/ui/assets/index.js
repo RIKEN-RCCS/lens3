@@ -15986,7 +15986,7 @@ function _sfc_render$5(_ctx, _cache, $props, $setup, $data, $options) {
       }, 8, ["modelValue"]),
       createVNode(VAppBarTitle, null, {
         default: withCtx(() => [
-          createVNode(VIcon, { icon: "mdi-cog" }),
+          //createVNode(VIcon, { icon: "mdi-cog" }),
           createTextVNode(" Lens3 ")
         ]),
         _: 1

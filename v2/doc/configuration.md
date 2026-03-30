@@ -21,11 +21,9 @@ The entries in "lens3.conf" are:
 ## Multiplexer Configuration (mux.conf)
 
 It is recommended to copy "mux-default.conf" as "mux.conf" (for
-example) in "/var/lib/lenticularis/" and use it.  Existence of other
-files named "mux*.conf" in the directory will prevent reloading the
-configuration during RPM installation.  Moreover, the default
+example) in "/var/lib/lenticularis/" and use it.  The default
 configuration "mux-default.conf" will be overwritten during RPM
-installation.
+re-installation.
 
 "mux.conf" contains the setting of Multiplexer.  The contents are
 stored in the keyval-db.

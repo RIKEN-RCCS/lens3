@@ -644,6 +644,7 @@ func handle_exc(x any, w http.ResponseWriter, rqst *http.Request, delay_ms time_
 // Header.  It returns a secret_record or nil.  It may return
 // (nil,nil) when an authorization header is missing.
 func check_authenticated(m *multiplexer, r *http.Request) (*secret_record, *proxy_exc) {
+	var timewindow = (m.conf.Multiplexer.Clock_skew_tolerance).time_duration()
 	var header = r.Header.Get("Authorization")
 	var cred *awss3aide.Authorization_s3v4 = awss3aide.Scan_aws_authorization(header)
 	if cred == nil {
@@ -666,7 +667,7 @@ func check_authenticated(m *multiplexer, r *http.Request) (*secret_record, *prox
 	assert_fatal(secret.Access_key == auth)
 	var keypair = [2]string{secret.Access_key, secret.Secret_key}
 	//var ok, reason1 = check_credential_is_good(r, keypair)
-	var _, err1 = awss3aide.Check_credential(r, keypair, 60*time.Second)
+	var _, err1 = awss3aide.Check_credential(r, keypair, timewindow)
 	if err1 != nil {
 		m.logger.Info("Bad credential", "key", auth,
 			"reason", err1)

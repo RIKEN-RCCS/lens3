@@ -130,14 +130,15 @@ func start_lenticularis_service(confpath string, services [2]string) {
 	var regconf *reg_conf = nil
 	var muxlogger *slog.Logger = nil
 	var reglogger *slog.Logger = nil
+	var err error = nil
 
 	// Value of "tracing" is prefered one from Reg than Mux.
 
 	if services[0] != "" {
 		var svc1 = services[0]
 		count++
-		muxconf = get_mux_conf(t, svc1)
-		if muxconf == nil {
+		muxconf, err = get_mux_conf(t, svc1)
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "No conf for %s found\n", svc1)
 			os.Exit(1)
 		}
@@ -147,8 +148,8 @@ func start_lenticularis_service(confpath string, services [2]string) {
 	if services[1] != "" {
 		var svc2 = services[1]
 		count++
-		regconf = get_reg_conf(t, svc2)
-		if regconf == nil {
+		regconf, err = get_reg_conf(t, svc2)
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "No conf for %s found\n", svc2)
 			os.Exit(1)
 		}

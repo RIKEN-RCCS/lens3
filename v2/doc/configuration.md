@@ -47,6 +47,9 @@ stored in the keyval-db.
     repeatedly sets its endpoint in the keyval-db.
   - __error_response_delay_ms__: is a delay added when sending a
     response for a failed http request.
+  - __clock_skew_tolerance__: is a time window the signing timestamp
+    is accepted.  A timestamp is accepted if it is within the
+    ±tolerance to the current time.
 
 ### "manager" configuration
 

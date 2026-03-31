@@ -874,34 +874,26 @@ var cmd_list = []*cmd{
 			if conf == nil {
 				panic(nil)
 			}
-			var conftype string
-			switch conf.(type) {
+			var configured bool = false
+			switch confbody := conf.(type) {
 			case *mux_conf:
-				conftype = "mux"
+				// Check if mux configuration exists in the db.
+				var subject = confbody.Subject
+				var _, err = get_mux_conf(t, subject)
+				if err == nil {
+					configured = true
+				}
 			case *reg_conf:
-				conftype = "reg"
+				// Check if reg configuration exists in the db.
+				var subject = confbody.Subject
+				var _, err = get_reg_conf(t, subject)
+				if err == nil {
+					configured = true
+				}
 			default:
 				t.logger.Error("Bad conf; type≠mux_conf nor type≠reg_conf",
 					"type", fmt.Sprintf("%T", conf))
 				panic(nil)
-			}
-			var configured bool = false
-			var conflist = list_confs(t)
-			for _, e := range conflist {
-				switch (*e).(type) {
-				case *mux_conf:
-					if conftype == "mux" {
-						configured = true
-					}
-				case *reg_conf:
-					if conftype == "reg" {
-						configured = true
-					}
-				default:
-					t.logger.Error("Bad conf; type≠mux_conf nor type≠reg_conf",
-						"type", fmt.Sprintf("%T", conf))
-					panic(nil)
-				}
 			}
 			if configured {
 				t.logger.Info("Already configured")

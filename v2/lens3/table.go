@@ -320,8 +320,54 @@ const (
 	start_failure_in_setup__     pool_reason = "backend setup fails"
 )
 
+// Errors returned in keyval-db access.  Other errors causes raising
+// exceptions.  See load_db_data().
+var err_missing_entry = errors.New("missing entry")
+var err_broken_entry = errors.New("broken entry")
+
 func make_failure_reason(s string) pool_reason {
 	return pool_reason("Backend outputs: " + s)
+}
+
+func db_Ping(db valkey.Client, ctx context.Context) valkey.ValkeyResult {
+	//var w = db.Ping(ctx)
+	var w = db.Do(ctx, db.B().Ping().Build())
+	return w
+}
+
+func db_Del(db valkey.Client, ctx context.Context, k string) valkey.ValkeyResult {
+	//var w = db.Del(ctx, k)
+	var w = db.Do(ctx, db.B().Del().Key(k).Build())
+	return w
+}
+
+func db_SetNX(db valkey.Client, ctx context.Context, k string, v string) valkey.ValkeyResult {
+	//var w = db.SetNX(ctx, k, v, db_no_expiration)
+	var w = db.Do(ctx, db.B().Setnx().Key(k).Value(v).Build())
+	return w
+}
+
+func db_Set(db valkey.Client, ctx context.Context, k string, v string) valkey.ValkeyResult {
+	//var w = db.Set(ctx, k, v, db_no_expiration)
+	var w = db.Do(ctx, db.B().Set().Key(k).Value(v).Build())
+	return w
+}
+
+func db_Get(db valkey.Client, ctx context.Context, k string) valkey.ValkeyResult {
+	//var w = db.Get(ctx, k)
+	var w = db.Do(ctx, db.B().Get().Key(k).Build())
+	return w
+}
+
+func db_Expire(db valkey.Client, ctx context.Context, k string, sec int64) valkey.ValkeyResult {
+	//var w = db.Expire(ctx, k, sec)
+	var w = db.Do(ctx, db.B().Expire().Key(k).Seconds(sec).Build())
+	return w
+}
+
+func db_Scan(db valkey.Client, ctx context.Context, cursor uint64, pattern string) valkey.ValkeyResult {
+	var w = db.Do(ctx, db.B().Scan().Cursor(cursor).Match(pattern).Build())
+	return w
 }
 
 // MAKE_KEYVAL_TABLE makes a set of keyval-db clients.  It retries a
@@ -433,8 +479,8 @@ func make_keyval_table(conf *db_conf, fail_at_once bool, logger *slog.Logger) *k
 		for time.Now().Before(limit) {
 			var db = t.setting
 			var ctx1 = context.Background()
-			//var w = db.Ping(ctx1)
-			var w = db.Do(ctx1, db.B().Ping().Build())
+			var w = db_Ping(db, ctx1)
+			//var w = db.Do(ctx1, db.B().Ping().Build())
 			err4 = w.Error()
 			if err4 == nil {
 				logger.Debug("Connected to keyval-db", "ep", ep)
@@ -459,7 +505,7 @@ func make_keyval_table(conf *db_conf, fail_at_once bool, logger *slog.Logger) *k
 
 func raise_on_marshaling_error(t *keyval_table, err error) {
 	if err != nil {
-		t.logger.Error("json/Marshal() on keyval-db entry errs", "err", err)
+		t.logger.Error("json.Marshal() on keyval-db entry errs", "err", err)
 		raise(&proxy_exc{
 			"",
 			"",
@@ -608,7 +654,8 @@ func delete_conf(t *keyval_table, sub string) {
 }
 
 // LIST_CONFS returns a list of confs.  It contains both mux_conf and
-// reg_conf.
+// reg_conf.  (* It does not use v==nil to check the existence of a
+// configuration because of the typed-nil issue. *)
 func list_confs(t *keyval_table) []*lens3_conf {
 	var prefix = db_conf_prefix
 	var confs []*lens3_conf = make([]*lens3_conf, 0)
@@ -616,44 +663,49 @@ func list_confs(t *keyval_table) []*lens3_conf {
 	for _, k := range ee {
 		var sub = k[len(prefix):]
 		var v lens3_conf
+		var err error
 		switch {
 		case sub == "mux" || (len(sub) >= 5 && sub[:4] == "mux:"):
-			v = get_mux_conf(t, sub)
+			v, err = get_mux_conf(t, sub)
 		case sub == "reg":
-			v = get_reg_conf(t, sub)
+			v, err = get_reg_conf(t, sub)
 		default:
 			t.logger.Error("Bad subject name", "name", sub)
 			panic(nil)
 		}
-		if v != nil {
+		if err == nil {
 			confs = append(confs, &v)
 		}
 	}
 	return confs
 }
 
-// GET_MUX_CONF returns a configuration for MUX.  The logger is the
-// "early"-logger which logs to stdout.
-func get_mux_conf(t *keyval_table, sub string) *mux_conf {
+// GET_MUX_CONF returns a configuration for MUX.  It returns an error
+// if an entry is missing or broken.  It treats a broken entry as
+// missing.  The logger is the "early"-logger which logs to stdout.
+// (* It avoids returning nil, because it becomes a typed-nil.  *)
+func get_mux_conf(t *keyval_table, sub string) (*mux_conf, error) {
 	assert_fatal(sub == "mux" || (len(sub) >= 5 && sub[:4] == "mux:"))
 	var data mux_conf
-	var ok = db_get_with_prefix(t, db_conf_prefix, sub, &data)
-	if ok {
-		check_mux_conf(&data, t.logger)
+	var err = db_get_with_prefix(t, db_conf_prefix, sub, &data, false)
+	if err == nil {
+		err = check_mux_conf(&data, t.logger)
 	}
-	return ITE(ok, &data, nil)
+	return &data, err
 }
 
-// GET_REG_CONF returns a configuration for REG.  The logger is the
-// "early"-logger which logs to stdout.
-func get_reg_conf(t *keyval_table, sub string) *reg_conf {
+// GET_REG_CONF returns a configuration for REG.  It returns an error
+// if an entry is missing or broken.  It treats a broken entry as
+// missing.  The logger is the "early"-logger which logs to stdout.
+// (* It avoids returning nil, because it becomes a typed-nil.  *)
+func get_reg_conf(t *keyval_table, sub string) (*reg_conf, error) {
 	assert_fatal(sub == "reg")
 	var data reg_conf
-	var ok = db_get_with_prefix(t, db_conf_prefix, sub, &data)
-	if ok {
-		check_reg_conf(&data, t.logger)
+	var err = db_get_with_prefix(t, db_conf_prefix, sub, &data, false)
+	if err == nil {
+		err = check_reg_conf(&data, t.logger)
 	}
-	return ITE(ok, &data, nil)
+	return &data, err
 }
 
 /* USERS */
@@ -698,8 +750,8 @@ func set_user_raw(t *keyval_table, u *user_record) {
 // GET_USER gets a user by a uid.  It may return nil.
 func get_user(t *keyval_table, uid string) *user_record {
 	var data user_record
-	var ok = db_get_with_prefix(t, db_user_data_prefix, uid, &data)
-	return ITE(ok, &data, nil)
+	var err = db_get_with_prefix(t, db_user_data_prefix, uid, &data, true)
+	return ITE(err == nil, &data, nil)
 }
 
 // DELETE_USER deletes a user and its associated claim entry.
@@ -736,8 +788,8 @@ func set_user_claim(t *keyval_table, claim string, uid *user_claim_record) {
 func get_user_claim(t *keyval_table, claim string) *user_claim_record {
 	assert_fatal(claim != "")
 	var data user_claim_record
-	var ok = db_get_with_prefix(t, db_user_claim_prefix, claim, &data)
-	return ITE(ok, &data, nil)
+	var err = db_get_with_prefix(t, db_user_claim_prefix, claim, &data, true)
+	return ITE(err == nil, &data, nil)
 }
 
 func delete_user_claim(t *keyval_table, claim string) {
@@ -762,8 +814,8 @@ func clear_user_claim(t *keyval_table, uid string) {
 		}
 		var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
 		defer cancel()
-		//var w = db.Del(ctx1, k)
-		var w = db.Do(ctx1, db.B().Del().Key(k).Build())
+		var w = db_Del(db, ctx1, k)
+		//var w = db.Do(ctx1, db.B().Del().Key(k).Build())
 		raise_on_del_failure(t, &w)
 	}
 }
@@ -777,8 +829,8 @@ func set_pool(t *keyval_table, pool string, data *pool_record) {
 
 func get_pool(t *keyval_table, pool string) *pool_record {
 	var data pool_record
-	var ok = db_get_with_prefix(t, db_pool_data_prefix, pool, &data)
-	return ITE(ok, &data, nil)
+	var err = db_get_with_prefix(t, db_pool_data_prefix, pool, &data, true)
+	return ITE(err == nil, &data, nil)
 }
 
 func delete_pool(t *keyval_table, pool string) {
@@ -821,8 +873,8 @@ func set_ex_bucket_directory(t *keyval_table, path string, dir *bucket_directory
 
 func get_bucket_directory(t *keyval_table, path string) *bucket_directory_record {
 	var data bucket_directory_record
-	var ok = db_get_with_prefix(t, db_directory_prefix, path, &data)
-	return ITE(ok, &data, nil)
+	var err = db_get_with_prefix(t, db_directory_prefix, path, &data, true)
+	return ITE(err == nil, &data, nil)
 }
 
 func find_bucket_directory_of_pool(t *keyval_table, pool string) string {
@@ -869,8 +921,8 @@ func set_approximate_state(t *keyval_table, pool string, data *approximate_state
 
 func get_approximate_state(t *keyval_table, pool string) *approximate_state_record {
 	var data approximate_state_record
-	var ok = db_get_with_prefix(t, db_approximate_state_prefix, pool, &data)
-	return ITE(ok, &data, nil)
+	var err = db_get_with_prefix(t, db_approximate_state_prefix, pool, &data, true)
+	return ITE(err == nil, &data, nil)
 }
 
 func delete_approximate_state(t *keyval_table, pool string) {
@@ -898,8 +950,8 @@ func set_backend_mutex_expiry(t *keyval_table, pool string, timeout time.Duratio
 
 func get_backend_mutex(t *keyval_table, pool string) *backend_mutex_record {
 	var data backend_mutex_record
-	var ok = db_get_with_prefix(t, db_backend_mutex_prefix, pool, &data)
-	return ITE(ok, &data, nil)
+	var err = db_get_with_prefix(t, db_backend_mutex_prefix, pool, &data, true)
+	return ITE(err == nil, &data, nil)
 }
 
 func delete_backend_mutex(t *keyval_table, pool string) {
@@ -919,8 +971,8 @@ func set_backend_expiry(t *keyval_table, pool string, timeout time.Duration) boo
 
 func get_backend(t *keyval_table, pool string) *backend_record {
 	var data backend_record
-	var ok = db_get_with_prefix(t, db_backend_data_prefix, pool, &data)
-	return ITE(ok, &data, nil)
+	var err = db_get_with_prefix(t, db_backend_data_prefix, pool, &data, true)
+	return ITE(err == nil, &data, nil)
 }
 
 func delete_backend(t *keyval_table, pool string) {
@@ -956,8 +1008,8 @@ func set_mux_ep_expiry(t *keyval_table, mux_ep string, timeout time.Duration) bo
 
 func get_mux_ep(t *keyval_table, mux_ep string) *mux_record {
 	var data mux_record
-	var ok = db_get_with_prefix(t, db_mux_ep_prefix, mux_ep, &data)
-	return ITE(ok, &data, nil)
+	var err = db_get_with_prefix(t, db_mux_ep_prefix, mux_ep, &data, true)
+	return ITE(err == nil, &data, nil)
 }
 
 func delete_mux_ep(t *keyval_table, mux_ep string) {
@@ -1006,8 +1058,8 @@ func set_bucket_by_adm(t *keyval_table, bucket string, data *bucket_record) {
 
 func get_bucket(t *keyval_table, bucket string) *bucket_record {
 	var data bucket_record
-	var ok = db_get_with_prefix(t, db_bucket_prefix, bucket, &data)
-	return ITE(ok, &data, nil)
+	var err = db_get_with_prefix(t, db_bucket_prefix, bucket, &data, true)
+	return ITE(err == nil, &data, nil)
 }
 
 func delete_bucket_checking(t *keyval_table, bucket string) bool {
@@ -1041,8 +1093,8 @@ func set_pool_timestamp(t *keyval_table, pool string) {
 
 func get_pool_timestamp(t *keyval_table, pool string) int64 {
 	var data int64
-	var ok = db_get_with_prefix(t, db_pool_timestamp_prefix, pool, &data)
-	return ITE(ok, data, 0)
+	var err = db_get_with_prefix(t, db_pool_timestamp_prefix, pool, &data, true)
+	return ITE(err == nil, data, 0)
 }
 
 func delete_pool_timestamp(t *keyval_table, pool string) {
@@ -1087,8 +1139,8 @@ func set_user_timestamp(t *keyval_table, uid string) {
 // It returns 0 on an internal db-access error.
 func get_user_timestamp(t *keyval_table, uid string) int64 {
 	var data int64
-	var ok = db_get_with_prefix(t, db_user_timestamp_prefix, uid, &data)
-	return ITE(ok, data, 0)
+	var err = db_get_with_prefix(t, db_user_timestamp_prefix, uid, &data, true)
+	return ITE(err == nil, data, 0)
 }
 
 func delete_user_timestamp(t *keyval_table, uid string) {
@@ -1160,8 +1212,8 @@ func set_with_unique_id_loop(t *keyval_table, prefix string, data any, generator
 		var k = (prefix + id)
 		var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
 		defer cancel()
-		//var w = db.SetNX(ctx1, k, v, db_no_expiration)
-		var w = db.Do(ctx1, db.B().Setnx().Key(k).Value(string(v)).Build())
+		var w = db_SetNX(db, ctx1, k, string(v))
+		//var w = db.Do(ctx1, db.B().Setnx().Key(k).Value(string(v)).Build())
 		raise_on_setnx_error(t, &w)
 		var ok, _ = w.AsBool()
 		if ok {
@@ -1184,8 +1236,8 @@ func set_ex_pool_name__(t *keyval_table, pool string, data *pool_name_record) bo
 
 func get_pool_name__(t *keyval_table, pool string) *pool_name_record {
 	var data pool_name_record
-	var ok = db_get_with_prefix(t, db_pool_name_prefix, pool, &data)
-	return ITE(ok, &data, nil)
+	var err = db_get_with_prefix(t, db_pool_name_prefix, pool, &data, true)
+	return ITE(err == nil, &data, nil)
 }
 
 func delete_pool_name_checking(t *keyval_table, pool string) bool {
@@ -1206,8 +1258,8 @@ func set_secret_by_adm(t *keyval_table, key string, data *secret_record) {
 
 func get_secret(t *keyval_table, key string) *secret_record {
 	var data secret_record
-	var ok = db_get_with_prefix(t, db_secret_prefix, key, &data)
-	return ITE(ok, &data, nil)
+	var err = db_get_with_prefix(t, db_secret_prefix, key, &data, true)
+	return ITE(err == nil, &data, nil)
 }
 
 // DELETE_SECRET_KEY deletes a access key, unconditionally.
@@ -1222,8 +1274,8 @@ func delete_secret_key__(t *keyval_table, key string) {
 	var k = (prefix + key)
 	var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
 	defer cancel()
-	//var w = db.Del(ctx1, k)
-	var w = db.Do(ctx1, db.B().Del().Key(k).Build())
+	var w = db_Del(db, ctx1, k)
+	//var w = db.Do(ctx1, db.B().Del().Key(k).Build())
 	raise_on_del_failure(t, &w)
 }
 
@@ -1261,8 +1313,8 @@ func set_csrf_token_expiry(t *keyval_table, uid string, timeout time.Duration) b
 
 func get_csrf_token(t *keyval_table, uid string) *csrf_token_record {
 	var data csrf_token_record
-	var ok = db_get_with_prefix(t, db_csrf_token_prefix, uid, &data)
-	return ITE(ok, &data, nil)
+	var err = db_get_with_prefix(t, db_csrf_token_prefix, uid, &data, true)
+	return ITE(err == nil, &data, nil)
 }
 
 func db_set_with_prefix(t *keyval_table, prefix string, key string, val any) {
@@ -1275,8 +1327,8 @@ func db_set_with_prefix(t *keyval_table, prefix string, key string, val any) {
 	raise_on_marshaling_error(t, err)
 	var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
 	defer cancel()
-	//var w = db.Set(ctx1, k, v, db_no_expiration)
-	var w = db.Do(ctx1, db.B().Set().Key(k).Value(string(v)).Build())
+	var w = db_Set(db, ctx1, k, string(v))
+	//var w = db.Do(ctx1, db.B().Set().Key(k).Value(string(v)).Build())
 	raise_on_set_error(t, &w)
 }
 
@@ -1290,14 +1342,16 @@ func db_setnx_with_prefix(t *keyval_table, prefix string, key string, val any) b
 	raise_on_marshaling_error(t, err)
 	var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
 	defer cancel()
-	//var w = db.SetNX(ctx1, k, v, db_no_expiration)
-	var w = db.Do(ctx1, db.B().Setnx().Key(k).Value(string(v)).Build())
+	var w = db_SetNX(db, ctx1, k, string(v))
+	//var w = db.Do(ctx1, db.B().Setnx().Key(k).Value(string(v)).Build())
 	raise_on_setnx_error(t, &w)
 	var ok, _ = w.AsBool()
 	return ok
 }
 
-func db_get_with_prefix(t *keyval_table, prefix string, key string, val any) bool {
+// DB_GET_WITH_PREFIX gets an entry.  It returns an error telling an
+// entry is missing or broken.  It raises an exception, otherwise.
+func db_get_with_prefix(t *keyval_table, prefix string, key string, val any, abort_on_decode_error bool) error {
 	if trace_db_get&tracing != 0 {
 		t.logger.Debug("DB: get", "key", (prefix + key))
 	}
@@ -1305,11 +1359,11 @@ func db_get_with_prefix(t *keyval_table, prefix string, key string, val any) boo
 	var k = (prefix + key)
 	var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
 	defer cancel()
-	//var w = db.Get(ctx1, k)
-	var w = db.Do(ctx1, db.B().Get().Key(k).Build())
+	var w = db_Get(db, ctx1, k)
+	//var w = db.Do(ctx1, db.B().Get().Key(k).Build())
 	raise_on_get_error(t, &w)
-	var ok = load_db_data(t, &w, val)
-	return ok
+	var err1 = load_db_data(t, &w, val, abort_on_decode_error)
+	return err1
 }
 
 func db_expire_with_prefix(t *keyval_table, prefix string, key string, sec int64) bool {
@@ -1320,8 +1374,8 @@ func db_expire_with_prefix(t *keyval_table, prefix string, key string, sec int64
 	var k = (prefix + key)
 	var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
 	defer cancel()
-	//var w = db.Expire(ctx1, k, sec)
-	var w = db.Do(ctx1, db.B().Expire().Key(k).Seconds(sec).Build())
+	var w = db_Expire(db, ctx1, k, sec)
+	//var w = db.Do(ctx1, db.B().Expire().Key(k).Seconds(sec).Build())
 	var ok = check_on_expire_failure(t, &w)
 	return ok
 }
@@ -1335,8 +1389,8 @@ func db_del_with_prefix(t *keyval_table, prefix string, key string) bool {
 	var k = (prefix + key)
 	var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
 	defer cancel()
-	//var w = db.Del(ctx1, k)
-	var w = db.Do(ctx1, db.B().Del().Key(k).Build())
+	var w = db_Del(db, ctx1, k)
+	//var w = db.Do(ctx1, db.B().Del().Key(k).Build())
 	var ok = check_on_del_failure(t, &w)
 	return ok
 }
@@ -1347,20 +1401,22 @@ func db_del_with_prefix_raise__(t *keyval_table, prefix string, key string) {
 	var k = (prefix + key)
 	var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
 	defer cancel()
-	//var w = db.Del(ctx1, k)
-	var w = db.Do(ctx1, db.B().Del().Key(k).Build())
+	var w = db_Del(db, ctx1, k)
+	//var w = db.Do(ctx1, db.B().Del().Key(k).Build())
 	raise_on_del_failure(t, &w)
 }
 
 // LOAD_DATA fills a structure by json data in the keyval-db.  It
-// returns true or false about an entry is found.  Note that a get
-// with valkey.IsValkeyNil(err) means a non-exising entry.  An error
-// for the keyval-db is already checked by raise_on_get_error().
-func load_db_data(t *keyval_table, w *valkey.ValkeyResult, data any) bool {
+// returns an error telling an entry is missing or broken.  But, it
+// raise an exception on a broken entry when
+// abort_on_decode_error=true.  Note that a get with
+// valkey.IsValkeyNil(err) means a non-exising entry.  An error for
+// the keyval-db is already checked by raise_on_get_error().
+func load_db_data(t *keyval_table, w *valkey.ValkeyResult, data any, abort_on_decode_error bool) error {
 	var b, err1 = w.AsBytes()
 	if err1 != nil {
 		if valkey.IsValkeyNil(err1) {
-			return false
+			return err_missing_entry
 		} else {
 			// (NEVER).
 			t.logger.Error("Bad value in keyval-db",
@@ -1388,17 +1444,21 @@ func load_db_data(t *keyval_table, w *valkey.ValkeyResult, data any) bool {
 	d.DisallowUnknownFields()
 	var err2 = d.Decode(data)
 	if err2 != nil {
-		t.logger.Error("json/Decoder.Decode() on keyval-db entry errs",
+		t.logger.Error("json.Decoder.Decode() on keyval-db entry errs",
 			"err", err2)
-		raise(&proxy_exc{
-			"",
-			"",
-			http_500_internal_server_error,
-			message_500_bad_db_entry,
-			nil,
-		})
+		if abort_on_decode_error {
+			raise(&proxy_exc{
+				"",
+				"",
+				http_500_internal_server_error,
+				message_500_bad_db_entry,
+				nil,
+			})
+		} else {
+			return err_broken_entry
+		}
 	}
-	return true
+	return nil
 }
 
 // SCAN_TABLE lists keys for the prefix+target pattern, where
@@ -1419,7 +1479,8 @@ func scan_table(t *keyval_table, prefix string, target string) []string {
 	var ee []string = make([]string, 0)
 	var cur uint64 = 0
 	for {
-		var w = db.Do(ctx1, db.B().Scan().Cursor(cur).Match(pattern).Build())
+		var w = db_Scan(db, ctx1, cur, pattern)
+		//var w = db.Do(ctx1, db.B().Scan().Cursor(cur).Match(pattern).Build())
 		var e, err = w.AsScanEntry()
 		if err != nil {
 			t.logger.Error("keyval-db scan() errs",
@@ -1456,7 +1517,8 @@ func clear_db(t *keyval_table, db valkey.Client, prefix string) {
 	for {
 		var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
 		defer cancel()
-		var w1 = db.Do(ctx1, db.B().Scan().Cursor(cur).Match(pattern).Build())
+		var w1 = db_Scan(db, ctx1, cur, pattern)
+		//var w1 = db.Do(ctx1, db.B().Scan().Cursor(cur).Match(pattern).Build())
 		var e, err1 = w1.AsScanEntry()
 		if err1 != nil {
 			t.logger.Error("keyval-db scan() errs (ignored)",
@@ -1465,8 +1527,8 @@ func clear_db(t *keyval_table, db valkey.Client, prefix string) {
 		}
 		for _, k := range e.Elements {
 			var ctx2 = context.Background()
-			//var _ = db.Del(ctx2, k)
-			var w2 = db.Do(ctx2, db.B().Del().Key(k).Build())
+			var w2 = db_Del(db, ctx2, k)
+			//var w2 = db.Do(ctx2, db.B().Del().Key(k).Build())
 			var err2 = w2.Error()
 			if err2 != nil {
 				t.logger.Error("keyval-db del() errs (ignored)",
@@ -1506,8 +1568,8 @@ func set_db_raw(t *keyval_table, kv [2]string) {
 	}
 	var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
 	defer cancel()
-	//var w = db.Set(ctx1, kv[0], kv[1], db_no_expiration)
-	var w = db.Do(ctx1, db.B().Set().Key(kv[0]).Value(kv[1]).Build())
+	var w = db_Set(db, ctx1, kv[0], kv[1])
+	//var w = db.Do(ctx1, db.B().Set().Key(kv[0]).Value(kv[1]).Build())
 	raise_on_set_error(t, &w)
 }
 
@@ -1519,8 +1581,8 @@ func delete_db_raw_by_adm(t *keyval_table, key string) {
 	for name, db := range t.db_name_to_db {
 		var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
 		defer cancel()
-		//var w = db.Del(ctx1, key)
-		var w = db.Do(ctx1, db.B().Del().Key(key).Build())
+		var w = db_Del(db, ctx1, key)
+		//var w = db.Do(ctx1, db.B().Del().Key(key).Build())
 		var n, err = w.AsInt64()
 		if err == nil && n == 1 {
 			fmt.Printf("deleted (%s) in %s in keyval-db\n", key, name)
@@ -1540,8 +1602,9 @@ func scan_db_raw(t *keyval_table, dbname string) []map[string]string {
 	for {
 		var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
 		defer cancel()
+		var w = db_Scan(db, ctx1, cur, "*")
 		//db.Scan(ctx1, 0, "*", 0).Iterator()
-		var w = db.Do(ctx1, db.B().Scan().Cursor(cur).Match("*").Build())
+		//var w = db.Do(ctx1, db.B().Scan().Cursor(cur).Match("*").Build())
 		var e, err = w.AsScanEntry()
 		if err != nil {
 			t.logger.Error("keyval-db scan() errs (ignored)",
@@ -1565,8 +1628,8 @@ func make_key_value_pairs(t *keyval_table, db valkey.Client, ee []string) []map[
 	for _, k := range ee {
 		var ctx1, cancel = context.WithTimeout(context.Background(), t.timeout)
 		defer cancel()
-		//var w = db.Get(ctx1, k)
-		var w = db.Do(ctx1, db.B().Get().Key(k).Build())
+		var w = db_Get(db, ctx1, k)
+		//var w = db.Do(ctx1, db.B().Get().Key(k).Build())
 		var val, err1 = w.AsBytes()
 		if err1 != nil {
 			// w.Error() case subsumed.

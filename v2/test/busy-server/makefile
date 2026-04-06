@@ -1,10 +1,7 @@
 ## makefile
 
 all::
-	@echo '"make install-boto3" or "make pyright"'
-
-install-boto3::
-	pip3 install --user -r requirements.txt
+	@echo '"make pyright"'
 
 pyright::
 	-(pyright *.py) > pyright-output.txt

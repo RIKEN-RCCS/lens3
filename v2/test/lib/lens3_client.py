@@ -248,7 +248,9 @@ class Lens3_Registrar(_Lens3_Client):
         self.api_version = "v1.2"
         self._verbose = False
         self.gid = self.conf.get("gid")
-        self.home = self.conf.get("home")
+        self.pool = self.conf.get("pool")
+        self.pool2 = self.conf.get("pool2")
+        self.poolpool = self.conf.get("poolpool")
         pass
 
     # Lens3-Registrar Oprations.
@@ -359,9 +361,9 @@ class Lens3_Registrar(_Lens3_Client):
         if pair is None:
             raise Lens3_Error(f"No access-key for a policy {policy}")
         else:
-            print(f"[{section_title}]\n"
-                  f"aws_access_key_id = {pair[0]}\n"
-                  f"aws_secret_access_key = {pair[1]}\n", end="")
+            print(f"  [{section_title}]\n"
+                  f"  aws_access_key_id = {pair[0]}\n"
+                  f"  aws_secret_access_key = {pair[1]}\n", end="")
             pass
         pass
 

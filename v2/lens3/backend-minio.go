@@ -1,0 +1,374 @@
+// Copyright 2022-2026 RIKEN R-CCS
+// SPDX-License-Identifier: BSD-2-Clause
+
+// S3 Server Delegate for MinIO
+
+package lens3
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"log/slog"
+	"net"
+	"net/http"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
+)
+
+// Message prefixes from MinIO at its start-up.
+var (
+	minio_expected_response    = "API:"
+	minio_response_port_in_use = "Specified port is already in use"
+	// minio_response_port_capability = "Insufficient permissions to use specified port"
+	// minio_response_bad_endpoint = "empty or root endpoint is not supported"
+	// minio_response_nonwritable = "mkdir ...: permission denied"
+	// minio_expected_response_X_ = "S3-API:"
+	// minio_response_error_ = "ERROR"
+	// minio_response_nonwritable_storage_ = "Unable to write to the backend"
+	// minio_response_failure_ = "Unable to initialize backend"
+)
+
+// BACKEND_MINIO is a delegate for MinIO.
+type backend_minio struct {
+	delegate_generic
+
+	mc_alias      string
+	mc_config_dir string
+
+	heartbeat_client *http.Client
+	heartbeat_url    string
+}
+
+// BACKEND_MINIO_FACTORY is a factory and holds the static and common
+// part of a MinIO backend.
+type backend_minio_factory struct {
+	factory_generic
+	*minio_conf
+}
+
+var the_backend_minio_factory = &backend_minio_factory{}
+
+func (f *backend_minio_factory) get_factory_generic_part() *factory_generic {
+	return &f.factory_generic
+}
+
+func (f *backend_minio_factory) configure_factory(conf *mux_conf, wc *manager_conf) {
+	f.manager_conf = wc
+	f.use_n_ports = 1
+	f.minio_conf = conf.Minio
+}
+
+func (f *backend_minio_factory) make_delegate(pool string) backend_delegate {
+	var d = &backend_minio{}
+	d.factory = f
+	runtime.SetFinalizer(d, finalize_backend_minio)
+	return d
+}
+
+func (f *backend_minio_factory) clean_at_exit(logger *slog.Logger) {
+	clean_minio_tmp(logger)
+}
+
+func finalize_backend_minio(d *backend_minio) {
+	if d.mc_config_dir != "" {
+		os.RemoveAll(d.mc_config_dir)
+		d.mc_config_dir = ""
+	}
+}
+
+func (d *backend_minio) get_factory() *backend_minio_factory {
+	var f, ok = (d.factory).(*backend_minio_factory)
+	if !ok {
+		logger_0.Error("BE(minio): BAD-IMPL backend factory unknown",
+			"factory", d.factory)
+		panic(nil)
+	}
+	return f
+}
+
+func (d *backend_minio) get_delegate_generic_part() *delegate_generic {
+	return &d.delegate_generic
+}
+
+func (d *backend_minio) make_command_line(w *manager, port int, directory string) backend_command {
+	var f = d.get_factory()
+	var ep = net.JoinHostPort("", strconv.Itoa(port))
+	var argv = []string{
+		f.PathMinio,
+		"--json", "--anonymous", "server",
+		"--address", ep, directory}
+	var envs = []string{
+		fmt.Sprintf("MINIO_ROOT_USER=%s", d.be.Root_access),
+		fmt.Sprintf("MINIO_ROOT_PASSWORD=%s", d.be.Root_secret),
+		fmt.Sprintf("MINIO_BROWSER=%s", "off"),
+	}
+	return backend_command{argv, envs}
+}
+
+// CHECK_STARTUP decides the server state.  It looks for an expected
+// response, when no messages are "level=FATAL".  Otherwise, in case
+// of an error with messages "level=FATAL", it diagnoses the cause of
+// the error by the first fatal message.  It returns a retry response
+// only on the port-in-use error.
+func (d *backend_minio) check_startup(w *manager, stream stdio_stream_indicator, ss []string) *start_result {
+	//fmt.Println("minio.check_startup(%v)", ss)
+	if stream == on_stderr {
+		return &start_result{
+			start_state: start_ongoing,
+			reason:      pool_reason_NORMAL,
+		}
+	}
+	var mm, _ = decode_json(ss)
+	//fmt.Printf("mm=%T\n", mm)
+	if len(mm) == 0 {
+		return &start_result{
+			start_state: start_ongoing,
+			reason:      pool_reason_NORMAL,
+		}
+	}
+	// var m1, fatal1 = check_fatal_exists(mm)
+	var error_found, m1 = find_one(mm, has_level_fatal)
+	if error_found {
+		assert_fatal(m1 != nil)
+		var msg = get_string(m1, "message")
+		switch {
+		case strings.HasPrefix(msg, minio_response_port_in_use):
+			return &start_result{
+				start_state: start_to_retry,
+				reason:      pool_reason_NORMAL,
+			}
+		default:
+			return &start_result{
+				start_state: start_persistent_failure,
+				reason:      make_failure_reason(msg),
+			}
+		}
+	}
+	// var m2, expected1 = check_expected_exists(mm)
+	var expected_found, m2 = find_one(mm, has_expected_response)
+	if expected_found {
+		assert_fatal(m2 != nil)
+		var m3 = get_string(m2, "message")
+		if trace_proc&tracing != 0 {
+			w.logger.Debug("BE(minio): Got an expected message", "output", m3)
+		}
+		return &start_result{
+			start_state: start_started,
+			reason:      pool_reason_NORMAL,
+		}
+	}
+	return &start_result{
+		start_state: start_ongoing,
+		reason:      pool_reason_NORMAL,
+	}
+}
+
+func (d *backend_minio) establish(w *manager) error {
+	//fmt.Println("minio.establish()")
+	var v1 = minio_mc_alias_set(d, w.logger)
+	return v1.err
+}
+
+// SHUTDOWN stops a server using MC admin-service-stop.
+func (d *backend_minio) shutdown(w *manager) error {
+	//fmt.Println("minio.shutdown()")
+	w.logger.Debug("BE(minio): Stopping MinIO",
+		"pool", d.Pool, "pid", d.cmd.Process.Pid)
+	//assert_fatal(d.mc_alias != nil)
+	var v1 = minio_mc_admin_service_stop(d, w.logger)
+	return v1.err
+}
+
+// HEARTBEAT http-gets the path "/minio/health/live" and returns an
+// http status code.  It returns 500 on a connection failure.
+func (d *backend_minio) heartbeat(w *manager) int {
+	//fmt.Println("minio.heartbeat()")
+
+	var f = d.get_factory()
+	if d.heartbeat_client == nil {
+		var timeout = (f.Backend_timeout_ms).time_duration()
+		d.heartbeat_client = &http.Client{
+			Timeout: timeout,
+		}
+		var ep = d.be.Backend_ep
+		d.heartbeat_url = fmt.Sprintf("http://%s/minio/health/live", ep)
+	}
+
+	var c = d.heartbeat_client
+	var rspn, err1 = c.Get(d.heartbeat_url)
+	if err1 != nil {
+		w.logger.Info("BE(minio): Heartbeat failed in http.Client.Get()",
+			"pool", d.Pool, "err", err1)
+		return http_500_internal_server_error
+	}
+	defer rspn.Body.Close()
+	var _, err2 = io.ReadAll(rspn.Body)
+	if err2 != nil {
+		w.logger.Info("BE(minio): Heartbeat failed in io.ReadAll()",
+			"pool", d.Pool, "err", err2)
+		return http_500_internal_server_error
+	}
+	return rspn.StatusCode
+}
+
+// *** MC-COMMANDS ***
+
+// Note It works with a missing key, because fetching a missing key
+// from a map returns a zero-value.
+func has_level_fatal(m map[string]any) bool {
+	return (m["level"] == "FATAL")
+}
+
+func has_expected_response(m map[string]any) bool {
+	var s = get_string(m, "message")
+	return strings.HasPrefix(s, minio_expected_response)
+}
+
+// MINIO_MC_RESULT is a decoding of an output of an MC-command.  On an
+// error, it returns {nil,error}.
+type minio_mc_result struct {
+	values []map[string]any
+	err    error
+}
+
+// SIMPLIFY_MINIO_MC_MESSAGE returns a 2-tuple {[value,...], ""} on success,
+// or {nil, error-cause} on failure.  It extracts a message part from
+// an error message.  MC-command may return zero or more values as
+// separate json records.  An empty output is a proper success.  Each
+// record is {"status": "success", ...}, containing a value.  An error
+// record looks like: {"status": "error", "error": {"message":, ...,
+// "cause": {"error": {"Code": ..., ...}}}}.  The
+// "error/cause/error/Code" slot will be a keyword of useful
+// information if it exists.  A returned 2-tuple may have a whole
+// message instead of a cause-code if the slot is missing.
+func simplify_minio_mc_message(s []byte, logger *slog.Logger) *minio_mc_result {
+	var mm, ok = decode_json([]string{string(s)})
+	if !ok {
+		logger.Error("BE(minio): json decode failed")
+		var err1 = fmt.Errorf("MC-command returned a bad json: %q", s)
+		return &minio_mc_result{nil, err1}
+	}
+
+	for _, m := range mm {
+		switch get_string(m, "status") {
+		case "success":
+			// Skip.
+		case "error":
+			if len(mm) != 1 {
+				logger.Warn("BE(minio): MC-command with multiple errors",
+					"stdout", mm)
+			}
+			var m1 = get_string(m, "error", "cause", "error", "Code")
+			if m1 != "" {
+				return &minio_mc_result{nil, errors.New(m1)}
+			}
+			var m2 = get_string(m, "error", "message")
+			if m2 != "" {
+				return &minio_mc_result{nil, errors.New(m2)}
+			}
+			return &minio_mc_result{nil, fmt.Errorf("%q", m)}
+		default:
+			// Unknown status.
+			return &minio_mc_result{nil, fmt.Errorf("%q", m)}
+		}
+	}
+	return &minio_mc_result{mm, nil}
+}
+
+// EXECUTE_MINIO_MC_CMD runs an MC-command and checks its output.
+func execute_minio_mc_cmd(d *backend_minio, synopsis string, command []string, logger *slog.Logger) *minio_mc_result {
+	assert_fatal(d.mc_alias != "" && d.mc_config_dir != "")
+	var f = d.get_factory()
+	var argv = []string{
+		f.PathMc,
+		"--json",
+		fmt.Sprintf("--config-dir=%s", d.mc_config_dir),
+	}
+	argv = append(argv, command...)
+
+	var timeout = (f.Backend_start_timeout_ms).time_duration()
+	var verbose = (trace_proc&tracing != 0)
+	var stdouts, stderrs, err1 = execute_command(synopsis, argv, d.environ,
+		timeout, "BE(minio)", verbose, logger)
+	if err1 != nil {
+		return &minio_mc_result{nil, err1}
+	}
+
+	var v1 = simplify_minio_mc_message([]byte(stdouts), logger)
+	if v1.err == nil {
+		if trace_proc&tracing != 0 {
+			logger.Debug("BE(minio): MC-command Okay", "cmd", command)
+		} else {
+			logger.Debug("BE(minio): MC-command Okay", "cmd", synopsis)
+		}
+	} else {
+		logger.Error("BE(minio): MC-command failed",
+			"cmd", argv, "err", v1.err,
+			"stdout", stdouts, "stderr", stderrs)
+	}
+	return v1
+}
+
+func minio_mc_alias_set(d *backend_minio, logger *slog.Logger) *minio_mc_result {
+	assert_fatal(d.mc_alias == "" && d.mc_config_dir == "")
+	var rnd = strings.ToLower(random_string(12))
+	var url = fmt.Sprintf("http://%s", d.be.Backend_ep)
+	var dir, err1 = os.MkdirTemp("", "lens3-mc-")
+	if err1 != nil {
+		logger.Error("BE(minio): os.MkdirTemp() failed", "err", err1)
+		return &minio_mc_result{nil, err1}
+	}
+	d.mc_alias = fmt.Sprintf("pool-%s-%s", d.Pool, rnd)
+	d.mc_config_dir = dir
+	var v1 = execute_minio_mc_cmd(d, "alias_set",
+		[]string{"alias", "set", d.mc_alias, url,
+			d.be.Root_access, d.be.Root_secret,
+			"--api", "S3v4"}, logger)
+	if v1.err != nil {
+		d.mc_alias = ""
+		d.mc_config_dir = ""
+	}
+	return v1
+}
+
+func minio_mc_alias_remove(d *backend_minio, logger *slog.Logger) *minio_mc_result {
+	assert_fatal(d.mc_alias != "" && d.mc_config_dir != "")
+	var v1 = execute_minio_mc_cmd(d, "alias_remove",
+		[]string{"alias", "remove", d.mc_alias}, logger)
+	if v1.err == nil {
+		d.mc_alias = ""
+		d.mc_config_dir = ""
+	}
+	return v1
+}
+
+func minio_mc_admin_service_stop(d *backend_minio, logger *slog.Logger) *minio_mc_result {
+	var v1 = execute_minio_mc_cmd(d, "admin_service_stop",
+		[]string{"admin", "service", "stop", d.mc_alias}, logger)
+	return v1
+}
+
+func clean_minio_tmp(logger *slog.Logger) {
+	var d = os.TempDir()
+	var pattern = fmt.Sprintf("%s/lens3-mc-*", d)
+	var matches, err1 = filepath.Glob(pattern)
+	if err1 != nil {
+		// (err1 : filepath.ErrBadPattern).
+		logger.Error("BE(minio): filepath.Glob() failed",
+			"pattern", pattern, "err", err1)
+		return
+	}
+	for _, p := range matches {
+		logger.Debug("BE(minio): Clean by os.RemoveAll()", "path", p)
+		var err2 = os.RemoveAll(p)
+		if err2 != nil {
+			// (err2 : *os.PathError).
+			logger.Error("BE(minio): os.RemoveAll() failed",
+				"path", p, "err", err2)
+		}
+	}
+}

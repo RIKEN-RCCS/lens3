@@ -21,23 +21,20 @@ file.
 First, prepare an S3 access key and a bucket in advance.
 
 Second, store access/secret keys in the configuration file of AWS CLI
-in "\~/.aws/credentials".  Optionally, set the S3 signature version in
-the configuration file "\~/.aws/config".
-
-"credentials" file looks like:
-```
-$ cat ~/.aws/credentials
-[default]
-aws_access_key_id = AlmlPM4qXMXKuyzCzbj6
-aws_secret_access_key = OesFyGbSuO76HSs5gfmw69VPMEBtA1t9RxyfzTvg6LXeMsYV
-```
+in "\~/.aws/config".  Optionally, set the S3 signature version in the
+configuration file.  Keys can be in a separate configuration file
+"\~/.aws/credentials".
 
 "config" file looks like:
 ```
 $ cat ~/.aws/config
 [default]
 s3 =
-    signature_version = s3v4
+     signature_version = s3v4
+ec2_metadata_disabled = true
+endpoint_url = https://127.0.0.1
+aws_access_key_id = AlmlPM4qXMXKuyzCzbj6
+aws_secret_access_key = OesFyGbSuO76HSs5gfmw69VPMEBtA1t9RxyfzTvg6LXeMsYV
 ```
 
 ## Run a Test

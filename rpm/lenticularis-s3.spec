@@ -17,6 +17,10 @@ Requires:       logrotate
 
 Requires(post): policycoreutils-python-utils openssl
 
+# Stop stripping off debug info.
+
+%define __os_install_post %{nil}
+
 %description
 Lenticularis-S3 is an AWS-S3 access multiplexer for servicing multiple
 server instances at a single access point.

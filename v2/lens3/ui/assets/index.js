@@ -15974,7 +15974,7 @@ function _sfc_render$5(_ctx, _cache, $props, $setup, $data, $options) {
         activator: withCtx(({ props }) => [
           createVNode(VAppBarNavIcon, normalizeProps(guardReactiveProps(props)), {
             default: withCtx(() => [
-              createVNode(VIcon, { icon: "mdi-menu" })
+              createVNode(VIcon, { icon: "mdi-information" })
             ]),
             _: 2
           }, 1040)

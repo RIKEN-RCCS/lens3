@@ -14,7 +14,7 @@ directory needs to be writable to the user:group pair.
 ![Landing page screenshot](../../v1/doc/ug1.jpg)
 
 __List Pools__ section displays a list of existing pools.  It is a
-slider list.  Check the "minio-state" of the pool just created.  It
+slider list.  Check the ""backend-state" of the pool just created.  It
 should be _ready_.  A pool is unusable when it is in the _inoperable_
 state (often, the reason is the directory is not writable).
 
@@ -90,21 +90,11 @@ rejected at Lens3 only return coarse error messages.
 - A pool becomes INOPERABLE, when starting the backend S3 server
   fails.  For diagnosing, the reason button on UI shows the message
   from the backend.  A typical error is that pool's bucket-directory
-  is not writable.  The message looks like `"mkdir
-  /home/XXX/XXX/.minio.sys: permission denied"`.  Unfortunately, the
-  message might not help much in other error cases.
-
-- MinIO stores its state in a directory ".minio.sys" in pool's
-  bucket-directory.  An inconsistent state could cause MinIO to fail.
-  The contents of ".minio.sys" can be incompatible between versions.
-  It typically happens when a user runs MinIO by yourself.  Recovering
-  from this problem, do two steps: remove the directory ".minio.sys",
-  and delete the pool.
+  is not writable.  Unfortunately, the message might not help much in
+  other error cases.
 
 - An existence of regular files in pool's bucket-directory may cause a
   problem.  Creating a bucket of the same name fails in the backend.
-  MinIO issues an error message with `"BucketAlreadyOwnedByYou"` which
-  appears in a dialog message.
 
 ## Overview of Lens3
 
@@ -113,11 +103,11 @@ rejected at Lens3 only return coarse error messages.
 | **Fig. Lens3 overview.** |
 
 Lens3 consists of Multiplexers and Registrar -- Multiplexer is a proxy
-to a backend S3 server, and Registrar is a setting Web-UI.  Others are
-by third-parties.  MinIO is an open-source but commercially supported
-S3 server.  Valkey is an open-source keyval-db database system.  A
-reverse-proxy is not specified in Lens3 but it is required for
-operation.
+to backend S3 servers, and Registrar manages buckets and access keys
+through Web-UI.  S3-Baby-server is an open-source S3 server.  Others
+are by third-parties.  Valkey is an open-source keyval-db database
+system.  A reverse-proxy is not specified in Lens3 but it is required
+for operation.
 
 ### Multiplexer (Lens3-Mux)
 
@@ -140,7 +130,8 @@ first creates a pool, then registers buckets to the pool.
 
 ### Pool State
 
-A pool has a state reflecting the state of a backend as "minio-state".
+A pool has a state reflecting the state of a backend as
+"backend-state".
 
 Pool states are:
 
@@ -197,8 +188,9 @@ Buckets can only have a public access policy.
 
 ### Residue Files
 
-Running MinIO leaves a directory ".minio.sys" in the bucket-directory
-of a pool.
+Running S3-Baby-server may create a file "."+object+"@meta" for each
+object.  It holds metadata for an object such as a checksum and
+attached tags.
 
 ### No Access Logs
 
@@ -229,11 +221,18 @@ Lens3.
 - __pool__: A bucket pool is a management unit of S3 buckets.  It
   corresponds to a single backend.
 - __backend__: A backend refers to a backend S3 server instance.  It
-  is a process of MinIO or rclone.
+  is a process of S3-Baby-server.
 - __probe access__: Registrar or the administrator tool accesses
   Multiplexer to start a backend instance.  Such access is called a
   probe access.  A probe access is processed at Multiplexer and is
   not forwarded to a backend.
+
+## Changes from v2.1.1 to v2.2.1
+
+- The backend is changed to S3-Baby-server.  The version of Minio got
+  not to work with recent AWS-CLI.  (It is probably due to handling of
+  chunked streams).  Note that Lens3 is only tested with
+  S3-Baby-server from version 2.2.
 
 ## Changes from v1.3.1 to v2.1.1
 

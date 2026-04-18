@@ -809,8 +809,8 @@ func check_bucket_in_path(m *multiplexer, w http.ResponseWriter, r *http.Request
 	// assert_fatal(name != "")
 	var bucket = get_bucket(m.table, name)
 	if bucket == nil {
-		m.logger.Info("Bad bucket", "bucket", name,
-			"reason", "not found")
+		m.logger.Debug("Bad bucket", "bucket", name,
+			"reason", "no bucket name")
 		var err2 = &proxy_exc{
 			auth,
 			"",
@@ -987,7 +987,8 @@ func pick_bucket_in_path(m *multiplexer, r *http.Request, auth string) (string, 
 		return "", nil
 	}
 	if !check_bucket_naming(bucket) {
-		m.logger.Info("Bad bucket naming", "bucket", bucket)
+		m.logger.Debug("Bad bucket", "bucket", bucket,
+			"reason", "bad naming")
 		var err1 = &proxy_exc{
 			auth,
 			"",

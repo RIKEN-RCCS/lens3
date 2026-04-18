@@ -264,12 +264,13 @@ func handle_unix_signals(t *keyval_table, logger *slog.Logger) {
 	}()
 }
 
+var quit_once sync.Once
+
 // FORCE_QUIT_SERVICE tells services to quit via the ch_quit_service
 // channel.  It lets the main thread exit, and thus, the remaining
 // part of this function may not run to completion.
 func force_quit_service(logger *slog.Logger) {
-	var once sync.Once
-	once.Do(func() {
+	quit_once.Do(func() {
 		// Gracefully shutdown.
 
 		if ch_quit_service_notify == nil {

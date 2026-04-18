@@ -45,7 +45,7 @@ cp:: s3-baby-server
 	cp ../v2/unit-file/reg-default.conf $(BUILD)/var/lib/lenticularis/
 	##
 	mkdir -p $(BUILD)/etc/httpd/conf.d
-	cp ../v2/proxy-apache/lens3proxy-basic.conf $(BUILD)/etc/httpd/conf.d/lens3proxy.conf
+	cp ../v2/proxy-apache/lenticularis-proxy-basic.conf $(BUILD)/etc/httpd/conf.d/lenticularis-proxy.conf
 	##
 	mkdir -p $(BUILD)/var/log/lenticularis
 	mkdir -p $(BUILD)/var/log/lenticularis-valkey

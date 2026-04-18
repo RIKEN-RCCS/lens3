@@ -17,6 +17,10 @@ Requires:       logrotate
 
 Requires(post): policycoreutils-python-utils openssl
 
+# Stop stripping off debug info.
+
+%define __os_install_post %{nil}
+
 %description
 Lenticularis-S3 is an AWS-S3 access multiplexer for servicing multiple
 server instances at a single access point.
@@ -54,13 +58,13 @@ if [ $1 -eq 1 ] ; then
     # Run in first install, not upgrade.
     semanage fcontext -a -t redis_log_t "/var/log/lenticularis-valkey(/.*)?"
     restorecon -r -v /var/log/lenticularis-valkey
-    restorecon -v /etc/httpd/conf.d/lens3proxy.conf
+    restorecon -v /etc/httpd/conf.d/lenticularis-proxy.conf
 fi
 
 semanage fcontext -l | grep lenticularis-valkey
 ls -dlZ /var/log/lenticularis
 ls -dlZ /var/log/lenticularis-valkey
-ls -lZ /etc/httpd/conf.d/lens3proxy.conf
+ls -lZ /etc/httpd/conf.d/lenticularis-proxy.conf
 
 if [ $1 -eq 1 ] ; then
     semanage port -a -t http_port_t -p tcp 8003
@@ -110,7 +114,7 @@ systemctl restart lenticularis-mux
 %dir %attr(770, -, -) /var/lib/lenticularis
 %config(noreplace) %attr(660, -, -) /var/lib/lenticularis/mux-default.conf
 %config(noreplace) %attr(660, -, -) /var/lib/lenticularis/reg-default.conf
-%config(noreplace) %attr(660, -, -) /etc/httpd/conf.d/lens3proxy.conf
+%config(noreplace) %attr(660, -, -) /etc/httpd/conf.d/lenticularis-proxy.conf
 %config(noreplace) %attr(644, -, -) /etc/logrotate.d/lenticularis-logrotate
 %dir %attr(770, -, -) /var/log/lenticularis
 %dir %attr(770, -, -) /var/log/lenticularis-valkey

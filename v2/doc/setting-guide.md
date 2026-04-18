@@ -219,17 +219,17 @@ Set up a configuration file with the needed authentication, and
 
 Prepare a configuration file in "/etc/httpd/conf.d/".  Sample files
 can be found in $TOP/v2/proxy-apache/.  Copy one as
-"/etc/httpd/conf.d/lens3proxy.conf" and edit it.  Note running
+"/etc/httpd/conf.d/lenticularis-proxy.conf" and edit it.  Note running
 "restorecon" sets the "system_u"-user on the file (or, you may run
 "chcon -u system_u" on the file).
 
 ```
-cp $TOP/v2/proxy-apache/lens3proxy-basic.conf /etc/httpd/conf.d/lens3proxy.conf
-chown root:root /etc/httpd/conf.d/lens3proxy.conf
-chmod 640 /etc/httpd/conf.d/lens3proxy.conf
-vi /etc/httpd/conf.d/lens3proxy.conf
-restorecon -v /etc/httpd/conf.d/lens3proxy.conf
-ls -lZ /etc/httpd/conf.d/lens3proxy.conf
+cp $TOP/v2/proxy-apache/lenticularis-proxy-basic.conf /etc/httpd/conf.d/lenticularis-proxy.conf
+chown root:root /etc/httpd/conf.d/lenticularis-proxy.conf
+chmod 640 /etc/httpd/conf.d/lenticularis-proxy.conf
+vi /etc/httpd/conf.d/lenticularis-proxy.conf
+restorecon -v /etc/httpd/conf.d/lenticularis-proxy.conf
+ls -lZ /etc/httpd/conf.d/lenticularis-proxy.conf
 (* Check the context is with system_u on it. *)
 ```
 
@@ -256,8 +256,8 @@ with Keycloak".  See below.
 OIDC logging messages are generated in "ssl_error_log".  Verbosity can
 be increased by setting "LogLevel" to "debug" in the "<Location
 /lens3.sts>" section.  The "LoadModule" line in the sample file
-"lens3proxy-oidc.conf" may be redundant, and it generates a warning
-message.
+"lenticularis-proxy-oidc.conf" may be redundant, and it generates a
+warning message.
 
 ### Choice: Basic Authentication
 
@@ -474,9 +474,10 @@ Use "-a password" instead of an environment variable.
 ### OIDC Redirect Failure
 
 OIDC may err with "Invalid parameter: redirect_uri" and fail to return
-to Lens3, when using an example configuration "lens3proxy-oidc.conf".
-It would happen in an https only site.  It may be fixed by modifying a
-"OIDCRedirectURI" line to a full URL starting with "https:".
+to Lens3, when using an example configuration
+"lenticularis-proxy-oidc.conf".  It would happen in an https only
+site.  It may be fixed by modifying a "OIDCRedirectURI" line to a full
+URL starting with "https:".
 
 ## CAVEAT
 
